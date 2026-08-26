@@ -1,4 +1,4 @@
-// api/contacts/check-duplicate.js
+// api/_contacts/check-duplicate.js
 import clientPromise, { ensureIndexes } from '../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
 

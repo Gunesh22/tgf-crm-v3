@@ -1,4 +1,4 @@
-// api/admin/stats.js
+// api/_admin/stats.js
 import clientPromise from '../lib/mongodb.js';
 
 export default async function handler(req, res) {

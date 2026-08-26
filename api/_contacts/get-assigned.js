@@ -1,4 +1,4 @@
-// api/contacts/get-assigned.js
+// api/_contacts/get-assigned.js
 import clientPromise, { ensureIndexes } from '../lib/mongodb.js';
 
 export default async function handler(req, res) {

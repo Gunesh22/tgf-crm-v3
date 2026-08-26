@@ -1,4 +1,4 @@
-// api/admin/attenders.js
+// api/_admin/attenders.js
 import clientPromise from '../lib/mongodb.js';
 
 const DEFAULT_ATTENDERS = [
