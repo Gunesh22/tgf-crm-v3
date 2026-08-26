@@ -16,9 +16,12 @@ export default async function handler(req, res) {
 
     const client = await clientPromise;
     const db = client.db('tgf_crm');
+    
+    // Support both new ObjectIds and legacy string IDs
+    const queryId = ObjectId.isValid(contactId) ? new ObjectId(contactId) : contactId;
 
     // 1. Fetch the contact to analyze history and determine previous state
-    const contact = await db.collection('contacts').findOne({ _id: new ObjectId(contactId) });
+    const contact = await db.collection('contacts').findOne({ _id: queryId });
     if (!contact) {
       return res.status(404).json({ error: 'Contact not found' });
     }
@@ -61,7 +64,7 @@ export default async function handler(req, res) {
     // 2. Atomically pull the history item and reset the attender state
     const updateResult = await db.collection('contacts').updateOne(
       { 
-        _id: new ObjectId(contactId),
+        _id: queryId,
         // Ensure the history item is still there (concurrency check)
         'history.id': historyId 
       },

@@ -22,3 +22,15 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+.vercel
+
+# Environment & local secrets
+.env
+.env.*
+!.env.example
+
+# Build/Scratch artifacts
+*.timestamp-*.mjs
+scratch/
+

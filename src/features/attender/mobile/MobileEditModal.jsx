@@ -1,0 +1,880 @@
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { toast } from "react-hot-toast";
+import {
+  Phone, Plus, X, Tag, User, MapPin, MessageSquare,
+  Hash, Clock, CheckCircle2, AlertCircle, Trash2,
+  CalendarDays, Loader, Flame, Edit3, ArrowLeft, Users, RotateCw
+} from "lucide-react";
+import {
+  addIncomingCallLog, updateCallLog, checkGlobalDuplicate, findMatchingAttenderState
+} from "../../../lib/db";
+import { searchCRMByPhone } from "../../../lib/ghl";
+import {
+  STATUS_OPTIONS,
+  OBJECTION_REASONS,
+  SOURCE_OPTIONS,
+  CALLED_FOR_OPTIONS,
+  isKhojiField,
+  getFieldWithFallback,
+  formatContactName,
+  isNotConnectedStatus
+} from "../utils";
+
+import SearchableDropdown from "../components/edit-modal/SearchableDropdown";
+import DuplicateBanner from "../components/edit-modal/DuplicateBanner";
+import SharedBanner from "../components/edit-modal/SharedBanner";
+import HistoryTimeline from "../components/edit-modal/HistoryTimeline";
+import CityAutofillInput from "../components/edit-modal/CityAutofillInput";
+import EditHistoryModal from "../components/edit-modal/EditHistoryModal";
+
+function parseTimestamp(t) {
+  if (!t) return null;
+  if (t instanceof Date) return t;
+  if (typeof t.toDate === "function") return t.toDate();
+  if (typeof t === "object" && t.seconds !== undefined) {
+    return new Date(t.seconds * 1000 + Math.round((t.nanoseconds || 0) / 1000000));
+  }
+  return new Date(t);
+}
+
+export default function MobileEditModal({
+  row,
+  attenderId,
+  attenderName = "Unknown",
+  programs = [],
+  onSave,
+  onDelete,
+  onClose,
+  onRefreshLead,
+  isFetchingShared = false
+}) {
+  const getNormalizedRow = () => {
+    const normalized = { ...row };
+    if (normalized.callType) {
+      normalized.callType = String(normalized.callType).toLowerCase();
+    }
+    
+    const standardFields = ["Name", "Phone", "Mobile", "Email", "City", "State", "Khoji", "Tags", "Source", "Called For"];
+    const standardVals = {};
+    standardFields.forEach(col => {
+      standardVals[col] = getFieldWithFallback(row, col);
+    });
+
+    const keysToDelete = new Set();
+    const keys = Object.keys(row);
+    keys.forEach(k => {
+      const kLower = k.toLowerCase();
+      if (["name", "caller", "caller name", "lead name", "lead", "name of caller"].includes(kLower)) keysToDelete.add(k);
+      if (["phone", "whatsapp", "phone number", "whatsapp number", "whatsappno", "contact", "contact number", "contact no", "contact_no"].includes(kLower)) keysToDelete.add(k);
+      if (["mobile", "mobile no", "mobile number"].includes(kLower)) keysToDelete.add(k);
+      if (["email", "mail", "e-mail", "email id", "emailaddress"].includes(kLower)) keysToDelete.add(k);
+      if (["city", "location", "khoji city", "place", "city name"].includes(kLower)) keysToDelete.add(k);
+      if (["state", "state name", "province", "region"].includes(kLower)) keysToDelete.add(k);
+      if (isKhojiField(kLower)) keysToDelete.add(k);
+      if (["source", "sourse", "source of informiton", "source of information"].includes(kLower)) keysToDelete.add(k);
+      if (["tags", "tag"].includes(kLower)) keysToDelete.add(k);
+      if (["called for", "called_for", "calledfor"].includes(kLower)) keysToDelete.add(k);
+    });
+
+    keysToDelete.forEach(k => delete normalized[k]);
+    standardFields.forEach(col => { normalized[col] = standardVals[col]; });
+
+    if (row._isNew && !normalized.Khoji) {
+      normalized.Khoji = "No";
+    }
+
+    normalized.remark = "";
+
+    return normalized;
+  };
+
+  const [savedRow, setSavedRow] = useState(() => getNormalizedRow());
+  const [edited, setEdited] = useState(() => getNormalizedRow());
+
+  useEffect(() => {
+    const norm = getNormalizedRow();
+    setSavedRow(norm);
+    setEdited(norm);
+  }, [row]);
+
+  const calledForField = useMemo(() => {
+    if (edited["Called For"] !== undefined) return "Called For";
+    return "calledFor";
+  }, [edited]);
+
+  const sourceField = useMemo(() => {
+    if (edited.Source !== undefined) return "Source";
+    if (edited.Sourse !== undefined) return "Sourse";
+    return "source";
+  }, [edited]);
+
+  const [activeTab, setActiveTab] = useState(() => (row && row._isNew ? "profile" : "call"));
+  const [saving, setSaving] = useState(false);
+  const [showEditHistory, setShowEditHistory] = useState(false);
+  const [showCalledForPrompt, setShowCalledForPrompt] = useState(false);
+  const [promptSelection, setPromptSelection] = useState("");
+  const [pendingSave, setPendingSave] = useState(false);
+  useEffect(() => {
+    const freshNorm = getNormalizedRow();
+    setSavedRow(freshNorm);
+    setEdited(prev => ({
+      ...freshNorm,
+      remark: prev?.remark || ""
+    }));
+  }, [row]);
+
+  const [globalDup, setGlobalDup] = useState(null);
+  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
+  const [isSearchingCRM, setIsSearchingCRM] = useState(false);
+
+  const newNoteRef = useRef(null);
+  const isSavingRef = useRef(false);
+
+  const handleChange = (field, val) => {
+    setEdited(prev => ({ ...prev, [field]: val }));
+  };
+
+  const handleCallTypeChange = (ct) => {
+    setEdited(prev => ({ ...prev, callType: ct }));
+  };
+
+  const phoneVal = useMemo(() => String(edited.Phone || "").trim(), [edited.Phone]);
+  const mobileVal = useMemo(() => String(edited.Mobile || "").trim(), [edited.Mobile]);
+  const dupTimerRef = useRef(null);
+
+  useEffect(() => {
+    const searchVal = phoneVal || mobileVal;
+    const cleanSearch = String(searchVal || "").replace(/\D/g, "");
+    if (cleanSearch.length < 10) {
+      setGlobalDup(null);
+      return;
+    }
+
+    if (dupTimerRef.current) clearTimeout(dupTimerRef.current);
+
+    dupTimerRef.current = setTimeout(async () => {
+      try {
+        setIsCheckingDuplicate(true);
+        const alreadyFetched = !!(edited.GHL_ID || row.GHL_ID || edited.ghl_id || row.ghl_id);
+        const shouldQueryCRM = (row._isNew || !edited.Name) && !alreadyFetched;
+
+        const [dupRes, crmRes] = await Promise.all([
+          checkGlobalDuplicate(searchVal, row.id).catch(() => null),
+          shouldQueryCRM ? searchCRMByPhone(searchVal).catch(() => []) : Promise.resolve([])
+        ]);
+
+        if (dupRes && dupRes.matches && dupRes.matches.length > 0) {
+          setGlobalDup(dupRes);
+          const dup = dupRes.first;
+          if (dup) {
+            setEdited(prev => ({
+              ...prev,
+              Name: prev.Name || dup.name || dup.Name || "",
+              Email: prev.Email || dup.email || dup.Email || "",
+              City: prev.City || dup.city || dup.City || "",
+              State: prev.State || dup.state || dup.State || "",
+              Tags: prev.Tags || (Array.isArray(dup.tags) ? dup.tags.join(", ") : dup.Tags || "")
+            }));
+            toast.success("Duplicate lead found! Info auto-filled.");
+          }
+        } else {
+          setGlobalDup(null);
+          const crmContact = Array.isArray(crmRes) ? crmRes[0] : crmRes;
+          if (crmContact) {
+            const name = crmContact.contactName || crmContact.name || [crmContact.firstName, crmContact.lastName].filter(Boolean).join(" ") || crmContact.Name || "";
+            const email = crmContact.email || crmContact.Email || "";
+            const city = crmContact.city || crmContact.location?.city || crmContact.City || "";
+            const state = crmContact.state || crmContact.location?.state || crmContact.State || "";
+            const source = crmContact.source || crmContact.Source || "";
+            const tags = Array.isArray(crmContact.tags) ? crmContact.tags.join(", ") : (crmContact.tags || crmContact.Tags || "");
+            const ghlId = crmContact.id || crmContact.GHL_ID || crmContact.ghl_id || "";
+
+            setEdited(prev => ({
+              ...prev,
+              Name: name || prev.Name,
+              Email: email || prev.Email,
+              City: city || prev.City,
+              State: state || prev.State,
+              Source: source || prev.Source,
+              Tags: tags || prev.Tags,
+              GHL_ID: ghlId || prev.GHL_ID
+            }));
+            toast.success(`Lead "${name || searchVal}" found in CRM! Details auto-filled.`);
+          }
+        }
+      } catch (err) {
+        console.error("[MobileEditModal Dup Error]", err);
+      } finally {
+        setIsCheckingDuplicate(false);
+        setIsSearchingCRM(false);
+      }
+    }, 200);
+
+    return () => {
+      if (dupTimerRef.current) clearTimeout(dupTimerRef.current);
+    };
+  }, [phoneVal, mobileVal, row._isNew, row.id]);
+
+  const getEditable = (field) => {
+    if (row._isNew) return true;
+    const attState = findMatchingAttenderState(row.attenderStates, attenderId, attenderName);
+    if (!attState) return true;
+    return true;
+  };
+
+  const handleSaveAndClose = async (overrideFields = null) => {
+    if (saving || isSavingRef.current) return;
+    isSavingRef.current = true;
+    setSaving(true);
+
+    const targetEdited = (overrideFields && typeof overrideFields === "object" && !overrideFields.target)
+      ? { ...edited, ...overrideFields }
+      : { ...edited };
+
+    if (targetEdited.status === "Reg.Done") {
+      targetEdited.callbackDate = null;
+      targetEdited.callbackStatus = null;
+    }
+
+    try {
+      const { id, _callbackDue, _isNew, ...rest } = targetEdited;
+      const updates = { ...rest };
+      if (updates.Name) updates.Name = formatContactName(updates.Name);
+
+      delete updates.attenderStates;
+      delete updates.assignedTo;
+      delete updates.assignedName;
+
+      updates.lastEditedBy = attenderName || "Unknown";
+
+      // Isolate history to this attender only
+      const attState = findMatchingAttenderState(row.attenderStates, attenderId, attenderName);
+      let baseHistory = Array.isArray(targetEdited.history) 
+        ? targetEdited.history 
+        : (Array.isArray(attState?.history) ? attState.history : []);
+      
+      baseHistory = baseHistory.filter(h => {
+        if (!h) return false;
+        const hName = String(h.attenderName || "").toLowerCase().trim();
+        const hId = String(h.attenderId || "").toLowerCase().trim();
+        const myName = String(attenderName || "").toLowerCase().trim();
+        const myId = String(attenderId || "").toLowerCase().trim();
+        if (myId && hId && hId === myId) return true;
+        if (myName && hName && hName === myName) return true;
+        return !hId && !hName;
+      });
+
+      const oldStatus = String(savedRow.status || "").trim();
+      const newStatus = String(targetEdited.status || "").trim();
+      const statusChanged = oldStatus !== newStatus;
+
+      const oldRemark = String(savedRow.remark || "").trim();
+      const newRemark = String(targetEdited.remark || "").trim();
+      const remarkChanged = oldRemark !== newRemark;
+
+      const isCallAttemptUpdated = statusChanged || remarkChanged;
+      if (isCallAttemptUpdated) {
+        const newHist = {
+          status: targetEdited.status || "Call Log Added",
+          remark: targetEdited.remark || "",
+          attenderName: attenderName || "Unknown",
+          timestamp: new Date().toISOString(),
+          calledFor: targetEdited[calledForField] || targetEdited["Called For"] || targetEdited.calledFor || "",
+          source: targetEdited[sourceField] || targetEdited.Source || targetEdited.source || "",
+          callType: targetEdited.callType || "outgoing"
+        };
+        updates.history = [...baseHistory, newHist];
+      } else {
+        updates.history = baseHistory;
+      }
+
+      console.log(`[MOBILE ATTENDER ISOLATED SAVE] Attender: "${attenderName}" (${attenderId})`, {
+        contactId: targetDocId,
+        leadName: targetEdited.Name || savedRow.Name,
+        previousIsolatedHistoryCount: baseHistory.length,
+        isCallAttemptUpdated,
+        finalHistoryCount: updates.history ? updates.history.length : baseHistory.length,
+        savedHistoryEntries: updates.history || baseHistory
+      });
+
+      const targetDocId = targetEdited.contactId || targetEdited.id || row.id;
+      const isNewWithoutDoc = row._isNew && !targetEdited.contactId && !targetEdited.id;
+
+      let savedDocId = targetDocId;
+      if (isNewWithoutDoc) {
+        delete updates._isNew;
+        const resId = await addIncomingCallLog(
+          attenderId || row.attenderId, attenderName || row.attenderName, updates, targetEdited.programId, targetEdited.programName
+        );
+        savedDocId = resId;
+      } else {
+        const existingContext = globalDup?.first
+          ? { ...globalDup.first, ...row, ...targetEdited }
+          : { ...row, ...targetEdited };
+        await updateCallLog(targetDocId, updates, attenderId, attenderName, existingContext);
+      }
+
+      const finalSavedPayload = {
+        ...targetEdited,
+        ...updates,
+        id: savedDocId,
+        history: updates.history || baseHistory
+      };
+
+      if (onSave) onSave(finalSavedPayload, false);
+
+      toast.success("Saved!", { duration: 3000, position: 'top-center' });
+      if (onClose) onClose();
+    } catch (err) {
+      console.error("Save error:", err);
+      toast.error("Save failed. Please check connection.", { duration: 4000, position: 'top-center' });
+    } finally {
+      setSaving(false);
+      isSavingRef.current = false;
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm("Remove this entry from sheet?")) return;
+    if (onDelete) onDelete(row.id);
+    if (onClose) onClose();
+  };
+
+  const getLogName = () => edited.Name || edited.name || row.Name || row.name || "";
+  const getCallbackDateStr = () => {
+    if (!edited.callbackDate) return "";
+    const d = parseTimestamp(edited.callbackDate);
+    return d && !isNaN(d.getTime()) ? d.toISOString().split("T")[0] : "";
+  };
+
+  const mergedHistory = useMemo(() => {
+    const list = [];
+
+    // 1. Current contact's history entries
+    const currentHist = Array.isArray(edited.history) ? edited.history : (Array.isArray(savedRow.history) ? savedRow.history : []);
+    currentHist.forEach((h, idx) => {
+      list.push({
+        status: h.status || "",
+        remark: h.remark || "",
+        calledFor: h.calledFor || h.called_for || h["Called For"] || "",
+        source: h.source || h.sourse || h.Source || "",
+        callType: h.callType || "outgoing",
+        attenderName: h.attenderName || "Unknown",
+        timestamp: h.timestamp || new Date().toISOString(),
+        isCurrentDoc: true,
+        originalIndex: idx,
+        sourceProgram: savedRow.programName || "This Sheet"
+      });
+    });
+
+    // 1b. Standalone remark
+    if (savedRow.remark && String(savedRow.remark).trim()) {
+      const remarkStr = String(savedRow.remark).trim();
+      const alreadyInHistory = list.some(h => h.remark === remarkStr && h.isCurrentDoc);
+      if (!alreadyInHistory) {
+        list.push({
+          status: savedRow.status || "",
+          remark: remarkStr,
+          calledFor: savedRow["Called For"] || savedRow.calledFor || "",
+          source: savedRow.Source || savedRow.source || "",
+          callType: savedRow.callType || "outgoing",
+          attenderName: savedRow.attenderName || savedRow.assignedName || "Unknown",
+          timestamp: savedRow.updatedAt?.toDate?.()?.toISOString?.() || savedRow.updatedAt || savedRow.createdAt?.toDate?.()?.toISOString?.() || savedRow.createdAt || new Date().toISOString(),
+          isCurrentDoc: true,
+          originalIndex: -1,
+          sourceProgram: savedRow.programName || "This Sheet"
+        });
+      }
+    }
+
+    // 2. All other attenders' histories from savedRow.attenderStates
+    if (savedRow.attenderStates) {
+      Object.keys(savedRow.attenderStates).forEach(otherAttenderId => {
+        const state = savedRow.attenderStates[otherAttenderId];
+        const isMe = otherAttenderId === attenderId || 
+                     otherAttenderId === attenderName || 
+                     (state && (state.attenderId === attenderId || state.attenderName === attenderName));
+        if (isMe) return; // Already included in currentHist above
+        if (state) {
+          const progName = state.programName || "Other Attender";
+          if (Array.isArray(state.history)) {
+            state.history.forEach(h => {
+              list.push({
+                status: h.status || "",
+                remark: h.remark || "",
+                calledFor: h.calledFor || h.called_for || h["Called For"] || state["Called For"] || state.calledFor || "",
+                source: h.source || h.sourse || h.Source || state.Source || state.source || "",
+                callType: h.callType || state.callType || "outgoing",
+                attenderName: h.attenderName || state.attenderName || "Unknown",
+                timestamp: h.timestamp || new Date().toISOString(),
+                isCurrentDoc: false,
+                sourceProgram: progName
+              });
+            });
+          }
+          if (state.remark && String(state.remark).trim()) {
+            const attRemark = String(state.remark).trim();
+            const alreadyInHistory = Array.isArray(state.history) && state.history.some(h => h.remark === attRemark);
+            if (!alreadyInHistory) {
+              list.push({
+                status: state.status || "",
+                remark: attRemark,
+                calledFor: state["Called For"] || state.calledFor || "",
+                source: state.Source || state.source || "",
+                callType: state.callType || "outgoing",
+                attenderName: state.attenderName || "Unknown",
+                timestamp: state.updatedAt || new Date().toISOString(),
+                isCurrentDoc: false,
+                sourceProgram: progName
+              });
+            }
+          }
+        }
+      });
+    }
+
+    const getMs = (val) => {
+      if (!val) return 0;
+      if (val instanceof Date) return val.getTime();
+      if (typeof val === "string") return new Date(val).getTime() || 0;
+      if (val.toDate && typeof val.toDate === "function") return val.toDate().getTime() || 0;
+      if (typeof val === "object" && val.seconds !== undefined) return val.seconds * 1000;
+      try {
+        const d = new Date(val);
+        return isNaN(d.getTime()) ? 0 : d.getTime();
+      } catch (e) {
+        return 0;
+      }
+    };
+
+    list.sort((a, b) => getMs(a.timestamp) - getMs(b.timestamp));
+
+    // Semantic Deduplication: Filter out any entries with identical remarks or close timestamps/statuses
+    const uniqueList = [];
+    const clean = s => String(s || "").trim().toLowerCase();
+
+    list.forEach(item => {
+      const itemRemark = clean(item.remark);
+      const itemStatus = clean(item.status);
+      const itemMs = getMs(item.timestamp);
+
+      const isDuplicate = uniqueList.some(ex => {
+        const exRemark = clean(ex.remark);
+        const exStatus = clean(ex.status);
+        const exMs = getMs(ex.timestamp);
+
+        const timeDiff = (itemMs > 0 && exMs > 0) ? Math.abs(itemMs - exMs) : 0;
+        const isTimeUnknown = itemMs === 0 || exMs === 0;
+
+        // Rule 1: Identical non-empty remarks logged within 30 minutes of each other (or unknown timestamp)
+        if (itemRemark && exRemark && itemRemark === exRemark) {
+          if (isTimeUnknown || timeDiff < 1800000) return true;
+        }
+
+        // Rule 2: Same status logged within 3 minutes of each other
+        if (itemStatus && exStatus && itemStatus === exStatus && itemMs > 0 && exMs > 0) {
+          if (timeDiff < 180000) return true;
+        }
+
+        return false;
+      });
+
+      if (!isDuplicate) {
+        uniqueList.push(item);
+      }
+    });
+
+    return uniqueList;
+  }, [edited.history, savedRow.history, savedRow.remark, savedRow.status, savedRow.programName, savedRow.attenderName, savedRow.assignedName, savedRow.updatedAt, savedRow.createdAt, savedRow.attenderStates, attenderId]);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-white sm:bg-black/60 sm:backdrop-blur-sm flex flex-col justify-between sm:justify-center animate-fade-in h-[100dvh] w-full sm:h-auto sm:min-h-0">
+      <div className="bg-white rounded-none sm:rounded-3xl w-full h-[100dvh] sm:h-auto sm:max-w-lg sm:max-h-[92vh] flex flex-col overflow-hidden shadow-2xl animate-slide-up">
+        
+        {/* 1. Header Card - Emerald Green */}
+        <div className="bg-[#009669] px-5 py-4 text-white flex flex-col gap-3.5 relative shrink-0 pt-6 sm:pt-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-11 h-11 rounded-full bg-white/20 text-white flex items-center justify-center font-bold shrink-0">
+                <User size={22} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-white font-extrabold text-lg leading-tight truncate">
+                  {getLogName() || "Unknown Entry"}
+                </h3>
+                <div className="text-[10px] font-bold text-white/80 uppercase tracking-wider mt-0.5 truncate">
+                  {edited.createdAt && (
+                    <span>ASSIGNED: {(edited.createdAt?.toDate ? edited.createdAt.toDate() : new Date(edited.createdAt)).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
+                  )}
+                  {edited.lastCalledAt && (
+                    <span> - LAST CALLED: {new Date(edited.lastCalledAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof onRefreshLead === "function") {
+                    onRefreshLead(edited || row);
+                  }
+                }}
+                disabled={isFetchingShared}
+                className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition active:scale-95 disabled:opacity-50"
+                title="Force fetch fresh lead from database & update local cache"
+              >
+                <RotateCw size={17} className={isFetchingShared ? "animate-spin text-amber-300" : ""} />
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition active:scale-95"
+                title="Close modal"
+              >
+                <X size={20} />
+              </button>
+            </div>
+          </div>
+
+          {/* Action Buttons Row: Call & WhatsApp */}
+          <div className="flex items-center gap-2.5 pt-1">
+            <a
+              href={`tel:${edited.Phone || edited.Mobile}`}
+              className="flex-1 py-2.5 px-4 rounded-full border border-white/40 bg-white/10 hover:bg-white/20 active:bg-white/30 text-white font-bold text-xs flex items-center justify-center gap-2 transition"
+            >
+              <Phone size={15} /> Call
+            </a>
+            <a
+              href={`https://wa.me/${(edited.Phone || edited.Mobile || "").replace(/\D/g, "")}`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex-1 py-2.5 px-4 rounded-full bg-[#10b981] hover:bg-[#059669] active:bg-[#047857] text-white font-bold text-xs flex items-center justify-center gap-2 transition shadow-md"
+            >
+              <MessageSquare size={15} /> WhatsApp
+            </a>
+          </div>
+        </div>
+
+        {/* 2. Fit 3 Tabs Side-by-Side (Zero Scroll) */}
+        <div className="grid grid-cols-3 w-full border-b border-slate-200 px-2 pt-2.5 bg-white shrink-0">
+          <button
+            type="button"
+            onClick={() => setActiveTab("call")}
+            className={`pb-2.5 text-[11px] font-extrabold tracking-tight uppercase flex items-center justify-center gap-1 border-b-2 transition-all ${
+              activeTab === "call"
+                ? "border-[#009669] text-[#009669]"
+                : "border-transparent text-gray-400 hover:text-gray-600"
+            }`}
+          >
+            <Phone size={13} className={activeTab === "call" ? "text-[#009669]" : "text-gray-400"} />
+            Call Entry
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("profile")}
+            className={`pb-2.5 text-[11px] font-extrabold tracking-tight uppercase flex items-center justify-center gap-1 border-b-2 transition-all ${
+              activeTab === "profile"
+                ? "border-[#009669] text-[#009669]"
+                : "border-transparent text-gray-400 hover:text-gray-600"
+            }`}
+          >
+            <User size={13} className={activeTab === "profile" ? "text-[#009669]" : "text-gray-400"} />
+            Profile
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowEditHistory(true)}
+            className="pb-2.5 text-[11px] font-extrabold tracking-tight uppercase flex items-center justify-center gap-1 border-b-2 border-transparent text-amber-600 hover:text-amber-700 transition-all"
+          >
+            <Edit3 size={13} className="text-amber-600" />
+            Past Logs
+          </button>
+        </div>
+
+        {/* 3. Modal Body Content */}
+        <div className="overflow-y-auto flex-1 px-5 py-5 space-y-5 bg-white">
+          <SharedBanner
+            edited={edited}
+            row={row}
+            globalDup={globalDup}
+            currentAttenderName={attenderName}
+            onRefreshLead={onRefreshLead}
+            isFetchingShared={isFetchingShared}
+          />
+          {activeTab === "call" ? (
+            <div className="space-y-4">
+              {/* Call Type pills */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+                  CALL TYPE
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {["outgoing", "incoming", "outgoing f", "incoming f"].map(opt => {
+                    const isSelected = edited.callType === opt;
+                    const labelText = opt === "outgoing f" ? "Outgoing (F)" : opt === "incoming f" ? "Incoming (F)" : opt.charAt(0).toUpperCase() + opt.slice(1);
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => handleCallTypeChange(opt)}
+                        className={`py-2 px-3 rounded-full text-xs font-bold transition-all border ${
+                          isSelected
+                            ? "bg-[#009669] text-white border-[#009669] shadow-md scale-[1.02]"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        {labelText}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Called For */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <Phone size={13} className="text-blue-500" /> CALLED FOR <span className="text-red-500 font-bold ml-0.5">*</span>
+                </label>
+                <SearchableDropdown
+                  options={CALLED_FOR_OPTIONS}
+                  selected={String(edited[calledForField] || "")}
+                  onChange={val => handleChange(calledForField, val)}
+                  placeholder="Search & select..."
+                  isMulti={true}
+                  colorClass="blue"
+                  disabled={!getEditable(calledForField)}
+                />
+              </div>
+
+              {/* Source */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <Tag size={13} className="text-amber-500" /> SOURCE <span className="text-red-500 font-bold ml-0.5">*</span>
+                </label>
+                <SearchableDropdown
+                  options={SOURCE_OPTIONS}
+                  selected={String(edited[sourceField] || "")}
+                  onChange={val => handleChange(sourceField, val)}
+                  placeholder="Search & select source..."
+                  colorClass="amber"
+                  disabled={!getEditable(sourceField)}
+                />
+              </div>
+
+              {/* General Result Status */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <CheckCircle2 size={13} className="text-blue-500" /> GENERAL RESULT STATUS <span className="text-red-500 font-bold ml-0.5">*</span>
+                </label>
+                <SearchableDropdown
+                  options={STATUS_OPTIONS}
+                  selected={edited.status || ""}
+                  onChange={val => handleChange("status", val)}
+                  placeholder="Search & select status..."
+                  colorClass="indigo"
+                />
+              </div>
+
+              {/* Objection tracker if not interested */}
+              {(edited.status === "Not interested" || edited.status === "Not possible") && (
+                <div className="space-y-2 p-3 bg-red-50/50 border border-red-100 rounded-2xl">
+                  <label className="text-[10px] font-black text-red-500 uppercase tracking-widest flex items-center gap-1.5">
+                    <AlertCircle size={13} /> Reason for {edited.status.toLowerCase()}?
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {OBJECTION_REASONS.map(reason => (
+                      <button
+                        key={reason}
+                        type="button"
+                        onClick={() => handleChange("objectionReason", edited.objectionReason === reason ? "" : reason)}
+                        className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black border transition-all ${
+                          edited.objectionReason === reason
+                            ? "bg-red-500 text-white border-red-500 shadow-md"
+                            : "bg-white text-red-600 border-red-200"
+                        }`}
+                      >
+                        {reason}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Call Notes & History */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <MessageSquare size={13} className="text-indigo-500" /> CALL NOTES
+                  </label>
+                  {mergedHistory && mergedHistory.length > 0 && (
+                    <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[10px] font-black uppercase">
+                      {mergedHistory.length} PAST
+                    </span>
+                  )}
+                </div>
+
+                <HistoryTimeline
+                  mergedHistory={mergedHistory}
+                  historyList={edited.history}
+                  onChangeHistory={updated => handleChange("history", updated)}
+                />
+
+                <textarea
+                  value={edited.remark || ""}
+                  onChange={e => handleChange("remark", e.target.value)}
+                  rows={2}
+                  className="w-full px-3.5 py-2.5 bg-[#f8fafc] border border-slate-200 rounded-2xl text-xs font-medium resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-[#009669] transition"
+                  placeholder="Write notes for this call..."
+                />
+              </div>
+
+              {/* Follow-up / Callback scheduling */}
+              <div className="space-y-1.5 pt-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                  <CalendarDays size={13} /> {edited.callbackDate ? "Follow-up Scheduled" : "Schedule Follow-up"}
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    value={getCallbackDateStr()}
+                    onChange={e => {
+                      handleChange("callbackDate", e.target.value);
+                      if (e.target.value && !edited.callbackStatus) handleChange("callbackStatus", "pending");
+                    }}
+                    className="flex-1 px-3 py-2 border rounded-xl text-xs font-bold bg-[#f8fafc] border-slate-200 text-slate-700"
+                  />
+                  {edited.callbackDate && (
+                    <button
+                      type="button"
+                      onClick={() => { handleChange("callbackDate", null); handleChange("callbackStatus", null); }}
+                      className="px-3 py-2 bg-red-50 text-red-500 font-bold rounded-xl text-xs"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Profile Details Tab */
+            <div className="space-y-4">
+              <div className="space-y-3">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">PERSONAL INFORMATION</h4>
+                
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold text-slate-500 flex items-center gap-1">
+                    <User size={11} className="text-emerald-500" /> NAME
+                  </label>
+                  <input
+                    value={edited.Name || ""}
+                    onChange={e => handleChange("Name", e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white text-slate-800"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold text-slate-500 flex items-center gap-1">
+                    <Phone size={11} className="text-blue-500" /> PHONE *
+                  </label>
+                  <input
+                    value={edited.Phone || ""}
+                    onChange={e => handleChange("Phone", e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white text-slate-800"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold text-slate-500 flex items-center gap-1">
+                    <Phone size={11} className="text-cyan-500" /> MOBILE
+                  </label>
+                  <input
+                    value={edited.Mobile || ""}
+                    onChange={e => handleChange("Mobile", e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white text-slate-800"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold text-slate-500 flex items-center gap-1">
+                    <Hash size={11} className="text-purple-500" /> EMAIL
+                  </label>
+                  <input
+                    value={edited.Email || ""}
+                    onChange={e => handleChange("Email", e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white text-slate-800"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3 pt-2">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">LOCATION INFO</h4>
+                
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold text-slate-500 flex items-center gap-1">
+                    <MapPin size={11} className="text-red-500" /> CITY *
+                  </label>
+                  <CityAutofillInput
+                    value={edited.City || ""}
+                    onChange={val => handleChange("City", val)}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold text-slate-500 flex items-center gap-1">
+                    <MapPin size={11} className="text-amber-500" /> STATE
+                  </label>
+                  <input
+                    value={edited.State || ""}
+                    onChange={e => handleChange("State", e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white text-slate-800"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 4. Modal Footer Bar - Sticky at bottom */}
+        <div className="sticky bottom-0 z-30 px-5 py-3.5 border-t border-slate-200 bg-white flex items-center justify-between shrink-0 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] pb-5 sm:pb-3.5">
+          {(!row._isNew && row.id) ? (
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="flex items-center gap-1.5 text-xs font-bold text-red-500 hover:text-red-700 transition active:scale-95 py-2 px-2"
+            >
+              <Trash2 size={16} /> Remove
+            </button>
+          ) : (
+            <div />
+          )}
+
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => handleSaveAndClose()}
+            className="px-8 py-3 bg-[#6366f1] hover:bg-[#4f46e5] active:bg-[#4338ca] text-white font-extrabold text-xs rounded-full shadow-lg shadow-indigo-500/25 transition active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 ml-auto"
+          >
+            {saving && <Loader size={14} className="animate-spin text-white" />} Save & Close
+          </button>
+        </div>
+      </div>
+
+      {/* Edit History Modal Overlay */}
+      {showEditHistory && (
+        <EditHistoryModal
+          row={edited}
+          attenderId={attenderId}
+          attenderName={attenderName}
+          onClose={() => setShowEditHistory(false)}
+          onHistoryUpdated={(newHistory) => {
+            handleChange("history", newHistory);
+          }}
+        />
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,2125 @@
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { toast } from "react-hot-toast";
+import {
+  Phone, Plus, X, Save, Tag, User, MapPin, MessageSquare,
+  Hash, Clock, CheckCircle2, AlertCircle, Trash2,
+  PhoneIncoming, PhoneOutgoing, CalendarDays, Loader, Flame,
+  ChevronDown, Check, Search, Users, RotateCw
+} from "lucide-react";
+import {
+  addIncomingCallLog, updateCallLog, createProgram, checkGlobalDuplicate, findMatchingAttenderState, combineContactHistories
+} from "../../../lib/db";
+import { searchCRMByPhone } from "../../../lib/ghl";
+import {
+  STATUS_OPTIONS,
+  OBJECTION_REASONS,
+  SOURCE_OPTIONS,
+  CALLED_FOR_OPTIONS,
+  CALL_TYPE_OPTIONS,
+  isIgnoredField,
+  getFieldWithFallback,
+  isKhojiAffirmative,
+  isKhojiNegative,
+  isKhojiField,
+  formatContactName,
+  isNotConnectedStatus
+} from "../utils";
+
+function parseTimestamp(t) {
+  if (!t) return null;
+  if (t instanceof Date) return t;
+  if (typeof t.toDate === "function") return t.toDate();
+  if (typeof t === "object" && t.seconds !== undefined) {
+    return new Date(t.seconds * 1000 + Math.round((t.nanoseconds || 0) / 1000000));
+  }
+  return new Date(t);
+}
+
+import SearchableDropdown from "./edit-modal/SearchableDropdown";
+import DuplicateBanner from "./edit-modal/DuplicateBanner";
+import SharedBanner from "./edit-modal/SharedBanner";
+import CallEntryTab from "./edit-modal/CallEntryTab";
+import ProfileDetailsTab from "./edit-modal/ProfileDetailsTab";
+import CallButton from "./CallButton";
+import WhatsAppButton from "./WhatsAppButton";
+import EditHistoryModal from "./edit-modal/EditHistoryModal";
+
+export const EditModal = ({
+  row,
+  attenderId,
+  attenderName = "Unknown",
+  attenders = [],
+  allowAttenderSelection = false,
+  programs = [],
+  onSave,
+  onDelete,
+  onClose,
+  onRefreshLead,
+  isFetchingShared = false
+}) => {
+  const [selectedAttenderId, setSelectedAttenderId] = useState(() => (attenderId || row?.attenderId || ""));
+  const [selectedAttenderName, setSelectedAttenderName] = useState(() => (attenderName || row?.attenderName || ""));
+
+  useEffect(() => {
+    if (attenderId) setSelectedAttenderId(attenderId);
+    if (attenderName) setSelectedAttenderName(attenderName);
+  }, [attenderId, attenderName]);
+
+  const activeAttenderId = selectedAttenderId || attenderId || row?.attenderId || "";
+  const activeAttenderName = selectedAttenderName || attenderName || row?.attenderName || "";
+
+  const getNormalizedRow = () => {
+    const normalized = { ...row };
+    if (normalized.callType) {
+      normalized.callType = String(normalized.callType).toLowerCase();
+    }
+    
+    // Whitelist fields to normalize
+    const standardFields = ["Name", "Phone", "Mobile", "Email", "City", "State", "Khoji", "Tags", "Source", "Called For"];
+    
+    // 1. Get fallback values for all standard fields
+    const standardVals = {};
+    standardFields.forEach(col => {
+      standardVals[col] = getFieldWithFallback(row, col);
+    });
+
+    // 2. Delete all aliases of standard fields from the normalized object to avoid duplicate keys
+    const keysToDelete = new Set();
+    const keys = Object.keys(row);
+    
+    keys.forEach(k => {
+      const kLower = k.toLowerCase();
+      // Name aliases
+      if (["name", "caller", "caller name", "lead name", "lead", "name of caller"].includes(kLower)) keysToDelete.add(k);
+      // Phone aliases
+      if (["phone", "whatsapp", "phone number", "whatsapp number", "whatsappno", "contact", "contact number", "contact no", "contact_no"].includes(kLower)) keysToDelete.add(k);
+      // Mobile aliases
+      if (["mobile", "mobile no", "mobile number"].includes(kLower)) keysToDelete.add(k);
+      // Email aliases
+      if (["email", "mail", "e-mail", "email id", "emailaddress"].includes(kLower)) keysToDelete.add(k);
+      // City aliases
+      if (["city", "location", "khoji city", "place", "city name"].includes(kLower)) keysToDelete.add(k);
+      // State aliases
+      if (["state", "state name", "province", "region"].includes(kLower)) keysToDelete.add(k);
+      // Khoji aliases
+      if (isKhojiField(kLower)) keysToDelete.add(k);
+      // Source aliases
+      if (["source", "sourse", "source of informiton", "source of information"].includes(kLower)) keysToDelete.add(k);
+      // Tags aliases
+      if (["tags", "tag"].includes(kLower)) keysToDelete.add(k);
+      // Called For aliases
+      if (["called for", "called_for", "calledfor"].includes(kLower)) keysToDelete.add(k);
+    });
+
+    // Delete keys
+    keysToDelete.forEach(k => {
+      delete normalized[k];
+    });
+
+    // 3. Set standard fields with normalized values
+    standardFields.forEach(col => {
+      normalized[col] = standardVals[col];
+    });
+    if (row._isNew && !normalized.Khoji) {
+      normalized.Khoji = "No";
+    }
+    if (row._isNew && !normalized.callType) {
+      normalized.callType = "incoming";
+    }
+    // Normalize Tags: if only a `tags` array exists (no `Tags` string), convert to comma string for display
+    if (!normalized.Tags && Array.isArray(row.tags) && row.tags.length > 0) {
+      normalized.Tags = row.tags.join(", ");
+    }
+    const attState = findMatchingAttenderState(normalized.attenderStates, activeAttenderId || attenderId, activeAttenderName || attenderName);
+    normalized.history = Array.isArray(attState?.history) ? [...attState.history] : [];
+
+    console.log(`[EDIT MODAL INIT TRACE] Lead: "${normalized.Name || row.id}"`, {
+      contactId: row.id || row.contactId,
+      rootRemark: row.remark,
+      attenderId: activeAttenderId || attenderId,
+      attenderName: activeAttenderName || attenderName,
+      matchedAttState: attState,
+      attStateRemark: attState?.remark,
+      attStateHistoryLength: Array.isArray(attState?.history) ? attState.history.length : 0,
+      attenderStatesKeys: Object.keys(normalized.attenderStates || {})
+    });
+
+    return {
+      ...normalized,
+      // Start with clean empty remark for new note entry — past remarks are displayed in CALL NOTES timeline
+      remark: "",
+      // If status is Query, default queryStatus to Pending for backward compat
+      queryStatus: normalized.status === "Query" ? (normalized.queryStatus || "Pending") : normalized.queryStatus,
+    };
+  };
+
+  const [savedRow, setSavedRow] = useState(getNormalizedRow);
+  const [edited, setEdited] = useState(getNormalizedRow);
+  const [saving, setSaving] = useState(false);
+  const [globalDup, setGlobalDup] = useState(null);
+  const [isSearchingCRM, setIsSearchingCRM] = useState(false);
+  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
+  const [dupPopoverOpen, setDupPopoverOpen] = useState(false);
+  const handleDismissRef = useRef(null);
+  const isSubmittingRef = useRef(false);
+  const [addedFields, setAddedFields] = useState([]);
+  const [localPrograms, setLocalPrograms] = useState(programs);
+  const [showCalledForPrompt, setShowCalledForPrompt] = useState(false);
+  const [promptSelection, setPromptSelection] = useState("");
+  const [pendingSave, setPendingSave] = useState(false);
+  const [showUndoStatusPrompt, setShowUndoStatusPrompt] = useState(false);
+  const [activeTab, setActiveTab] = useState(() => (row._isNew ? "profile" : "call"));
+  const [showEditHistory, setShowEditHistory] = useState(false);
+
+  useEffect(() => {
+    const freshNorm = getNormalizedRow();
+    setSavedRow(freshNorm);
+    setEdited(freshNorm);
+  }, [row]);
+
+  useEffect(() => {
+    setLocalPrograms(programs);
+  }, [programs]);
+
+  const getOtherValuesForField = (fieldKey) => {
+    const list = [];
+    const seenKeys = new Set();
+
+    const extractVal = (obj, key) => {
+      if (!obj) return undefined;
+      if (key === "programName") return obj.programName || obj.programId;
+      if (obj[key] !== undefined) return obj[key];
+      const cleanStr = (s) => String(s).toLowerCase().replace(/[\s_-]/g, "");
+      const targetClean = cleanStr(key);
+      const found = Object.keys(obj).find(k => cleanStr(k) === targetClean);
+      return found ? obj[found] : undefined;
+    };
+
+    const addToList = (rawName, val) => {
+      if (val === undefined || val === null) return;
+      const valStr = String(Array.isArray(val) ? val.join(", ") : val).trim();
+      if (!valStr) return;
+
+      const name = rawName === attenderName ? "You" : rawName;
+      const uniqueKey = `${name}_${valStr}`.toLowerCase();
+      if (!seenKeys.has(uniqueKey)) {
+        seenKeys.add(uniqueKey);
+        list.push({ name, val: valStr });
+      }
+    };
+
+    // 1. Gather from current contact's attenderStates
+    if (savedRow.attenderStates) {
+      Object.keys(savedRow.attenderStates).forEach(attId => {
+        const state = savedRow.attenderStates[attId];
+        if (state) {
+          const name = state.attenderName || (attId === attenderId ? "You" : "Attender");
+          const val = extractVal(state, fieldKey);
+          addToList(name, val);
+
+          // History logs inside state
+          if (Array.isArray(state.history)) {
+            state.history.forEach(h => {
+              const hVal = extractVal(h, fieldKey);
+              const hName = h.attenderName || name;
+              addToList(hName, hVal);
+            });
+          }
+        }
+      });
+    }
+
+    // 2. Gather from current contact's top-level and history
+    const topVal = extractVal(savedRow._rawData || savedRow, fieldKey);
+    const topName = savedRow.lastEditedBy || savedRow.assignedName || savedRow.attenderName || "Original";
+    addToList(topName, topVal);
+
+    const currentHist = Array.isArray(edited.history) ? edited.history : (Array.isArray(savedRow.history) ? savedRow.history : []);
+    currentHist.forEach(h => {
+      const hVal = extractVal(h, fieldKey);
+      const hName = h.attenderName || topName;
+      addToList(hName, hVal);
+    });
+
+    // 3. Gather from duplicate matches
+    if (globalDup && Array.isArray(globalDup.matches)) {
+      globalDup.matches.forEach(m => {
+        // Top-level value of duplicate
+        const mVal = extractVal(m, fieldKey);
+        const mName = m.lastEditedBy || m.assignedName || m.attenderName || "Duplicate";
+        addToList(mName, mVal);
+
+        // History logs of duplicate
+        if (Array.isArray(m.history)) {
+          m.history.forEach(h => {
+            const hVal = extractVal(h, fieldKey);
+            const hName = h.attenderName || mName;
+            addToList(hName, hVal);
+          });
+        }
+
+        // attenderStates of duplicate
+        if (m.attenderStates) {
+          Object.keys(m.attenderStates).forEach(attId => {
+            const state = m.attenderStates[attId];
+            if (state) {
+              const name = state.attenderName || "Attender";
+              const val = extractVal(state, fieldKey);
+              addToList(name, val);
+
+              if (Array.isArray(state.history)) {
+                state.history.forEach(h => {
+                  const hVal = extractVal(h, fieldKey);
+                  const hName = h.attenderName || name;
+                  addToList(hName, hVal);
+                });
+              }
+            }
+          });
+        }
+      });
+    }
+
+    // Filter out currently active input value to keep the badges focused on past history
+    const myCurrentVal = String(edited[fieldKey] || "").trim().toLowerCase();
+    return list.filter(item => {
+      const itemValStr = String(item.val).trim().toLowerCase();
+      return itemValStr !== myCurrentVal;
+    });
+  };
+
+  const getLastEditedBy = () => {
+    let latestTime = 0;
+    let latestAttender = savedRow.lastEditedBy || savedRow.assignedName || savedRow.attenderName || "";
+    
+    if (savedRow.updatedAt) {
+      const t = savedRow.updatedAt?.toMillis ? savedRow.updatedAt.toMillis() : new Date(savedRow.updatedAt).getTime();
+      if (t > latestTime) {
+        latestTime = t;
+      }
+    }
+
+    // Check attenderStates
+    if (savedRow.attenderStates) {
+      Object.keys(savedRow.attenderStates).forEach(attId => {
+        const state = savedRow.attenderStates[attId];
+        if (state && state.updatedAt) {
+          const t = new Date(state.updatedAt).getTime();
+          if (t > latestTime) {
+            latestTime = t;
+            latestAttender = state.attenderName || "Attender";
+          }
+        }
+      });
+    }
+    
+    if (globalDup && Array.isArray(globalDup.matches)) {
+      globalDup.matches.filter(m => m.isAssigned === true || m.assignedTo).forEach(m => {
+        if (m.updatedAt) {
+          const t = m.updatedAt?.toMillis ? m.updatedAt.toMillis() : new Date(m.updatedAt).getTime();
+          if (t > latestTime) {
+            latestTime = t;
+            latestAttender = m.lastEditedBy || m.assignedName || m.attenderName || "";
+          }
+        }
+      });
+    }
+    
+    return latestAttender;
+  };
+
+  const handleCreateProgramTag = async (newTagName) => {
+    const cleaned = newTagName.trim();
+    if (!cleaned) return;
+
+    // Prevent duplicate creation
+    if (localPrograms.some(p => p.name.toLowerCase() === cleaned.toLowerCase())) {
+      toast.error("Program/tag already exists!");
+      return;
+    }
+
+    const toastId = toast.loading(`Creating program/tag "${cleaned}"...`);
+    try {
+      await createProgram(cleaned);
+
+      const newProg = {
+        id: cleaned,
+        name: cleaned,
+        contactCount: 0,
+        createdAt: new Date()
+      };
+
+      setLocalPrograms(prev => [newProg, ...prev]);
+
+      // Select it
+      handleChange("programId", cleaned);
+      handleChange("programName", cleaned);
+      handleChange("Sub Program", cleaned);
+      handleChange("subProgram", cleaned);
+
+      // Sync to Tags field
+      const existingTagsStr = edited.Tags || "";
+      const existingTags = existingTagsStr.split(",").map(x => x.trim()).filter(Boolean);
+      if (!existingTags.includes(cleaned)) {
+        existingTags.push(cleaned);
+      }
+      handleChange("Tags", existingTags.join(", "));
+
+      toast.success(`Program/tag "${cleaned}" created!`, { id: toastId });
+    } catch (err) {
+      toast.error(`Failed to create: ${err.message}`, { id: toastId });
+    }
+  };
+
+  const handleAddField = () => {
+    const name = window.prompt("Enter new field name:");
+    if (!name) return;
+    const cleanName = name.trim();
+    if (!cleanName) return;
+
+    // Check if standard or already exists
+    const existingKeys = Object.keys(edited).map(k => k.toLowerCase());
+    if (existingKeys.includes(cleanName.toLowerCase())) {
+      toast.error("Field already exists!");
+      return;
+    }
+
+    setAddedFields(prev => [...prev, cleanName]);
+    setEdited(prev => ({
+      ...prev,
+      [cleanName]: ""
+    }));
+  };
+
+  // Identify fields from the contact that aren't internal bookkeeping fields
+  const dynamicFields = useMemo(() => {
+    const standardOrder = ["Name", "Phone", "Mobile", "Email", "City", "State", "Khoji", "Tags", "Source", "Called For"];
+    const excludedKeysLower = new Set([
+      "id", "contactid", "programid", "programname", "attenderid", "attendername",
+      "calltype", "call type", "status", "remark", "callbackdate", "callbackstatus", "iscallbackdue",
+      "ishotlead", "createdat", "updatedat", "lastcalledat", "firstcalledat", "history",
+      "_callbackdue", "_deleted", "_isnew", "registeredat", "conversionsource", "convertedby",
+      "ghl_id", "ghlid", "sub program", "subprogram", "objectionreason",
+      "lasteditedby", "lasteditedat", "attenderstates", "assignedto",
+      "assignedname", "assignedat", "isassigned", "normalizedphone", "normalizedmobile", "registeredyearmonth",
+      "name", "phone", "mobile", "email", "city", "state", "khoji", "tags", "source", "called for", "calledfor", "sourse",
+      "ismanualentry", "ismanual", "is_manual_entry"
+    ]);
+
+    const contactKeys = Object.keys(edited).filter(k => {
+      const kLower = k.toLowerCase().trim();
+      if (excludedKeysLower.has(kLower)) return false;
+      if (k.startsWith("_")) return false;
+
+      // Always show newly added fields in this modal session
+      if (addedFields.includes(k)) return true;
+
+      // If the contact has recorded mapped fields list, only allow if explicitly mapped.
+      if (edited._mappedFields && Array.isArray(edited._mappedFields)) {
+        return edited._mappedFields.includes(k);
+      }
+
+      if (isIgnoredField(k)) return false;
+      
+      // Only show other fields if they have a non-empty, non-dummy value
+      const val = edited[k];
+      if (val === null || val === undefined) return false;
+      const strVal = String(val).trim();
+      if (!strVal) return false;
+      
+      const lowerVal = strVal.toLowerCase();
+      if (["none", "n/a", "null", "undefined", "false"].includes(lowerVal)) return false;
+      
+      return true;
+    });
+
+    const sortedKeys = [...contactKeys].sort((a, b) => {
+      const idxA = standardOrder.indexOf(a);
+      const idxB = standardOrder.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+
+    return sortedKeys;
+  }, [edited, addedFields]);
+
+  // Debounced duplicate check — only on phone/mobile value change, not every keystroke
+  const phoneVal = useMemo(() => {
+    return String(edited.Phone || "").trim();
+  }, [edited.Phone]);
+
+  const mobileVal = useMemo(() => {
+    return String(edited.Mobile || "").trim();
+  }, [edited.Mobile]);
+
+  const initialPhone = useMemo(() => {
+    return getFieldWithFallback(row, "Phone");
+  }, [row]);
+
+  const initialMobile = useMemo(() => {
+    return getFieldWithFallback(row, "Mobile");
+  }, [row]);
+
+  const dupTimerRef = useRef(null);
+  const activeToastRef = useRef(null);
+  const lastSearchedPhoneRef = useRef("");
+  const lastSearchedMobileRef = useRef("");
+
+  useEffect(() => {
+    if (dupTimerRef.current) clearTimeout(dupTimerRef.current);
+
+    const cleanPhone = phoneVal.replace(/\D/g, "");
+    const cleanMobile = mobileVal.replace(/\D/g, "");
+
+    const isPhoneEmptyOrInitial = !phoneVal || phoneVal === initialPhone || cleanPhone.length < 10;
+    const isMobileEmptyOrInitial = !mobileVal || mobileVal === initialMobile || cleanMobile.length < 10;
+
+    if (isPhoneEmptyOrInitial && isMobileEmptyOrInitial) {
+      setGlobalDup(null);
+      setIsCheckingDuplicate(false);
+      if (activeToastRef.current) {
+        toast.dismiss(activeToastRef.current);
+        activeToastRef.current = null;
+      }
+      lastSearchedPhoneRef.current = "";
+      lastSearchedMobileRef.current = "";
+      return;
+    }
+
+    const shouldCheckPhone = phoneVal !== initialPhone && cleanPhone.length >= 10 && phoneVal !== lastSearchedPhoneRef.current;
+    const shouldCheckMobile = mobileVal !== initialMobile && cleanMobile.length >= 10 && mobileVal !== lastSearchedMobileRef.current;
+
+    if (!shouldCheckPhone && !shouldCheckMobile) {
+      return;
+    }
+
+    setIsCheckingDuplicate(true);
+    if (!activeToastRef.current) {
+      activeToastRef.current = toast.loading(`Checking details for ${[phoneVal, mobileVal].filter(Boolean).join(" / ")}...`);
+    }
+
+    dupTimerRef.current = setTimeout(async () => {
+      try {
+        lastSearchedPhoneRef.current = phoneVal;
+        lastSearchedMobileRef.current = mobileVal;
+
+        const excludeId = row._isNew ? null : (edited.contactId || row.id);
+        const combinedValue = [
+          phoneVal !== initialPhone && cleanPhone.length >= 10 ? phoneVal : null,
+          mobileVal !== initialMobile && cleanMobile.length >= 10 ? mobileVal : null
+        ].filter(Boolean).join(", ");
+        const searchVal = phoneVal || mobileVal;
+        const alreadyFetched = !!(edited.GHL_ID || row.GHL_ID || edited.ghl_id || row.ghl_id);
+        const shouldQueryCRM = (row._isNew || !edited.Name || !String(edited.Name).trim()) && !alreadyFetched;
+
+        // Run MongoDB Dup Check and GHL CRM Search in PARALLEL for instant <200ms response!
+        const [dupRes, crmRes] = await Promise.all([
+          checkGlobalDuplicate(combinedValue, excludeId).catch(err => {
+            console.warn("[Dup Check Error]", err);
+            return null;
+          }),
+          shouldQueryCRM ? searchCRMByPhone(searchVal).catch(err => {
+            console.warn("[GHL Search Error]", err);
+            return [];
+          }) : Promise.resolve([])
+        ]);
+
+        let combinedMatches = [];
+        const allTagsSet = new Set();
+        if (dupRes) {
+          if (Array.isArray(dupRes.matches)) combinedMatches = dupRes.matches;
+          if (Array.isArray(dupRes.allTags)) dupRes.allTags.forEach(t => allTagsSet.add(t));
+        }
+
+        if (combinedMatches.length > 0) {
+          const dup = combinedMatches[0];
+          setGlobalDup({
+            count: combinedMatches.length,
+            allTags: Array.from(allTagsSet).sort(),
+            matches: combinedMatches,
+            first: dup,
+            programName: dup?.programName,
+            showWarning: true
+          });
+
+          if (activeToastRef.current) {
+            toast.success("Duplicate contact found in database!", { id: activeToastRef.current });
+            activeToastRef.current = null;
+          }
+
+          setEdited(prev => {
+            const updated = { ...prev };
+            const fieldsToMap = ["Name", "Email", "City", "State", "Khoji"];
+            fieldsToMap.forEach(f => {
+              const dupVal = getFieldWithFallback(dup, f);
+              if (!String(updated[f] || "").trim() && dupVal) updated[f] = dupVal;
+            });
+            const dupTagsVal = getFieldWithFallback(dup, "tags") || getFieldWithFallback(dup, "Tags");
+            if (!String(updated.Tags || "").trim() && dupTagsVal) updated.Tags = dupTagsVal;
+            if (!updated.contactId) updated.contactId = dup.contactId || dup.id;
+            if (!updated.GHL_ID && dup.GHL_ID) updated.GHL_ID = dup.GHL_ID;
+            return updated;
+          });
+        } else {
+          setGlobalDup(null);
+          const crmContact = Array.isArray(crmRes) ? crmRes[0] : crmRes;
+          if (crmContact) {
+            const name = crmContact.contactName || crmContact.name || [crmContact.firstName, crmContact.lastName].filter(Boolean).join(" ") || crmContact.Name || "";
+            const email = crmContact.email || crmContact.Email || "";
+            const city = crmContact.city || crmContact.location?.city || crmContact.City || "";
+            const state = crmContact.state || crmContact.location?.state || crmContact.State || "";
+            const source = crmContact.source || crmContact.Source || "";
+            const tags = Array.isArray(crmContact.tags) ? crmContact.tags.join(", ") : (crmContact.tags || crmContact.Tags || "");
+            const ghlId = crmContact.id || crmContact.GHL_ID || crmContact.ghl_id || "";
+
+            console.log(`%c[CRM AUTOFILL SUCCESS] %cFound contact in GHL CRM:`, "color: #10b981; font-weight: bold", "color: inherit", crmContact);
+            setEdited(prev => {
+              const updated = { ...prev };
+              if (name) updated.Name = name;
+              if (email) updated.Email = email;
+              if (city) updated.City = city;
+              if (state) updated.State = state;
+              if (source) updated.Source = source;
+              if (tags) updated.Tags = tags;
+              if (ghlId) updated.GHL_ID = ghlId;
+              return updated;
+            });
+
+            const toastMessage = `Lead "${name || searchVal}" found in CRM! Details auto-filled.`;
+            if (activeToastRef.current) {
+              toast.success(toastMessage, { id: activeToastRef.current });
+              activeToastRef.current = null;
+            } else {
+              toast.success(toastMessage);
+            }
+          } else {
+            if (activeToastRef.current) {
+              toast.dismiss(activeToastRef.current);
+              activeToastRef.current = null;
+            }
+          }
+        }
+      } catch (err) {
+        console.error("[EditModal] Duplicate/CRM check failed:", err);
+        setGlobalDup(null);
+        if (activeToastRef.current) {
+          toast.dismiss(activeToastRef.current);
+          activeToastRef.current = null;
+        }
+      } finally {
+        setIsCheckingDuplicate(false);
+        setIsSearchingCRM(false);
+      }
+    }, 200);
+
+    return () => {
+      if (dupTimerRef.current) clearTimeout(dupTimerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phoneVal, mobileVal, row._isNew, row.id, initialPhone, initialMobile]);
+
+  const dupWarningMessage = useMemo(() => {
+    if (!globalDup) return "";
+    const attenders = new Set();
+    const calledFors = new Set();
+    let isAssignedToMe = false;
+    let isAssignedToOthers = false;
+    let isUnassigned = false;
+
+    globalDup.matches.forEach(m => {
+      const docAssigned = m.isAssigned === true || (Array.isArray(m.assignedTo) && m.assignedTo.length > 0);
+      if (!docAssigned) {
+        isUnassigned = true;
+      }
+
+      // Gather Called For values
+      const docCalledFor = m["Called For"] || m.calledFor || "";
+      if (docCalledFor && docCalledFor !== "Unknown") {
+        calledFors.add(docCalledFor);
+      }
+
+      if (m.attenderStates) {
+        Object.keys(m.attenderStates).forEach(attId => {
+          const state = m.attenderStates[attId];
+          if (state) {
+            if (state.attenderName && state.attenderName !== "Unknown") {
+              if (attId === attenderId || state.attenderName === attenderName) {
+                isAssignedToMe = true;
+              } else {
+                attenders.add(state.attenderName);
+                isAssignedToOthers = true;
+              }
+            }
+            const stateCalledFor = state["Called For"] || state.calledFor || "";
+            if (stateCalledFor && stateCalledFor !== "Unknown") {
+              calledFors.add(stateCalledFor);
+            }
+          }
+        });
+      }
+      
+      const topName = m.assignedName || m.attenderName;
+      const topId = m.attenderId;
+      if (topName && topName !== "Unknown") {
+        if (topId === attenderId || topName === attenderName) {
+          isAssignedToMe = true;
+        } else {
+          attenders.add(topName);
+          isAssignedToOthers = true;
+        }
+      }
+    });
+
+    const attList = Array.from(attenders).filter(Boolean);
+    const cfList = Array.from(calledFors).filter(Boolean);
+    const cfStr = cfList.length > 0 ? ` for ${cfList.join(", ")}` : "";
+
+    if (isAssignedToMe && isAssignedToOthers && attList.length > 0) {
+      return `Already assigned to you and ${attList.join(", ")}${cfStr}`;
+    } else if (isAssignedToMe) {
+      return `Already assigned to you${cfStr}`;
+    } else if (isAssignedToOthers && attList.length > 0) {
+      return `Already assigned to ${attList.join(", ")}${cfStr}`;
+    } else if (isUnassigned) {
+      return `Already present in database (Unassigned)${cfStr}`;
+    } else {
+      return `Already present in database${cfStr}`;
+    }
+  }, [globalDup, attenderId, attenderName]);
+
+  const isPhoneDuplicate = useMemo(() => {
+    if (!globalDup || !globalDup.showWarning || !globalDup.first || !phoneVal) return false;
+    const rawNorm = phoneVal.replace(/\D/g, "");
+    if (!rawNorm) return false;
+    const norm = rawNorm.length >= 10 ? rawNorm.slice(-10) : rawNorm;
+    const first = globalDup.first;
+    return (
+      first.normalizedPhone === norm ||
+      first.normalizedMobile === norm ||
+      (Array.isArray(first.normalizedPhones) && first.normalizedPhones.includes(norm))
+    );
+  }, [globalDup, phoneVal]);
+
+  const isMobileDuplicate = useMemo(() => {
+    if (!globalDup || !globalDup.showWarning || !globalDup.first || !mobileVal) return false;
+    const rawNorm = mobileVal.replace(/\D/g, "");
+    if (!rawNorm) return false;
+    const norm = rawNorm.length >= 10 ? rawNorm.slice(-10) : rawNorm;
+    const first = globalDup.first;
+    return (
+      first.normalizedPhone === norm ||
+      first.normalizedMobile === norm ||
+      (Array.isArray(first.normalizedPhones) && first.normalizedPhones.includes(norm))
+    );
+  }, [globalDup, mobileVal]);
+
+  const handleAutofillFromDuplicate = () => {
+    if (!globalDup || !globalDup.first) return;
+    const dup = globalDup.first;
+    setEdited(prev => {
+      const updated = { ...prev };
+      
+      // 1. Autofill standard fields
+      const fieldsToMap = ["Name", "Email", "City", "State", "Khoji"];
+      fieldsToMap.forEach(f => {
+        const dupVal = getFieldWithFallback(dup, f);
+        if (dupVal) {
+          updated[f] = dupVal;
+        }
+      });
+
+      // Map Tags specifically
+      const dupTagsVal = getFieldWithFallback(dup, "tags") || getFieldWithFallback(dup, "Tags");
+      if (dupTagsVal) {
+        updated.Tags = dupTagsVal;
+      }
+
+      // Map Called For & Source
+      const dupCalledFor = getFieldWithFallback(dup, "Called For");
+      if (dupCalledFor) {
+        updated[calledForField] = dupCalledFor;
+      }
+      const dupSource = getFieldWithFallback(dup, "Source");
+      if (dupSource) {
+        updated[sourceField] = dupSource;
+      }
+
+      // Set contactId and GHL_ID
+      if (!updated.contactId) {
+        updated.contactId = dup.contactId || dup.id;
+      }
+      if (!updated.GHL_ID && dup.GHL_ID) {
+        updated.GHL_ID = dup.GHL_ID;
+      }
+
+      // 2. Autofill all other fields (custom / dynamic fields)
+      Object.keys(dup).forEach(k => {
+        const kl = k.toLowerCase();
+        if ([
+          "id", "contactid", "ghl_id", "normalizedphone", "normalizedmobile",
+          "assignedto", "assignedname", "assignedat", "isassigned", "history",
+          "createdat", "updatedat", "lasteditedby", "lasteditedat", "createdtime",
+          "attenderid", "attendername", "programid", "programname", "remark", "status",
+          "calltype", "querystatus", "objectionreason", "callbackdate", "callbackstatus",
+          "ishotlead", "firstcalledat", "lastcalledat", "_isnew", "_rawdata", "_deleted",
+          "attenderstates", "tags", "source", "called for", "called_for", "calledfor"
+        ].includes(kl)) {
+          return;
+        }
+
+        const dupVal = dup[k];
+        if (dupVal !== undefined && dupVal !== null && String(dupVal).trim() !== "") {
+          const existingKey = Object.keys(updated).find(x => x.toLowerCase() === kl);
+          if (existingKey) {
+            updated[existingKey] = dupVal;
+          } else {
+            updated[k] = dupVal;
+          }
+        }
+      });
+
+      return updated;
+    });
+    toast.success("Autofilled contact details from duplicate entry!");
+  };
+
+  // Aggregated Call Notes / History from current contact & duplicate contact records
+  const mergedHistory = useMemo(() => {
+    const list = [];
+
+    // 1. Current contact's history entries (combine local attender history & top-level document history)
+    const combinedCurrentHist = [];
+    if (Array.isArray(edited.history)) combinedCurrentHist.push(...edited.history);
+    if (Array.isArray(savedRow.history)) {
+      savedRow.history.forEach(h => {
+        if (!combinedCurrentHist.some(ex => ex.timestamp === h.timestamp && ex.remark === h.remark && ex.status === h.status)) {
+          combinedCurrentHist.push(h);
+        }
+      });
+    }
+
+    combinedCurrentHist.forEach((h, idx) => {
+      list.push({
+        status: h.status || "",
+        remark: h.remark || "",
+        calledFor: h.calledFor || h.called_for || h["Called For"] || "",
+        source: h.source || h.sourse || h.Source || "",
+        callType: h.callType || "outgoing",
+        attenderName: h.attenderName || "Unknown",
+        timestamp: h.timestamp || new Date().toISOString(),
+        isCurrentDoc: true,
+        originalIndex: idx,
+        sourceProgram: savedRow.programName || "This Sheet"
+      });
+    });
+
+    // 1b. Also include the standalone remark saved before history tracking existed
+    if (savedRow.remark && String(savedRow.remark).trim()) {
+      const remarkStr = String(savedRow.remark).trim();
+      const alreadyInHistory = list.some(h => h.remark === remarkStr && h.isCurrentDoc);
+      if (!alreadyInHistory) {
+        list.push({
+          status: savedRow.status || "",
+          remark: remarkStr,
+          calledFor: savedRow["Called For"] || savedRow.calledFor || "",
+          source: savedRow.Source || savedRow.source || "",
+          callType: savedRow.callType || "outgoing",
+          attenderName: savedRow.attenderName || savedRow.assignedName || "Unknown",
+          timestamp: savedRow.updatedAt?.toDate?.()?.toISOString?.() || savedRow.updatedAt || savedRow.createdAt?.toDate?.()?.toISOString?.() || savedRow.createdAt || new Date().toISOString(),
+          isCurrentDoc: true,
+          originalIndex: -1,
+          sourceProgram: savedRow.programName || "This Sheet"
+        });
+      }
+    }
+
+    // 2. Iterate over row.attenderStates to collect history of other sessions
+    if (savedRow.attenderStates) {
+      const myAttId = String(activeAttenderId || attenderId || "").toLowerCase().trim();
+      const myAttName = String(activeAttenderName || attenderName || "").toLowerCase().trim();
+
+      Object.keys(savedRow.attenderStates).forEach(otherAttenderId => {
+        const state = savedRow.attenderStates[otherAttenderId];
+        if (state) {
+          const stateAttId = String(otherAttenderId || state.attenderId || "").toLowerCase().trim();
+          const stateAttName = String(state.attenderName || "").toLowerCase().trim();
+          
+          // Skip active attender because their history entries were already processed in Step 1
+          if (myAttId && stateAttId && stateAttId === myAttId) return;
+          if (myAttName && stateAttName && stateAttName === myAttName) return;
+
+          const progName = state.programName || "Attender Log";
+          // Add history entries
+          if (Array.isArray(state.history)) {
+            state.history.forEach(h => {
+              list.push({
+                status: h.status || "",
+                remark: h.remark || "",
+                calledFor: h.calledFor || h.called_for || h["Called For"] || state["Called For"] || state.calledFor || "",
+                source: h.source || h.sourse || h.Source || state.Source || state.source || "",
+                callType: h.callType || state.callType || "outgoing",
+                attenderName: h.attenderName || state.attenderName || "Unknown",
+                timestamp: h.timestamp || new Date().toISOString(),
+                isCurrentDoc: false,
+                sourceProgram: progName
+              });
+            });
+          }
+          // Standalone remark for this other attender
+          if (state.remark && String(state.remark).trim()) {
+            const attRemark = String(state.remark).trim();
+            const alreadyInHistory = Array.isArray(state.history) && state.history.some(h => h.remark === attRemark);
+            if (!alreadyInHistory) {
+              list.push({
+                status: state.status || "",
+                remark: attRemark,
+                calledFor: state["Called For"] || state.calledFor || "",
+                source: state.Source || state.source || "",
+                callType: state.callType || "outgoing",
+                attenderName: state.attenderName || "Unknown",
+                timestamp: state.updatedAt || new Date().toISOString(),
+                isCurrentDoc: false,
+                sourceProgram: progName
+              });
+            }
+          }
+        }
+      });
+    }
+
+    // 3. Fallback: also include duplicate contacts' history if globalDup has matches
+    if (globalDup && Array.isArray(globalDup.matches)) {
+      globalDup.matches.filter(m => m.id !== row.id).forEach(m => {
+        const progName = m.programName || "Duplicate Lead";
+
+        // A) Extract nested history/remarks from m.attenderStates
+        if (m.attenderStates) {
+          Object.keys(m.attenderStates).forEach(otherId => {
+            const state = m.attenderStates[otherId];
+            if (state) {
+              const attProgName = state.programName || progName;
+              if (Array.isArray(state.history)) {
+                state.history.forEach(h => {
+                  list.push({
+                    status: h.status || "",
+                    remark: h.remark || "",
+                    calledFor: h.calledFor || h.called_for || h["Called For"] || state["Called For"] || state.calledFor || "",
+                    source: h.source || h.sourse || h.Source || state.Source || state.source || "",
+                    callType: h.callType || state.callType || "outgoing",
+                    attenderName: h.attenderName || state.attenderName || "Unknown",
+                    timestamp: h.timestamp || new Date().toISOString(),
+                    isCurrentDoc: false,
+                    sourceProgram: attProgName
+                  });
+                });
+              }
+              if (state.remark && String(state.remark).trim()) {
+                const attRemark = String(state.remark).trim();
+                const alreadyInStateHistory = Array.isArray(state.history) && state.history.some(h => h.remark === attRemark);
+                if (!alreadyInStateHistory) {
+                  list.push({
+                    status: state.status || "",
+                    remark: attRemark,
+                    calledFor: state["Called For"] || state.calledFor || "",
+                    source: state.Source || state.source || "",
+                    callType: state.callType || "outgoing",
+                    attenderName: state.attenderName || "Unknown",
+                    timestamp: state.updatedAt || new Date().toISOString(),
+                    isCurrentDoc: false,
+                    sourceProgram: attProgName
+                  });
+                }
+              }
+            }
+          });
+        }
+
+        // B) Extract top-level history/remarks of the duplicate match
+        if (Array.isArray(m.history)) {
+          m.history.forEach(h => {
+            list.push({
+              status: h.status || "",
+              remark: h.remark || "",
+              calledFor: h.calledFor || h.called_for || h["Called For"] || "",
+              source: h.source || h.sourse || h.Source || "",
+              callType: h.callType || "outgoing",
+              attenderName: h.attenderName || "Unknown",
+              timestamp: h.timestamp || new Date().toISOString(),
+              isCurrentDoc: false,
+              sourceProgram: progName
+            });
+          });
+        }
+        // Also include standalone remark from duplicate if no history
+        if (m.remark && String(m.remark).trim()) {
+          const dupRemark = String(m.remark).trim();
+          const alreadyInDupHistory = Array.isArray(m.history) && m.history.some(h => h.remark === dupRemark);
+          if (!alreadyInDupHistory) {
+            list.push({
+              status: m.status || "",
+              remark: dupRemark,
+              calledFor: m["Called For"] || m.calledFor || "",
+              source: m.Source || m.source || "",
+              callType: m.callType || "outgoing",
+              attenderName: m.assignedName || m.attenderName || "Unknown",
+              timestamp: m.updatedAt?.toDate?.()?.toISOString?.() || m.updatedAt || m.createdAt?.toDate?.()?.toISOString?.() || m.createdAt || new Date().toISOString(),
+              isCurrentDoc: false,
+              sourceProgram: progName
+            });
+          }
+        }
+      });
+    }
+
+    const getMs = (val) => {
+      if (!val) return 0;
+      if (val instanceof Date) return val.getTime();
+      if (typeof val === "string") return new Date(val).getTime() || 0;
+      if (val.toDate && typeof val.toDate === "function") return val.toDate().getTime() || 0;
+      if (typeof val === "object" && val.seconds !== undefined) return val.seconds * 1000;
+      try {
+        const d = new Date(val);
+        return isNaN(d.getTime()) ? 0 : d.getTime();
+      } catch (e) {
+        return 0;
+      }
+    };
+
+    // Sort chronologically ascending
+    list.sort((a, b) => {
+      const timeA = getMs(a.timestamp);
+      const timeB = getMs(b.timestamp);
+      return timeA - timeB;
+    });
+
+    // Semantic Deduplication: Filter out any entries with identical remarks or close timestamps/statuses
+    const uniqueList = [];
+    const clean = s => String(s || "").trim().toLowerCase();
+
+    list.forEach(item => {
+      const itemRemark = clean(item.remark);
+      const itemStatus = clean(item.status);
+      const itemMs = getMs(item.timestamp);
+
+      const isDuplicate = uniqueList.some(ex => {
+        const exRemark = clean(ex.remark);
+        const exStatus = clean(ex.status);
+        const exMs = getMs(ex.timestamp);
+
+        const timeDiff = (itemMs > 0 && exMs > 0) ? Math.abs(itemMs - exMs) : 0;
+
+        // Rule 1: Identical non-empty remarks logged within 15 seconds of each other (including 0ms exact match)
+        if (itemRemark && exRemark && itemRemark === exRemark) {
+          if (timeDiff < 15000) return true;
+        }
+
+        // Rule 2: Same status logged within 15 seconds of each other (only if remarks are also identical)
+        if (itemStatus && exStatus && itemStatus === exStatus && itemRemark === exRemark) {
+          if (timeDiff < 15000) return true;
+        }
+
+        return false;
+      });
+
+      if (!isDuplicate) {
+        uniqueList.push(item);
+      }
+    });
+
+    console.log(`[EDIT MODAL MERGED HISTORY TRACE] Lead: "${edited.Name || row.id}"`, {
+      rawListCount: list.length,
+      uniqueCount: uniqueList.length,
+      historyEntries: uniqueList.map(h => ({
+        status: h.status,
+        remark: h.remark,
+        attenderName: h.attenderName,
+        timestamp: h.timestamp,
+        sourceProgram: h.sourceProgram
+      }))
+    });
+
+    return uniqueList;
+  }, [savedRow.history, savedRow.remark, savedRow.status, savedRow.programName, savedRow.attenderName, savedRow.assignedName, savedRow.updatedAt, savedRow.createdAt, savedRow.attenderStates, globalDup, edited.history, attenderId]);
+
+  // Compute call count for the active attender only (do not combine across attenders)
+  const myAttenderCallCount = useMemo(() => {
+    if (!mergedHistory || !Array.isArray(mergedHistory)) return 0;
+    const myId = String(activeAttenderId || attenderId || "").toLowerCase().trim();
+    const myName = String(activeAttenderName || attenderName || "").toLowerCase().trim();
+
+    const myCalls = mergedHistory.filter(h => {
+      const hAttName = String(h.attenderName || "").toLowerCase().trim();
+      const hAttId = String(h.attenderId || "").toLowerCase().trim();
+      if (myName && hAttName && hAttName === myName) return true;
+      if (myId && hAttId && hAttId === myId) return true;
+      if (h.isCurrentDoc && (!hAttName || hAttName === "unknown") && (!hAttId || hAttId === "unknown")) return true;
+      return false;
+    });
+
+    return myCalls.length > 0 ? myCalls.length : 0;
+  }, [mergedHistory, activeAttenderId, attenderId, activeAttenderName, attenderName]);
+
+
+
+  // Identity helpers
+  const getLogName = () => {
+    if (edited.Name && String(edited.Name).trim()) {
+      return edited.Name;
+    }
+    const key = Object.keys(edited).find(k => {
+      const kl = k.toLowerCase();
+      if (kl === "attendername" || kl === "programname") return false;
+      return kl.includes("name") || kl.includes("lead");
+    });
+    return key ? edited[key] : "";
+  };
+
+  const handleChange = (key, val) => {
+    setEdited(prev => {
+      const next = { ...prev, [key]: val };
+      if (key === "status" && val === "Reg.Done") {
+        next.callbackDate = null;
+        next.callbackStatus = null;
+      }
+      return next;
+    });
+  };
+
+  const handleCallTypeChange = (newCallType) => {
+    setEdited(prev => {
+      const updated = { ...prev, callType: newCallType };
+      
+      // Only auto-update program/tag defaults if this is a new entry
+      if (row._isNew) {
+        const isIncoming = newCallType === "incoming" || newCallType === "incoming f";
+        const currentProgId = prev.programId;
+        
+        // Only update if current program is the default incoming-calls or outgoing-calls,
+        // or if it's empty (untagged). This avoids overwriting custom tags chosen by user.
+        if (!currentProgId || currentProgId === "incoming-calls" || currentProgId === "outgoing-calls" || currentProgId === "Incoming Calls" || currentProgId === "Outgoing Calls") {
+          const defaultProgId = isIncoming ? "incoming-calls" : "outgoing-calls";
+          const defaultProgName = isIncoming ? "Incoming Calls" : "Outgoing Calls";
+          
+          updated.programId = defaultProgId;
+          updated.programName = defaultProgName;
+          updated["Sub Program"] = defaultProgName;
+          updated.subProgram = defaultProgName;
+
+          // Sync Tags string for display in the modal
+          const currentTags = prev.Tags || "";
+          const tagsList = currentTags.split(",").map(t => t.trim()).filter(Boolean);
+          
+          // Remove the other default tag if it exists
+          const tagToRemove = isIncoming ? "Outgoing Calls" : "Incoming Calls";
+          const tagToAdd = isIncoming ? "Incoming Calls" : "Outgoing Calls";
+          
+          let filteredTags = tagsList.filter(t => t !== tagToRemove);
+          if (!filteredTags.includes(tagToAdd)) {
+            filteredTags.push(tagToAdd);
+          }
+          updated.Tags = filteredTags.join(", ");
+        }
+      }
+      return updated;
+    });
+  };
+
+  // Smart field matching: find actual key name in data that matches an alias list.
+  // Explicitly exclude dot-notation keys (e.g. attenderStates.attenderId.source) which
+  // are internal Firestore paths and must never be used as field labels.
+  const findField = (aliases) => {
+    const keys = Object.keys(edited).filter(k => !k.includes(".") && !k.toLowerCase().startsWith("attenderstates"));
+    return keys.find(k => aliases.some(a => k.toLowerCase() === a || k.toLowerCase() === a.replace(/_/g, " "))) 
+      || keys.find(k => aliases.some(a => k.toLowerCase().includes(a)))
+      || (aliases[0].charAt(0).toUpperCase() + aliases[0].slice(1));
+  };
+  const sourceField = findField(["source", "sourse"]);
+  const calledForField = findField(["called for", "called_for", "calledfor"]);
+
+  const isManualEntry = edited.isManualEntry || edited.programId === "incoming-calls" || edited.programId === "outgoing-calls" || edited.programId === "Incoming Calls" || edited.programId === "Outgoing Calls";
+  const isIncoming = edited._isNew || edited.callType === "incoming" || edited.callType === "incoming f" || isManualEntry;
+
+  const getEditable = (field) => {
+    if (field === "Tags") return true;
+    if (isIncoming) return true;
+    if (addedFields.includes(field)) return true;
+    const fLower = field.toLowerCase();
+    return ["source", "called for", "khoji", "city", "state"].includes(fLower) || 
+      fLower.includes("asmani") || 
+      fLower.includes("aasmani") || 
+      fLower.includes("आसमानी") || 
+      fLower.includes("shivir done");
+  };
+
+  const isQuestion = (f) => f.length > 40 || /^(what|how|why|describe|tell)[\s_]/i.test(f);
+  const isCampaign = (f) => { const k = f.toLowerCase().replace(/[_\s]/g, ""); return k.includes("adid") || k.includes("adname") || k.includes("adsetid") || k.includes("adsetname") || k.includes("campaignid") || k.includes("campaignname") || k.includes("formid") || k.includes("formname") || k.includes("isorganic") || k.includes("createdtime"); };
+  const iconFor = (f) => { const k = f.toLowerCase(); return k.includes("name") || k.includes("lead") || k.includes("khoji") || k.includes("caller") ? <User size={11} className="text-emerald-500" /> : k.includes("phone") || k.includes("mobile") ? <Phone size={11} className="text-blue-500" /> : k.includes("city") || k.includes("location") ? <MapPin size={11} className="text-red-500" /> : k.includes("email") ? <Hash size={11} className="text-purple-500" /> : k.includes("when") || k.includes("suitable") ? <Clock size={11} className="text-amber-500" /> : k.includes("asmani") || k.includes("aasmani") || k.includes("आसमानी") ? <CheckCircle2 size={11} className="text-pink-500" /> : <Tag size={11} className="text-indigo-500" />; };
+  const labelFor = (f) => f.replace(/_/g, " ").replace(/\?/g, "").trim();
+
+  const basicFields = useMemo(() => {
+    return dynamicFields.filter(f => !isQuestion(f) && !isCampaign(f));
+  }, [dynamicFields]);
+  const questionFields = useMemo(() => {
+    return dynamicFields.filter(f => isQuestion(f));
+  }, [dynamicFields]);
+  const campaignFields = useMemo(() => {
+    return dynamicFields.filter(f => isCampaign(f));
+  }, [dynamicFields]);
+
+  const handleSaveAndClose = async (overrideFields = null, isFromHistory = false) => {
+    if (saving) return; // Prevent double save
+
+    let targetEdited = (overrideFields && typeof overrideFields === "object" && !overrideFields.target && !overrideFields.nativeEvent)
+      ? { ...edited, ...overrideFields }
+      : { ...edited };
+
+    if (targetEdited.status === "Reg.Done") {
+      targetEdited.callbackDate = null;
+      targetEdited.callbackStatus = null;
+    }
+
+    // Fix for Flaw 3: Clicking "Save" with No Changes (Ghost Calls)
+    const isNew = !!row._isNew;
+
+    // We compute the call-attempt changes first
+    const getTimestampOrNull = (val) => {
+      if (!val) return null;
+      if (val instanceof Date) return val.getTime();
+      if (typeof val === "string") return new Date(val).getTime();
+      if (val.toDate && typeof val.toDate === "function") return val.toDate().getTime();
+      if (typeof val === "object" && val.seconds !== undefined) return val.seconds * 1000;
+      try {
+        return new Date(val).getTime();
+      } catch (e) {
+        return null;
+      }
+    };
+
+    const oldStatus = String(savedRow.status || "").trim();
+    const newStatus = String(targetEdited.status || "").trim();
+    const statusChanged = oldStatus !== newStatus;
+
+    const oldRemark = String(savedRow.remark || "").trim();
+    const newRemark = String(targetEdited.remark || "").trim();
+    const remarkChanged = oldRemark !== newRemark;
+    const newRemarkEntered = newRemark !== "";
+
+    const oldCallType = String(savedRow.callType || "outgoing").toLowerCase();
+    const newCallType = String(targetEdited.callType || "outgoing").toLowerCase();
+    const callTypeChanged = oldCallType !== newCallType;
+
+    const oldCallbackTime = getTimestampOrNull(savedRow.callbackDate);
+    const newCallbackTime = getTimestampOrNull(targetEdited.callbackDate);
+    const callbackDateChanged = oldCallbackTime !== newCallbackTime;
+
+    const oldObjection = String(savedRow.objectionReason || "").trim();
+    const newObjection = String(targetEdited.objectionReason || "").trim();
+    const objectionReasonChanged = oldObjection !== newObjection;
+
+    const isCallAttemptUpdated = statusChanged || remarkChanged || callTypeChanged || callbackDateChanged || objectionReasonChanged;
+
+    console.log(`[EDIT MODAL SAVE DIAGNOSTIC] Lead: "${getLogName() || row.id}"`, {
+      savedRowRemark: savedRow.remark,
+      targetEditedRemark: targetEdited.remark,
+      oldRemark,
+      newRemark,
+      remarkChanged,
+      oldStatus,
+      newStatus,
+      statusChanged,
+      isCallAttemptUpdated,
+      activeAttenderId,
+      activeAttenderName,
+      attenderId,
+      attenderName
+    });
+
+    if (!isFromHistory && !isNew) {
+      const cleanForCompare = (val) => {
+        if (val === undefined || val === null) return "";
+        if (val instanceof Date) return val.toISOString().split("T")[0];
+        if (typeof val === "object" && val.seconds !== undefined) {
+          return new Date(val.seconds * 1000).toISOString().split("T")[0];
+        }
+        return String(val).trim();
+      };
+      
+      const historyChanged = JSON.stringify(targetEdited.history || []) !== JSON.stringify(savedRow.history || []);
+      const phoneChanged = cleanForCompare(targetEdited.Phone) !== cleanForCompare(savedRow.Phone) || cleanForCompare(targetEdited.Mobile) !== cleanForCompare(savedRow.Mobile);
+
+      const hasChanges = historyChanged || phoneChanged || isCallAttemptUpdated || Object.keys(targetEdited).some(key => {
+        if (["id", "_callbackDue", "_isNew", "attenderStates", "assignedTo", "assignedName", "assignedAt", "isAssigned", "lastEditedBy", "lastEditedAt", "normalizedPhone", "normalizedMobile", "history", "lastCalledAt", "firstCalledAt"].includes(key)) {
+          return false;
+        }
+        if (key === "remark") {
+          return String(targetEdited.remark || "").trim() !== "";
+        }
+        const val1 = cleanForCompare(savedRow[key]);
+        const val2 = cleanForCompare(targetEdited[key]);
+        return val1 !== val2;
+      });
+
+      if (!hasChanges) {
+        console.log("No changes detected. Closing modal without saving.");
+        toast.success("No changes detected.");
+        if (onClose) onClose();
+        return;
+      }
+    }
+
+    if (!isFromHistory) {
+      // Compulsory Phone / Mobile Validation
+      const phoneVal = String(targetEdited.Phone || targetEdited.Mobile || targetEdited.phone || targetEdited.mobile || "").trim();
+      if (!phoneVal) {
+        toast.error("Please enter a Phone or Mobile number before saving.", { duration: 4000, position: 'top-center' });
+        return;
+      }
+
+      // Compulsory Status Validation
+      if (!targetEdited.status || String(targetEdited.status).trim() === "") {
+        toast.error("Please select a call status before saving.", { duration: 4000, position: 'top-center' });
+        return;
+      }
+
+      if (allowAttenderSelection && !activeAttenderId) {
+        toast.error("Please select an attender on whose behalf this call is being logged.", { duration: 4000, position: 'top-center' });
+        return;
+      }
+
+      const isUnconnected = isNotConnectedStatus(targetEdited.status);
+
+      if (isUnconnected) {
+        if (!targetEdited.City || !String(targetEdited.City).trim()) {
+          targetEdited.City = "Unknown";
+        }
+        if (!targetEdited.Khoji || !String(targetEdited.Khoji).trim()) {
+          targetEdited.Khoji = "No";
+        }
+      }
+
+      if (allowAttenderSelection && !activeAttenderId) {
+        toast.error("Please select an Attender before saving.", { duration: 4000, position: 'top-center' });
+        return;
+      }
+
+      // Compulsory Khoji Validation
+      const khojiVal = String(targetEdited.Khoji || targetEdited.khoji || "").trim();
+      if (!khojiVal && !isUnconnected) {
+        toast.error("Please select Khoji status (Yes / Dew drop khoji / No) before saving.", { duration: 4000, position: 'top-center' });
+        return;
+      }
+
+      // Compulsory City Validation
+      const cityVal = String(targetEdited.City || targetEdited.city || "").trim();
+      if (!cityVal && !isUnconnected) {
+        toast.error("Please enter a City before saving.", { duration: 4000, position: 'top-center' });
+        return;
+      }
+
+      // Compulsory Called For Validation
+      const calledForVal = String(targetEdited[calledForField] || "").trim();
+      if (!calledForVal && !isUnconnected) {
+        toast.error("Please select a 'Called For' program/option before saving.", { duration: 4000, position: 'top-center' });
+        return;
+      }
+
+      // Compulsory Source Validation
+      const sourceVal = String(targetEdited[sourceField] || "").trim();
+      if (!sourceVal && !isUnconnected) {
+        toast.error("Please select a 'Source' before saving.", { duration: 4000, position: 'top-center' });
+        return;
+      }
+
+      // Objection Tracker Validation
+      if ((targetEdited.status === "Not interested" || targetEdited.status === "Not possible") && !targetEdited.objectionReason) {
+        toast.error(`Please select a reason for "${targetEdited.status}" before saving.`, { duration: 4000, position: 'top-center' });
+        return;
+      }
+
+      // REGISTRATION DONE VALIDATION
+      if (targetEdited.status === "Reg.Done" && CALLED_FOR_OPTIONS.length > 1) {
+        const calledForVal = targetEdited[calledForField] || "";
+        const selectedArr = calledForVal.split(",").map(x => x.trim()).filter(Boolean);
+        if (selectedArr.length !== 1) {
+          setPromptSelection("");
+          setPendingSave(true);
+          setShowCalledForPrompt(true);
+          return;
+        }
+      }
+    }
+
+    if (saving || isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    setSaving(true);
+
+    try {
+      const { id, _callbackDue, ...rest } = targetEdited;
+      const updates = { ...rest };
+      if (updates.Name) {
+        updates.Name = formatContactName(updates.Name);
+      }
+      // Never send attenderStates or internal bookkeeping back to Firestore as a whole object.
+      // updateCallLog manages attenderStates internally via dot-notation (merge-safe).
+      // Sending it here would overwrite the entire map, erasing other attenders' data.
+      delete updates.attenderStates;
+      delete updates.assignedTo;
+      delete updates.assignedName;
+      delete updates.assignedAt;
+      delete updates.isAssigned;
+      delete updates.lastEditedBy;
+      delete updates.lastEditedAt;
+      delete updates.normalizedPhone;
+      delete updates.normalizedMobile;
+
+      // Detect if history was altered (e.g., deletion or edit) so we keep it even when not a call attempt.
+      const historyChanged = JSON.stringify(targetEdited.history || []) !== JSON.stringify(savedRow.history || []);
+
+      // Scope baseHistory ONLY to active attender's history entries
+      const activeStateObj = findMatchingAttenderState(savedRow.attenderStates, activeAttenderId, activeAttenderName);
+      let rawHistory = Array.isArray(targetEdited.history) 
+        ? targetEdited.history 
+        : (Array.isArray(activeStateObj?.history) ? activeStateObj.history : []);
+      
+      let baseHistory = rawHistory.filter(h => {
+        if (!h) return false;
+        const hName = String(h.attenderName || "").toLowerCase().trim();
+        const hId = String(h.attenderId || "").toLowerCase().trim();
+        const myName = String(activeAttenderName || "").toLowerCase().trim();
+        const myId = String(activeAttenderId || "").toLowerCase().trim();
+        if (myId && hId && hId === myId) return true;
+        if (myName && hName && hName === myName) return true;
+        return !hId && !hName;
+      });
+
+      if (isFromHistory) {
+        if (updates.callbackDate) {
+          if (typeof updates.callbackDate === "string") {
+            updates.callbackDate = new Date(updates.callbackDate);
+          }
+        } else {
+          updates.callbackDate = null;
+        }
+
+        // Clean undefined values out of updates because Firebase will CRASH if any field is undefined.
+        Object.keys(updates).forEach(key => {
+          if (updates[key] === undefined) {
+            delete updates[key];
+          }
+        });
+
+        // Ensure any newly added fields are marked as mapped so they show up in the table/attender view
+        if (addedFields.length > 0) {
+          const currentMapped = Array.isArray(updates._mappedFields) ? [...updates._mappedFields] : [];
+          addedFields.forEach(f => {
+            if (!currentMapped.includes(f)) {
+              currentMapped.push(f);
+            }
+          });
+          updates._mappedFields = currentMapped;
+        }
+
+        updates.history = targetEdited.history || [];
+      } else if (!isNew && !isCallAttemptUpdated && !historyChanged) {
+        // Strip all call-specific fields to prevent ghost calls or history additions
+        delete updates.status;
+        delete updates.remark;
+        delete updates.callType;
+        delete updates.callbackDate;
+        delete updates.callbackStatus;
+        delete updates.objectionReason;
+        delete updates.queryStatus;
+        delete updates.lastCalledAt;
+        delete updates.firstCalledAt;
+        delete updates.history;
+      } else {
+        if (updates.callbackDate) {
+          if (typeof updates.callbackDate === "string") {
+            updates.callbackDate = new Date(updates.callbackDate);
+          }
+        } else {
+          updates.callbackDate = null;
+        }
+
+        // Clean undefined values out of updates because Firebase will CRASH if any field is undefined.
+        Object.keys(updates).forEach(key => {
+          if (updates[key] === undefined) {
+            delete updates[key];
+          }
+        });
+
+        const baseHistory = Array.isArray(targetEdited.history) ? [...targetEdited.history] : (Array.isArray(savedRow.history) ? [...savedRow.history] : []);
+
+        // Ensure any newly added fields are marked as mapped so they show up in the table/attender view
+        if (addedFields.length > 0) {
+          const currentMapped = Array.isArray(updates._mappedFields) ? [...updates._mappedFields] : [];
+          addedFields.forEach(f => {
+            if (!currentMapped.includes(f)) {
+              currentMapped.push(f);
+            }
+          });
+          updates._mappedFields = currentMapped;
+        }
+
+        // Track call timestamp — only when a call-attempt actually changes or a new entry is created
+        if (isNew || isCallAttemptUpdated) {
+          updates.lastCalledAt = new Date().toISOString();
+          if (!savedRow.firstCalledAt && !targetEdited.firstCalledAt) {
+            updates.firstCalledAt = new Date().toISOString();
+          }
+        }
+
+
+
+        // Scenario 2: Incoming call & Registration on an Outgoing Campaign
+        const isIncomingConvertOnOutgoingProgram = 
+          oldStatus !== "Reg.Done" &&
+          updates.status === "Reg.Done" &&
+          String(targetEdited.callType || "outgoing").toLowerCase().startsWith("incoming") &&
+          (targetEdited.programId || savedRow.programId) !== "incoming-calls";
+
+        if (isIncomingConvertOnOutgoingProgram) {
+          const safeName = activeAttenderName || attenderName || "Unknown";
+          const nowStr = new Date().toISOString();
+
+          // 1. The Incoming Call Log (Query)
+          const queryHist = {
+            status: "Query",
+            remark: updates.remark || "Payment query / incoming confirmation",
+            attenderName: safeName,
+            timestamp: nowStr,
+            calledFor: targetEdited[calledForField] || targetEdited["Called For"] || targetEdited.calledFor || "",
+            source: targetEdited[sourceField] || targetEdited.Source || targetEdited.source || targetEdited.Sourse || targetEdited.sourse || "",
+            callType: targetEdited.callType || "incoming"
+          };
+
+          // 2. The Outgoing Conversion Log (Registration)
+          const regHist = {
+            status: "Reg.Done",
+            remark: "Registered",
+            attenderName: safeName,
+            timestamp: new Date(new Date(nowStr).getTime() + 1000).toISOString(),
+            calledFor: targetEdited[calledForField] || targetEdited["Called For"] || targetEdited.calledFor || "",
+            source: targetEdited[sourceField] || targetEdited.Source || targetEdited.source || targetEdited.Sourse || targetEdited.sourse || "",
+            callType: "outgoing"
+          };
+
+          updates.history = [...baseHistory, queryHist, regHist];
+          updates.callType = "outgoing"; // Force outgoing conversion at root level
+        } else if (isCallAttemptUpdated) {
+          const safeName = activeAttenderName || attenderName || "Unknown";
+          const nowStr = new Date().toISOString();
+
+          const oldCalledForVal = String(savedRow[calledForField] || savedRow["Called For"] || savedRow.calledFor || "").trim().toLowerCase();
+          const newCalledForVal = String(targetEdited[calledForField] || targetEdited["Called For"] || targetEdited.calledFor || "").trim().toLowerCase();
+          const calledForChanged = oldCalledForVal !== newCalledForVal;
+
+          const isNewConversionEvent = (oldStatus !== "Reg.Done" && targetEdited.status === "Reg.Done") ||
+            (oldStatus === "Reg.Done" && targetEdited.status === "Reg.Done" && calledForChanged && newCalledForVal !== "");
+
+          let histStatus = updates.status || targetEdited.status || "";
+          if (!histStatus) {
+            histStatus = "Call Log Added";
+          }
+
+          const newHist = {
+            status: histStatus,
+            remark: updates.remark || "",
+            attenderName: safeName,
+            timestamp: nowStr,
+            calledFor: targetEdited[calledForField] || targetEdited["Called For"] || targetEdited.calledFor || "",
+            source: targetEdited[sourceField] || targetEdited.Source || targetEdited.source || targetEdited.Sourse || targetEdited.sourse || "",
+            callType: targetEdited.callType || "outgoing"
+          };
+
+          // Fix for Flaw 2: 15-second session collapsing for status-only edits by same attender
+          let collapsed = false;
+          const hasNewRemark = Boolean(String(newHist.remark || "").trim());
+          if (!hasNewRemark && baseHistory.length > 0) {
+            const lastEntryIndex = baseHistory.length - 1;
+            const lastEntry = baseHistory[lastEntryIndex];
+            
+            const isSameAttender = String(lastEntry.attenderName || "").toLowerCase().trim() === safeName.toLowerCase().trim();
+            
+            if (isSameAttender && lastEntry.timestamp) {
+              const lastTime = new Date(lastEntry.timestamp).getTime();
+              const currTime = new Date(nowStr).getTime();
+              const diffSeconds = (currTime - lastTime) / 1000;
+              
+              if (diffSeconds < 15) {
+                const mergedEntry = {
+                  ...lastEntry,
+                  status: newHist.status,
+                  remark: newHist.remark || lastEntry.remark,
+                  calledFor: newHist.calledFor,
+                  source: newHist.source,
+                  callType: newHist.callType,
+                  timestamp: nowStr
+                };
+                
+                const updatedHistory = [...baseHistory];
+                updatedHistory[lastEntryIndex] = mergedEntry;
+                updates.history = updatedHistory;
+                collapsed = true;
+              }
+            }
+          }
+
+          if (!collapsed) {
+            updates.history = [...baseHistory, newHist];
+          }
+        } else {
+          // Persist the corrected/updated baseHistory even if no new call attempt log was added
+          updates.history = baseHistory;
+        }
+
+        // Ensure updates.remark is wiped/deleted if no new remark was entered and we're not saving a new call attempt
+        if (!newRemarkEntered && !isCallAttemptUpdated) {
+          delete updates.remark;
+        }
+      }
+
+      const targetDocId = targetEdited.contactId || targetEdited.id || id || `temp_${Date.now()}`;
+      const isNewWithoutDoc = row._isNew && !targetEdited.contactId && !targetEdited.id;
+
+      // Merge updated history into attenderStates for local memory state so subsequent modal opens read the updated logs
+      const currentAttStates = { ...(targetEdited.attenderStates || savedRow.attenderStates || {}) };
+      if (activeAttenderId) {
+        const prevAttState = currentAttStates[activeAttenderId] || {};
+        currentAttStates[activeAttenderId] = {
+          ...prevAttState,
+          attenderId: activeAttenderId,
+          attenderName: activeAttenderName || prevAttState.attenderName || "Unknown",
+          status: updates.status || prevAttState.status,
+          remark: updates.remark !== undefined ? updates.remark : prevAttState.remark,
+          history: updates.history || prevAttState.history || [],
+          updatedAt: new Date().toISOString()
+        };
+      }
+
+      // Combine top-level history with active attender's updated history so global entries (e.g. Reg.Done) are preserved
+      const mergedDocHistory = Array.isArray(savedRow.history) ? [...savedRow.history] : [];
+      if (Array.isArray(updates.history)) {
+        updates.history.forEach(h => {
+          if (!mergedDocHistory.some(ex => ex.timestamp === h.timestamp && ex.remark === h.remark && ex.status === h.status)) {
+            mergedDocHistory.push(h);
+          }
+        });
+      }
+
+      const finalSavedPayload = {
+        ...targetEdited,
+        ...updates,
+        id: targetDocId,
+        attenderStates: currentAttStates,
+        history: mergedDocHistory.length > 0 ? mergedDocHistory : (updates.history || targetEdited.history || [])
+      };
+
+      // 1. INSTANT 0ms UI UPDATE & MODAL CLOSE
+      if (onSave) onSave(finalSavedPayload, false);
+      if (onClose) onClose();
+      toast.success("Saved!", { duration: 3000, position: 'top-center' });
+
+      // 2. ASYNCHRONOUS BACKGROUND MONGODB PERSISTENCE
+      (async () => {
+        try {
+          let savedDocId = targetDocId;
+          if (isNewWithoutDoc) {
+            delete updates._isNew;
+            const resId = await addIncomingCallLog(
+              activeAttenderId, activeAttenderName, updates, targetEdited.programId, targetEdited.programName
+            );
+            console.log("[INSTANT SAVE BG] addIncomingCallLog docId:", resId);
+            savedDocId = resId;
+          } else {
+            const existingContext = globalDup?.first
+              ? { ...globalDup.first, ...row, ...targetEdited }
+              : { ...row, ...targetEdited };
+            const res = await updateCallLog(targetDocId, updates, activeAttenderId, activeAttenderName, existingContext);
+            if (res?.updatedLead) {
+              targetEdited = { ...targetEdited, ...res.updatedLead };
+            }
+          }
+          if (onSave && savedDocId && savedDocId !== targetDocId) {
+            onSave({ ...finalSavedPayload, id: savedDocId, contactId: savedDocId }, false);
+          }
+        } catch (bgErr) {
+          console.error("❌ BACKGROUND SAVE ERROR:", bgErr);
+          toast.error("Background sync error: " + (bgErr.message || "Unknown error"));
+        }
+      })();
+    } catch (err) {
+      console.error("❌ CRITICAL SAVE ERROR:", err.message || err);
+      toast.error("Save failed: " + (err.message || "Unknown error"), { duration: 6000, position: 'top-center' });
+    } finally {
+      setSaving(false);
+      isSubmittingRef.current = false;
+    }
+  };
+
+  const handleDismiss = () => {
+    if (saving) return;
+    if (onClose) onClose();
+  };
+  handleDismissRef.current = handleDismiss;
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") handleDismissRef.current?.(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const handleDelete = async () => {
+    if (!window.confirm("Remove this entry?")) return;
+    onDelete(row.id);
+    onClose();
+  };
+
+  const getCallbackDateStr = () => {
+    if (!edited.callbackDate) return "";
+    const d = parseTimestamp(edited.callbackDate);
+    return d && !isNaN(d.getTime()) ? d.toISOString().split("T")[0] : "";
+  };
+
+  const getPromptOptions = () => {
+    const calledForVal = edited[calledForField] || "";
+    const selectedArr = calledForVal.split(",").map(x => x.trim()).filter(Boolean);
+    if (selectedArr.length === 0) {
+      return CALLED_FOR_OPTIONS;
+    }
+    return selectedArr;
+  };
+
+  const modalScrollRef = useRef(null);
+  useEffect(() => {
+    if (modalScrollRef.current) modalScrollRef.current.scrollTop = 0;
+  }, [row?.id]);
+
+  const isIncomingCall = String(edited.callType || "outgoing").toLowerCase().startsWith("incoming");
+  
+  const callTheme = isIncomingCall 
+    ? {
+        primary: "emerald",
+        tabClass: "border-emerald-500 text-emerald-700 font-extrabold scale-105",
+        tabLine: "bg-emerald-500",
+        iconClass: "text-emerald-500",
+        panelClass: "bg-emerald-50/20 border-emerald-100/50 shadow-emerald-500/5",
+        callTypeBtnSelected: "bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/20 scale-105 font-bold",
+        callTypeBtnUnselected: "bg-white text-emerald-600 border-emerald-100 hover:bg-emerald-50/50"
+      }
+    : {
+        primary: "indigo",
+        tabClass: "border-indigo-500 text-indigo-700 font-extrabold scale-105",
+        tabLine: "bg-indigo-500",
+        iconClass: "text-indigo-500",
+        panelClass: "bg-indigo-50/20 border-indigo-100/50 shadow-indigo-500/5",
+        callTypeBtnSelected: "bg-slate-800 text-white border-slate-800 shadow-md scale-105 font-bold",
+        callTypeBtnUnselected: "bg-gray-50 text-gray-600 border-gray-100 hover:bg-gray-200"
+      };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in" onClick={handleDismiss}>
+      <div
+        className="bg-white rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200 animate-slide-up"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Modal Header */}
+        <div className={`px-5 py-3.5 flex items-center justify-between ${edited._callbackDue ? "bg-rose-800 text-white shadow-xs" : isIncomingCall ? "bg-emerald-800 text-white shadow-xs" : "bg-slate-900 text-white shadow-xs"}`}>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-white/10 border border-white/20 rounded-lg flex items-center justify-center text-white shrink-0">
+              {edited.callType === "incoming" ? <PhoneIncoming size={18} /> : <PhoneOutgoing size={18} />}
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h3 className="text-white font-bold text-lg leading-none">{getLogName() || "Unknown Lead"}</h3>
+                <CallButton phone={edited.Phone || edited.Mobile} variant="header" />
+                <WhatsAppButton phone={edited.Phone || edited.Mobile} name={getLogName()} variant="header" />
+              </div>
+              <div className="flex items-center gap-2.5 mt-1">
+                {edited.createdAt && (
+                  <span className="text-[10px] font-semibold text-white/60 uppercase tracking-wider">
+                    Assigned: {(edited.createdAt?.toDate ? edited.createdAt.toDate() : new Date(edited.createdAt)).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                  </span>
+                )}
+                {edited.lastCalledAt && (
+                  <span className="text-[10px] font-semibold text-white/60 uppercase tracking-wider">
+                    Last called: {new Date(edited.lastCalledAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                )}
+                {(myAttenderCallCount > 0 || (mergedHistory && mergedHistory.length > 0)) && (
+                  <span className="text-[10px] font-semibold bg-white/15 px-2 py-0.5 rounded-md text-white/90" title="Calls logged by active attender">
+                    {myAttenderCallCount > 0 ? myAttenderCallCount : mergedHistory.length} call{(myAttenderCallCount > 0 ? myAttenderCallCount : mergedHistory.length) > 1 ? "s" : ""}
+                  </span>
+                )}
+
+                {getLastEditedBy() && (
+                  <span className="text-[10px] font-semibold text-white/70 uppercase tracking-wider">
+                    By: {getLastEditedBy()}
+                  </span>
+                )}
+
+                {(isCheckingDuplicate || isSearchingCRM || isFetchingShared) && (
+                  <span className="text-[10px] font-bold bg-amber-500 px-2 py-0.5 rounded-md text-white animate-pulse flex items-center gap-1 shrink-0 shadow-2xs">
+                    <Loader size={11} className="animate-spin text-white" />
+                    {isFetchingShared ? "SYNCING..." : isCheckingDuplicate ? "CHECKING DUPES..." : "SEARCHING CRM..."}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleChange("isHotLead", !edited.isHotLead)}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 active:scale-[0.98] cursor-pointer ${edited.isHotLead ? "bg-amber-500 text-white shadow-2xs" : "bg-white/10 text-white/80 hover:bg-white/20"}`}
+            >
+              <Flame size={13} className={edited.isHotLead ? "animate-pulse" : ""} /> {edited.isHotLead ? "HOT LEAD" : "Mark Hot"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof onRefreshLead === "function") {
+                  onRefreshLead(edited || row);
+                }
+              }}
+              disabled={isFetchingShared}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/10 hover:bg-white/20 active:scale-[0.98] rounded-lg text-white text-xs font-medium transition-all duration-150 border border-white/20 shadow-2xs cursor-pointer disabled:opacity-50"
+              title="Force fetch fresh lead directly from database"
+            >
+              <RotateCw size={12} className={isFetchingShared ? "animate-spin text-amber-300" : ""} />
+              <span>{isFetchingShared ? "Syncing..." : "Sync"}</span>
+            </button>
+            <button onClick={handleDismiss} className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center text-white hover:bg-white/20 active:scale-[0.98] transition-all duration-150 cursor-pointer" title="Discard changes & close">
+              <X size={16} />
+            </button>
+            <button
+              onClick={handleSaveAndClose}
+              disabled={saving}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 active:scale-[0.98] rounded-lg text-white text-xs font-semibold transition-all duration-150 shadow-2xs disabled:opacity-50 cursor-pointer"
+              title="Save changes & close"
+            >
+              {saving ? <Loader size={12} className="animate-spin" /> : <Save size={12} />}
+              <span>{saving ? "Saving..." : "Save"}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Compulsory Attender Selector for Admin */}
+        {(allowAttenderSelection || attenders.length > 0) && (
+          <div className="px-6 py-2.5 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 shrink-0">
+            <div className="flex items-center gap-2">
+              <User size={15} className="text-indigo-400" />
+              <span className="text-xs font-bold text-slate-300">
+                Logged on Behalf of Attender: <span className="text-rose-400 font-extrabold">*</span>
+              </span>
+            </div>
+            <select
+              value={activeAttenderId}
+              required
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedAttenderId(val);
+                const match = attenders.find(a => String(a.id || a.value) === String(val));
+                if (match) {
+                  setSelectedAttenderName(match.name || match.label || "Attender");
+                }
+              }}
+              className={`px-3 py-1.5 bg-slate-800 border rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer min-w-[220px] transition ${
+                !activeAttenderId ? "border-amber-500 text-amber-300 shadow-sm shadow-amber-500/20" : "border-slate-700 text-white"
+              }`}
+            >
+              <option value="">-- Select Attender (Required *) --</option>
+              {attenders.map(a => (
+                <option key={a.id || a.value} value={a.id || a.value}>
+                  {a.name || a.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div ref={modalScrollRef} className="overflow-y-auto flex-1 p-8 space-y-8">
+          {/* Tab Switcher */}
+          <div className="flex border-b border-gray-150 gap-6 mb-6">
+            <button
+              type="button"
+              onClick={() => setActiveTab("call")}
+              className={`pb-3 text-sm font-black tracking-wider uppercase flex items-center gap-2 border-b-2 transition-all relative ${
+                activeTab === "call"
+                  ? callTheme.tabClass
+                  : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200"
+              }`}
+            >
+              <Phone size={14} className={activeTab === "call" ? callTheme.iconClass : "text-gray-400"} />
+              Record Call Entry
+              {activeTab === "call" && (
+                <span className={`absolute bottom-[-2px] left-0 right-0 h-0.5 rounded-full ${callTheme.tabLine} animate-pulse`} />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("profile")}
+              className={`pb-3 text-sm font-black tracking-wider uppercase flex items-center gap-2 border-b-2 transition-all relative ${
+                activeTab === "profile"
+                  ? callTheme.tabClass
+                  : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200"
+              }`}
+            >
+              <User size={14} className={activeTab === "profile" ? callTheme.iconClass : "text-gray-400"} />
+              Edit Profile Details
+              {(isCheckingDuplicate || isSearchingCRM) && (
+                <Loader size={12} className="animate-spin text-indigo-500 shrink-0" />
+              )}
+              {globalDup && globalDup.showWarning && (
+                <AlertCircle size={14} className="text-amber-500 shrink-0 animate-bounce" title={dupWarningMessage} />
+              )}
+              {activeTab === "profile" && (
+                <span className={`absolute bottom-[-2px] left-0 right-0 h-0.5 rounded-full ${callTheme.tabLine} animate-pulse`} />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowEditHistory(true)}
+              className="pb-3 text-sm font-black tracking-wider uppercase flex items-center gap-2 border-b-2 border-transparent text-amber-600 hover:text-amber-700 hover:border-amber-250 transition-all ml-auto"
+            >
+              ✏️ Edit Past Logs
+            </button>
+          </div>
+
+          {/* Shared Lead Banner */}
+          <SharedBanner
+            edited={edited}
+            row={row}
+            globalDup={globalDup}
+            currentAttenderName={activeAttenderName}
+            onRefreshLead={onRefreshLead}
+            isFetchingShared={isFetchingShared}
+          />
+
+          {/* Duplicate Banner */}
+          <DuplicateBanner
+            globalDup={globalDup}
+            dupWarningMessage={dupWarningMessage}
+            onAutofill={handleAutofillFromDuplicate}
+          />
+
+          {activeTab === "call" ? (
+            <CallEntryTab
+              edited={edited}
+              row={row}
+              callTheme={callTheme}
+              calledForField={calledForField}
+              sourceField={sourceField}
+              getEditable={getEditable}
+              handleChange={handleChange}
+              handleCallTypeChange={handleCallTypeChange}
+              getOtherValuesForField={getOtherValuesForField}
+              mergedHistory={mergedHistory}
+              setShowCalledForPrompt={setShowCalledForPrompt}
+              setPromptSelection={setPromptSelection}
+              setPendingSave={setPendingSave}
+              setShowUndoStatusPrompt={setShowUndoStatusPrompt}
+              setEdited={setEdited}
+              getCallbackDateStr={getCallbackDateStr}
+            />
+          ) : (
+            <ProfileDetailsTab
+              edited={edited}
+              handleChange={handleChange}
+              getEditable={getEditable}
+              isCheckingDuplicate={isCheckingDuplicate}
+              isSearchingCRM={isSearchingCRM}
+              basicFields={basicFields}
+              questionFields={questionFields}
+              campaignFields={campaignFields}
+              handleAddField={handleAddField}
+            />
+          )}
+        </div>
+
+
+        <div className="p-6 border-t border-gray-100 bg-gray-50 flex items-center justify-between shadow-inner">
+          {(!row._isNew && row.id) ? (
+            <button onClick={handleDelete} className="flex items-center gap-2 text-xs font-bold text-red-400 hover:text-red-600 transition">
+              <Trash2 size={14} /> Remove Entry
+            </button>
+          ) : (
+            <div />
+          )}
+          <div className="flex items-center gap-4 text-xs font-bold text-gray-400 tracking-tighter uppercase">
+            {saving ? "Saving..." : "All exits auto-save"}
+          </div>
+          <button disabled={saving} onClick={handleSaveAndClose} className="px-8 py-3 bg-indigo-600 border border-indigo-600 text-white font-black rounded-2xl shadow-lg shadow-indigo-500/30 hover:bg-indigo-700 transition active:scale-95 leading-none flex items-center justify-center gap-2 disabled:opacity-50">
+            {saving && <Loader size={14} className="animate-spin" />} Save & Close
+          </button>
+        </div>
+      </div>
+
+      {/* Called For compulsory prompt */}
+      {showCalledForPrompt && (
+        <div 
+          onClick={e => e.stopPropagation()} 
+          className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
+        >
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl border border-indigo-150 animate-slide-up flex flex-col max-h-[85vh]">
+            <div className="flex items-center gap-3 mb-4 text-indigo-900">
+              <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
+                <Phone size={20} />
+              </div>
+              <div>
+                <h4 className="font-black text-lg leading-none">Select Registered Program</h4>
+                <p className="text-[11px] text-gray-500 mt-1 font-semibold">Select exactly which program this lead has registered for.</p>
+              </div>
+            </div>
+
+            {/* Options List */}
+            <div className="flex-1 overflow-y-auto space-y-2 py-2 pr-1 min-h-[200px]">
+              {getPromptOptions().map(opt => {
+                const isSel = promptSelection === opt;
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => {
+                      setPromptSelection(opt);
+                    }}
+                    className={`w-full px-4 py-3 rounded-2xl text-xs font-bold border transition-all text-left flex items-center justify-between ${
+                      isSel
+                        ? "bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-600/20 scale-[1.01]"
+                        : "bg-gray-50 border-gray-150 text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    <span>{opt}</span>
+                    {isSel && <CheckCircle2 size={16} />}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 mt-5 pt-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCalledForPrompt(false);
+                  setPendingSave(false);
+                }}
+                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-600 font-bold rounded-2xl text-xs transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!promptSelection) {
+                    toast.error("Please select exactly 1 option.");
+                    return;
+                  }
+                  const valStr = promptSelection;
+                  handleChange(calledForField, valStr);
+                  handleChange("status", "Reg.Done");
+                  setShowCalledForPrompt(false);
+                  
+                  if (pendingSave) {
+                    setPendingSave(false);
+                    handleSaveAndClose({ [calledForField]: valStr, status: "Reg.Done" });
+                  } else {
+                    toast.success("Called For and Registration status updated!");
+                  }
+                }}
+                className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black rounded-2xl text-xs transition shadow-lg shadow-indigo-500/25"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Undo Status Selection Prompt */}
+      {showUndoStatusPrompt && (
+        <div 
+          onClick={e => e.stopPropagation()} 
+          className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
+        >
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl border border-rose-150 animate-slide-up flex flex-col max-h-[85vh]">
+            <div className="flex items-center gap-3 mb-4 text-rose-900">
+              <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center text-rose-600">
+                <X size={20} />
+              </div>
+              <div>
+                <h4 className="font-black text-lg leading-none">Undo Registration</h4>
+                <p className="text-[11px] text-gray-500 mt-1 font-semibold">Please select the new status for this lead.</p>
+              </div>
+            </div>
+
+            {/* Status Options List */}
+            <div className="flex-1 overflow-y-auto space-y-2 py-2 pr-1 min-h-[250px]">
+              {STATUS_OPTIONS.filter(opt => opt !== "Reg.Done").map(opt => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => {
+                    setShowUndoStatusPrompt(false);
+                    if (opt === "Not interested" || opt === "Not possible" || opt === "Callback") {
+                      setEdited(prev => ({
+                        ...prev,
+                        status: opt,
+                        callbackDate: opt === "Callback" ? prev.callbackDate : null,
+                        callbackStatus: opt === "Callback" ? prev.callbackStatus : null,
+                        objectionReason: ""
+                      }));
+                      toast.success(`Status set to "${opt}". Please fill in any details and save.`);
+                    } else {
+                      handleSaveAndClose({
+                        status: opt
+                      });
+                    }
+                  }}
+                  className="w-full px-4 py-3 rounded-2xl text-xs font-bold border border-gray-150 bg-gray-50 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition text-left mb-1.5"
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 mt-5 pt-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setShowUndoStatusPrompt(false)}
+                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-600 font-bold rounded-2xl text-xs transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {showEditHistory && (
+        <EditHistoryModal
+          isOpen={showEditHistory}
+          onClose={() => setShowEditHistory(false)}
+          edited={edited}
+          setEdited={(updater) => {
+            setEdited(prev => {
+              const next = typeof updater === "function" ? updater(prev) : updater;
+              setSavedRow(next);
+              return next;
+            });
+          }}
+          row={row}
+          onSave={onSave}
+          calledForField={calledForField}
+          sourceField={sourceField}
+          attenderId={attenderId}
+          onParentClose={onClose}
+          onSaveAll={handleSaveAndClose}
+          mergedHistory={mergedHistory}
+        />
+      )}
+    </div>
+  );
+};

@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { contactId, attenderId, attenderName, status, remark, callbackDate, calledFor } = req.body;
+    const { contactId, attenderId, attenderName, status, remark, callbackDate, calledFor, ...rootUpdates } = req.body;
 
     if (!contactId || !attenderId) {
       return res.status(400).json({ error: 'contactId and attenderId are required' });
@@ -28,22 +28,54 @@ export default async function handler(req, res) {
       calledFor: calledFor || '',
       timestamp: nowIso
     };
+    
+    // Support both new ObjectIds and legacy string IDs
+    const queryId = ObjectId.isValid(contactId) ? new ObjectId(contactId) : contactId;
 
-    // Atomic update of attender state map entry and history array append
+    // Clean up internal non-persisted parameters from rootUpdates
+    delete rootUpdates.contactId;
+    delete rootUpdates.id;
+    delete rootUpdates._id;
+    delete rootUpdates.history;
+    delete rootUpdates.attenderStates;
+    delete rootUpdates.assignedTo;
+
+    // Normalize phone numbers if modified
+    if (rootUpdates.Phone || rootUpdates.phone) {
+      const p = String(rootUpdates.Phone || rootUpdates.phone).trim();
+      rootUpdates.Phone = p;
+      rootUpdates.phone = p;
+      rootUpdates.normalizedPhone = p.replace(/\D/g, "");
+    }
+    if (rootUpdates.Mobile || rootUpdates.mobile) {
+      const m = String(rootUpdates.Mobile || rootUpdates.mobile).trim();
+      rootUpdates.Mobile = m;
+      rootUpdates.mobile = m;
+      rootUpdates.normalizedMobile = m.replace(/\D/g, "");
+    }
+
+    // Atomic update of root fields, attender state map entry, and history array append
+    const setPayload = {
+      ...rootUpdates,
+      updatedAt: nowIso,
+      isAssigned: true,
+      [`attenderStates.${attenderId}`]: {
+        attenderId,
+        attenderName: attenderName || '',
+        status: status || 'Pending',
+        remark: remark || '',
+        callbackDate: callbackDate || null,
+        lastCalledAt: nowIso,
+        calledFor: calledFor || ''
+      }
+    };
+
     const updateResult = await db.collection('contacts').updateOne(
-      { _id: new ObjectId(contactId) },
+      { $or: [{ _id: queryId }, { id: contactId }, { _id: contactId }] },
       {
-        $set: {
-          updatedAt: nowIso,
-          [`attenderStates.${attenderId}`]: {
-            attenderId,
-            attenderName,
-            status,
-            remark,
-            callbackDate: callbackDate || null,
-            lastCalledAt: nowIso,
-            calledFor: calledFor || ''
-          }
+        $set: setPayload,
+        $addToSet: {
+          assignedTo: attenderId
         },
         $push: {
           history: historyItem
