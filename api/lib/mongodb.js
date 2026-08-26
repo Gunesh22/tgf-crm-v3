@@ -11,15 +11,41 @@ if (!process.env.MONGODB_URI) {
   throw new Error('Please add MONGODB_URI to your Vercel Environment Variables');
 }
 
+// Safe diagnostic logger (never exposes credentials or password)
+function logSafeMongoStatus(uri) {
+  try {
+    const hasUri = Boolean(uri);
+    const host = uri ? (uri.match(/@([^/?]+)/)?.[1] || 'hidden-host') : 'none';
+    const dbName = uri ? (uri.match(/\.net\/([^?]+)/)?.[1] || 'default') : 'none';
+    console.log(`[MONGODB INIT] env: ${process.env.NODE_ENV || 'production'} | URI Configured: ${hasUri} | Host: ${host} | DB: ${dbName}`);
+  } catch (e) {
+    console.log('[MONGODB INIT] Initialized');
+  }
+}
+
+logSafeMongoStatus(uri);
+
 if (process.env.NODE_ENV === 'development') {
   if (!global._mongoClientPromise) {
     client = new MongoClient(uri, options);
-    global._mongoClientPromise = client.connect();
+    global._mongoClientPromise = client.connect().then(c => {
+      console.log('[MONGODB CONNECTED] Local instance active');
+      return c;
+    }).catch(err => {
+      console.error('[MONGODB ERROR] Connection failed:', err.message);
+      throw err;
+    });
   }
   clientPromise = global._mongoClientPromise;
 } else {
   client = new MongoClient(uri, options);
-  clientPromise = client.connect();
+  clientPromise = client.connect().then(c => {
+    console.log('[MONGODB CONNECTED] Vercel Serverless instance active');
+    return c;
+  }).catch(err => {
+    console.error('[MONGODB ERROR] Vercel connection failed:', err.message);
+    throw err;
+  });
 }
 
 let indexesPromise = null;
