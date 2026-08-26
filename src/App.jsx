@@ -1,10 +1,22 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginScreen from './features/auth/LoginScreen';
-import AttenderWorkspace from './features/attender/AttenderWorkspace';
-import AdminDashboard from './features/admin/AdminDashboard';
 import './index.css';
+
+const AttenderWorkspace = lazy(() => import('./features/attender/AttenderWorkspace'));
+const AdminDashboard = lazy(() => import('./features/admin/AdminDashboard'));
+
+function LoadingFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-300">
+      <div className="flex items-center space-x-3">
+        <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+        <span className="text-sm font-medium">Loading Workspace...</span>
+      </div>
+    </div>
+  );
+}
 
 // Protected Route Wrapper
 function ProtectedRoute({ children, requiredRole }) {
@@ -31,23 +43,25 @@ function AppRoutes() {
   const { user, logout } = useAuth();
   return (
     <div className="app-container">
-      <Routes>
-        <Route path="/login" element={user && user.role ? <Navigate to={`/${user.role}`} replace /> : <LoginScreen />} />
-        
-        <Route path="/attender" element={
-          <ProtectedRoute requiredRole="attender">
-            <AttenderWorkspace attenderId={user?.id} attenderName={user?.name} onExit={logout} />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="/admin" element={
-          <ProtectedRoute requiredRole="admin">
-            <AdminDashboard onExit={logout} />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
+      <Suspense fallback={<LoadingFallback />}>
+        <Routes>
+          <Route path="/login" element={user && user.role ? <Navigate to={`/${user.role}`} replace /> : <LoginScreen />} />
+          
+          <Route path="/attender" element={
+            <ProtectedRoute requiredRole="attender">
+              <AttenderWorkspace attenderId={user?.id} attenderName={user?.name} onExit={logout} />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/admin" element={
+            <ProtectedRoute requiredRole="admin">
+              <AdminDashboard onExit={logout} />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </Suspense>
     </div>
   );
 }

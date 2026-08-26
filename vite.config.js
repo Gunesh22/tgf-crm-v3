@@ -13,5 +13,19 @@ export default defineConfig({
         secure: false,
       }
     }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-excel': ['xlsx'],
+          'vendor-charts': ['recharts'],
+          'vendor-icons': ['lucide-react'],
+        }
+      }
+    },
+    chunkSizeWarningLimit: 1000
   }
 })
+
