@@ -9,7 +9,7 @@ export const DEFAULT_NOT_CONNECTED_STATUSES = ["NA", "Busy", "Call Cut", "switch
 export const DEFAULT_CONNECTED_STATUSES = ["Info given", "Interested", "Reg.Done", "reminder", "Query", "Already Reg.d", "Next time", "Shivir done", "Not possible", "Pending", "Not interested", "Not Attended", "Call Log Added"];
 
 // API FETCH HELPERS
-const fetchAPI = async (endpoint, method = "GET", body = null) => {
+export const fetchAPI = async (endpoint, method = "GET", body = null) => {
   console.log(`%c[API CALL] %c${method} %c${endpoint}`, "color: #3b82f6; font-weight: bold", "color: #10b981; font-weight: bold", "color: gray");
   if (body) {
     console.log("%c[PAYLOAD]", "color: #f59e0b; font-weight: bold", body);
@@ -23,13 +23,21 @@ const fetchAPI = async (endpoint, method = "GET", body = null) => {
   
   try {
     const res = await fetch(endpoint, options);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "API Error");
+    const text = await res.text();
+    let data = {};
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        data = { error: `Server error (${res.status})` };
+      }
+    }
+    if (!res.ok) throw new Error(data.error || data.message || `API Error (${res.status})`);
     
     console.log(`%c[API SUCCESS] %c${endpoint}`, "color: #10b981; font-weight: bold", "color: gray", data);
     return data;
   } catch (error) {
-    console.error(`%c[API ERROR] %c${endpoint}`, "color: #ef4444; font-weight: bold", "color: gray", error);
+    console.error(`%c[API ERROR] %c${endpoint}`, "color: #ef4444; font-weight: bold", "color: gray", error.message || error);
     throw error;
   }
 };
@@ -198,18 +206,20 @@ export const getActiveCacheMonths = async () => [];
 export const getLockedMonthlyReports = async () => [];
 export const exportCallCenterCacheToJson = async () => {};
 
-export const subscribeToCallLogs = (attenderId, attenderName, callback) => {
+export const subscribeToCallLogs = (attenderId, attenderName, callback, onError) => {
   let isSubscribed = true;
   const cacheKey = `attender_call_logs_${attenderId}`;
 
   // 1. INSTANT 0ms RENDERING FROM LOCAL CACHE
+  let cacheLoaded = false;
   try {
     const cachedData = localStorage.getItem(cacheKey);
     if (cachedData) {
       const parsed = JSON.parse(cachedData);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         console.log(`%c[0ms INSTANT CACHE] Loaded ${parsed.length} contacts from local cache`, "color: #10b981; font-weight: bold");
         callback(parsed);
+        cacheLoaded = true;
       }
     }
   } catch (e) {
@@ -221,16 +231,25 @@ export const subscribeToCallLogs = (attenderId, attenderName, callback) => {
     if (!isSubscribed) return;
     try {
       const res = await getAssignedContacts(attenderId);
-      if (isSubscribed && res.data) {
+      if (isSubscribed) {
+        const data = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
         try {
-          localStorage.setItem(cacheKey, JSON.stringify(res.data));
+          localStorage.setItem(cacheKey, JSON.stringify(data));
         } catch (err) {
           console.warn("[Local Cache Write Error]", err);
         }
-        callback(res.data);
+        callback(data);
       }
     } catch (e) {
       console.error("[subscribeToCallLogs polling error]", e);
+      if (isSubscribed) {
+        if (!cacheLoaded) {
+          callback([]);
+        }
+        if (onError && !cacheLoaded) {
+          onError(e);
+        }
+      }
     }
   };
   

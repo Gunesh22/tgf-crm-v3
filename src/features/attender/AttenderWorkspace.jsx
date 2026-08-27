@@ -6,7 +6,7 @@ import {
   Edit3, X, Save, FileText, Calendar, Tag, User, MapPin, MessageSquare,
   Hash, Clock, PhoneOff, CheckCircle2, AlertCircle, Trash2,
   PhoneIncoming, PhoneOutgoing, CalendarDays, Loader, Flame, SlidersHorizontal, FileSpreadsheet, CheckSquare,
-  Bell, Sparkles, UserCheck, RefreshCw
+  Bell, Sparkles, UserCheck, RefreshCw, Info
 } from "lucide-react";
 import {
   subscribeToCallLogs, updateCallLog, addIncomingCallLog,
@@ -103,7 +103,8 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   const [callLogs, setCallLogs] = useState([]);
   const [editingRow, setEditingRow] = useState(null);
   const [isFetchingShared, setIsFetchingShared] = useState(false);
-  const [isLoadingProgram, setIsLoadingProgram] = useState(false); // skeleton state
+  const [isLoadingProgram, setIsLoadingProgram] = useState(true); // skeleton state
+  const [loadError, setLoadError] = useState(null); // error state
   const [requestCount, setRequestCount] = useState(10);
   const [isRequesting, setIsRequesting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -150,16 +151,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   const [programSearch, setProgramSearch] = useState("");
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
-  useEffect(() => {
-    const handleGlobalKeyDown = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setCommandPaletteOpen(prev => !prev);
-      }
-    };
-    window.addEventListener("keydown", handleGlobalKeyDown);
-    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, []);
+
 
   useEffect(() => {
     try {
@@ -287,16 +279,33 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     loadPrograms();
   }, []);
 
-  useEffect(() => {
+  const handleRetryLoad = useCallback(() => {
     if (!attenderId) return;
     setIsLoadingProgram(true);
+    setLoadError(null);
+    if (unsubRef.current) unsubRef.current();
+
     console.log(`[ATTENDER VIEW SUB] Subscribing for attenderId: "${attenderId}"`);
-    unsubRef.current = subscribeToCallLogs(attenderId, attenderName, (logs) => {
-      setCallLogs(enrichLogsWithCallbackFlags(logs));
-      setIsLoadingProgram(false);
-    });
+    unsubRef.current = subscribeToCallLogs(
+      attenderId,
+      attenderName,
+      (logs) => {
+        setCallLogs(enrichLogsWithCallbackFlags(logs));
+        setIsLoadingProgram(false);
+        setLoadError(null);
+      },
+      (err) => {
+        console.error("[Call Sheet Load Error]", err);
+        setLoadError(err);
+        setIsLoadingProgram(false);
+      }
+    );
+  }, [attenderId, attenderName]);
+
+  useEffect(() => {
+    handleRetryLoad();
     return () => { if (unsubRef.current) unsubRef.current(); };
-  }, [attenderId]);
+  }, [handleRetryLoad]);
 
   // Modal Close Handler with Logging
   const handleCloseModal = useCallback(() => {
@@ -550,7 +559,10 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   };
 
 
-  const openCallEntryDialog = () => {
+  const openCallEntryDialog = useCallback(() => {
+    setCommandPaletteOpen(false);
+    setShowAdvancedFilters(false);
+    setIsColumnModalOpen(false);
     setEditingRow({
       _isNew: true,
       _timestamp: Date.now(),
@@ -565,7 +577,20 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
       subProgram: "Incoming Calls",
       status: "", remark: "",
     });
-  };
+  }, [attenderId, attenderName]);
+
+  // Global Keyboard Shortcut: Alt + A directly opens the Add Call Entry modal
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      const isAltA = e.altKey && (e.code === "KeyA" || e.key?.toLowerCase() === "a" || e.keyCode === 65);
+      if (isAltA) {
+        e.preventDefault();
+        openCallEntryDialog();
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [openCallEntryDialog]);
 
   const handleDeleteRow = async (id) => {
     try {
@@ -1496,6 +1521,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
           optionsVersion={optionsVersion}
           attenderId={attenderId}
           attenderName={attenderName}
+          isLoadingProgram={isLoadingProgram}
           filteredLogs={sortedLogs}
           allLogsCount={callLogs.length}
           filterStatus={filterStatus}
@@ -1575,9 +1601,9 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
         }
       `}</style>
 
-      {/* Top Bar */}
-      <header className="bg-white border-b border-slate-200 px-4 py-2.5 flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0 shadow-2xs">
-        <div className="flex items-center justify-between md:justify-start gap-4">
+      {/* Top Bar — Identity + Primary Action */}
+      <header className="bg-white border-b border-slate-200 px-5 py-3 flex items-center justify-between gap-4 shrink-0 shadow-2xs">
+        <div className="flex items-center gap-4">
           <div className="flex items-center gap-2.5">
             <button onClick={onExit} className="p-1.5 hover:bg-slate-100 rounded-lg transition border border-slate-200 text-slate-600 hover:text-slate-900 cursor-pointer" title="Exit to Portal">
               <ArrowLeft size={16} />
@@ -1611,209 +1637,113 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
               My Performance
             </button>
           </div>
-
-          {/* Assisted Registration Notification Bell */}
-          <div className="relative" ref={notifRef}>
-            <button
-              type="button"
-              onClick={() => {
-                setShowNotifPopover(prev => !prev);
-                if (unreadNotifCount > 0) markAllNotificationsRead();
-              }}
-              className={`p-2 rounded-xl border transition-all flex items-center justify-center relative cursor-pointer ${
-                unreadNotifCount > 0
-                  ? "bg-amber-50 border-amber-300 text-amber-600 hover:bg-amber-100 shadow-xs"
-                  : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-              }`}
-              title="Team Assisted Registrations"
-            >
-              <Bell size={18} className={unreadNotifCount > 0 ? "animate-bounce" : ""} />
-              {unreadNotifCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white font-extrabold text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-xs">
-                  {unreadNotifCount}
-                </span>
-              )}
-            </button>
-
-            {/* Notification Popover Dropdown */}
-            {showNotifPopover && (
-              <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-80 sm:w-96 bg-white border border-gray-200 rounded-2xl shadow-2xl z-50 overflow-hidden animate-fadeIn">
-                <div className="p-3.5 bg-slate-900 text-white flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Sparkles size={16} className="text-amber-400" />
-                    <div>
-                      <h3 className="font-extrabold text-xs">Team Assisted Registrations</h3>
-                      <p className="text-[10px] text-slate-300 font-medium">Registrations completed on your leads</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="max-h-80 overflow-y-auto divide-y divide-gray-100">
-                  {assistedNotifications.length === 0 ? (
-                    <div className="p-6 text-center text-gray-400">
-                      <UserCheck size={28} className="mx-auto mb-2 text-gray-300" />
-                      <p className="text-xs font-semibold">No team-assisted registrations yet</p>
-                      <p className="text-[10px] mt-1 text-gray-400">When a team member closes a registration for your assigned lead, it will show up here.</p>
-                    </div>
-                  ) : (
-                    assistedNotifications.map(notif => {
-                      const isRead = readNotifIds.includes(notif.id);
-                      return (
-                        <div
-                          key={notif.id}
-                          onClick={() => {
-                            setEditingRow(notif.log);
-                            setShowNotifPopover(false);
-                          }}
-                          className={`p-3.5 hover:bg-blue-50/60 cursor-pointer transition flex items-start gap-3 ${
-                            !isRead ? "bg-amber-50/40" : ""
-                          }`}
-                        >
-                          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-extrabold text-xs shrink-0 mt-0.5 shadow-xs">
-                            {notif.convertedBy.charAt(0).toUpperCase()}
-                          </div>
-
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="text-xs font-black text-slate-900 truncate">{notif.leadName}</span>
-                              <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 shrink-0">
-                                +1 Primary Credit
-                              </span>
-                            </div>
-
-                            <p className="text-xs text-slate-600 mt-0.5 leading-snug">
-                              Registered by <span className="font-extrabold text-blue-600">{notif.convertedBy}</span> on your behalf.
-                            </p>
-
-                            <div className="flex items-center justify-between text-[10px] text-gray-400 font-semibold mt-1.5">
-                              <span className="truncate">{notif.program}</span>
-                              <span>{notif.phone}</span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Quick Search & Command Trigger (Ctrl+K) */}
-          <button
-            type="button"
-            onClick={() => setCommandPaletteOpen(true)}
-            className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-500 transition cursor-pointer"
-            title="Search contacts & commands (Ctrl + K)"
-          >
-            <Search size={13} className="text-slate-400" />
-            <span className="hidden sm:inline font-medium">Search...</span>
-            <kbd className="font-mono text-[10px] bg-white text-slate-500 border border-slate-200 rounded px-1 shadow-2xs">Ctrl K</kbd>
-          </button>
-
-          {/* Secondary Workflow: Get Numbers */}
-          <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-lg p-1">
-            {/* Searchable Tag Dropdown */}
-            <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) { setProgramDropOpen(false); setProgramSearch(""); } }}>
+        <div className="flex items-center gap-3">
+          {/* Notifications & Quick Info Row */}
+          <div className="flex items-center gap-2">
+            {/* Assisted Registration Notification Bell */}
+            <div className="relative" ref={notifRef}>
               <button
                 type="button"
-                onClick={() => { setProgramDropOpen(o => !o); setProgramSearch(""); }}
-                className="flex items-center gap-1.5 bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:text-slate-900 rounded-md px-2.5 py-1 focus:outline-none cursor-pointer min-w-[130px] max-w-[200px]"
+                onClick={() => {
+                  setShowNotifPopover(prev => !prev);
+                  if (unreadNotifCount > 0) markAllNotificationsRead();
+                }}
+                className={`p-2 rounded-xl border transition-all flex items-center justify-center relative cursor-pointer ${
+                  unreadNotifCount > 0
+                    ? "bg-amber-50 border-amber-300 text-amber-600 hover:bg-amber-100 shadow-xs"
+                    : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                }`}
+                title="Team Assisted Registrations"
               >
-                <span className="truncate">
-                  {selectedProgramId ? (programs.find(p => p.id === selectedProgramId)?.name || "Select Tag...") : "Select Tag..."}
-                </span>
-                <ChevronDown size={13} className={`shrink-0 text-slate-400 transition-transform ${programDropOpen ? "rotate-180" : ""}`} />
+                <Bell size={18} className={unreadNotifCount > 0 ? "animate-bounce" : ""} />
+                {unreadNotifCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white font-extrabold text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-xs">
+                    {unreadNotifCount}
+                  </span>
+                )}
               </button>
 
-              {programDropOpen && (
-                <div className="absolute left-0 top-full mt-1.5 w-64 bg-white border border-slate-200 rounded-lg shadow-xl z-50 overflow-hidden">
-                  {/* Search input */}
-                  <div className="p-2 border-b border-slate-100">
-                    <div className="relative">
-                      <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                      <input
-                        autoFocus
-                        type="text"
-                        placeholder="Search tags..."
-                        value={programSearch}
-                        onChange={e => setProgramSearch(e.target.value)}
-                        className="w-full pl-7 pr-3 py-1.5 text-xs font-medium bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:border-indigo-500 focus:bg-white transition"
-                      />
+              {/* Notification Popover Dropdown */}
+              {showNotifPopover && (
+                <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-80 sm:w-96 bg-white border border-gray-200 rounded-2xl shadow-2xl z-50 overflow-hidden animate-fadeIn">
+                  <div className="p-3.5 bg-slate-900 text-white flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={16} className="text-amber-400" />
+                      <div>
+                        <h3 className="font-extrabold text-xs">Team Assisted Registrations</h3>
+                        <p className="text-[10px] text-slate-300 font-medium">Registrations completed on your leads</p>
+                      </div>
                     </div>
                   </div>
-                  {/* Options list */}
-                  <div className="max-h-52 overflow-y-auto py-1">
-                    {/* Clear option */}
-                    <button
-                      type="button"
-                      tabIndex={0}
-                      onClick={() => { setSelectedProgramId(""); setSelectedProgramName(""); setSelectedSubProgram(""); setProgramDropOpen(false); setProgramSearch(""); }}
-                      className={`w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-slate-50 transition ${!selectedProgramId ? "text-indigo-600 bg-indigo-50/50 font-semibold" : "text-slate-400"}`}
-                    >
-                      — Select Tag...
-                    </button>
-                    {programs
-                      .filter(p => !programSearch || p.name.toLowerCase().includes(programSearch.toLowerCase()))
-                      .map(p => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          tabIndex={0}
-                          onClick={() => {
-                            setSelectedProgramId(p.id);
-                            setSelectedProgramName(p.name);
-                            setSelectedSubProgram("");
-                            setProgramDropOpen(false);
-                            setProgramSearch("");
-                          }}
-                          className={`w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-slate-50 transition truncate ${selectedProgramId === p.id ? "text-indigo-600 bg-indigo-50/50 font-semibold" : "text-slate-700"}`}
-                        >
-                          {p.name}
-                        </button>
-                      ))
-                    }
-                    {programs.filter(p => !programSearch || p.name.toLowerCase().includes(programSearch.toLowerCase())).length === 0 && (
-                      <div className="px-3 py-3 text-xs text-slate-400 text-center">No tags match "{programSearch}"</div>
+
+                  <div className="max-h-80 overflow-y-auto divide-y divide-gray-100">
+                    {assistedNotifications.length === 0 ? (
+                      <div className="p-6 text-center text-gray-400">
+                        <UserCheck size={28} className="mx-auto mb-2 text-gray-300" />
+                        <p className="text-xs font-semibold">No team-assisted registrations yet</p>
+                        <p className="text-[10px] mt-1 text-gray-400">When a team member closes a registration for your assigned lead, it will show up here.</p>
+                      </div>
+                    ) : (
+                      assistedNotifications.map(notif => {
+                        const isRead = readNotifIds.includes(notif.id);
+                        return (
+                          <div
+                            key={notif.id}
+                            onClick={() => {
+                              setEditingRow(notif.log);
+                              setShowNotifPopover(false);
+                            }}
+                            className={`p-3.5 hover:bg-blue-50/60 cursor-pointer transition flex items-start gap-3 ${
+                              !isRead ? "bg-amber-50/40" : ""
+                            }`}
+                          >
+                            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-extrabold text-xs shrink-0 mt-0.5 shadow-xs">
+                              {notif.convertedBy.charAt(0).toUpperCase()}
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-xs font-black text-slate-900 truncate">{notif.leadName}</span>
+                                <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 shrink-0">
+                                  +1 Primary Credit
+                                </span>
+                              </div>
+
+                              <p className="text-xs text-slate-600 mt-0.5 leading-snug">
+                                Registered by <span className="font-extrabold text-blue-600">{notif.convertedBy}</span> on your behalf.
+                              </p>
+
+                              <div className="flex items-center justify-between text-[10px] text-gray-400 font-semibold mt-1.5">
+                                <span className="truncate">{notif.program}</span>
+                                <span>{notif.phone}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-md px-1.5 py-0.5">
-              <button onClick={() => setRequestCount(c => Math.max(5, c - 5))} className="w-4 h-4 flex items-center justify-center text-slate-500 hover:text-slate-900 font-bold text-xs cursor-pointer">-</button>
-              <span className="w-6 text-center font-mono font-bold text-xs text-slate-800">{requestCount}</span>
-              <button onClick={() => setRequestCount(c => c + 5)} className="w-4 h-4 flex items-center justify-center text-slate-500 hover:text-slate-900 font-bold text-xs cursor-pointer">+</button>
-            </div>
+            {/* Quick Command Palette & Shortcuts (i) Button */}
             <button
-              onClick={handleGetNumbers}
-              disabled={isRequesting || !selectedProgramId}
-              className="flex items-center gap-1.5 px-3 py-1 bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white rounded-md font-semibold text-xs disabled:opacity-50 transition shadow-2xs cursor-pointer"
+              type="button"
+              onClick={() => setCommandPaletteOpen(true)}
+              className="p-2 rounded-xl border border-gray-200 bg-white hover:bg-slate-50 text-gray-500 hover:text-indigo-600 transition-all flex items-center justify-center cursor-pointer shadow-2xs"
+              title="Quick Search & Keyboard Shortcuts (Ctrl + K / Alt + A)"
             >
-              {isRequesting ? <Loader size={12} className="animate-spin" /> : <PhoneOutgoing size={12} />}
-              Get Numbers
+              <Info size={18} />
             </button>
           </div>
-
-          {/* Utility Action: Demoted Rebuild Cache */}
-          <button 
-            type="button"
-            onClick={handleRebuildCache}
-            disabled={isRebuildingCache}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-transparent hover:bg-slate-100 active:scale-[0.98] text-slate-500 hover:text-slate-800 rounded-lg text-xs font-medium border border-slate-200 disabled:opacity-50 transition cursor-pointer"
-            title="Admin utility: Rebuild local database cache"
-          >
-            <RefreshCw size={13} className={isRebuildingCache ? "animate-spin text-slate-600" : "text-slate-400"} />
-            <span>{isRebuildingCache ? "Rebuilding..." : "Rebuild Cache"}</span>
-          </button>
 
           {/* Primary Action: Add Call Entry */}
           <button 
             onClick={openCallEntryDialog} 
-            className="flex items-center gap-2 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white rounded-lg font-semibold text-xs transition shadow-2xs cursor-pointer"
+            className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white rounded-lg font-bold text-xs transition shadow-2xs cursor-pointer shrink-0"
           >
             <PhoneIncoming size={14} /> Add Call Entry
           </button>
@@ -1972,6 +1902,23 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
       {/* Filters */}
       {activeView === "sheet" && (
         <AttenderFilters
+          programs={programs}
+          selectedProgramId={selectedProgramId}
+          setSelectedProgramId={setSelectedProgramId}
+          selectedProgramName={selectedProgramName}
+          setSelectedProgramName={setSelectedProgramName}
+          setSelectedSubProgram={setSelectedSubProgram}
+          programDropOpen={programDropOpen}
+          setProgramDropOpen={setProgramDropOpen}
+          programSearch={programSearch}
+          setProgramSearch={setProgramSearch}
+          requestCount={requestCount}
+          setRequestCount={setRequestCount}
+          handleGetNumbers={handleGetNumbers}
+          isRequesting={isRequesting}
+          handleRebuildCache={handleRebuildCache}
+          isRebuildingCache={isRebuildingCache}
+          isLoadingProgram={isLoadingProgram}
           optionsVersion={optionsVersion}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
@@ -2041,25 +1988,84 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
         />
       )}
 
-      {/* Sheet Table */}
-      {isLoadingProgram ? (
-        <div className="flex-1 flex flex-col overflow-hidden p-6 space-y-3 animate-pulse">
-          <div className="h-10 bg-gray-200 rounded-xl w-full" />
-          {[...Array(8)].map((_, i) => (
-            <div key={i} className="flex gap-4">
-              <div className="h-8 bg-gray-100 rounded-lg w-12" />
-              <div className="h-8 bg-gray-100 rounded-lg flex-1" />
-              <div className="h-8 bg-gray-100 rounded-lg w-24" />
-              <div className="h-8 bg-gray-100 rounded-lg w-32" />
-              <div className="h-8 bg-gray-50 rounded-lg flex-1" />
-              <div className="h-8 bg-gray-100 rounded-lg w-28" />
-            </div>
-          ))}
-        </div>
-      ) : activeView === "performance" ? (
+      {/* Sheet Table Area */}
+      {activeView === "performance" ? (
         <MyPerformanceDashboard logs={callLogs} attenderName={attenderName} attenderId={attenderId} />
+      ) : loadError && callLogs.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-12 bg-white text-center">
+          <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mb-3 border border-rose-100 shadow-xs">
+            <AlertCircle size={24} />
+          </div>
+          <h3 className="text-sm font-bold text-slate-900">Unable to load contacts</h3>
+          <p className="text-xs text-slate-500 max-w-sm mt-1 mb-4 leading-relaxed">
+            {loadError?.message || "Something went wrong while loading your call sheet."}
+          </p>
+          <button
+            type="button"
+            onClick={handleRetryLoad}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs shadow-sm transition flex items-center gap-2 cursor-pointer active:scale-95"
+          >
+            <RefreshCw size={14} /> Retry
+          </button>
+        </div>
+      ) : isLoadingProgram && callLogs.length === 0 ? (
+        <div className="flex-1 flex flex-col overflow-hidden bg-white border-t border-slate-200">
+          <style>{`
+            @keyframes skeletonShimmer {
+              0% { background-position: -200% 0; }
+              100% { background-position: 200% 0; }
+            }
+            .skeleton-box {
+              background: linear-gradient(90deg, #F1F3F5 25%, #F8F9FA 50%, #F1F3F5 75%);
+              background-size: 200% 100%;
+              animation: skeletonShimmer 1.4s ease-in-out infinite;
+            }
+          `}</style>
+          <div className="flex-1 overflow-auto">
+            <table className="table-auto w-full text-left border-collapse text-xs">
+              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+                <tr>
+                  <th className="py-2.5 px-3 text-[11px] font-semibold text-slate-400 uppercase w-10 text-center">#</th>
+                  <th className="py-2.5 px-3 text-[11px] font-semibold text-slate-400 uppercase min-w-[140px]">Name</th>
+                  <th className="py-2.5 px-3 text-[11px] font-semibold text-slate-400 uppercase min-w-[130px]">Phone</th>
+                  <th className="py-2.5 px-3 text-[11px] font-semibold text-slate-400 uppercase min-w-[120px]">City</th>
+                  <th className="py-2.5 px-3 text-[11px] font-semibold text-slate-400 uppercase min-w-[120px]">Tags</th>
+                  <th className="py-2.5 px-3 text-[11px] font-semibold text-slate-400 uppercase min-w-[90px]">Type</th>
+                  <th className="py-2.5 px-3 text-[11px] font-semibold text-slate-400 uppercase min-w-[110px]">Status</th>
+                  <th className="py-2.5 px-3 text-[11px] font-semibold text-slate-400 uppercase min-w-[200px]">Remark</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {[...Array(7)].map((_, i) => (
+                  <tr key={i} className="h-[48px]">
+                    <td className="py-2.5 px-3 text-center"><div className="h-4 w-4 bg-[#F1F3F5] rounded mx-auto skeleton-box" /></td>
+                    <td className="py-2.5 px-3"><div className="h-4 w-28 bg-[#F1F3F5] rounded skeleton-box" /></td>
+                    <td className="py-2.5 px-3"><div className="h-4 w-24 bg-[#F1F3F5] rounded skeleton-box" /></td>
+                    <td className="py-2.5 px-3"><div className="h-4 w-20 bg-[#F1F3F5] rounded skeleton-box" /></td>
+                    <td className="py-2.5 px-3"><div className="h-4 w-16 bg-[#F1F3F5] rounded skeleton-box" /></td>
+                    <td className="py-2.5 px-3"><div className="h-4 w-14 bg-[#F1F3F5] rounded skeleton-box" /></td>
+                    <td className="py-2.5 px-3"><div className="h-4 w-20 bg-[#F1F3F5] rounded skeleton-box" /></td>
+                    <td className="py-2.5 px-3"><div className="h-4 w-36 bg-[#F1F3F5] rounded skeleton-box" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       ) : (
         <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Results Summary Bar (Results context beside table) */}
+          <div className="bg-slate-50/80 border-b border-slate-200 px-5 py-1.5 flex items-center justify-between shrink-0 text-xs font-semibold text-slate-500">
+            <span>
+              {isLoadingProgram
+                ? "Loading contacts…"
+                : `${tagFilteredLogs.length} contact${tagFilteredLogs.length !== 1 ? "s" : ""}${selectedTags.length === 0 ? " · All tags" : ` · ${selectedTags.length} tag${selectedTags.length > 1 ? "s" : ""}`}`}
+            </span>
+            <span className="text-[11px] text-slate-400 font-medium">
+              Page {page} of {totalPages || 1}
+            </span>
+          </div>
+
           <ContactTable
             scrollRef={scrollRef}
             onMouseDown={onMouseDown}
@@ -2075,6 +2081,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
             didDrag={didDrag}
             setEditingRow={handleSelectRow}
             onRefreshLead={handleRefreshSingleLead}
+            onClearFilters={handleClearAllFilters}
             callLogs={callLogs}
           />
 

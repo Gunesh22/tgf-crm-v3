@@ -187,7 +187,7 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
               onClick={() => setActiveTab(item.id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                 activeTab === item.id
-                  ? "bg-indigo-600 text-white shadow-xs"
+                  ? "bg-blue-600 text-white shadow-xs"
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
               }`}
             >
@@ -202,7 +202,7 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
       <aside className="hidden md:flex w-60 bg-white border-r border-slate-200 flex-col h-full shrink-0 shadow-xs">
         <div className="p-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-xs">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-xs">
               <Settings size={17} />
             </div>
             <div>
@@ -217,7 +217,7 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
               className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 rounded-lg transition border border-slate-200 cursor-pointer"
               title="Refresh Data"
             >
-              <RefreshCw size={14} className={isRefreshing ? "animate-spin text-indigo-600" : ""} />
+              <RefreshCw size={14} className={isRefreshing ? "animate-spin text-blue-600" : ""} />
             </button>
           </div>
         </div>
@@ -229,15 +229,15 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
               onClick={() => setActiveTab(item.id)}
               className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === item.id
-                  ? "bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-2xs"
+                  ? "bg-blue-50 text-blue-700 border border-blue-100 shadow-2xs"
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
               }`}
             >
-              <span className={activeTab === item.id ? "text-indigo-600" : "text-slate-400"}>
+              <span className={activeTab === item.id ? "text-blue-600" : "text-slate-400"}>
                 {item.icon}
               </span>
               {item.label}
-              {activeTab === item.id && <ChevronRight size={13} className="ml-auto text-indigo-600" />}
+              {activeTab === item.id && <ChevronRight size={13} className="ml-auto text-blue-600" />}
             </button>
           ))}
         </nav>

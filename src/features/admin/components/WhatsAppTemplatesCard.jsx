@@ -107,16 +107,16 @@ export function WhatsAppTemplatesCard({ templates = DEFAULT_WHATSAPP_TEMPLATES, 
   };
 
   return (
-    <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm space-y-6">
+    <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-2xs space-y-4">
       {/* Card Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-3.5">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
-            <MessageSquare size={20} />
+          <div className="w-9 h-9 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200">
+            <MessageSquare size={18} />
           </div>
           <div>
-            <h3 className="font-bold text-gray-900 text-base">WhatsApp Message Templates</h3>
-            <p className="text-xs text-gray-400 font-medium mt-0.5">
+            <h3 className="font-semibold text-[#172033] text-sm">WhatsApp Message Templates</h3>
+            <p className="text-xs text-[#667085] mt-0.5">
               Customize quick message templates used by attenders when sending WhatsApp messages.
             </p>
           </div>
@@ -124,9 +124,9 @@ export function WhatsAppTemplatesCard({ templates = DEFAULT_WHATSAPP_TEMPLATES, 
 
         <button
           onClick={openAddModal}
-          className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-2xl transition shadow-xs cursor-pointer shrink-0"
+          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-md transition shadow-2xs cursor-pointer shrink-0"
         >
-          <Plus size={15} />
+          <Plus size={14} />
           <span>Add Template</span>
         </button>
       </div>
@@ -305,7 +305,7 @@ export function WhatsAppTemplatesCard({ templates = DEFAULT_WHATSAPP_TEMPLATES, 
               <button
                 type="button"
                 onClick={handleSave}
-                className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs transition active:scale-95 cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-md shadow-2xs transition active:scale-95 cursor-pointer"
               >
                 <Save size={14} />
                 <span>Save Template</span>

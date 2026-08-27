@@ -216,8 +216,8 @@ export default function AttendersTab({ programs, attenders, onReloadAttenders })
         <div className="space-y-5">
           <AdminPasswordCard highlighted={true} />
 
-          <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-2xs">
-            <h3 className="text-xs font-semibold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+          <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
               <UserPlus size={15} className="text-indigo-600" />
               {editingAttender ? "Edit Attender Profile" : "Add New Attender"}
             </h3>
@@ -279,9 +279,9 @@ export default function AttendersTab({ programs, attenders, onReloadAttenders })
 
         {/* Right List Column */}
         <div className="md:col-span-2 space-y-5">
-          <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-2xs">
-            <h3 className="text-xs font-semibold text-slate-900 uppercase tracking-wider mb-3">Attenders List ({attenders.length})</h3>
-            <div className="divide-y divide-slate-100 border border-slate-200 rounded-md overflow-hidden">
+          <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-2xs">
+            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3.5">Attenders List ({attenders.length})</h3>
+            <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden">
               {attenders.map(a => {
                 const isPassVisible = visiblePasswords[a.id];
                 const currentPass = a.password || "------";

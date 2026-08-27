@@ -115,7 +115,7 @@ const SearchableDropdown = ({
       </button>
 
       {isOpen && !disabled && (
-        <div className="absolute left-0 right-0 mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-xl max-h-64 overflow-hidden flex flex-col animate-fade-in">
+        <div className="absolute left-0 right-0 mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-xl max-h-64 overflow-hidden flex flex-col animate-dropdown">
           <div className="p-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
             <Search size={13} className="text-slate-400 shrink-0 ml-1" />
             <input

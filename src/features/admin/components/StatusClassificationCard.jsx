@@ -1,5 +1,5 @@
 import React from "react";
-import { Sliders, Search, X, PhoneCall, PhoneOff, HelpCircle, GripVertical } from "lucide-react";
+import { SlidersHorizontal, Search, X, PhoneCall, PhoneOff, HelpCircle, GripVertical, Check, Layers } from "lucide-react";
 
 export function StatusClassificationCard({
   classificationSearch,
@@ -17,41 +17,47 @@ export function StatusClassificationCard({
   unassignedList
 }) {
   return (
-    <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <Sliders size={20} className="text-indigo-600" />
-            <h3 className="font-bold text-gray-900 text-base">Status Call Classification (Drag & Drop)</h3>
+    <div className="space-y-4">
+      {/* Header & Subtitle */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-md bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center shrink-0 shadow-2xs">
+            <SlidersHorizontal size={18} />
           </div>
-          <p className="text-xs text-gray-400 font-medium mt-0.5">
-            Drag & drop status items across the 3 columns below to control which call statuses count as Connected, Not Connected, or Not Assigned.
-          </p>
+          <div>
+            <h3 className="text-sm font-semibold text-[#172033] tracking-tight">
+              Call Classification & Reporting Rules
+            </h3>
+            <p className="text-xs text-[#667085] mt-0.5">
+              Drag & drop statuses across columns to categorize calls into Connected, Not Connected, or Unassigned.
+            </p>
+          </div>
         </div>
 
-        {/* Search bar */}
-        <div className="relative min-w-[240px]">
-          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+        {/* Search Input */}
+        <div className="relative max-w-xs w-full">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
           <input
             type="text"
             value={classificationSearch}
             onChange={e => setClassificationSearch(e.target.value)}
-            placeholder="Search status options..."
-            className="w-full pl-9 pr-8 py-2 text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-gray-400"
+            placeholder="Search classification statuses..."
+            className="w-full h-9 pl-9 pr-8 bg-white border border-[#DDE2EA] rounded-[7px] text-xs font-medium text-[#172033] placeholder:text-[#98A2B3] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all duration-150 shadow-[0_1px_2px_rgba(16,24,40,0.02)]"
           />
           {classificationSearch && (
             <button
               onClick={() => setClassificationSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#98A2B3] hover:text-[#172033] p-0.5 cursor-pointer"
             >
-              <X size={14} />
+              <X size={13} />
             </button>
           )}
         </div>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-6">
-        {/* Table 1: Connected Calls */}
+      {/* Unified Elevated 3-Column Container */}
+      <div className="bg-white rounded-[10px] border border-[#E4E7EC] shadow-[0_1px_3px_rgba(16,24,40,0.04),0_1px_2px_rgba(16,24,40,0.02)] overflow-hidden divide-y md:divide-y-0 md:divide-x divide-[#E4E7EC] grid md:grid-cols-3">
+        {/* Column 1: Connected */}
         <div
           onDragOver={(e) => { e.preventDefault(); setDragOverCategory("connected"); }}
           onDragLeave={() => setDragOverCategory(null)}
@@ -63,28 +69,24 @@ export function StatusClassificationCard({
               setDraggedItem(null);
             }
           }}
-          className={`rounded-2xl border transition-all duration-200 p-4 space-y-3 ${
-            dragOverCategory === "connected"
-              ? "bg-emerald-50/80 border-emerald-400 shadow-md ring-2 ring-emerald-400/20"
-              : "bg-emerald-50/20 border-emerald-100"
+          className={`flex flex-col transition-colors duration-150 ${
+            dragOverCategory === "connected" ? "bg-emerald-50/40" : "bg-white"
           }`}
         >
-          <div className="flex items-center justify-between border-b border-emerald-100 pb-3">
+          {/* Header */}
+          <div className="p-3.5 border-b border-[#E4E7EC] bg-[#FAFBFD] flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700">
-                <PhoneCall size={15} />
-              </div>
-              <div>
-                <h4 className="font-bold text-emerald-950 text-sm">Connected Calls</h4>
-                <p className="text-[10px] text-emerald-700 font-medium">Answered / Actionable</p>
-              </div>
+              <PhoneCall size={14} className="text-emerald-600 shrink-0" />
+              <h4 className="font-semibold text-xs text-[#172033]">Connected</h4>
+              <span className="text-[11px] text-[#667085]">(Answered)</span>
             </div>
-            <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-xs font-extrabold">
-              {displayConnectedList.length} / {connectedList.length}
+            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200/80 rounded-md font-mono text-[11px] font-semibold">
+              {displayConnectedList.length}
             </span>
           </div>
 
-          <div className="space-y-2 min-h-[220px] max-h-[420px] overflow-y-auto pr-1">
+          {/* Body */}
+          <div className="p-2.5 space-y-1.5 min-h-[220px] max-h-[400px] overflow-y-auto">
             {displayConnectedList.map((st) => (
               <div
                 key={st}
@@ -93,24 +95,24 @@ export function StatusClassificationCard({
                   setDraggedItem({ status: st, fromCategory: "connected" });
                   e.dataTransfer.setData("text/plain", JSON.stringify({ status: st, fromCategory: "connected" }));
                 }}
-                className="bg-white p-3 rounded-xl border border-emerald-100/80 shadow-xs flex items-center justify-between group hover:border-emerald-300 transition-all cursor-grab active:cursor-grabbing"
+                className="h-10 px-3 rounded-md border border-[#E4E7EC] bg-white hover:bg-[#F8FAFC] flex items-center justify-between group transition-all duration-150 cursor-grab active:cursor-grabbing text-xs shadow-2xs hover:shadow-[0_2px_6px_rgba(16,24,40,0.04)]"
               >
-                <div className="flex items-center gap-2">
-                  <GripVertical size={14} className="text-gray-300 group-hover:text-emerald-500 transition-colors" />
-                  <span className="text-xs font-bold text-gray-800">{st}</span>
+                <div className="flex items-center gap-2 truncate pr-2">
+                  <GripVertical size={13} className="text-[#98A2B3] opacity-30 group-hover:opacity-100 transition-opacity shrink-0" />
+                  <span className="font-medium text-[#172033] truncate text-[13px]">{st}</span>
                 </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                   <button
                     onClick={() => handleMoveStatus(st, "connected", "notConnected")}
                     title="Move to Not Connected"
-                    className="px-2 py-0.5 text-[10px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-md transition-colors cursor-pointer"
+                    className="px-2 py-0.5 text-[10px] font-semibold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200/60 rounded transition-colors cursor-pointer"
                   >
-                    → Not Connected
+                    → Not Conn
                   </button>
                   <button
                     onClick={() => handleMoveStatus(st, "connected", "unassigned")}
                     title="Unassign"
-                    className="px-2 py-0.5 text-[10px] font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-md transition-colors cursor-pointer"
+                    className="px-2 py-0.5 text-[10px] font-medium bg-slate-100 text-[#667085] hover:bg-slate-200 border border-slate-200/80 rounded transition-colors cursor-pointer"
                   >
                     Unassign
                   </button>
@@ -119,19 +121,19 @@ export function StatusClassificationCard({
             ))}
 
             {displayConnectedList.length === 0 && (
-              <div className="h-40 flex flex-col items-center justify-center border-2 border-dashed border-emerald-200/60 rounded-xl text-center p-4">
-                <p className="text-xs font-bold text-emerald-800">
+              <div className="h-36 flex flex-col items-center justify-center border border-dashed border-[#E4E7EC] rounded-md text-center p-3">
+                <p className="text-xs font-semibold text-[#172033]">
                   {classificationSearch ? "No matching statuses" : "No Connected Statuses"}
                 </p>
-                <p className="text-[10px] text-emerald-600 mt-0.5">
-                  {classificationSearch ? "Try a different search query" : "Drag status here"}
+                <p className="text-[11px] text-[#667085] mt-0.5">
+                  {classificationSearch ? "Try a different search" : "Drag status items here"}
                 </p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Table 2: Not Connected Calls */}
+        {/* Column 2: Not Connected */}
         <div
           onDragOver={(e) => { e.preventDefault(); setDragOverCategory("notConnected"); }}
           onDragLeave={() => setDragOverCategory(null)}
@@ -143,28 +145,24 @@ export function StatusClassificationCard({
               setDraggedItem(null);
             }
           }}
-          className={`rounded-2xl border transition-all duration-200 p-4 space-y-3 ${
-            dragOverCategory === "notConnected"
-              ? "bg-rose-50/80 border-rose-400 shadow-md ring-2 ring-rose-400/20"
-              : "bg-rose-50/20 border-rose-100"
+          className={`flex flex-col transition-colors duration-150 ${
+            dragOverCategory === "notConnected" ? "bg-rose-50/40" : "bg-white"
           }`}
         >
-          <div className="flex items-center justify-between border-b border-rose-100 pb-3">
+          {/* Header */}
+          <div className="p-3.5 border-b border-[#E4E7EC] bg-[#FAFBFD] flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-xl bg-rose-100 flex items-center justify-center text-rose-700">
-                <PhoneOff size={15} />
-              </div>
-              <div>
-                <h4 className="font-bold text-rose-950 text-sm">Not Connected Calls</h4>
-                <p className="text-[10px] text-rose-700 font-medium">Unanswered / Missed</p>
-              </div>
+              <PhoneOff size={14} className="text-rose-600 shrink-0" />
+              <h4 className="font-semibold text-xs text-[#172033]">Not Connected</h4>
+              <span className="text-[11px] text-[#667085]">(Missed)</span>
             </div>
-            <span className="px-2.5 py-0.5 bg-rose-100 text-rose-800 rounded-full text-xs font-extrabold">
-              {displayNotConnectedList.length} / {notConnectedList.length}
+            <span className="px-2 py-0.5 bg-rose-50 text-rose-800 border border-rose-200/80 rounded-md font-mono text-[11px] font-semibold">
+              {displayNotConnectedList.length}
             </span>
           </div>
 
-          <div className="space-y-2 min-h-[220px] max-h-[420px] overflow-y-auto pr-1">
+          {/* Body */}
+          <div className="p-2.5 space-y-1.5 min-h-[220px] max-h-[400px] overflow-y-auto">
             {displayNotConnectedList.map((st) => (
               <div
                 key={st}
@@ -173,24 +171,24 @@ export function StatusClassificationCard({
                   setDraggedItem({ status: st, fromCategory: "notConnected" });
                   e.dataTransfer.setData("text/plain", JSON.stringify({ status: st, fromCategory: "notConnected" }));
                 }}
-                className="bg-white p-3 rounded-xl border border-rose-100/80 shadow-xs flex items-center justify-between group hover:border-rose-300 transition-all cursor-grab active:cursor-grabbing"
+                className="h-10 px-3 rounded-md border border-[#E4E7EC] bg-white hover:bg-[#F8FAFC] flex items-center justify-between group transition-all duration-150 cursor-grab active:cursor-grabbing text-xs shadow-2xs hover:shadow-[0_2px_6px_rgba(16,24,40,0.04)]"
               >
-                <div className="flex items-center gap-2">
-                  <GripVertical size={14} className="text-gray-300 group-hover:text-rose-500 transition-colors" />
-                  <span className="text-xs font-bold text-gray-800">{st}</span>
+                <div className="flex items-center gap-2 truncate pr-2">
+                  <GripVertical size={13} className="text-[#98A2B3] opacity-30 group-hover:opacity-100 transition-opacity shrink-0" />
+                  <span className="font-medium text-[#172033] truncate text-[13px]">{st}</span>
                 </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                   <button
                     onClick={() => handleMoveStatus(st, "notConnected", "connected")}
                     title="Move to Connected"
-                    className="px-2 py-0.5 text-[10px] font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-md transition-colors cursor-pointer"
+                    className="px-2 py-0.5 text-[10px] font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/60 rounded transition-colors cursor-pointer"
                   >
                     → Connected
                   </button>
                   <button
                     onClick={() => handleMoveStatus(st, "notConnected", "unassigned")}
                     title="Unassign"
-                    className="px-2 py-0.5 text-[10px] font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-md transition-colors cursor-pointer"
+                    className="px-2 py-0.5 text-[10px] font-medium bg-slate-100 text-[#667085] hover:bg-slate-200 border border-slate-200/80 rounded transition-colors cursor-pointer"
                   >
                     Unassign
                   </button>
@@ -199,19 +197,19 @@ export function StatusClassificationCard({
             ))}
 
             {displayNotConnectedList.length === 0 && (
-              <div className="h-40 flex flex-col items-center justify-center border-2 border-dashed border-rose-200/60 rounded-xl text-center p-4">
-                <p className="text-xs font-bold text-rose-800">
+              <div className="h-36 flex flex-col items-center justify-center border border-dashed border-[#E4E7EC] rounded-md text-center p-3">
+                <p className="text-xs font-semibold text-[#172033]">
                   {classificationSearch ? "No matching statuses" : "No Not-Connected Statuses"}
                 </p>
-                <p className="text-[10px] text-rose-600 mt-0.5">
-                  {classificationSearch ? "Try a different search query" : "Drag status here"}
+                <p className="text-[11px] text-[#667085] mt-0.5">
+                  {classificationSearch ? "Try a different search" : "Drag status items here"}
                 </p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Table 3: Not Assigned */}
+        {/* Column 3: Not Assigned */}
         <div
           onDragOver={(e) => { e.preventDefault(); setDragOverCategory("unassigned"); }}
           onDragLeave={() => setDragOverCategory(null)}
@@ -223,28 +221,24 @@ export function StatusClassificationCard({
               setDraggedItem(null);
             }
           }}
-          className={`rounded-2xl border transition-all duration-200 p-4 space-y-3 ${
-            dragOverCategory === "unassigned"
-              ? "bg-slate-100 border-slate-400 shadow-md ring-2 ring-slate-400/20"
-              : "bg-gray-50/50 border-gray-100"
+          className={`flex flex-col transition-colors duration-150 ${
+            dragOverCategory === "unassigned" ? "bg-slate-100/60" : "bg-white"
           }`}
         >
-          <div className="flex items-center justify-between border-b border-gray-200/60 pb-3">
+          {/* Header */}
+          <div className="p-3.5 border-b border-[#E4E7EC] bg-[#FAFBFD] flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-xl bg-gray-200 flex items-center justify-center text-gray-700">
-                <HelpCircle size={15} />
-              </div>
-              <div>
-                <h4 className="font-bold text-gray-900 text-sm">Not Assigned</h4>
-                <p className="text-[10px] text-gray-400 font-medium">Uncategorized / Other</p>
-              </div>
+              <HelpCircle size={14} className="text-[#667085] shrink-0" />
+              <h4 className="font-semibold text-xs text-[#172033]">Not Assigned</h4>
+              <span className="text-[11px] text-[#667085]">(Uncategorized)</span>
             </div>
-            <span className="px-2.5 py-0.5 bg-gray-200 text-gray-800 rounded-full text-xs font-extrabold">
-              {displayUnassignedList.length} / {unassignedList.length}
+            <span className="px-2 py-0.5 bg-slate-100 text-[#172033] border border-slate-200 rounded-md font-mono text-[11px] font-semibold">
+              {displayUnassignedList.length}
             </span>
           </div>
 
-          <div className="space-y-2 min-h-[220px] max-h-[420px] overflow-y-auto pr-1">
+          {/* Body */}
+          <div className="p-2.5 space-y-1.5 min-h-[220px] max-h-[400px] overflow-y-auto">
             {displayUnassignedList.map((st) => (
               <div
                 key={st}
@@ -253,38 +247,38 @@ export function StatusClassificationCard({
                   setDraggedItem({ status: st, fromCategory: "unassigned" });
                   e.dataTransfer.setData("text/plain", JSON.stringify({ status: st, fromCategory: "unassigned" }));
                 }}
-                className="bg-white p-3 rounded-xl border border-gray-200/80 shadow-xs flex items-center justify-between group hover:border-gray-400 transition-all cursor-grab active:cursor-grabbing"
+                className="h-10 px-3 rounded-md border border-[#E4E7EC] bg-white hover:bg-[#F8FAFC] flex items-center justify-between group transition-all duration-150 cursor-grab active:cursor-grabbing text-xs shadow-2xs hover:shadow-[0_2px_6px_rgba(16,24,40,0.04)]"
               >
-                <div className="flex items-center gap-2">
-                  <GripVertical size={14} className="text-gray-300 group-hover:text-gray-600 transition-colors" />
-                  <span className="text-xs font-bold text-gray-800">{st}</span>
+                <div className="flex items-center gap-2 truncate pr-2">
+                  <GripVertical size={13} className="text-[#98A2B3] opacity-30 group-hover:opacity-100 transition-opacity shrink-0" />
+                  <span className="font-medium text-[#172033] truncate text-[13px]">{st}</span>
                 </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                   <button
                     onClick={() => handleMoveStatus(st, "unassigned", "connected")}
                     title="Move to Connected"
-                    className="px-2 py-0.5 text-[10px] font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-md transition-colors cursor-pointer"
+                    className="px-2 py-0.5 text-[10px] font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/60 rounded transition-colors cursor-pointer"
                   >
                     → Connected
                   </button>
                   <button
                     onClick={() => handleMoveStatus(st, "unassigned", "notConnected")}
                     title="Move to Not Connected"
-                    className="px-2 py-0.5 text-[10px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-md transition-colors cursor-pointer"
+                    className="px-2 py-0.5 text-[10px] font-semibold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200/60 rounded transition-colors cursor-pointer"
                   >
-                    → Not Connected
+                    → Not Conn
                   </button>
                 </div>
               </div>
             ))}
 
             {displayUnassignedList.length === 0 && (
-              <div className="h-40 flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl text-center p-4">
-                <p className="text-xs font-bold text-gray-400">
-                  {classificationSearch ? "No matching statuses" : "All Statuses Assigned"}
+              <div className="h-36 flex flex-col items-center justify-center border border-dashed border-[#E4E7EC] rounded-md text-center p-3">
+                <p className="text-xs font-semibold text-[#172033] flex items-center gap-1">
+                  {classificationSearch ? "No matching statuses" : <><Check size={13} className="text-emerald-600" /> All Statuses Categorized</>}
                 </p>
-                <p className="text-[10px] text-gray-400 mt-0.5">
-                  {classificationSearch ? "Try a different search query" : "Every status is categorized!"}
+                <p className="text-[11px] text-[#667085] mt-0.5">
+                  {classificationSearch ? "Try a different search" : "Every status has been classified."}
                 </p>
               </div>
             )}

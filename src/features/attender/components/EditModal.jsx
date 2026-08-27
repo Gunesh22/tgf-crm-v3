@@ -1666,10 +1666,17 @@ export const EditModal = ({
   handleDismissRef.current = handleDismiss;
 
   useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") handleDismissRef.current?.(); };
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        handleDismissRef.current?.();
+      } else if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        handleSaveAndClose();
+      }
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [handleSaveAndClose]);
 
   const handleDelete = async () => {
     if (!window.confirm("Remove this entry?")) return;
@@ -1722,11 +1729,11 @@ export const EditModal = ({
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in" onClick={handleDismiss}>
       <div
-        className="bg-white rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200 animate-slide-up"
+        className="bg-white rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl border-0 animate-modal-in"
         onClick={e => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className={`px-5 py-3.5 flex items-center justify-between ${edited._callbackDue ? "bg-rose-800 text-white shadow-xs" : isIncomingCall ? "bg-emerald-800 text-white shadow-xs" : "bg-slate-900 text-white shadow-xs"}`}>
+        <div className={`px-5 py-3.5 flex items-center justify-between rounded-t-2xl ${edited._callbackDue ? "bg-rose-800 text-white shadow-xs" : isIncomingCall ? "bg-emerald-800 text-white shadow-xs" : "bg-slate-900 text-white shadow-xs"}`}>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-white/10 border border-white/20 rounded-lg flex items-center justify-center text-white shrink-0">
               {edited.callType === "incoming" ? <PhoneIncoming size={18} /> : <PhoneOutgoing size={18} />}

@@ -334,6 +334,20 @@ export default function MobileEditModal({
     }
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (onClose) onClose();
+      } else if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        handleSaveAndClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, handleSaveAndClose]);
+
   const handleDelete = async () => {
     if (!window.confirm("Remove this entry from sheet?")) return;
     if (onDelete) onDelete(row.id);
@@ -489,10 +503,10 @@ export default function MobileEditModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-white sm:bg-black/60 sm:backdrop-blur-sm flex flex-col justify-between sm:justify-center animate-fade-in h-[100dvh] w-full sm:h-auto sm:min-h-0">
-      <div className="bg-white rounded-none sm:rounded-3xl w-full h-[100dvh] sm:h-auto sm:max-w-lg sm:max-h-[92vh] flex flex-col overflow-hidden shadow-2xl animate-slide-up">
+      <div className="bg-[#009669] rounded-none sm:rounded-3xl w-full h-[100dvh] sm:h-auto sm:max-w-lg sm:max-h-[92vh] flex flex-col overflow-hidden shadow-2xl animate-slide-up">
         
         {/* 1. Header Card - Emerald Green */}
-        <div className="bg-[#009669] px-5 py-4 text-white flex flex-col gap-3.5 relative shrink-0 pt-6 sm:pt-4">
+        <div className="bg-[#009669] rounded-t-none sm:rounded-t-3xl px-5 py-4 text-white flex flex-col gap-3.5 relative shrink-0 pt-6 sm:pt-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-11 h-11 rounded-full bg-white/20 text-white flex items-center justify-center font-bold shrink-0">

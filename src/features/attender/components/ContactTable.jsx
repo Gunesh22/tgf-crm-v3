@@ -94,6 +94,7 @@ export function ContactTable({
   didDrag,
   setEditingRow,
   onRefreshLead,
+  onClearFilters,
   callLogs
 }) {
   const getStatusBadge = (log) => {
@@ -144,7 +145,7 @@ export function ContactTable({
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseLeave}
-        className="flex-1 overflow-auto cursor-grab"
+        className="flex-1 overflow-auto cursor-grab [scrollbar-gutter:stable]"
         style={{ userSelect: "none" }}
       >
         <table className="table-auto w-full text-left border-collapse text-xs">
@@ -402,12 +403,37 @@ export function ContactTable({
             {paginated.length === 0 && (
               <tr>
                 <td colSpan={visibleCount}>
-                  <div className="py-20 text-center bg-slate-50/50">
-                    <p className="text-sm font-semibold text-slate-500">
-                      {callLogs.length === 0
-                        ? "Select a tag above and click 'Get Numbers' to start calling, or add an incoming call."
-                        : "No entries match the selected filters."}
-                    </p>
+                  <div className="py-16 text-center bg-slate-50/50 flex flex-col items-center justify-center p-6">
+                    {callLogs.length === 0 ? (
+                      <>
+                        <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-2 border border-slate-200">
+                          <Users size={20} />
+                        </div>
+                        <p className="text-sm font-bold text-slate-700">No contacts assigned yet</p>
+                        <p className="text-xs text-slate-500 max-w-sm mt-1 leading-relaxed">
+                          Select a tag above and click 'Get Numbers' to start calling, or add an incoming call.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-2 border border-slate-200">
+                          <Users size={20} />
+                        </div>
+                        <p className="text-sm font-bold text-slate-700">No matching contacts found</p>
+                        <p className="text-xs text-slate-500 max-w-sm mt-1 mb-3 leading-relaxed">
+                          No contacts match your active search or filter criteria.
+                        </p>
+                        {onClearFilters && (
+                          <button
+                            type="button"
+                            onClick={onClearFilters}
+                            className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 active:scale-95 text-slate-700 font-bold text-xs rounded-lg transition"
+                          >
+                            Clear Filters
+                          </button>
+                        )}
+                      </>
+                    )}
                   </div>
                 </td>
               </tr>

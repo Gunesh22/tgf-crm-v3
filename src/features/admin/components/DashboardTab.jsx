@@ -1083,10 +1083,10 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl border border-gray-100 shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Header */}
-            <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-indigo-50/50 via-white to-purple-50/30 flex items-center justify-between">
+            <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-blue-50/40 via-white to-slate-50 flex items-center justify-between">
               <div>
-                <h3 className="font-extrabold text-xl text-gray-900 flex items-center gap-2">
-                  <span>📊</span> Calls & Leads Breakdown for <span className="text-indigo-600 underline decoration-indigo-300">{typeof selectedAttenderDetails === "object" ? selectedAttenderDetails.name : selectedAttenderDetails}</span>
+                <h3 className="font-extrabold text-xl text-slate-900 flex items-center gap-2">
+                  <span>📊</span> Calls & Leads Breakdown for <span className="text-blue-600 underline decoration-blue-300">{typeof selectedAttenderDetails === "object" ? selectedAttenderDetails.name : selectedAttenderDetails}</span>
                 </h3>
                 <p className="text-xs text-gray-500 mt-1 font-medium">
                   Showing {attenderModalLeads.length} counted entries for date range <span className="font-bold text-gray-700">{dateFrom}</span> to <span className="font-bold text-gray-700">{dateTo}</span>

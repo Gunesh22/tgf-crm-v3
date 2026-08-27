@@ -7,6 +7,7 @@ import { formatContactName, getSharedAttenders } from "../utils";
 import { AttenderFilters } from "../components/AttenderFilters";
 
 export default function MobileAttenderView({
+  isLoadingProgram = false,
   optionsVersion,
   attenderId,
   attenderName,
@@ -116,7 +117,7 @@ export default function MobileAttenderView({
           <div>
             <h1 className="font-extrabold text-base leading-none">My Call Sheet</h1>
             <p className="text-[10px] text-emerald-100 font-medium mt-0.5">
-              Showing {filteredLogs.length} of {allLogsCount} leads
+              {isLoadingProgram ? "Loading contacts…" : `Showing ${filteredLogs.length} of ${allLogsCount} leads`}
             </p>
           </div>
         </div>
@@ -230,6 +231,7 @@ export default function MobileAttenderView({
       {/* 2. Embedded Filters Section */}
       <div className="px-3 py-2 bg-white border-b border-slate-200 shrink-0">
         <AttenderFilters
+          isLoadingProgram={isLoadingProgram}
           optionsVersion={optionsVersion}
           showAdvancedFilters={showAdvancedFilters}
           setShowAdvancedFilters={setShowAdvancedFilters}

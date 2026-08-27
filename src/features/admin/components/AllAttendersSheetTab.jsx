@@ -103,32 +103,32 @@ function MultiSelectDropdown({ options, selected = [], onChange, placeholder, ic
   const hasFilterApplied = selected.length > 0 && selected.length < normalizedOptions.length;
 
   return (
-    <div className="relative min-w-[105px] sm:min-w-[115px]" ref={ref}>
+    <div className="relative min-w-[110px] sm:min-w-[125px]" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen(p => !p)}
-        className={`flex items-center justify-between gap-1.5 px-2.5 py-1.5 border rounded-xl font-bold text-xs shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full whitespace-nowrap transition-all duration-200 cursor-pointer ${
+        className={`flex items-center justify-between gap-1.5 h-9 px-3 border rounded-md text-xs font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 w-full whitespace-nowrap transition-colors cursor-pointer ${
           hasFilterApplied
-            ? "bg-indigo-50 border-indigo-300 text-indigo-900 font-extrabold shadow-indigo-100"
-            : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300"
+            ? "bg-indigo-50 border-indigo-200 text-indigo-700 font-semibold"
+            : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
         }`}
       >
         <div className="flex items-center gap-1.5 min-w-0 truncate">
-          {Icon && <Icon size={13} className={hasFilterApplied ? "text-indigo-600" : "text-gray-400"} />}
-          <span className="truncate text-left font-bold">{label}</span>
+          {Icon && <Icon size={13} className={hasFilterApplied ? "text-indigo-600" : "text-slate-400"} />}
+          <span className="truncate text-left font-medium">{label}</span>
         </div>
         {hasFilterApplied && (
-          <span className="w-4 h-4 rounded-full bg-indigo-600 text-white text-[10px] font-black flex items-center justify-center shrink-0">
+          <span className="w-4 h-4 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
             {selected.length}
           </span>
         )}
-        <ChevronDown size={14} className={`shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""} ${hasFilterApplied ? "text-indigo-600" : "text-gray-400"}`} />
+        <ChevronDown size={14} className={`shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""} ${hasFilterApplied ? "text-indigo-600" : "text-slate-400"}`} />
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1.5 bg-white border border-gray-200 rounded-2xl shadow-2xl w-full min-w-[220px] max-w-[300px] overflow-hidden left-0 sm:left-auto animate-slide-down-scale origin-top-left">
-          <div className="p-2 border-b border-gray-100 flex items-center gap-2 bg-gray-50/50">
-            <Search size={13} className="text-gray-400 shrink-0" />
+        <div className="absolute z-50 mt-1 bg-white border border-slate-200 rounded-md shadow-lg w-full min-w-[210px] max-w-[280px] overflow-hidden left-0">
+          <div className="p-2 border-b border-slate-100 flex items-center gap-1.5 bg-slate-50/50">
+            <Search size={13} className="text-slate-400 shrink-0" />
             <input
               autoFocus
               value={search}
@@ -138,7 +138,7 @@ function MultiSelectDropdown({ options, selected = [], onChange, placeholder, ic
             />
             {search && (
               <button onClick={() => setSearch("")}>
-                <X size={12} className="text-gray-400 hover:text-gray-600" />
+                <X size={12} className="text-slate-400 hover:text-slate-600" />
               </button>
             )}
           </div>

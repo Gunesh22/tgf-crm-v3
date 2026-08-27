@@ -18,20 +18,23 @@ const getLocalDateStr = (d = new Date()) => {
 function MonthlySection({ title, subtitle, action, children, defaultOpen = true }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   return (
-    <div className="bg-white rounded-lg border border-slate-200 shadow-2xs overflow-hidden transition-all">
-      <div className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer select-none">
-        <div onClick={() => setIsOpen(!isOpen)} className="flex-1">
-          <h3 className="text-xs font-semibold text-slate-900 uppercase tracking-wider flex items-center gap-2">{title}</h3>
+    <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden transition-all">
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-5 py-3.5 flex items-center justify-between bg-slate-50/60 hover:bg-slate-100/70 transition-colors cursor-pointer select-none border-b border-slate-200/80"
+      >
+        <div className="flex-1">
+          <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">{title}</h3>
           {subtitle && <p className="text-xs text-slate-500 mt-0.5 font-medium">{subtitle}</p>}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {action}
-          <button type="button" onClick={() => setIsOpen(!isOpen)} className="p-1 text-slate-400 hover:text-slate-600">
+          <button type="button" onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }} className="p-1 text-slate-400 hover:text-slate-600 rounded-md transition-colors">
             {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
           </button>
         </div>
       </div>
-      {isOpen && <div className="p-6 border-t border-gray-50 bg-white">{children}</div>}
+      {isOpen && <div className="p-5 bg-white">{children}</div>}
     </div>
   );
 }
@@ -145,11 +148,11 @@ function FormulaInfoPopover({ title = "Formula Info", formulas = [], iconOnly = 
 
 function MonthlyTable({ headers, rows, totals, formatValue }) {
   return (
-    <div className="overflow-x-auto rounded-2xl border border-gray-100">
-      <table className="w-full text-sm text-left">
-        <thead className="bg-gray-50 text-[10px] font-bold text-gray-500 uppercase tracking-wider border-b border-gray-100">
+    <div className="overflow-x-auto overflow-y-auto max-h-[550px] rounded-xl border border-slate-200 shadow-2xs bg-white">
+      <table className="w-full text-xs text-left border-collapse">
+        <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200 sticky top-0 z-20 shadow-2xs">
           <tr>
-            {headers.map(h => {
+            {headers.map((h, index) => {
               const formulaInfo = HEADER_FORMULAS[h];
               let firstLine = h;
               let secondLine = "";
@@ -167,8 +170,15 @@ function MonthlyTable({ headers, rows, totals, formatValue }) {
                 secondLine = h.replace("Overall ", "");
               }
 
+              const isFirstCol = index === 0;
+
               return (
-                <th key={h} className="px-6 py-3 whitespace-nowrap">
+                <th
+                  key={h}
+                  className={`px-4 py-3 whitespace-nowrap bg-slate-50 ${
+                    isFirstCol ? "sticky left-0 z-30 border-r border-slate-200" : ""
+                  }`}
+                >
                   <div className="flex items-center gap-1.5">
                     <span>
                       {firstLine}
@@ -187,23 +197,60 @@ function MonthlyTable({ headers, rows, totals, formatValue }) {
             })}
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-50">
+        <tbody className="divide-y divide-slate-100 bg-white">
           {rows.map((row, idx) => (
-            <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-              {headers.map((h, i) => (
-                <td key={i} className={`px-6 py-3.5 ${i === 0 ? "font-bold text-gray-800" : "text-gray-600"}`}>
-                  {formatValue ? formatValue(row[h], h) : row[h]}
-                </td>
-              ))}
+            <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+              {headers.map((h, i) => {
+                const rawVal = row[h];
+                const displayVal = formatValue ? formatValue(rawVal, h) : rawVal;
+                const isFirstCol = i === 0;
+                const isZero = displayVal === 0 || displayVal === "0" || displayVal === "0.0%" || displayVal === "0%";
+                const isRate = h.includes("Rate (%)");
+
+                return (
+                  <td
+                    key={i}
+                    className={`px-4 py-2.5 whitespace-nowrap ${
+                      isFirstCol
+                        ? "sticky left-0 bg-white font-semibold text-slate-800 z-10 border-r border-slate-100 shadow-r"
+                        : isRate
+                        ? isZero
+                          ? "text-slate-300 font-mono text-xs"
+                          : "font-semibold text-emerald-700 font-mono text-xs"
+                        : isZero
+                        ? "text-slate-300 font-mono text-xs"
+                        : "text-slate-700 font-mono text-xs"
+                    }`}
+                  >
+                    {displayVal}
+                  </td>
+                );
+              })}
             </tr>
           ))}
           {totals && (
-            <tr className="bg-gray-50/70 border-t border-gray-100 font-bold text-gray-900">
-              {headers.map((h, i) => (
-                <td key={i} className="px-6 py-4">
-                  {formatValue ? formatValue(totals[h], h) : totals[h]}
-                </td>
-              ))}
+            <tr className="bg-slate-100/90 border-t-2 border-slate-200 font-bold text-slate-900 sticky bottom-0 z-20">
+              {headers.map((h, i) => {
+                const rawVal = totals[h];
+                const displayVal = formatValue ? formatValue(rawVal, h) : rawVal;
+                const isFirstCol = i === 0;
+                const isRate = h.includes("Rate (%)");
+
+                return (
+                  <td
+                    key={i}
+                    className={`px-4 py-3 whitespace-nowrap ${
+                      isFirstCol
+                        ? "sticky left-0 bg-slate-100 font-bold text-slate-900 z-30 border-r border-slate-200"
+                        : isRate
+                        ? "font-bold text-emerald-800 font-mono text-xs"
+                        : "font-bold text-slate-900 font-mono text-xs"
+                    }`}
+                  >
+                    {displayVal}
+                  </td>
+                );
+              })}
             </tr>
           )}
         </tbody>
@@ -223,7 +270,7 @@ function MultiSelect({ options, selected, onChange, placeholder, allLabel = "All
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const filtered = options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()));
+  const filtered = options.filter(o => String(o.label || "").toLowerCase().includes(search.toLowerCase()));
   const allSelected = selected.length === 0 || selected.length === options.length;
 
   const toggle = (val) => {
@@ -248,28 +295,28 @@ function MultiSelect({ options, selected, onChange, placeholder, allLabel = "All
   const hasFilterApplied = selected.length > 0 && selected.length < options.length;
 
   return (
-    <div className="relative flex-1 min-w-[150px] sm:min-w-[165px] max-w-[250px]" ref={ref}>
+    <div className="relative flex-1 min-w-[140px] sm:min-w-[155px] max-w-[220px]" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen(p => !p)}
-        className={`flex items-center justify-between gap-2 px-4 py-2.5 border rounded-2xl font-bold text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full whitespace-nowrap overflow-hidden transition-all duration-200 cursor-pointer ${
+        className={`flex items-center justify-between gap-2 h-9 px-3 border rounded-md text-xs font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 w-full whitespace-nowrap overflow-hidden transition-colors cursor-pointer ${
           hasFilterApplied
-            ? "bg-indigo-50/80 border-indigo-300 text-indigo-900 font-extrabold shadow-sm shadow-indigo-100"
-            : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50/90 hover:border-gray-300"
+            ? "bg-indigo-50 border-indigo-200 text-indigo-700 font-semibold"
+            : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
         }`}
       >
-        <span className="truncate flex-1 text-left font-bold">{label}</span>
+        <span className="truncate flex-1 text-left">{label}</span>
         {hasFilterApplied && (
-          <span className="w-4.5 h-4.5 rounded-full bg-indigo-600 text-white text-[10px] font-black flex items-center justify-center shrink-0">
+          <span className="w-4 h-4 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
             {selected.length}
           </span>
         )}
-        <ChevronDown size={16} className={`shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""} ${hasFilterApplied ? "text-indigo-600" : "text-gray-400"}`} />
+        <ChevronDown size={14} className={`shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""} ${hasFilterApplied ? "text-indigo-600" : "text-slate-400"}`} />
       </button>
       {open && (
-        <div className="absolute z-50 mt-1 bg-white border border-gray-200 rounded-2xl shadow-2xl w-full min-w-[230px] overflow-hidden right-0">
-          <div className="p-2 border-b border-gray-100 flex items-center gap-2">
-            <Search size={13} className="text-gray-400 shrink-0" />
+        <div className="absolute z-50 mt-1 bg-white border border-slate-200 rounded-md shadow-lg w-full min-w-[210px] overflow-hidden right-0">
+          <div className="p-2 border-b border-slate-100 flex items-center gap-1.5">
+            <Search size={13} className="text-slate-400 shrink-0" />
             <input
               autoFocus
               value={search}
@@ -277,15 +324,15 @@ function MultiSelect({ options, selected, onChange, placeholder, allLabel = "All
               placeholder="Search..."
               className="w-full text-xs focus:outline-none bg-transparent"
             />
-            {search && <button onClick={() => setSearch("")}><X size={12} className="text-gray-400" /></button>}
+            {search && <button onClick={() => setSearch("")}><X size={12} className="text-slate-400" /></button>}
           </div>
-          <div className="max-h-60 overflow-y-auto py-1">
+          <div className="max-h-56 overflow-y-auto py-1">
             <button
               onClick={toggleAll}
-              className="w-full px-4 py-2 text-left text-xs font-black text-indigo-600 hover:bg-indigo-50 flex items-center gap-2"
+              className="w-full px-3 py-1.5 text-left text-xs font-semibold text-indigo-600 hover:bg-indigo-50 flex items-center gap-2"
             >
-              <span className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 ${allSelected ? "bg-indigo-600 border-indigo-600" : "border-gray-300"}`}>
-                {allSelected && <Check size={10} className="text-white stroke-[3]" />}
+              <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${allSelected ? "bg-indigo-600 border-indigo-600" : "border-slate-300"}`}>
+                {allSelected && <Check size={9} className="text-white stroke-[3]" />}
               </span>
               {allLabel}
             </button>
@@ -295,10 +342,10 @@ function MultiSelect({ options, selected, onChange, placeholder, allLabel = "All
                 <button
                   key={o.value}
                   onClick={() => toggle(o.value)}
-                  className="w-full px-4 py-2 text-left text-xs font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  className="w-full px-3 py-1.5 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2"
                 >
-                  <span className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 ${active ? "bg-indigo-600 border-indigo-600" : "border-gray-300"}`}>
-                    {active && <Check size={10} className="text-white stroke-[3]" />}
+                  <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${active ? "bg-indigo-600 border-indigo-600" : "border-slate-300"}`}>
+                    {active && <Check size={9} className="text-white stroke-[3]" />}
                   </span>
                   <span className="truncate">{o.label}</span>
                 </button>
@@ -781,236 +828,6 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
     return list;
   }, [allAttempts, metrics, monthFiltered]);
 
-  const connectedBreakdown = React.useMemo(() => {
-    const map = {};
-    CONNECTED_STATUSES.forEach(s => {
-      map[s] = { total: 0, incoming: 0, outgoing: 0 };
-    });
-    let total = 0;
-    allAttempts.forEach(c => {
-      if (CONNECTED_STATUSES.includes(c.status)) {
-        if (!map[c.status]) {
-          map[c.status] = { total: 0, incoming: 0, outgoing: 0 };
-        }
-        map[c.status].total++;
-        const type = (c.callType || "").toLowerCase();
-        const isIncoming = type.startsWith("incoming");
-        if (isIncoming) {
-          map[c.status].incoming++;
-        } else {
-          map[c.status].outgoing++;
-        }
-        total++;
-      }
-    });
-    return Object.entries(map)
-      .filter(([_, countObj]) => countObj.total > 0)
-      .map(([status, countObj]) => ({
-        "Call Outcome Status": status,
-        "No. of Calls": countObj.total,
-        "Incoming": countObj.incoming,
-        "Outgoing": countObj.outgoing,
-        "Percentage (%)": total ? `${((countObj.total / total) * 100).toFixed(1)}%` : "0.0%"
-      }));
-  }, [allAttempts]);
-
-  const notConnectedBreakdown = React.useMemo(() => {
-    const map = {};
-    NOT_CONNECTED_STATUSES.forEach(s => {
-      map[s] = { total: 0, incoming: 0, outgoing: 0 };
-    });
-    let total = 0;
-    allAttempts.forEach(c => {
-      if (NOT_CONNECTED_STATUSES.includes(c.status)) {
-        if (!map[c.status]) {
-          map[c.status] = { total: 0, incoming: 0, outgoing: 0 };
-        }
-        map[c.status].total++;
-        const type = (c.callType || "").toLowerCase();
-        const isIncoming = type.startsWith("incoming");
-        if (isIncoming) {
-          map[c.status].incoming++;
-        } else {
-          map[c.status].outgoing++;
-        }
-        total++;
-      }
-    });
-    return Object.entries(map)
-      .filter(([_, countObj]) => countObj.total > 0)
-      .map(([status, countObj]) => ({
-        "Call Outcome Status": status,
-        "No. of Calls": countObj.total,
-        "Incoming": countObj.incoming,
-        "Outgoing": countObj.outgoing,
-        "Percentage (%)": total ? `${((countObj.total / total) * 100).toFixed(1)}%` : "0.0%"
-      }));
-  }, [allAttempts]);
-
-  const dayWiseTimeline = React.useMemo(() => {
-    const map = {};
-    allAttempts.forEach(c => {
-      if (!c.timestamp) return;
-      const dStr = c.timestamp.toLocaleDateString("en-IN");
-      if (!map[dStr]) {
-        map[dStr] = { date: dStr, total: 0, connected: 0, notConnected: 0, incoming: 0, outgoing: 0, conversions: 0, incomingConversions: 0, outgoingConversions: 0 };
-      }
-      map[dStr].total++;
-      if (CONNECTED_STATUSES.includes(c.status)) map[dStr].connected++;
-      else if (NOT_CONNECTED_STATUSES.includes(c.status)) map[dStr].notConnected++;
-      
-      const type = (c.callType || "").toLowerCase();
-      const isIncoming = type.startsWith("incoming");
-      if (isIncoming) {
-        map[dStr].incoming++;
-      } else {
-        map[dStr].outgoing++;
-      }
-
-      if (c.status === "Reg.Done") {
-        map[dStr].conversions++;
-        if (isIncoming) {
-          map[dStr].incomingConversions++;
-        } else {
-          map[dStr].outgoingConversions++;
-        }
-      }
-    });
-
-    if (!startDate || !endDate) return [];
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    start.setHours(0, 0, 0, 0);
-    end.setHours(0, 0, 0, 0);
-    
-    const list = [];
-    let current = new Date(start);
-    let count = 0;
-    while (current.getTime() <= end.getTime() && count < 366) {
-      const dStr = current.toLocaleDateString("en-IN");
-      const data = map[dStr] || { date: dStr, total: 0, connected: 0, notConnected: 0, incoming: 0, outgoing: 0, conversions: 0, incomingConversions: 0, outgoingConversions: 0 };
-      list.push({
-        "Date": dStr,
-        "Total Calls": data.total,
-        "Connected": data.connected,
-        "Not Connected": data.notConnected,
-        "Incoming": data.incoming,
-        "Outgoing": data.outgoing,
-        "Reg.Done (Conversions)": data.conversions,
-        "Incoming Conversions": data.incomingConversions,
-        "Outgoing Conversions": data.outgoingConversions
-      });
-      current.setDate(current.getDate() + 1);
-      count++;
-    }
-    return list;
-  }, [allAttempts, startDate, endDate]);
-
-  const dayWiseTotals = React.useMemo(() => {
-    const totals = { 
-      "Date": "Total", 
-      "Total Calls": 0, 
-      "Connected": 0, 
-      "Not Connected": 0, 
-      "Incoming": 0, 
-      "Outgoing": 0, 
-      "Reg.Done (Conversions)": 0,
-      "Incoming Conversions": 0,
-      "Outgoing Conversions": 0
-    };
-    dayWiseTimeline.forEach(row => {
-      totals["Total Calls"] += row["Total Calls"];
-      totals["Connected"] += row["Connected"];
-      totals["Not Connected"] += row["Not Connected"];
-      totals["Incoming"] += row["Incoming"];
-      totals["Outgoing"] += row["Outgoing"];
-      totals["Reg.Done (Conversions)"] += row["Reg.Done (Conversions)"];
-      totals["Incoming Conversions"] += row["Incoming Conversions"];
-      totals["Outgoing Conversions"] += row["Outgoing Conversions"];
-    });
-    return totals;
-  }, [dayWiseTimeline]);
-
-  const timeOfDayTrend = React.useMemo(() => {
-    const intervals = [
-      { label: "Morning (08:00 AM - 12:00 PM)", start: 8, end: 12 },
-      { label: "Afternoon (12:00 PM - 04:00 PM)", start: 12, end: 16 },
-      { label: "Evening (04:00 PM - 08:00 PM)", start: 16, end: 20 },
-      { label: "Night (08:00 PM - 12:00 AM)", start: 20, end: 24 },
-      { label: "Off Hours (12:00 AM - 08:00 AM)", start: 0, end: 8 }
-    ];
-
-    const map = {};
-    intervals.forEach(i => {
-      map[i.label] = { total: 0, connected: 0, notConnected: 0, incoming: 0, outgoing: 0, conversions: 0, incomingConversions: 0, outgoingConversions: 0 };
-    });
-
-    allAttempts.forEach(c => {
-      if (!c.timestamp) return;
-      const hr = c.timestamp.getHours();
-      const match = intervals.find(i => hr >= i.start && hr < i.end);
-      if (match) {
-        map[match.label].total++;
-        if (CONNECTED_STATUSES.includes(c.status)) map[match.label].connected++;
-        else if (NOT_CONNECTED_STATUSES.includes(c.status)) map[match.label].notConnected++;
-        
-        const type = (c.callType || "").toLowerCase();
-        const isIncoming = type.startsWith("incoming");
-        if (isIncoming) {
-          map[match.label].incoming++;
-        } else {
-          map[match.label].outgoing++;
-        }
-
-        if (c.status === "Reg.Done") {
-          map[match.label].conversions++;
-          if (isIncoming) {
-            map[match.label].incomingConversions++;
-          } else {
-            map[match.label].outgoingConversions++;
-          }
-        }
-      }
-    });
-
-    return intervals.map(i => ({
-      "Time Interval": i.label,
-      "Total Calls": map[i.label].total,
-      "Connected": map[i.label].connected,
-      "Not Connected": map[i.label].notConnected,
-      "Incoming": map[i.label].incoming,
-      "Outgoing": map[i.label].outgoing,
-      "Reg.Done (Conversions)": map[i.label].conversions,
-      "Incoming Conversions": map[i.label].incomingConversions,
-      "Outgoing Conversions": map[i.label].outgoingConversions
-    }));
-  }, [allAttempts]);
-
-  const timeOfDayTotals = React.useMemo(() => {
-    const totals = { 
-      "Time Interval": "Total", 
-      "Total Calls": 0, 
-      "Connected": 0, 
-      "Not Connected": 0, 
-      "Incoming": 0, 
-      "Outgoing": 0, 
-      "Reg.Done (Conversions)": 0,
-      "Incoming Conversions": 0,
-      "Outgoing Conversions": 0
-    };
-    timeOfDayTrend.forEach(row => {
-      totals["Total Calls"] += row["Total Calls"];
-      totals["Connected"] += row["Connected"];
-      totals["Not Connected"] += row["Not Connected"];
-      totals["Incoming"] += row["Incoming"];
-      totals["Outgoing"] += row["Outgoing"];
-      totals["Reg.Done (Conversions)"] += row["Reg.Done (Conversions)"];
-      totals["Incoming Conversions"] += row["Incoming Conversions"];
-      totals["Outgoing Conversions"] += row["Outgoing Conversions"];
-    });
-    return totals;
-  }, [timeOfDayTrend]);
-
   const attenderPerformance = React.useMemo(() => {
     const map = {};
     allAttempts.forEach(c => {
@@ -1090,184 +907,6 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
     totals["Conversion Rate (%)"] = totalDenominator ? `${((totals["Reg.Done (Conversions)"] / totalDenominator) * 100).toFixed(1)}%` : "0.0%";
     return totals;
   }, [attenderPerformance]);
-
-  const calledForBreakdown = React.useMemo(() => {
-    const map = {};
-    allAttempts.forEach(c => {
-      const calledFors = String(c.calledFor || "").trim()
-        ? String(c.calledFor).split(",").map(x => x.trim()).filter(Boolean)
-        : ["Unknown"];
-      
-      calledFors.forEach(prog => {
-        if (selectedCalledFors.length > 0 && !selectedCalledFors.includes(prog)) {
-          return;
-        }
-        if (!map[prog]) {
-          map[prog] = { name: prog, total: 0, connected: 0, notConnected: 0, incoming: 0, outgoing: 0, conversions: 0, incomingConversions: 0, outgoingConversions: 0, query: 0, denominator: 0 };
-        }
-        const item = map[prog];
-        item.total++;
-        if (CONNECTED_STATUSES.includes(c.status)) item.connected++;
-        else if (NOT_CONNECTED_STATUSES.includes(c.status)) item.notConnected++;
-        
-        const type = (c.callType || "").toLowerCase();
-        const isIncoming = type.startsWith("incoming");
-        if (isIncoming) {
-          item.incoming++;
-        } else {
-          item.outgoing++;
-        }
-
-        if (c.status === "Reg.Done") {
-          item.conversions++;
-          if (isIncoming) {
-            item.incomingConversions++;
-          } else {
-            item.outgoingConversions++;
-          }
-        }
-        if (c.status === "Query") {
-          item.query++;
-        }
-        
-        item.denominator += getConversionDenominator(c.status);
-      });
-    });
-
-    return Object.values(map).map(a => ({
-      "Called For": a.name,
-      "Total Calls": a.total,
-      "Connected": a.connected,
-      "Not Connected": a.notConnected,
-      "Incoming": a.incoming,
-      "Outgoing": a.outgoing,
-      "Query Calls": a.query,
-      "Reg.Done (Conversions)": a.conversions,
-      "Incoming Conversions": a.incomingConversions,
-      "Outgoing Conversions": a.outgoingConversions,
-      "denominator": a.denominator,
-      "Conversion Rate (%)": a.denominator ? `${((a.conversions / a.denominator) * 100).toFixed(1)}%` : "0.0%"
-    })).sort((a, b) => b["Total Calls"] - a["Total Calls"]);
-  }, [allAttempts, selectedCalledFors]);
-
-  const calledForBreakdownTotals = React.useMemo(() => {
-    const totals = { 
-      "Called For": "Total", 
-      "Total Calls": 0, 
-      "Connected": 0, 
-      "Not Connected": 0, 
-      "Incoming": 0, 
-      "Outgoing": 0, 
-      "Query Calls": 0,
-      "Reg.Done (Conversions)": 0, 
-      "Incoming Conversions": 0,
-      "Outgoing Conversions": 0,
-      "Conversion Rate (%)": "0.0%" 
-    };
-    let totalDenominator = 0;
-    calledForBreakdown.forEach(row => {
-      totals["Total Calls"] += row["Total Calls"];
-      totals["Connected"] += row["Connected"];
-      totals["Not Connected"] += row["Not Connected"];
-      totals["Incoming"] += row["Incoming"];
-      totals["Outgoing"] += row["Outgoing"];
-      totals["Query Calls"] += row["Query Calls"];
-      totals["Reg.Done (Conversions)"] += row["Reg.Done (Conversions)"];
-      totals["Incoming Conversions"] += row["Incoming Conversions"];
-      totals["Outgoing Conversions"] += row["Outgoing Conversions"];
-      totalDenominator += row["denominator"] || 0;
-    });
-    totals["Conversion Rate (%)"] = totalDenominator ? `${((totals["Reg.Done (Conversions)"] / totalDenominator) * 100).toFixed(1)}%` : "0.0%";
-    return totals;
-  }, [calledForBreakdown]);
-
-  const sourceBreakdown = React.useMemo(() => {
-    const map = {};
-    allAttempts.forEach(c => {
-      const src = String(c.source || "").trim() || "Unknown";
-      if (!map[src]) {
-        map[src] = { name: src, total: 0, connected: 0, notConnected: 0, incoming: 0, outgoing: 0, conversions: 0, incomingConversions: 0, outgoingConversions: 0, query: 0, denominator: 0 };
-      }
-      const item = map[src];
-      item.total++;
-      if (CONNECTED_STATUSES.includes(c.status)) item.connected++;
-      else if (NOT_CONNECTED_STATUSES.includes(c.status)) item.notConnected++;
-      
-      const type = (c.callType || "").toLowerCase();
-      const isIncoming = type.startsWith("incoming");
-      if (isIncoming) {
-        item.incoming++;
-      } else {
-        item.outgoing++;
-      }
-
-      if (c.status === "Reg.Done") {
-        item.conversions++;
-        if (isIncoming) {
-          item.incomingConversions++;
-        } else {
-          item.outgoingConversions++;
-        }
-      }
-      if (c.status === "Query") {
-        item.query++;
-      }
-      
-      item.denominator += getConversionDenominator(c.status);
-    });
-
-    return Object.values(map).map(a => ({
-      "Source": a.name,
-      "Total Calls": a.total,
-      "Connected": a.connected,
-      "Not Connected": a.notConnected,
-      "Incoming": a.incoming,
-      "Outgoing": a.outgoing,
-      "Query Calls": a.query,
-      "Reg.Done (Conversions)": a.conversions,
-      "Incoming Conversions": a.incomingConversions,
-      "Outgoing Conversions": a.outgoingConversions,
-      "denominator": a.denominator,
-      "Conversion Rate (%)": a.denominator ? `${((a.conversions / a.denominator) * 100).toFixed(1)}%` : "0.0%"
-    })).sort((a, b) => {
-      const aEnd = shouldGoToEnd(a["Source"]);
-      const bEnd = shouldGoToEnd(b["Source"]);
-      if (aEnd && !bEnd) return 1;
-      if (!aEnd && bEnd) return -1;
-      return b["Total Calls"] - a["Total Calls"];
-    });
-  }, [allAttempts]);
-
-  const sourceBreakdownTotals = React.useMemo(() => {
-    const totals = { 
-      "Source": "Total", 
-      "Total Calls": 0, 
-      "Connected": 0, 
-      "Not Connected": 0, 
-      "Incoming": 0, 
-      "Outgoing": 0, 
-      "Query Calls": 0,
-      "Reg.Done (Conversions)": 0, 
-      "Incoming Conversions": 0,
-      "Outgoing Conversions": 0,
-      "Conversion Rate (%)": "0.0%" 
-    };
-    let totalDenominator = 0;
-    sourceBreakdown.forEach(row => {
-      totals["Total Calls"] += row["Total Calls"];
-      totals["Connected"] += row["Connected"];
-      totals["Not Connected"] += row["Not Connected"];
-      totals["Incoming"] += row["Incoming"];
-      totals["Outgoing"] += row["Outgoing"];
-      totals["Query Calls"] += row["Query Calls"];
-      totals["Reg.Done (Conversions)"] += row["Reg.Done (Conversions)"];
-      totals["Incoming Conversions"] += row["Incoming Conversions"];
-      totals["Outgoing Conversions"] += row["Outgoing Conversions"];
-      totalDenominator += row["denominator"] || 0;
-    });
-    totals["Conversion Rate (%)"] = totalDenominator ? `${((totals["Reg.Done (Conversions)"] / totalDenominator) * 100).toFixed(1)}%` : "0.0%";
-    return totals;
-  }, [sourceBreakdown]);
 
   const calledForVsSourceBreakdown = React.useMemo(() => {
     const map = {};
@@ -1400,8 +1039,6 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
     return totals;
   }, [calledForVsSourceBreakdown]);
 
-
-
   const conversionsList = React.useMemo(() => {
     return allAttempts.filter(c => c.status === "Reg.Done");
   }, [allAttempts]);
@@ -1458,39 +1095,15 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
     const wsSummary = XLSX.utils.json_to_sheet(section1);
     XLSX.utils.book_append_sheet(wb, wsSummary, "Summary KPI");
 
-    // 2. Connected
-    const wsConnected = XLSX.utils.json_to_sheet(connectedBreakdown);
-    XLSX.utils.book_append_sheet(wb, wsConnected, "Connected Breakdowns");
-
-    // 3. Not Connected
-    const wsNotConnected = XLSX.utils.json_to_sheet(notConnectedBreakdown);
-    XLSX.utils.book_append_sheet(wb, wsNotConnected, "Not Connected Breakdowns");
-
-    // 4. Day-wise
-    const wsDay = XLSX.utils.json_to_sheet([...dayWiseTimeline, dayWiseTotals]);
-    XLSX.utils.book_append_sheet(wb, wsDay, "Day-wise Calls Timeline");
-
-    // 5. Time of day
-    const wsTime = XLSX.utils.json_to_sheet([...timeOfDayTrend, timeOfDayTotals]);
-    XLSX.utils.book_append_sheet(wb, wsTime, "Time of Day Trends");
-
-    // 6. Attenders
+    // 2. Attenders
     const wsAttenders = XLSX.utils.json_to_sheet(cleanRows([...attenderPerformance, attenderPerformanceTotals]));
     XLSX.utils.book_append_sheet(wb, wsAttenders, "Attender Performance");
 
-    // 7. Called For Breakdown
-    const wsCalledFor = XLSX.utils.json_to_sheet(cleanRows([...calledForBreakdown, calledForBreakdownTotals]));
-    XLSX.utils.book_append_sheet(wb, wsCalledFor, "Called For Breakdowns");
-
-    // 8. Source-wise Breakdown
-    const wsSource = XLSX.utils.json_to_sheet(cleanRows([...sourceBreakdown, sourceBreakdownTotals]));
-    XLSX.utils.book_append_sheet(wb, wsSource, "Source Breakdowns");
-
-    // 9. Called For vs Source Breakdown
+    // 3. Called For vs Source Breakdown
     const wsCalledForVsSource = XLSX.utils.json_to_sheet(cleanRows([...calledForVsSourceBreakdown, calledForVsSourceBreakdownTotals]));
     XLSX.utils.book_append_sheet(wb, wsCalledForVsSource, "Called For vs Source");
 
-    // 10. Detailed Call Logs (Grouped by Mobile Number: consecutive rows per number, chronological history)
+    // 4. Detailed Call Logs (Grouped by Mobile Number: consecutive rows per number, chronological history)
     const detailedLogs = [...allAttempts]
       .sort((a, b) => {
         const phoneA = (a.contactPhone || "").trim();
@@ -1530,25 +1143,34 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
   const activeFilters = selectedProgramIds.length + selectedAttenderIds.length + selectedSources.length + selectedCalledFors.length + selectedStatuses.length + selectedCallTypes.length + selectedKhojiStatuses.length;
 
   return (
-    <div className="p-8 space-y-8">
+    <div className="p-4 md:p-6 space-y-5">
       {/* Top Bar */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-3xl font-black text-slate-800">Call Center Analytics Report</h2>
-          <p className="text-slate-500 mt-1">Generate comprehensive custom range analytics and export to Excel</p>
+          <h2 className="text-lg font-bold text-slate-900 tracking-tight">Call Center Analytics Report</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Generate comprehensive custom range analytics and export to Excel.</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={handleExport}
+            disabled={!monthFiltered.length}
+            className="flex items-center gap-1.5 h-8 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs rounded-md transition-colors disabled:opacity-50 cursor-pointer shadow-2xs"
+          >
+            <Download size={14} /> Export Excel Workbook
+          </button>
         </div>
       </div>
 
       {/* Filter Bar */}
-      <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm space-y-4">
+      <div className="bg-white border border-slate-200 rounded-lg p-3.5 shadow-2xs space-y-3">
         {/* Row 1: Dropdowns grid */}
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <MultiSelect
             options={programOptions}
             selected={selectedProgramIds}
             onChange={setSelectedProgramIds}
             placeholder="Tags"
-            allLabel="🌟 All Tags"
+            allLabel="All Tags"
           />
 
           <MultiSelect
@@ -1556,7 +1178,7 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
             selected={selectedAttenderIds}
             onChange={setSelectedAttenderIds}
             placeholder="Attenders"
-            allLabel="👥 All Attenders"
+            allLabel="All Attenders"
           />
 
           <MultiSelect
@@ -1564,7 +1186,7 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
             selected={selectedSources}
             onChange={setSelectedSources}
             placeholder="Source"
-            allLabel="📢 All Sources"
+            allLabel="All Sources"
           />
 
           <MultiSelect
@@ -1572,7 +1194,7 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
             selected={selectedCalledFors}
             onChange={setSelectedCalledFors}
             placeholder="Called For"
-            allLabel="📞 All Called For"
+            allLabel="All Called For"
           />
 
           <MultiSelect
@@ -1580,7 +1202,7 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
             selected={selectedStatuses}
             onChange={setSelectedStatuses}
             placeholder="Status"
-            allLabel="📊 All Statuses"
+            allLabel="All Statuses"
           />
 
           <MultiSelect
@@ -1588,7 +1210,7 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
             selected={selectedCallTypes}
             onChange={setSelectedCallTypes}
             placeholder="Call Type"
-            allLabel="📞 All Call Types"
+            allLabel="All Call Types"
           />
 
           <MultiSelect
@@ -1596,29 +1218,27 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
             selected={selectedKhojiStatuses}
             onChange={setSelectedKhojiStatuses}
             placeholder="Khoji Status"
-            allLabel="🔮 All Khoji Statuses"
+            allLabel="All Khoji Statuses"
           />
         </div>
 
         {/* Row 2: Controls & Export */}
-        <div className="flex flex-wrap items-center justify-between gap-4 pt-3.5 border-t border-gray-100/80">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 bg-gray-50/80 p-1.5 rounded-2xl border border-gray-100">
-              <span className="text-[11px] font-extrabold text-gray-400 uppercase tracking-wider pl-2">From:</span>
-              <input
-                type="date"
-                value={startDate}
-                onChange={e => setStartDate(e.target.value)}
-                className="px-3 py-1.5 bg-white border border-gray-200/80 rounded-xl font-bold text-xs text-slate-700 shadow-2xs focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-              />
-              <span className="text-[11px] font-extrabold text-gray-400 uppercase tracking-wider px-1">To:</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={e => setEndDate(e.target.value)}
-                className="px-3 py-1.5 bg-white border border-gray-200/80 rounded-xl font-bold text-xs text-slate-700 shadow-2xs focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-              />
-            </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mr-1">Date Range:</span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={e => setStartDate(e.target.value)}
+              className="h-8 px-2.5 bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+            />
+            <span className="text-slate-400 text-xs font-medium">→</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={e => setEndDate(e.target.value)}
+              className="h-8 px-2.5 bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+            />
             {(() => {
               const todayObj = new Date();
               const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, "0")}-${String(todayObj.getDate()).padStart(2, "0")}`;
@@ -1632,39 +1252,41 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
               const isThisMonthSelected = startDate === firstDayStr && endDate === lastDayStr;
 
               return (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 ml-1">
                   <button
                     onClick={() => {
                       setStartDate(todayStr);
                       setEndDate(todayStr);
                     }}
-                    className={`px-3.5 py-2 rounded-2xl text-xs font-black border transition-all duration-200 cursor-pointer ${
+                    className={`h-8 px-2.5 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
                       isTodaySelected
-                        ? "bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-600/20 scale-[1.02]"
-                        : "bg-emerald-50/80 text-emerald-700 border-emerald-100 hover:bg-emerald-100 hover:scale-[1.01]"
+                        ? "bg-indigo-600 border-indigo-600 text-white"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                     }`}
                   >
-                    📅 Today
+                    Today
                   </button>
                   <button
                     onClick={() => {
                       setStartDate(firstDayStr);
                       setEndDate(lastDayStr);
                     }}
-                    className={`px-3.5 py-2 rounded-2xl text-xs font-black border transition-all duration-200 cursor-pointer ${
+                    className={`h-8 px-2.5 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
                       isThisMonthSelected
-                        ? "bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-600/20 scale-[1.02]"
-                        : "bg-indigo-50/80 text-indigo-700 border-indigo-100 hover:bg-indigo-100 hover:scale-[1.01]"
+                        ? "bg-indigo-600 border-indigo-600 text-white"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                     }`}
                   >
-                    📅 This Month
+                    This Month
                   </button>
                 </div>
               );
             })()}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500 font-medium">{monthFiltered.length} entries</span>
+
             {activeFilters > 0 && (
               <button
                 onClick={() => {
@@ -1676,64 +1298,54 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
                   setSelectedCallTypes([]);
                   setSelectedKhojiStatuses([]);
                 }}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-red-50 text-red-600 border border-red-100 rounded-2xl text-xs font-black hover:bg-red-100 transition animate-fade-in cursor-pointer"
+                className="flex items-center gap-1 px-2.5 h-8 bg-rose-50 text-rose-600 border border-rose-200 rounded-md text-xs font-medium hover:bg-rose-100 transition cursor-pointer"
               >
                 <X size={12} /> Clear filters
-                <span className="bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]">{activeFilters}</span>
+                <span className="bg-rose-600 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center text-[10px] font-bold">{activeFilters}</span>
               </button>
             )}
-
-            <button onClick={handleExport} disabled={!monthFiltered.length}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-black text-xs rounded-2xl shadow-md shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer">
-              <Download size={16} /> Export Excel Workbook
-            </button>
           </div>
         </div>
       </div>
 
       {loading ? (
-        <div className="py-20 text-center text-gray-400 font-bold">Loading report datasets...</div>
+        <div className="py-16 text-center text-slate-400 text-xs font-medium">Loading report datasets...</div>
       ) : (!startDate || !endDate || monthFiltered.length === 0) ? (
-        <div className="py-20 text-center text-gray-400 font-bold">No call history logs found for this period.</div>
+        <div className="py-16 text-center text-slate-400 text-xs font-medium">No call history logs found for this period.</div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-5">
           {/* Summary KPIs */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
-              <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 shrink-0">
-                <Calendar size={22} />
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-2xs flex flex-col justify-between">
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Average Daily Calls</p>
-                <p className="text-2xl font-black text-gray-800 mt-1">{metrics.avgCallsPerDay}</p>
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Average Daily Calls</p>
+                <p className="text-2xl font-bold text-slate-900 tracking-tight mt-1">{metrics.avgCallsPerDay}</p>
               </div>
+              <p className="text-[11px] text-slate-400 font-medium mt-2">Calculated per active day</p>
             </div>
-            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
-              <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 shrink-0">
-                <TrendingUp size={22} />
-              </div>
+
+            <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-2xs flex flex-col justify-between">
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Busiest Day Peak</p>
-                <p className="text-sm font-bold text-gray-800 mt-1 truncate max-w-[170px]" title={metrics.highestCallDay}>{metrics.highestCallDay}</p>
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Busiest Day Peak</p>
+                <p className="text-sm font-bold text-slate-900 mt-1 truncate" title={metrics.highestCallDay}>{metrics.highestCallDay}</p>
               </div>
+              <p className="text-[11px] text-slate-400 font-medium mt-2">Highest attempt volume</p>
             </div>
-            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
-              <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 shrink-0">
-                <UserCheck size={22} />
-              </div>
+
+            <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-2xs flex flex-col justify-between">
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Unique Connected Calls</p>
-                <p className="text-2xl font-black text-gray-800 mt-1">{metrics.connectedCalls}</p>
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Unique Connected Calls</p>
+                <p className="text-2xl font-bold text-slate-900 tracking-tight mt-1">{metrics.connectedCalls}</p>
               </div>
+              <p className="text-[11px] text-emerald-600 font-medium mt-2">Successful responses</p>
             </div>
-            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
-              <div className="w-12 h-12 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600 shrink-0">
-                <Smile size={22} />
-              </div>
+
+            <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-2xs flex flex-col justify-between">
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Direct Registrations (Period)</p>
-                <p className="text-2xl font-black text-gray-800 mt-1">{metrics.totalConversions}</p>
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Direct Registrations</p>
+                <p className="text-2xl font-bold text-blue-600 tracking-tight mt-1">{metrics.totalConversions}</p>
               </div>
+              <p className="text-[11px] text-blue-600 font-medium mt-2">Period conversions</p>
             </div>
           </div>
 

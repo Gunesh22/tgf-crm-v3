@@ -2,7 +2,7 @@ import React from "react";
 import {
   Search, SlidersHorizontal, FileSpreadsheet, Flame, Clock, Tag,
   ChevronDown, X, AlertCircle, Phone, PhoneOff, Calendar, CalendarDays,
-  User, CheckCircle2, CheckSquare
+  User, CheckCircle2, CheckSquare, MoreHorizontal, PhoneOutgoing, RefreshCw, Loader
 } from "lucide-react";
 import { STATUS_OPTIONS } from "../utils";
 
@@ -165,6 +165,25 @@ function MultiSelectDropdown({
 
 
 export function AttenderFilters({
+  // Working controls props (Tag selection & Get numbers)
+  programs = [],
+  selectedProgramId,
+  setSelectedProgramId,
+  selectedProgramName,
+  setSelectedProgramName,
+  setSelectedSubProgram,
+  programDropOpen,
+  setProgramDropOpen,
+  programSearch,
+  setProgramSearch,
+  requestCount,
+  setRequestCount,
+  handleGetNumbers,
+  isRequesting,
+  handleRebuildCache,
+  isRebuildingCache,
+
+  isLoadingProgram = false,
   // Search & sorting
   searchQuery,
   setSearchQuery,
@@ -258,10 +277,27 @@ export function AttenderFilters({
   const [searchDraft, setSearchDraft] = React.useState(searchQuery);
   const [filterSearchQuery, setFilterSearchQuery] = React.useState("");
   const [showDatePickerModal, setShowDatePickerModal] = React.useState(false);
+  const [appliedFeedback, setAppliedFeedback] = React.useState("");
+  const [moreMenuOpen, setMoreMenuOpen] = React.useState(false);
+  const drawerSearchInputRef = React.useRef(null);
 
   React.useEffect(() => {
     setSearchDraft(searchQuery);
   }, [searchQuery]);
+
+  // Handle Keyboard Shortcuts for Filter Drawer (Escape key)
+  React.useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && showAdvancedFilters) {
+        setShowAdvancedFilters(false);
+      }
+    };
+    if (showAdvancedFilters) {
+      window.addEventListener("keydown", handleKeyDown);
+      setTimeout(() => drawerSearchInputRef.current?.focus(), 50);
+    }
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showAdvancedFilters, setShowAdvancedFilters]);
 
   const handleExecuteSearch = () => {
     setSearchQuery(searchDraft);
@@ -269,238 +305,250 @@ export function AttenderFilters({
     if (onTriggerSearch) onTriggerSearch(searchDraft);
   };
 
-  const shouldShowFilter = (label) => {
-    if (!filterSearchQuery.trim()) return true;
-    return label.toLowerCase().includes(filterSearchQuery.trim().toLowerCase());
-  };
+  // Structured All Filter Categories Registry for Global Filter Value Search
+  const allCategories = React.useMemo(() => [
+    {
+      id: "source",
+      name: "Source",
+      group: "CONTACT",
+      selected: filterSource || [],
+      onChange: (vals) => { setFilterSource(vals); setPage(1); },
+      options: (uniqueSources || []).map(s => typeof s === "object" ? s : { value: s, label: String(s || "") })
+    },
+    {
+      id: "city",
+      name: "City",
+      group: "CONTACT",
+      selected: filterCity || [],
+      onChange: (vals) => { setFilterCity(vals); setPage(1); },
+      options: (uniqueCities || []).map(c => typeof c === "object" ? c : { value: c, label: String(c || "") })
+    },
+    {
+      id: "calledFor",
+      name: "Called For",
+      group: "CONTACT",
+      selected: filterCalledFor || [],
+      onChange: (vals) => { setFilterCalledFor(vals); setPage(1); },
+      options: (uniqueCalledFor || []).map(cf => typeof cf === "object" ? cf : { value: cf, label: String(cf || "") })
+    },
+    {
+      id: "callType",
+      name: "Call Type",
+      group: "CALL",
+      selected: filterCallType || [],
+      onChange: (vals) => { setFilterCallType(vals); setPage(1); },
+      options: [
+        { value: "incoming", label: "Incoming" },
+        { value: "outgoing", label: "Outgoing" },
+        { value: "incoming f", label: "Incoming Forward" },
+        { value: "outgoing f", label: "Outgoing Forward" }
+      ]
+    },
+    {
+      id: "callCount",
+      name: "Call Count",
+      group: "CALL",
+      selected: filterCallCount || [],
+      onChange: (vals) => { setFilterCallCount(vals); setPage(1); },
+      options: [
+        { value: "0", label: "0 Calls (Never Called)" },
+        { value: "1", label: "1 Call" },
+        { value: "2+", label: "2+ Calls" }
+      ]
+    },
+    {
+      id: "callbackStatus",
+      name: "Callback Status",
+      group: "CALL",
+      selected: filterCallbackStatus || [],
+      onChange: (vals) => { setFilterCallbackStatus(vals); setPage(1); },
+      options: [
+        { value: "pending", label: "Pending" },
+        { value: "done", label: "Done" },
+        { value: "rescheduled", label: "Rescheduled" },
+        { value: "cancelled", label: "Cancelled" }
+      ]
+    },
+    {
+      id: "subProgram",
+      name: "Sub Program",
+      group: "LEAD",
+      selected: filterSubProgram || [],
+      onChange: (vals) => { setFilterSubProgram(vals); setPage(1); },
+      options: (uniqueSubPrograms || []).map(sp => typeof sp === "object" ? sp : { value: sp, label: String(sp || "") })
+    },
+    {
+      id: "objection",
+      name: "Objection Reason",
+      group: "LEAD",
+      selected: filterObjectionReason || [],
+      onChange: (vals) => { setFilterObjectionReason(vals); setPage(1); },
+      options: (uniqueObjectionReasons || []).map(o => typeof o === "object" ? o : { value: o, label: String(o || "") })
+    },
+    {
+      id: "genStatus",
+      name: "General Status",
+      group: "LEAD",
+      selected: filterGeneralStatus || [],
+      onChange: (vals) => { setFilterGeneralStatus(vals); setPage(1); },
+      options: [...(STATUS_OPTIONS || []).filter(opt => opt !== "Reg.Done"), "Query Pending", "Query Solved"].map(st =>
+        typeof st === "object" ? st : { value: st, label: String(st || "") }
+      )
+    },
+    {
+      id: "abhivyakti",
+      name: "Abhivyakti",
+      group: "SPECIAL",
+      selected: filterAbhivyakti || [],
+      onChange: (vals) => { setFilterAbhivyakti(vals); setPage(1); },
+      options: [
+        { value: "Yes", label: "Yes (Registered)" },
+        { value: "No", label: "No (Not Registered)" }
+      ]
+    },
+    {
+      id: "khoji",
+      name: "Khoji Status",
+      group: "SPECIAL",
+      selected: filterKhoji || [],
+      onChange: (vals) => { setFilterKhoji(vals); setPage(1); },
+      options: [
+        { value: "Yes", label: "Yes (Khoji)" },
+        { value: "No", label: "No (New)" },
+        { value: "Dew drop khoji", label: "Dew drop khoji" }
+      ]
+    }
+  ], [
+    filterSource, filterCity, filterCalledFor, filterCallType, filterCallCount,
+    filterCallbackStatus, filterSubProgram, filterObjectionReason, filterGeneralStatus,
+    filterAbhivyakti, filterKhoji, uniqueSources, uniqueCities, uniqueCalledFor,
+    uniqueSubPrograms, uniqueObjectionReasons, setFilterSource, setFilterCity,
+    setFilterCalledFor, setFilterCallType, setFilterCallCount, setFilterCallbackStatus,
+    setFilterSubProgram, setFilterObjectionReason, setFilterGeneralStatus,
+    setFilterAbhivyakti, setFilterKhoji, setPage
+  ]);
 
-  const filterVisible = {
-    source: shouldShowFilter("Source") || shouldShowFilter("Origin"),
-    city: shouldShowFilter("City") || shouldShowFilter("Location"),
-    calledFor: shouldShowFilter("Called For"),
-    callType: shouldShowFilter("Call Type") || shouldShowFilter("Incoming Outgoing"),
-    subProgram: shouldShowFilter("Sub Program") || shouldShowFilter("Sheet"),
-    objection: shouldShowFilter("Objection Reason") || shouldShowFilter("Reject"),
-    callbackStatus: shouldShowFilter("Callback Status") || shouldShowFilter("Pending Done"),
-    callCount: shouldShowFilter("Call Count") || shouldShowFilter("Number of Calls"),
-    genStatus: shouldShowFilter("Gen. Status") || shouldShowFilter("General Result"),
-    queryStatus: shouldShowFilter("Query Status") || shouldShowFilter("Query Pending") || shouldShowFilter("Query Solved"),
-    abhivyakti: shouldShowFilter("Abhivyakti") || shouldShowFilter("Registration"),
-    khoji: shouldShowFilter("Khoji Status") || shouldShowFilter("Maha Asmani"),
-    date: shouldShowFilter("Date") || shouldShowFilter("Time") || shouldShowFilter("Calendar") || shouldShowFilter("Called Date") || shouldShowFilter("Assignment Date")
-  };
+  // Compute Active Filter Chips List
+  const activeChips = React.useMemo(() => {
+    const chips = [];
+    allCategories.forEach(cat => {
+      cat.selected.forEach(val => {
+        const opt = cat.options.find(o => o.value === val);
+        chips.push({
+          catId: cat.id,
+          catName: cat.name,
+          val: val,
+          label: opt ? opt.label : String(val),
+          remove: () => cat.onChange(cat.selected.filter(v => v !== val))
+        });
+      });
+    });
 
-  const visibleCount = Object.values(filterVisible).filter(Boolean).length;
+    if (filterDateType && filterDateType !== "All") {
+      const dateLabel = filterDateType === "lastCalledAt" ? "Last Called" : "Assignment Date";
+      chips.push({
+        catId: "date",
+        catName: "Date",
+        val: filterDateRange,
+        label: `${dateLabel}: ${filterDateRange}`,
+        remove: () => {
+          setFilterDateType("All");
+          setFilterDateRange("All");
+          setCustomDateFrom("");
+          setCustomDateTo("");
+        }
+      });
+    }
+    return chips;
+  }, [allCategories, filterDateType, filterDateRange, setFilterDateType, setFilterDateRange, setCustomDateFrom, setCustomDateTo]);
+
+  // Perform Global Value & Field Search across all Categories
+  const searchResults = React.useMemo(() => {
+    const query = filterSearchQuery.trim().toLowerCase();
+    if (!query) return null;
+
+    const results = [];
+    allCategories.forEach(cat => {
+      const catNameMatches = cat.name.toLowerCase().includes(query);
+      const matchedOpts = cat.options.filter(opt =>
+        String(opt.label).toLowerCase().includes(query) ||
+        String(opt.value).toLowerCase().includes(query)
+      );
+
+      if (catNameMatches || matchedOpts.length > 0) {
+        results.push({
+          category: cat,
+          displayOptions: catNameMatches ? cat.options : matchedOpts
+        });
+      }
+    });
+    return results;
+  }, [filterSearchQuery, allCategories]);
 
   React.useEffect(() => {
-    if (!showAdvancedFilters) {
-      setFilterSearchQuery("");
+    function handleKeyDown(e) {
+      if (e.key === "Escape" && showAdvancedFilters) {
+        setShowAdvancedFilters(false);
+      }
     }
-  }, [showAdvancedFilters]);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showAdvancedFilters, setShowAdvancedFilters]);
+
+  const handleApplyFilters = () => {
+    setShowAdvancedFilters(false);
+    setAppliedFeedback(`${activeChips.length} filter${activeChips.length === 1 ? "" : "s"} applied`);
+    setTimeout(() => setAppliedFeedback(""), 3000);
+  };
 
   return (
     <>
-      {/* Top Header Filter Bar (Tag Selector + 3-Month Active Window + Advanced Filters) */}
-      {!hideTagFilter && (
-        <div className="bg-white border-b border-gray-100 px-6 py-2 flex items-center gap-3 shrink-0 relative overflow-x-auto">
-          {availableTags.length > 0 && (
-            <>
-              <Tag size={14} className="text-indigo-500 shrink-0" />
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest shrink-0">Tag Filter</span>
-              
-              <div className="relative shrink-0">
-                <button
-                  onClick={() => setTagDropdownOpen(!tagDropdownOpen)}
-                  className="flex items-center justify-between gap-2 px-3 py-1 bg-indigo-50 border border-indigo-200 rounded-xl font-black text-xs text-indigo-700 hover:bg-indigo-100 transition focus:outline-none min-w-[150px]"
-                >
-                  <span>
-                    {selectedTags.length === 0
-                      ? "— All Tags —"
-                      : `${selectedTags.length} Tag${selectedTags.length > 1 ? "s" : ""} Selected`}
-                  </span>
-                  <ChevronDown size={14} className={`transition-transform duration-200 ${tagDropdownOpen ? "rotate-180" : ""}`} />
-                </button>
-
-                {tagDropdownOpen && (
-                  <>
-                    <div className="fixed inset-0 z-20" onClick={() => setTagDropdownOpen(false)} />
-                    <div className="absolute left-0 mt-2 w-72 bg-white border border-gray-200 rounded-2xl shadow-xl z-30 flex flex-col p-3 animate-slide-down-scale origin-top">
-                      {/* Tag Search Input */}
-                      <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 mb-2 shrink-0">
-                        <Search size={14} className="text-gray-400" />
-                        <input
-                          type="text"
-                          placeholder="Search tags..."
-                          value={tagSearchQuery}
-                          onChange={e => setTagSearchQuery(e.target.value)}
-                          className="bg-transparent text-xs font-semibold text-gray-700 outline-none w-full"
-                        />
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center justify-between text-[10px] font-black text-indigo-600 uppercase tracking-wider px-1 mb-2 shrink-0">
-                        <button
-                          onClick={() => {
-                            setSelectedTags(availableTags);
-                            setPage(1);
-                            resetOtherFilters();
-                          }}
-                          className="hover:underline"
-                        >
-                          Select All
-                        </button>
-                        <button
-                          onClick={() => {
-                            setSelectedTags([]);
-                            setPage(1);
-                            resetOtherFilters();
-                          }}
-                          className="hover:underline text-rose-600"
-                        >
-                          Clear
-                        </button>
-                      </div>
-
-                      {/* Scrollable list of tags */}
-                      <div className="max-h-48 overflow-y-auto space-y-1 pr-1 flex-1">
-                        {availableTags
-                          .filter(tag => tag.toLowerCase().includes(tagSearchQuery.toLowerCase()))
-                          .map(tag => {
-                            const isChecked = selectedTags.includes(tag);
-                            return (
-                              <label
-                                key={tag}
-                                className="flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-slate-50 rounded-lg cursor-pointer transition text-xs font-bold text-gray-700"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={() => {
-                                      if (isChecked) {
-                                        setSelectedTags(prev => prev.filter(t => t !== tag));
-                                      } else {
-                                        setSelectedTags(prev => [...prev, tag]);
-                                      }
-                                      setPage(1);
-                                      resetOtherFilters();
-                                    }}
-                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
-                                />
-                                <span className="truncate">#{tag}</span>
-                              </label>
-                            );
-                          })}
-                        {availableTags.filter(tag => tag.toLowerCase().includes(tagSearchQuery.toLowerCase())).length === 0 && (
-                          <div className="text-center py-4 text-xs font-semibold text-gray-400">
-                            No tags match your search.
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Selected tag pills inline */}
-              {selectedTags.length > 0 && (
-                <div className="flex items-center gap-1.5 flex-wrap max-w-xs overflow-y-auto max-h-10 shrink-0">
-                  {selectedTags.map(tag => (
-                    <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                      #{tag}
-                      <button
-                        onClick={() => {
-                          setSelectedTags(prev => prev.filter(t => t !== tag));
-                          setPage(1);
-                          resetOtherFilters();
-                        }}
-                        className="p-0.5 hover:bg-indigo-100 rounded-full transition"
-                      >
-                        <X size={10} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-
-          {/* 3-Month Cache Indicator & Historical Date Toggle (Moved Beside Tag Filter) */}
-          <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200/80 px-2 py-0.5 rounded-xl shrink-0 text-[11px]">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            <span className="font-bold text-gray-700 animate-pulse">
-              3-Month Active Window
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setShowDatePickerModal(true);
-              }}
-              className="ml-1 px-2 py-0.5 bg-white border border-gray-200 hover:bg-gray-100 text-gray-600 hover:text-gray-900 text-[10px] font-semibold rounded-lg transition"
-            >
-              Load Older Dates
-            </button>
-          </div>
-
-          {/* Advanced Filters Button (Moved Beside Tag Filter) */}
-          <button
-            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold transition-all border active:scale-[0.97] shrink-0 ${
-              showAdvancedFilters || activeFiltersCount > 0
-                ? "bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm"
-                : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            <SlidersHorizontal size={13} />
-            Advanced Filters {activeFiltersCount > 0 && `(${activeFiltersCount})`}
-          </button>
-
-          <span className="text-xs font-bold text-gray-400 shrink-0 ml-auto">
-            {tagFilteredLogsLength} contact{tagFilteredLogsLength !== 1 ? "s" : ""}{selectedTags.length === 0 ? " · all tags" : ""}
-          </span>
-        </div>
-      )}
-
       {/* Overdue Callbacks Banner */}
       {stats.callbacks > 0 && filterStatus !== "Callback" && (
         <div 
-          className="bg-gradient-to-r from-red-600 to-rose-600 px-6 py-3 flex items-center justify-between shrink-0 shadow-lg shadow-red-600/10 cursor-pointer" 
+          className="bg-gradient-to-r from-red-600 to-rose-600 px-6 py-2.5 flex items-center justify-between shrink-0 shadow-lg shadow-red-600/10 cursor-pointer" 
           onClick={() => { setFilterStatus("Callback"); setPage(1); }}
         >
           <div className="flex items-center gap-3 text-white">
-            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center animate-pulse">
-              <AlertCircle size={22} />
+            <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center animate-pulse">
+              <AlertCircle size={18} />
             </div>
             <div>
-              <p className="font-black text-sm leading-none">You have {stats.callbacks} callback{stats.callbacks > 1 ? "s" : ""} due today or overdue!</p>
-              <p className="text-white/70 text-xs font-medium mt-0.5">Click here to view them. These people are waiting for your call.</p>
+              <p className="font-black text-xs leading-none">You have {stats.callbacks} callback{stats.callbacks > 1 ? "s" : ""} due today or overdue!</p>
+              <p className="text-white/70 text-[11px] font-medium mt-0.5">Click here to view them. These people are waiting for your call.</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 bg-white/20 px-4 py-2 rounded-xl text-white font-black text-xs">
-            <Phone size={14} /> Call Now
+          <div className="flex items-center gap-2 bg-white/20 px-3 py-1.5 rounded-xl text-white font-black text-xs">
+            <Phone size={13} /> Call Now
           </div>
         </div>
       )}
 
-      {/* Main Filter Action Bar */}
-      <div className="bg-white border-b border-gray-100 px-6 py-2 flex items-center justify-between shrink-0 gap-3">
-        <div className="flex items-center gap-3 overflow-x-auto flex-1">
-          <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1 shrink-0 focus-within:ring-2 focus-within:ring-indigo-100 transition">
-            <Search size={14} className="text-gray-400 shrink-0" />
+      {/* Row 2: Data Controls (Search contacts, Tag selection, Get Numbers, More menu) */}
+      <div className="bg-white border-b border-slate-200 px-5 py-2 flex items-center justify-between gap-3 shrink-0">
+        <div className="flex items-center gap-3 flex-wrap flex-1">
+          {/* Search contacts input (No separate Search text button) */}
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 focus-within:ring-2 focus-within:ring-indigo-100 focus-within:bg-white transition flex-1 min-w-[220px] max-w-md">
+            <Search size={14} className="text-slate-400 shrink-0" />
             <input
               type="text"
-              placeholder="Search..."
+              placeholder="Search contacts..."
               value={searchDraft}
-              onChange={e => setSearchDraft(e.target.value)}
+              onChange={e => {
+                const val = e.target.value;
+                setSearchDraft(val);
+                if (!val) {
+                  setSearchQuery("");
+                  setPage(1);
+                }
+              }}
               onKeyDown={e => {
                 if (e.key === "Enter") {
                   e.preventDefault();
                   handleExecuteSearch();
                 }
               }}
-              className="bg-transparent text-sm font-semibold outline-none w-36"
+              className="bg-transparent text-xs font-medium outline-none w-full text-slate-800 placeholder-slate-400"
             />
             {searchDraft && (
               <button
@@ -510,27 +558,158 @@ export function AttenderFilters({
                   setSearchQuery("");
                   setPage(1);
                 }}
-                className="text-gray-400 hover:text-gray-600 p-0.5"
+                className="text-slate-400 hover:text-slate-600 p-0.5 shrink-0"
               >
                 <X size={12} />
               </button>
             )}
+          </div>
+
+          {/* Get Numbers Workflow Group */}
+          <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-lg p-1 shrink-0">
+            {/* Searchable Tag Dropdown */}
+            <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) { setProgramDropOpen?.(false); setProgramSearch?.(""); } }}>
+              <button
+                type="button"
+                onClick={() => { setProgramDropOpen?.(o => !o); setProgramSearch?.(""); }}
+                className="flex items-center gap-1.5 bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:text-slate-900 rounded-md px-2.5 py-1 focus:outline-none cursor-pointer min-w-[130px] max-w-[200px]"
+              >
+                <span className="truncate">
+                  {selectedProgramId ? (programs?.find(p => p.id === selectedProgramId)?.name || "Select Tag...") : "Select Tag..."}
+                </span>
+                <ChevronDown size={13} className={`shrink-0 text-slate-400 transition-transform ${programDropOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {programDropOpen && (
+                <div className="absolute left-0 top-full mt-1.5 w-64 bg-white border border-slate-200 rounded-lg shadow-xl z-50 overflow-hidden">
+                  <div className="p-2 border-b border-slate-100">
+                    <div className="relative">
+                      <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      <input
+                        autoFocus
+                        type="text"
+                        placeholder="Search tags..."
+                        value={programSearch}
+                        onChange={e => setProgramSearch?.(e.target.value)}
+                        className="w-full pl-7 pr-3 py-1.5 text-xs font-medium bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:border-indigo-500 focus:bg-white transition"
+                      />
+                    </div>
+                  </div>
+                  <div className="max-h-52 overflow-y-auto py-1">
+                    <button
+                      type="button"
+                      tabIndex={0}
+                      onClick={() => { setSelectedProgramId?.(""); setSelectedProgramName?.(""); setSelectedSubProgram?.(""); setProgramDropOpen?.(false); setProgramSearch?.(""); }}
+                      className={`w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-slate-50 transition ${!selectedProgramId ? "text-indigo-600 bg-indigo-50/50 font-semibold" : "text-slate-400"}`}
+                    >
+                      — Select Tag...
+                    </button>
+                    {(programs || [])
+                      .filter(p => !programSearch || p.name.toLowerCase().includes(programSearch.toLowerCase()))
+                      .map(p => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          tabIndex={0}
+                          onClick={() => {
+                            setSelectedProgramId?.(p.id);
+                            setSelectedProgramName?.(p.name);
+                            setSelectedSubProgram?.("");
+                            setProgramDropOpen?.(false);
+                            setProgramSearch?.("");
+                          }}
+                          className={`w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-slate-50 transition truncate ${selectedProgramId === p.id ? "text-indigo-600 bg-indigo-50/50 font-semibold" : "text-slate-700"}`}
+                        >
+                          {p.name}
+                        </button>
+                      ))
+                    }
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-md px-1.5 py-0.5">
+              <button onClick={() => setRequestCount?.(c => Math.max(5, c - 5))} className="w-4 h-4 flex items-center justify-center text-slate-500 hover:text-slate-900 font-bold text-xs cursor-pointer">-</button>
+              <span className="w-6 text-center font-mono font-bold text-xs text-slate-800">{requestCount}</span>
+              <button onClick={() => setRequestCount?.(c => c + 5)} className="w-4 h-4 flex items-center justify-center text-slate-500 hover:text-slate-900 font-bold text-xs cursor-pointer">+</button>
+            </div>
+
             <button
-              type="button"
-              onClick={handleExecuteSearch}
-              className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold rounded-lg transition shadow-sm shrink-0"
+              onClick={handleGetNumbers}
+              disabled={isRequesting || !selectedProgramId}
+              className="flex items-center gap-1.5 px-3 py-1 bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white rounded-md font-semibold text-xs disabled:opacity-50 transition shadow-2xs cursor-pointer shrink-0"
             >
-              Search
+              {isRequesting ? <Loader size={12} className="animate-spin" /> : <PhoneOutgoing size={12} />}
+              Get Numbers
             </button>
           </div>
 
+          {/* More Menu (⋯) Dropdown */}
+          <div className="relative shrink-0" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setMoreMenuOpen(false); }}>
+            <button
+              type="button"
+              onClick={() => setMoreMenuOpen(o => !o)}
+              className="p-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-600 rounded-lg transition cursor-pointer"
+              title="More Options"
+            >
+              <MoreHorizontal size={16} />
+            </button>
+            {moreMenuOpen && (
+              <div className="absolute right-0 top-full mt-1.5 w-48 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden py-1 animate-fadeIn">
+                <button
+                  type="button"
+                  onClick={() => { setMoreMenuOpen(false); handleRebuildCache?.(); }}
+                  disabled={isRebuildingCache}
+                  className="w-full text-left px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition disabled:opacity-50"
+                >
+                  <RefreshCw size={13} className={isRebuildingCache ? "animate-spin text-slate-500" : "text-slate-400"} />
+                  <span>{isRebuildingCache ? "Rebuilding Cache..." : "Rebuild Cache"}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setMoreMenuOpen(false); window.location.reload(); }}
+                  className="w-full text-left px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition"
+                >
+                  <RefreshCw size={13} className="text-slate-400" />
+                  <span>Refresh Data</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Row 3: Filter & View Section (Controls + View Pills) */}
+      <div className="bg-white border-b border-slate-200 px-5 py-2 flex items-center justify-between gap-4 flex-wrap shrink-0">
+        {/* Controls group (Filters, Sort, Columns) */}
+        <div className="flex items-center gap-2 overflow-x-auto">
+          {/* Advanced Filters Drawer Button (Maintains active state when drawer is open or filters applied) */}
+          <button
+            type="button"
+            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border cursor-pointer shrink-0 ${
+              showAdvancedFilters || activeFiltersCount > 0
+                ? "bg-indigo-50/90 border-indigo-300 text-indigo-700 font-bold shadow-2xs ring-2 ring-indigo-500/10"
+                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
+            }`}
+          >
+            <SlidersHorizontal size={13} className={showAdvancedFilters || activeFiltersCount > 0 ? "text-indigo-600" : "text-slate-500"} />
+            <span>Filters</span>
+            {activeFiltersCount > 0 && (
+              <span className="ml-0.5 px-1.5 py-0.2 bg-indigo-600 text-white font-extrabold text-[10px] rounded-full shadow-2xs">
+                {activeFiltersCount}
+              </span>
+            )}
+          </button>
+
+          {/* Sort Dropdown */}
           {!hideSort && (
-            <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 shrink-0">
-              <SlidersHorizontal size={13} className="text-gray-400" />
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 shrink-0">
               <select
                 value={sortBy}
                 onChange={e => { setSortBy(e.target.value); setPage(1); }}
-                className="bg-transparent text-xs font-bold text-gray-600 focus:outline-none cursor-pointer"
+                className="bg-transparent text-xs font-semibold text-slate-700 focus:outline-none cursor-pointer"
               >
                 <option value="activityDesc">Sort: Latest Activity</option>
                 <option value="createdDesc">Sort: Date Assigned</option>
@@ -539,315 +718,353 @@ export function AttenderFilters({
             </div>
           )}
 
+          {/* Columns Button */}
           <button
             onClick={() => setIsColumnModalOpen(true)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border active:scale-[0.97] shrink-0 ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border active:scale-[0.97] shrink-0 ${
               hiddenColumns.length > 0
-                ? "bg-teal-50 border-teal-200 text-teal-700 shadow-sm"
-                : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                ? "bg-teal-50 border-teal-200 text-teal-700 font-bold"
+                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
             }`}
           >
             <FileSpreadsheet size={13} />
             Columns {hiddenColumns.length > 0 && `(${allPossibleCols.length - hiddenColumns.length}/${allPossibleCols.length})`}
           </button>
 
-          <div className="flex items-center gap-2">
-            {["All", "Hot Leads", "Follow up", "Unanswered Callback", "Today Activity"].map(s => (
-              <button
-                key={s}
-                onClick={() => { setFilterStatus(s); setPage(1); }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all active:scale-[0.97] ${
-                  filterStatus === s
-                    ? s === "Hot Leads"
-                      ? "bg-orange-500 text-white shadow shadow-orange-500/20"
-                      : s === "Follow up"
-                      ? "bg-blue-600 text-white shadow shadow-blue-500/20"
-                      : s === "Unanswered Callback"
-                      ? "bg-amber-500 text-white shadow shadow-amber-500/20"
-                      : s === "Today Activity"
-                      ? "bg-teal-600 text-white shadow shadow-teal-500/20"
-                      : "bg-[#217346] text-white shadow"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
-              >
-                {s === "Hot Leads" && <Flame size={12} className={filterStatus === s ? "text-white" : "text-orange-500"} />}
-                {s === "Follow up" && <Clock size={12} className={filterStatus === s ? "text-white" : "text-blue-500"} />}
-                {s === "Unanswered Callback" && <PhoneOff size={12} className={filterStatus === s ? "text-white" : "text-amber-500"} />}
-                {s === "Today Activity" && <Calendar size={12} className={filterStatus === s ? "text-white" : "text-teal-500"} />}
-                {s}
-              </button>
-            ))}
-          </div>
+          {/* Clear Filters Button (surfaced outside in main toolbar when active) */}
+          {activeFiltersCount > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                handleClearAllFilters?.();
+                setShowAdvancedFilters(false);
+              }}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 rounded-lg text-xs font-semibold transition shrink-0 active:scale-[0.97] cursor-pointer"
+              title="Clear all active filters"
+            >
+              <X size={13} className="text-rose-500" />
+              <span>Clear Filters</span>
+            </button>
+          )}
+
+          {appliedFeedback && (
+            <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold rounded-md animate-fade-in shrink-0">
+              ✓ {appliedFeedback}
+            </span>
+          )}
         </div>
 
-        {activeFiltersCount > 0 && (
-          <button
-            onClick={() => {
-              handleClearAllFilters();
-              setShowAdvancedFilters(false);
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 rounded-xl text-xs font-bold transition whitespace-nowrap shrink-0"
-          >
-            Clear All
-          </button>
-        )}
+        {/* Views group (Pill-style view tabs with fixed dimensions & zero reflow) */}
+        <div className="flex items-center gap-1.5 overflow-x-auto shrink-0 py-0.5 select-none">
+          {[
+            { id: "All", label: "All", icon: null, activeBg: "bg-indigo-600 text-white border-indigo-600 shadow-2xs" },
+            { id: "Hot Leads", label: "Hot Leads", icon: Flame, iconActive: "text-white", iconInactive: "text-orange-500", activeBg: "bg-orange-500 text-white border-orange-500 shadow-2xs" },
+            { id: "Follow up", label: "Follow up", icon: Clock, iconActive: "text-white", iconInactive: "text-blue-500", activeBg: "bg-blue-600 text-white border-blue-600 shadow-2xs" },
+            { id: "Unanswered Callback", label: "Unanswered Callback", icon: PhoneOff, iconActive: "text-white", iconInactive: "text-amber-500", activeBg: "bg-amber-500 text-white border-amber-500 shadow-2xs" },
+            { id: "Today Activity", label: "Today Activity", icon: Calendar, iconActive: "text-white", iconInactive: "text-teal-500", activeBg: "bg-teal-600 text-white border-teal-600 shadow-2xs" },
+          ].map(tab => {
+            const isActive = filterStatus === tab.id;
+            const IconComp = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => { setFilterStatus(tab.id); setPage(1); }}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap border transition-[background-color,border-color,color,box-shadow] duration-150 ease-in-out cursor-pointer h-7 ${
+                  isActive
+                    ? tab.activeBg
+                    : "bg-slate-100 border-slate-200/60 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900"
+                }`}
+              >
+                {IconComp && (
+                  <IconComp size={12} className={`shrink-0 transition-colors duration-150 ${isActive ? tab.iconActive : tab.iconInactive}`} />
+                )}
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Advanced Filters Drawer Panel / Modal */}
-      <div 
-        onClick={e => { if (e.target === e.currentTarget) setShowAdvancedFilters(false); }}
-        className={`fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 transition-all duration-300 ease-out ${
-          showAdvancedFilters ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
-        }`}
-      >
-        <div className={`bg-white rounded-3xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden border border-gray-100 max-h-[90vh] transition-all duration-300 ease-out transform ${
-          showAdvancedFilters ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-8 scale-95"
-        }`}>
+      {/* ── HIGH-SPEED RIGHT-SIDE FILTER DRAWER ────────────────────────────────── */}
+      {showAdvancedFilters && (
+        <>
+          {/* Subtle Semi-Transparent Backdrop Overlay (dim underlying content, clicking closes) */}
+          <div
+            className="fixed inset-0 z-[100] bg-slate-900/30 backdrop-blur-[2px] transition-opacity duration-200 animate-fadeIn"
+            onClick={() => setShowAdvancedFilters(false)}
+          />
+
+          {/* Premium Right-Side Filter Drawer (contained within viewport, 400px fixed width on desktop, 90vw on mobile) */}
+          <div className="fixed top-0 right-0 z-[110] w-[90vw] sm:w-[400px] max-w-[420px] bg-white border-l border-slate-200/80 shadow-2xl flex flex-col h-[100dvh] overflow-hidden transition-transform duration-200 ease-in-out animate-drawer-right">
             {/* Header */}
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-slate-50/50">
-              <div>
-                <h3 className="text-base font-black text-gray-900 flex items-center gap-2">
-                  <SlidersHorizontal size={18} className="text-indigo-600" />
-                  Advanced Filters
-                  {activeFiltersCount > 0 && (
-                    <span className="px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-black uppercase tracking-wider">
-                      {activeFiltersCount} Active
-                    </span>
-                  )}
-                </h3>
-                <p className="text-xs text-gray-500 font-semibold mt-0.5">Filter down contacts using multiple criteria</p>
+            <div className="px-5 py-3.5 border-b border-slate-200 bg-slate-50/80 shrink-0 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-indigo-100/70 border border-indigo-200 flex items-center justify-center text-indigo-600 shrink-0">
+                    <SlidersHorizontal size={15} />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-900 leading-tight">Advanced Filters</h3>
+                    <p className="text-[10px] text-slate-500 font-medium">Filter contacts using multiple criteria</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedFilters(false)}
+                  className="p-1.5 hover:bg-slate-200/70 text-slate-400 hover:text-slate-700 rounded-md transition cursor-pointer"
+                  title="Close Filters (Esc)"
+                >
+                  <X size={16} />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowAdvancedFilters(false)}
-                className="p-2 hover:bg-gray-100 active:scale-90 rounded-xl transition text-gray-400 hover:text-gray-600"
-              >
-                <X size={18} />
-              </button>
+
+              {/* Header Filter Counter Summary */}
+              <div className="pt-2 flex items-center justify-between text-xs border-t border-slate-200/60 font-medium">
+                <span className="text-slate-500 font-semibold">{allCategories.length} filter categories</span>
+                {activeChips.length > 0 ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-indigo-700 font-bold bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full text-[11px]">
+                      {activeChips.length} active
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleClearAllFilters()}
+                      className="text-rose-600 hover:underline font-semibold text-xs cursor-pointer"
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-slate-400 text-[11px]">No active filters</span>
+                )}
+              </div>
             </div>
 
-            {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {/* Search Inside Filters */}
-              <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 transition-all duration-200 rounded-2xl px-4 py-2.5 max-w-md">
-                <Search size={15} className="text-gray-400 shrink-0" />
+            {/* Global Filter & Value Search Input (Most Important UX Feature) */}
+            <div className="px-5 py-3 border-b border-slate-100 bg-white shrink-0 space-y-2">
+              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-colors rounded-md px-3 py-2">
+                <Search size={15} className="text-slate-400 shrink-0" />
                 <input
+                  ref={drawerSearchInputRef}
                   type="text"
-                  placeholder="Search inside filters (e.g. City, Source, Khoji...)"
+                  placeholder="Search filters, values, or fields..."
                   value={filterSearchQuery}
                   onChange={e => setFilterSearchQuery(e.target.value)}
-                  className="bg-transparent text-xs font-bold text-gray-700 outline-none w-full placeholder:text-gray-400"
+                  className="bg-transparent text-xs font-medium text-slate-800 outline-none w-full placeholder:text-slate-400"
                 />
                 {filterSearchQuery && (
                   <button
                     type="button"
                     onClick={() => setFilterSearchQuery("")}
-                    className="p-1 hover:bg-gray-200 rounded-full transition text-gray-400 hover:text-gray-600 active:scale-90"
+                    className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
                   >
-                    <X size={12} />
+                    <X size={13} />
                   </button>
                 )}
               </div>
 
-              {/* Filters Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {/* Source */}
-                {filterVisible.source && (
-                  <MultiSelectDropdown
-                    label="Source"
-                    icon={<User size={11} className="text-blue-500" />}
-                    options={uniqueSources}
-                    selectedValues={filterSource}
-                    onChange={val => { setFilterSource(val); setPage(1); }}
-                    placeholder="Search sources..."
-                  />
-                )}
-
-                {/* City */}
-                {filterVisible.city && (
-                  <MultiSelectDropdown
-                    label="City"
-                    icon={<User size={11} className="text-emerald-500" />}
-                    options={uniqueCities}
-                    selectedValues={filterCity}
-                    onChange={val => { setFilterCity(val); setPage(1); }}
-                    placeholder="Search cities..."
-                  />
-                )}
-
-                {/* Called For */}
-                {filterVisible.calledFor && (
-                  <MultiSelectDropdown
-                    label="Called For"
-                    icon={<Phone size={11} className="text-indigo-500" />}
-                    options={uniqueCalledFor}
-                    selectedValues={filterCalledFor}
-                    onChange={val => { setFilterCalledFor(val); setPage(1); }}
-                    placeholder="Search purpose..."
-                  />
-                )}
-
-                {/* Call Type */}
-                {filterVisible.callType && (
-                  <MultiSelectDropdown
-                    label="Call Type"
-                    icon={<Phone size={11} className="text-orange-500" />}
-                    options={[
-                      { value: "incoming", label: "Incoming" },
-                      { value: "outgoing", label: "Outgoing" },
-                      { value: "incoming f", label: "Incoming Forward" },
-                      { value: "outgoing f", label: "Outgoing Forward" }
-                    ]}
-                    selectedValues={filterCallType}
-                    onChange={val => { setFilterCallType(val); setPage(1); }}
-                    placeholder="Search call types..."
-                  />
-                )}
-
-                {/* Sub Program */}
-                {filterVisible.subProgram && (
-                  <MultiSelectDropdown
-                    label="Sub Program"
-                    icon={<Tag size={11} className="text-teal-500" />}
-                    options={uniqueSubPrograms}
-                    selectedValues={filterSubProgram}
-                    onChange={val => { setFilterSubProgram(val); setPage(1); }}
-                    placeholder="Search sub programs..."
-                  />
-                )}
-
-                {/* Objection Reason */}
-                {filterVisible.objection && (
-                  <MultiSelectDropdown
-                    label="Objection Reason"
-                    icon={<SlidersHorizontal size={11} className="text-pink-500" />}
-                    options={uniqueObjectionReasons}
-                    selectedValues={filterObjectionReason}
-                    onChange={val => { setFilterObjectionReason(val); setPage(1); }}
-                    placeholder="Search reasons..."
-                  />
-                )}
-
-                {/* Callback Status */}
-                {filterVisible.callbackStatus && (
-                  <MultiSelectDropdown
-                    label="Callback Status"
-                    icon={<Clock size={11} className="text-purple-500" />}
-                    options={[
-                      { value: "pending", label: "⏳ Pending" },
-                      { value: "done", label: "✅ Done" },
-                      { value: "rescheduled", label: "🔄 Rescheduled" },
-                      { value: "cancelled", label: "❌ Cancelled" }
-                    ]}
-                    selectedValues={filterCallbackStatus}
-                    onChange={val => { setFilterCallbackStatus(val); setPage(1); }}
-                    placeholder="Search callback status..."
-                  />
-                )}
-
-                {/* Call Count */}
-                {filterVisible.callCount && (
-                  <MultiSelectDropdown
-                    label="Call Count"
-                    icon={<User size={11} className="text-gray-500" />}
-                    options={[
-                      { value: "0", label: "0 Calls (Never Called)" },
-                      { value: "1", label: "1 Call" },
-                      { value: "2+", label: "2+ Calls" }
-                    ]}
-                    selectedValues={filterCallCount}
-                    onChange={val => { setFilterCallCount(val); setPage(1); }}
-                    placeholder="Search counts..."
-                  />
-                )}
-
-                {/* Gen. Status */}
-                {filterVisible.genStatus && (
-                  <div className="space-y-2">
-                    <MultiSelectDropdown
-                      label="Gen. Status"
-                      icon={<CheckCircle2 size={11} className="text-indigo-500" />}
-                      options={[
-                        ...STATUS_OPTIONS.filter(opt => opt !== "Reg.Done"),
-                        "Query Pending",
-                        "Query Solved"
-                      ]}
-                      selectedValues={filterGeneralStatus}
-                      onChange={val => {
-                        setFilterGeneralStatus(val);
-                        setPage(1);
-                      }}
-                      placeholder="Search status..."
-                    />
-                  </div>
-                )}
-
-                {/* Query Status — standalone, always accessible */}
-                {filterVisible.queryStatus && false && (
-                  <div className="space-y-1.5">
-                  </div>
-                )}
-
-                {/* Abhivyakti */}
-                {filterVisible.abhivyakti && (
-                  <MultiSelectDropdown
-                    label="Abhivyakti"
-                    icon={<Flame size={11} className="text-emerald-500" />}
-                    options={[
-                      { value: "Yes", label: "Yes (Registered)" },
-                      { value: "No", label: "No (Not Registered)" }
-                    ]}
-                    selectedValues={filterAbhivyakti}
-                    onChange={val => { setFilterAbhivyakti(val); setPage(1); }}
-                    placeholder="Search registration..."
-                  />
-                )}
-
-                {/* Khoji Status */}
-                {filterVisible.khoji && (
-                  <MultiSelectDropdown
-                    label="Khoji Status"
-                    icon={<CheckSquare size={11} className="text-pink-500" />}
-                    options={[
-                      { value: "Yes", label: "Yes (Khoji)" },
-                      { value: "No", label: "No (New)" },
-                      { value: "Dew drop khoji", label: "Dew drop khoji" }
-                    ]}
-                    selectedValues={filterKhoji}
-                    onChange={val => { setFilterKhoji(val); setPage(1); }}
-                    placeholder="Search khoji status..."
-                  />
-                )}
-
-                {/* No filters match fallback */}
-                {visibleCount === 0 && (
-                  <div className="col-span-full py-12 text-center space-y-2">
-                    <div className="text-gray-400 font-bold text-sm">No filters match "{filterSearchQuery}"</div>
-                    <button 
-                      type="button"
-                      onClick={() => setFilterSearchQuery("")} 
-                      className="text-xs text-indigo-600 hover:text-indigo-700 font-black uppercase tracking-wider"
+              {/* Active Filter Chips Summary */}
+              {activeChips.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 pt-1 max-h-24 overflow-y-auto">
+                  {activeChips.map(chip => (
+                    <span
+                      key={chip.catId + "-" + chip.val}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-900 border border-indigo-200 rounded-md text-xs font-semibold"
                     >
-                      Clear Search
-                    </button>
-                  </div>
-                )}
-              </div>
+                      <span className="text-[10px] text-indigo-500 uppercase font-bold">{chip.catName}:</span>
+                      <span>{chip.label}</span>
+                      <button
+                        type="button"
+                        onClick={chip.remove}
+                        className="text-indigo-400 hover:text-indigo-800 p-0.5 rounded cursor-pointer"
+                      >
+                        <X size={11} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
 
-              {/* Easier Date Filter Section */}
-              {filterVisible.date && (
-                <div className="p-5 bg-slate-50 border border-slate-100 rounded-3xl space-y-4 transition-all animate-slide-up">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-200/60 pb-3">
-                    <div className="flex items-center gap-2">
-                      <CalendarDays size={16} className="text-teal-600" />
-                      <span className="text-xs font-black text-slate-700 uppercase tracking-wider">Date Parameters</span>
+            {/* Scrollable Drawer Content */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-6">
+              {/* ── MODE 1: GLOBAL VALUE & FIELD SEARCH RESULTS ── */}
+              {filterSearchQuery.trim() !== "" ? (
+                <div className="space-y-4">
+                  {searchResults && searchResults.length > 0 ? (
+                    <>
+                      <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        {searchResults.length} Filter Group{searchResults.length > 1 ? "s" : ""} Matched
+                      </div>
+                      {searchResults.map(({ category, displayOptions }) => (
+                        <div key={category.id} className="border border-slate-200 rounded-md overflow-hidden bg-white shadow-2xs">
+                          <div className="bg-slate-50 px-3.5 py-2 border-b border-slate-100 flex items-center justify-between text-xs font-bold text-slate-800">
+                            <span className="uppercase tracking-wider text-[11px] text-indigo-600">{category.name}</span>
+                            <span className="text-[10px] text-slate-400 font-normal">
+                              {category.selected.length} / {category.options.length} selected
+                            </span>
+                          </div>
+                          <div className="p-2 divide-y divide-slate-50 max-h-48 overflow-y-auto">
+                            {displayOptions.map((opt, idx) => {
+                              const checked = category.selected.includes(opt.value);
+                              return (
+                                <label
+                                  key={category.id + "-" + opt.value + "-" + idx}
+                                  className={`flex items-center justify-between px-3 py-2 rounded text-xs font-medium cursor-pointer transition-colors ${
+                                    checked ? "bg-indigo-50/70 text-indigo-950 font-semibold" : "hover:bg-slate-50 text-slate-700"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() => {
+                                        if (checked) {
+                                          category.onChange(category.selected.filter(v => v !== opt.value));
+                                        } else {
+                                          category.onChange([...category.selected, opt.value]);
+                                        }
+                                      }}
+                                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                                    />
+                                    <span className="truncate">{opt.label}</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400 font-mono uppercase ml-2 shrink-0">{category.name}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <div className="p-8 text-center space-y-2 border border-dashed border-slate-200 rounded-lg">
+                      <div className="text-slate-700 font-semibold text-xs">No matching filters for "{filterSearchQuery}"</div>
+                      <p className="text-slate-400 text-xs">
+                        Try searching for: <span className="font-mono text-indigo-600">source, city, status, program, phone</span>
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setFilterSearchQuery("")}
+                        className="mt-2 text-xs font-semibold text-indigo-600 hover:underline cursor-pointer"
+                      >
+                        Clear Filter Search
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* ── MODE 2: DEFAULT GROUPED FILTER PANELS ── */
+                <div className="space-y-6">
+                  {/* GROUP 1 — CONTACT */}
+                  <div className="space-y-2.5">
+                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-1">
+                      Group 1 — Contact Details
+                    </div>
+                    <div className="grid grid-cols-1 gap-3">
+                      {allCategories.filter(c => c.group === "CONTACT").map(cat => (
+                        <MultiSelectDropdown
+                          key={cat.id}
+                          label={cat.name}
+                          icon={<User size={12} className="text-slate-400" />}
+                          options={cat.options}
+                          selectedValues={cat.selected}
+                          onChange={cat.onChange}
+                          placeholder={`Search ${cat.name.toLowerCase()}...`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* GROUP 2 — CALL */}
+                  <div className="space-y-2.5">
+                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-1">
+                      Group 2 — Call & Attempts
+                    </div>
+                    <div className="grid grid-cols-1 gap-3">
+                      {allCategories.filter(c => c.group === "CALL").map(cat => (
+                        <MultiSelectDropdown
+                          key={cat.id}
+                          label={cat.name}
+                          icon={<Phone size={12} className="text-slate-400" />}
+                          options={cat.options}
+                          selectedValues={cat.selected}
+                          onChange={cat.onChange}
+                          placeholder={`Search ${cat.name.toLowerCase()}...`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* GROUP 3 — LEAD */}
+                  <div className="space-y-2.5">
+                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-1">
+                      Group 3 — Lead & Status
+                    </div>
+                    <div className="grid grid-cols-1 gap-3">
+                      {allCategories.filter(c => c.group === "LEAD").map(cat => (
+                        <MultiSelectDropdown
+                          key={cat.id}
+                          label={cat.name}
+                          icon={<Tag size={12} className="text-slate-400" />}
+                          options={cat.options}
+                          selectedValues={cat.selected}
+                          onChange={cat.onChange}
+                          placeholder={`Search ${cat.name.toLowerCase()}...`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* GROUP 4 — SPECIAL */}
+                  <div className="space-y-2.5">
+                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-1">
+                      Group 4 — Special Classifications
+                    </div>
+                    <div className="grid grid-cols-1 gap-3">
+                      {allCategories.filter(c => c.group === "SPECIAL").map(cat => (
+                        <MultiSelectDropdown
+                          key={cat.id}
+                          label={cat.name}
+                          icon={<CheckCircle2 size={12} className="text-slate-400" />}
+                          options={cat.options}
+                          selectedValues={cat.selected}
+                          onChange={cat.onChange}
+                          placeholder={`Search ${cat.name.toLowerCase()}...`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* DATE PARAMETERS SECTION */}
+                  <div className="space-y-3 pt-2 border-t border-slate-100">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <CalendarDays size={13} className="text-slate-500" /> Date Parameters
+                      </span>
+                      {filterDateType !== "All" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFilterDateType("All");
+                            setFilterDateRange("All");
+                            setCustomDateFrom("");
+                            setCustomDateTo("");
+                          }}
+                          className="text-[10px] text-rose-600 hover:underline font-semibold cursor-pointer"
+                        >
+                          Clear Date
+                        </button>
+                      )}
                     </div>
 
-                    <div className="flex flex-wrap gap-2 items-center">
+                    {/* Date Target Selector Buttons */}
+                    <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-md">
                       {[
-                        { label: "No Date Filter", value: "All" },
-                        { label: "Last Called Date", value: "lastCalledAt" },
-                        { label: "Assignment Date", value: "createdAt" }
+                        { label: "No Date", value: "All" },
+                        { label: "Last Called", value: "lastCalledAt" },
+                        { label: "Assigned", value: "createdAt" }
                       ].map(opt => (
                         <button
                           key={opt.value}
@@ -859,142 +1076,126 @@ export function AttenderFilters({
                               setFilterDateRange("All");
                               setCustomDateFrom("");
                               setCustomDateTo("");
-                              setCustomTimeFrom("");
-                              setCustomTimeTo("");
                             } else if (filterDateRange === "All") {
                               setFilterDateRange("Today");
                             }
                           }}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border active:scale-[0.97] hover:scale-[1.01] ${
+                          className={`py-1.5 px-2 rounded text-xs font-semibold transition-colors cursor-pointer ${
                             filterDateType === opt.value
-                              ? "bg-teal-50 border-teal-200 text-teal-700 font-extrabold shadow-sm"
-                              : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                              ? "bg-white text-indigo-700 shadow-2xs font-bold"
+                              : "text-slate-600 hover:text-slate-900"
                           }`}
                         >
                           {opt.label}
                         </button>
                       ))}
                     </div>
-                  </div>
 
-                  {filterDateType !== "All" && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-1">
-                      {/* Quick Range Selector */}
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none flex items-center gap-1">
-                          <Calendar size={11} className="text-teal-500" /> Quick Range
-                        </label>
-                        <div className="flex flex-wrap gap-1.5">
-                          {[
-                            { label: "Today", value: "Today" },
-                            { label: "Yesterday", value: "Yesterday" },
-                            { label: "Last 7 Days", value: "This Week" },
-                            { label: "Custom Range", value: "Custom" }
-                          ].map(range => (
-                            <button
-                              key={range.value}
-                              type="button"
-                              onClick={() => {
-                                setFilterDateRange(range.value);
+                    {/* Revealable Date Range & Custom From/To */}
+                    {filterDateType !== "All" && (
+                      <div className="space-y-3 p-3 bg-slate-50 border border-slate-200 rounded-md animate-fade-in">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Quick Range</label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[
+                              { label: "Today", value: "Today" },
+                              { label: "Yesterday", value: "Yesterday" },
+                              { label: "Last 7 Days", value: "This Week" },
+                              { label: "Custom", value: "Custom" }
+                            ].map(range => (
+                              <button
+                                key={range.value}
+                                type="button"
+                                onClick={() => {
+                                  setFilterDateRange(range.value);
+                                  setPage(1);
+                                  if (range.value !== "Custom") {
+                                    setCustomDateFrom("");
+                                    setCustomDateTo("");
+                                  }
+                                }}
+                                className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors cursor-pointer ${
+                                  filterDateRange === range.value
+                                    ? "bg-indigo-600 border-indigo-600 text-white font-semibold"
+                                    : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100"
+                                }`}
+                              >
+                                {range.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* From / To Date Inputs */}
+                        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60">
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">From Date</label>
+                            <input
+                              type="date"
+                              value={customDateFrom}
+                              onChange={e => {
+                                setCustomDateFrom(e.target.value);
+                                setFilterDateRange("Custom");
                                 setPage(1);
-                                if (range.value !== "Custom") {
-                                  setCustomDateFrom("");
-                                  setCustomDateTo("");
-                                }
                               }}
-                              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all border active:scale-[0.97] hover:scale-[1.01] ${
-                                filterDateRange === range.value
-                                  ? "bg-teal-600 border-teal-600 text-white shadow-md shadow-teal-600/10 scale-[1.03]"
-                                  : "bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"
-                              }`}
-                            >
-                              {range.label}
-                            </button>
-                          ))}
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">To Date</label>
+                            <input
+                              type="date"
+                              value={customDateTo}
+                              onChange={e => {
+                                setCustomDateTo(e.target.value);
+                                setFilterDateRange("Custom");
+                                setPage(1);
+                              }}
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                          </div>
                         </div>
                       </div>
-
-                      {/* Custom Date Range */}
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-teal-600 uppercase tracking-widest leading-none flex items-center gap-1">
-                          <Calendar size={10} /> Date Range
-                        </label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <input
-                            type="date"
-                            value={customDateFrom}
-                            onChange={e => {
-                              setCustomDateFrom(e.target.value);
-                              setFilterDateRange("Custom");
-                              setPage(1);
-                            }}
-                            className={`w-full px-3 py-1.5 border rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white transition font-sans ${
-                              customDateFrom ? "bg-teal-50/50 border-teal-300" : "bg-white border-gray-200"
-                            }`}
-                          />
-                          <input
-                            type="date"
-                            value={customDateTo}
-                            onChange={e => {
-                              setCustomDateTo(e.target.value);
-                              setFilterDateRange("Custom");
-                              setPage(1);
-                            }}
-                            className={`w-full px-3 py-1.5 border rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white transition font-sans ${
-                              customDateTo ? "bg-teal-50/50 border-teal-300" : "bg-white border-gray-200"
-                            }`}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Custom Time Range */}
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none flex items-center gap-1">
-                          <Clock size={10} /> Time Range
-                        </label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <input
-                            type="time"
-                            value={customTimeFrom}
-                            onChange={e => { setCustomTimeFrom(e.target.value); setPage(1); }}
-                            className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition font-sans cursor-pointer"
-                          />
-                          <input
-                            type="time"
-                            value={customTimeTo}
-                            onChange={e => { setCustomTimeTo(e.target.value); setPage(1); }}
-                            className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition font-sans cursor-pointer"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Footer */}
-            <div className="px-6 py-4 bg-slate-50 border-t border-gray-100 flex items-center justify-between">
+            {/* Sticky Drawer Footer */}
+            <div className="sticky bottom-0 bg-white border-t border-slate-200 px-5 py-3.5 flex items-center justify-between shrink-0 shadow-[0_-4px_12px_rgba(0,0,0,0.03)] z-20">
               <button
                 type="button"
-                onClick={() => {
-                  handleClearAllFilters();
-                  setShowAdvancedFilters(false);
-                }}
-                className="px-4 py-2 text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 active:scale-[0.97] rounded-xl transition-all duration-150 flex items-center gap-1.5"
+                onClick={() => handleClearAllFilters()}
+                className="text-xs font-semibold text-slate-600 hover:text-rose-600 transition cursor-pointer"
               >
-                Clear All Filters
+                Clear all filters
               </button>
-              <button
-                type="button"
-                onClick={() => setShowAdvancedFilters(false)}
-                className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-[0.97] rounded-xl shadow-md shadow-indigo-600/10 transition-all duration-150"
-              >
-                Apply & Close
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedFilters(false)}
+                  className="px-3.5 py-1.5 border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-medium rounded-md transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyFilters}
+                  className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow-2xs transition active:scale-[0.98] cursor-pointer flex items-center gap-1.5"
+                >
+                  <span>Apply Filters</span>
+                  {activeChips.length > 0 && (
+                    <span className="w-4 h-4 rounded-full bg-white/20 text-white text-[10px] font-bold flex items-center justify-center">
+                      {activeChips.length}
+                    </span>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </>
+      )}
 
       {/* Dedicated Historical Date Range Picker Modal */}
       {showDatePickerModal && (

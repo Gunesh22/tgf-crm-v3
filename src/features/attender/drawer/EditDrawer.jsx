@@ -24,16 +24,16 @@ export default function EditDrawer({ contact, onClose, onSave }) {
     <>
       {/* Backdrop overlay */}
       <div 
-        className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[60] transition-opacity duration-300" 
+        className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-[60] animate-fade-in" 
         onClick={onClose}
       />
       
       {/* Sliding Drawer matching V2 EditModal styling */}
-      <div className="fixed inset-y-0 right-0 w-full max-w-[450px] bg-white shadow-2xl z-[70] transform transition-transform duration-300 flex flex-col border-l border-slate-200">
+      <div className="fixed inset-y-0 right-0 w-full max-w-[450px] bg-white shadow-2xl z-[70] animate-drawer-right flex flex-col border-l border-slate-200">
         
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-slate-50/80">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm border border-indigo-200">
+            <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 shadow-sm border border-blue-200">
               <User size={18} />
             </div>
             <div>
@@ -56,28 +56,28 @@ export default function EditDrawer({ contact, onClose, onSave }) {
               <div>
                 <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-0.5">Name</label>
                 <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-indigo-500 transition-colors">
+                  <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-blue-500 transition-colors">
                     <User size={14} />
                   </div>
                   <input 
                     type="text" 
                     value={edited.name || ''} 
                     onChange={e => handleChange('name', e.target.value)} 
-                    className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm"
+                    className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
                   />
                 </div>
               </div>
               <div>
                 <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-0.5">Phone</label>
                 <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-indigo-500 transition-colors">
+                  <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-blue-500 transition-colors">
                     <Phone size={14} />
                   </div>
                   <input 
                     type="text" 
                     value={edited.phone || ''} 
                     onChange={e => handleChange('phone', e.target.value)} 
-                    className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm"
+                    className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
                   />
                 </div>
               </div>
@@ -88,7 +88,7 @@ export default function EditDrawer({ contact, onClose, onSave }) {
               <select 
                 value={edited.status || 'Pending'} 
                 onChange={e => handleChange('status', e.target.value)}
-                className="w-full pl-3 pr-8 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm appearance-none cursor-pointer"
+                className="w-full pl-3 pr-8 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm appearance-none cursor-pointer"
               >
                 {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -97,14 +97,14 @@ export default function EditDrawer({ contact, onClose, onSave }) {
             <div>
               <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-0.5">Remarks</label>
               <div className="relative group">
-                <div className="absolute top-2.5 left-2.5 pointer-events-none text-slate-400 group-focus-within:text-indigo-500 transition-colors">
+                <div className="absolute top-2.5 left-2.5 pointer-events-none text-slate-400 group-focus-within:text-blue-500 transition-colors">
                   <MessageSquare size={14} />
                 </div>
                 <textarea 
                   value={edited.remark || ''} 
                   onChange={e => handleChange('remark', e.target.value)}
                   placeholder="Enter call notes here..."
-                  className="w-full pl-8 pr-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm min-h-[120px] resize-y"
+                  className="w-full pl-8 pr-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm min-h-[120px] resize-y"
                 />
               </div>
             </div>
@@ -123,7 +123,7 @@ export default function EditDrawer({ contact, onClose, onSave }) {
           <button 
             type="submit" 
             form="edit-form" 
-            className="px-5 py-2 rounded-lg text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-500/20 transition-all flex items-center gap-2 cursor-pointer active:scale-[0.98]"
+            className="px-5 py-2 rounded-lg text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-500/20 transition-all flex items-center gap-2 cursor-pointer active:scale-[0.98]"
           >
             <Save size={16} /> Save (Alt+S)
           </button>

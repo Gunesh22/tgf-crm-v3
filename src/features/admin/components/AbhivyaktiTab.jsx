@@ -9,27 +9,34 @@ import { CONNECTED_STATUSES, getContactKhoji, renderVal } from "../utils.jsx";
 function ReportSection({ title, subtitle, badge, action, children, defaultOpen = true }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   return (
-    <div className="bg-white rounded-lg border border-slate-200 shadow-2xs overflow-hidden transition-all">
-      <div className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer select-none">
-        <div onClick={() => setIsOpen(!isOpen)} className="flex-1">
+    <div className="bg-white rounded-lg border border-slate-200/90 shadow-2xs overflow-hidden transition-all">
+      <div
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50/80 transition-colors cursor-pointer select-none bg-slate-50/40 border-b border-slate-200/60"
+      >
+        <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="text-xs font-semibold text-slate-900 uppercase tracking-wider flex items-center gap-2">{title}</h3>
+            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">{title}</h3>
             {badge && (
-              <span className="text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded font-semibold border border-indigo-100">
+              <span className="text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded font-semibold border border-indigo-100/80">
                 {badge}
               </span>
             )}
           </div>
-          {subtitle && <p className="text-xs text-slate-500 mt-0.5 font-medium">{subtitle}</p>}
+          {subtitle && <p className="text-[11px] text-slate-500 mt-0.5 font-normal">{subtitle}</p>}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
           {action}
-          <button type="button" onClick={() => setIsOpen(!isOpen)} className="p-1 text-slate-400 hover:text-slate-600">
+          <button
+            type="button"
+            onClick={() => setIsOpen(!isOpen)}
+            className="p-1 text-slate-400 hover:text-slate-600 rounded transition cursor-pointer"
+          >
             {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
           </button>
         </div>
       </div>
-      {isOpen && <div className="px-4 pb-4 pt-2 border-t border-slate-100 bg-white">{children}</div>}
+      {isOpen && <div className="p-4 bg-white space-y-3">{children}</div>}
     </div>
   );
 }
@@ -257,6 +264,25 @@ export const getRegistrationPrimaryAttender = (r) => {
     }
   }
 
+  return "Direct / Online";
+};
+
+// Lead Owner helper specifically for identifying the original assigned owner (nurturer) vs assisting converter
+export const getRegistrationLeadOwner = (r) => {
+  if (!r) return "Direct / Online";
+  const assigned = r.attenderName || r.assignedTo || r.assignedAttender || r.attender;
+  if (assigned && String(assigned).trim() && String(assigned).trim() !== "Unknown" && String(assigned).trim() !== "Unassigned") {
+    return String(assigned).trim();
+  }
+  if (Array.isArray(r.history) && r.history.length > 0) {
+    for (let i = 0; i < r.history.length; i++) {
+      const h = r.history[i];
+      const hAttender = h.attenderName || h.user || h.attender;
+      if (hAttender && String(hAttender).trim() && String(hAttender).trim() !== "Unknown" && String(hAttender).trim() !== "Unassigned") {
+        return String(hAttender).trim();
+      }
+    }
+  }
   return "Direct / Online";
 };
 
@@ -605,23 +631,23 @@ export default function AbhivyaktiTab({
   const sharedConversionsBreakdown = useMemo(() => {
     const map = {};
     filteredRegistrations.forEach(r => {
-      const primaryName = getRegistrationPrimaryAttender(r);
+      const primaryOwner = getRegistrationLeadOwner(r);
       const finalRegistrar = (r.convertedBy || "").trim();
 
       if (
         finalRegistrar &&
         finalRegistrar !== "Unknown" &&
         finalRegistrar !== "Direct / Online" &&
-        primaryName &&
-        primaryName !== "Unknown" &&
-        primaryName !== "Direct / Online" &&
-        finalRegistrar !== primaryName
+        primaryOwner &&
+        primaryOwner !== "Unknown" &&
+        primaryOwner !== "Direct / Online" &&
+        finalRegistrar !== primaryOwner
       ) {
-        const key = `${finalRegistrar}__${primaryName}`;
+        const key = `${finalRegistrar}__${primaryOwner}`;
         if (!map[key]) {
           map[key] = {
             assistant: finalRegistrar,
-            primaryOwner: primaryName,
+            primaryOwner: primaryOwner,
             count: 0
           };
         }
@@ -813,43 +839,54 @@ export default function AbhivyaktiTab({
   };
 
   return (
-    <div className="p-8 space-y-8">
-      {/* Top Bar */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+    <div className="p-4 md:p-6 space-y-6">
+      {/* ── 1. PAGE HEADER ────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2">
         <div>
-          <h2 className="text-3xl font-black text-slate-800">Abhivyakti Registration Analytics</h2>
-          <p className="text-slate-500 mt-1">Track registrations, sources, conversions, and export reporting sheets.</p>
+          <h2 className="text-lg font-bold text-slate-900 tracking-tight">Abhivyakti Registration Analytics</h2>
+          <p className="text-xs text-slate-500 mt-0.5 font-normal">
+            Track registrations, sources, conversions, and export reporting sheets.
+          </p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={async () => {
+            type="button"
+            onClick={() => {
               toast.loading("Refreshing registrations data...", { id: "refresh-regs" });
-              await clearLocalRegistrationsCache();
+              try {
+                localStorage.removeItem("abhivyakti_registrations_cache");
+              } catch {}
               window.location.reload();
             }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl transition-all cursor-pointer"
-            title="Purge cache and re-fetch latest registrations from Firestore"
+            className="flex items-center gap-1.5 h-8 px-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-medium text-xs rounded-md transition-colors cursor-pointer"
+            title="Purge local cache and re-fetch latest registrations"
           >
-            <RotateCw size={16} /> Refresh
+            <RotateCw size={13} className="text-slate-500" /> Refresh
           </button>
-          <button onClick={handleExport} disabled={!filteredRegistrations.length}
-            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-sm transition-all disabled:opacity-50">
-            <Download size={18} /> Export Workbook
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={!filteredRegistrations.length}
+            className="flex items-center gap-1.5 h-8 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-md transition-colors disabled:opacity-50 cursor-pointer shadow-2xs"
+          >
+            <Download size={13} /> Export Workbook
           </button>
         </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm space-y-4">
-        {/* Row 1: Dropdowns grid */}
-        <div className="flex flex-wrap items-center gap-2.5">
+      {/* ── 2. COMPACT FILTER TOOLBAR ────────────────────────────────────────── */}
+      <div className="bg-white border border-slate-200 rounded-lg p-3.5 shadow-2xs space-y-3">
+        {/* Row 1: Dropdown Filters Toolbar */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">Filters:</span>
+          
           {/* Call Type Dropdown */}
           <MultiSelect
             options={callTypeOptions}
             selected={selectedCallTypes}
             onChange={setSelectedCallTypes}
             placeholder="Call Type"
-            allLabel="📞 All Call Types"
+            allLabel="All Call Types"
           />
 
           {/* Called For Dropdown */}
@@ -858,7 +895,7 @@ export default function AbhivyaktiTab({
             selected={selectedCalledFors}
             onChange={setSelectedCalledFors}
             placeholder="Called For"
-            allLabel="📞 All Called For"
+            allLabel="All Called For"
           />
 
           {/* Source Dropdown */}
@@ -867,7 +904,7 @@ export default function AbhivyaktiTab({
             selected={selectedSources}
             onChange={setSelectedSources}
             placeholder="Source"
-            allLabel="📢 All Sources"
+            allLabel="All Sources"
           />
 
           {/* Attender Dropdown */}
@@ -876,30 +913,39 @@ export default function AbhivyaktiTab({
             selected={selectedAttenders}
             onChange={setSelectedAttenders}
             placeholder="Attender"
-            allLabel="👥 All Attenders"
+            allLabel="All Attenders"
           />
         </div>
 
-        {/* Row 2: Date Pickers & Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-gray-100">
+        {/* Row 2: Date Range Controls & Meta Actions */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mr-1">Date Range:</span>
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-              className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-            <span className="text-gray-400 text-sm font-medium">to</span>
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-              className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-            
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">Date Range:</span>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={e => setDateFrom(e.target.value)}
+              className="h-8 px-2.5 bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+            />
+            <span className="text-slate-400 text-xs font-medium">→</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={e => setDateTo(e.target.value)}
+              className="h-8 px-2.5 bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+            />
+
             {(dateFrom || dateTo) && (
               <button
+                type="button"
                 onClick={() => {
                   setDateFrom("");
                   setDateTo("");
                 }}
-                className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-2xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                className="h-8 px-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-md text-xs font-medium transition flex items-center gap-1 cursor-pointer"
                 title="Reset date range filter"
               >
-                <X size={12} /> Reset Dates
+                <X size={12} /> Reset
               </button>
             )}
 
@@ -924,45 +970,48 @@ export default function AbhivyaktiTab({
               const isLastMonthSelected = dateFrom === prevFirstDayStr && dateTo === prevLastDayStr;
 
               return (
-                <div className="flex flex-wrap items-center gap-2 ml-2">
+                <div className="flex items-center gap-1 ml-1">
                   <button
+                    type="button"
                     onClick={() => {
                       setDateFrom(todayStr);
                       setDateTo(todayStr);
                     }}
-                    className={`px-3 py-1.5 rounded-2xl text-xs font-black border transition-all duration-200 cursor-pointer ${
+                    className={`h-8 px-2.5 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
                       isTodaySelected
-                        ? "bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-600/20 scale-[1.03]"
-                        : "bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100/80 hover:scale-[1.01]"
+                        ? "bg-indigo-600 border-indigo-600 text-white"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                     }`}
                   >
-                    📅 Today
+                    Today
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
                       setDateFrom(firstDayStr);
                       setDateTo(lastDayStr);
                     }}
-                    className={`px-3 py-1.5 rounded-2xl text-xs font-black border transition-all duration-200 cursor-pointer ${
+                    className={`h-8 px-2.5 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
                       isThisMonthSelected
-                        ? "bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-600/20 scale-[1.03]"
-                        : "bg-indigo-50 text-indigo-600 border-indigo-100 hover:bg-indigo-100/80 hover:scale-[1.01]"
+                        ? "bg-indigo-600 border-indigo-600 text-white"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                     }`}
                   >
-                    📅 This Month
+                    This Month
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
                       setDateFrom(prevFirstDayStr);
                       setDateTo(prevLastDayStr);
                     }}
-                    className={`px-3 py-1.5 rounded-2xl text-xs font-black border transition-all duration-200 cursor-pointer ${
+                    className={`h-8 px-2.5 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
                       isLastMonthSelected
-                        ? "bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-600/20 scale-[1.03]"
-                        : "bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100/80 hover:scale-[1.01]"
+                        ? "bg-indigo-600 border-indigo-600 text-white"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                     }`}
                   >
-                    📅 Last Month
+                    Last Month
                   </button>
                 </div>
               );
@@ -970,11 +1019,11 @@ export default function AbhivyaktiTab({
           </div>
 
           <div className="flex items-center gap-3">
-            <span className="text-xs text-gray-400 font-semibold">{filteredRegistrations.length} entries</span>
+            <span className="text-xs text-slate-500 font-medium">{filteredRegistrations.length} entries</span>
 
-            {/* Clear filters action */}
-            {(activeFilters > 0) && (
+            {activeFilters > 0 && (
               <button
+                type="button"
                 onClick={() => {
                   setSelectedCallTypes([]);
                   setSelectedCalledFors([]);
@@ -983,10 +1032,12 @@ export default function AbhivyaktiTab({
                   setDateFrom("");
                   setDateTo("");
                 }}
-                className="flex items-center gap-1.5 px-3 py-2 bg-red-50 text-red-600 border border-red-100 rounded-2xl text-xs font-black hover:bg-red-100 transition cursor-pointer"
+                className="flex items-center gap-1 px-2.5 h-8 bg-rose-50 text-rose-600 border border-rose-200/80 rounded-md text-xs font-medium hover:bg-rose-100/80 transition cursor-pointer"
               >
                 <X size={12} /> Clear filters
-                <span className="bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]">{activeFilters}</span>
+                <span className="bg-rose-600 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center text-[10px] font-bold">
+                  {activeFilters}
+                </span>
               </button>
             )}
           </div>
@@ -994,313 +1045,363 @@ export default function AbhivyaktiTab({
       </div>
 
       {loading ? (
-        <div className="py-20 text-center text-gray-400 font-bold">Loading registrations database...</div>
+        <div className="py-16 text-center text-slate-400 text-xs font-medium">Loading registrations database...</div>
       ) : filteredRegistrations.length === 0 ? (
-        <div className="py-20 text-center text-gray-400 font-bold">No registration records match the filters.</div>
+        <div className="py-16 text-center text-slate-400 text-xs font-medium">No registration records match the active filters.</div>
       ) : (
         <div className="space-y-6">
-          {/* Summary Metric Cards - 4 Side-by-Side */}
+          {/* ── 3. KPI SUMMARY CARDS ────────────────────────────────────────── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
-              <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 shrink-0">
-                <Calendar size={22} />
-              </div>
+            {/* Card 1: Average Registrations/Day */}
+            <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-2xs flex flex-col justify-between">
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Average Registrations/Day</p>
-                <p className="text-2xl font-black text-gray-800 mt-1">{metrics.avgPerDay}</p>
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Average Registrations / Day</p>
+                <p className="text-2xl font-bold text-slate-900 tracking-tight mt-1">{metrics.avgPerDay}</p>
               </div>
+              <p className="text-[11px] text-slate-400 font-medium mt-2">Calculated per active day</p>
             </div>
-            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
-              <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 shrink-0">
-                <TrendingUp size={22} />
-              </div>
+
+            {/* Card 2: Highest Peak Day */}
+            <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-2xs flex flex-col justify-between">
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Highest Peak Day</p>
-                <p className="text-sm font-bold text-gray-800 mt-1 truncate" title={metrics.highestDay}>{metrics.highestDay}</p>
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Highest Peak Day</p>
+                <p className="text-sm font-bold text-slate-900 mt-1 truncate" title={metrics.highestDay}>
+                  {metrics.highestDay}
+                </p>
               </div>
+              <p className="text-[11px] text-slate-400 font-medium mt-2">Peak registration volume</p>
             </div>
-            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
-              <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 shrink-0">
-                <UserCheck size={22} />
-              </div>
+
+            {/* Card 3: Attender Assisted */}
+            <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-2xs flex flex-col justify-between">
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Attender Assisted Registrations</p>
-                <p className="text-2xl font-black text-gray-800 mt-1">{metrics.totalAttenderAssisted}</p>
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Attender Assisted</p>
+                <p className="text-2xl font-bold text-emerald-600 tracking-tight mt-1">{metrics.totalAttenderAssisted}</p>
               </div>
+              <p className="text-[11px] text-emerald-600/80 font-medium mt-2">Attender facilitated</p>
             </div>
-            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
-              <div className="w-12 h-12 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600 shrink-0">
-                <Smile size={22} />
-              </div>
+
+            {/* Card 4: Direct / Online Registrations */}
+            <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-2xs flex flex-col justify-between">
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Direct Registrations (Online)</p>
-                <p className="text-2xl font-black text-gray-800 mt-1">{metrics.totalRegistrations - metrics.totalAttenderAssisted}</p>
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Direct / Online Registrations</p>
+                <p className="text-2xl font-bold text-slate-700 tracking-tight mt-1">
+                  {metrics.totalRegistrations - metrics.totalAttenderAssisted}
+                </p>
               </div>
+              <p className="text-[11px] text-slate-400 font-medium mt-2">Self-registered / Unassisted</p>
             </div>
           </div>
 
-          {/* Attender Productivity */}
-              {attenderPerformance.length > 0 && (
-                <ReportSection
-                  title="Attender Assisted Conversions"
-                  subtitle="Conversion volume and conversion rates calculated from connected incoming & outgoing calls"
-                  action={
-                    <FormulaInfoPopover
-                      title="Attender Conversion Rate Formulas"
-                      formulas={[
-                        {
-                          label: "Incoming Conversion Rate (%)",
-                          formula: "(Incoming Conversions ÷ Total Incoming Connected Calls) × 100"
-                        },
-                        {
-                          label: "Outgoing Conversion Rate (%)",
-                          formula: "(Outgoing Conversions ÷ Total Outgoing Connected Calls) × 100"
-                        },
-                        {
-                          label: "Overall Conversion Rate (%)",
-                          formula: "(Total Conversions ÷ Total Connected Calls) × 100"
-                        }
-                      ]}
-                    />
-                  }
-                >
-                  <div className="overflow-x-auto rounded-2xl border border-gray-100 max-h-[400px] overflow-y-auto">
-                    <table className="w-full text-sm text-left">
-                      <thead className="bg-gray-50 text-[10px] font-bold text-gray-500 uppercase tracking-wider border-b border-gray-100 sticky top-0">
-                        <tr>
-                          <th className="px-6 py-3 bg-gray-50">Attender Name</th>
-                          <th className="px-4 py-3 bg-gray-50 text-right">Incoming<br />Connected Calls</th>
-                          <th className="px-4 py-3 bg-gray-50 text-right">Incoming<br />Conversions</th>
-                          <th className="px-4 py-3 bg-gray-50 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              <span>Incoming<br />Conversion Rate (%)</span>
-                              <FormulaInfoPopover
-                                title="Incoming Conversion Rate"
-                                formulas={[{ label: "Incoming Conversion Rate (%)", formula: "(Incoming Conversions ÷ Total Incoming Connected Calls) × 100" }]}
-                                iconOnly={true}
-                              />
-                            </div>
-                          </th>
-                          <th className="px-4 py-3 bg-gray-50 text-right">Outgoing<br />Connected Calls</th>
-                          <th className="px-4 py-3 bg-gray-50 text-right">Outgoing<br />Conversions</th>
-                          <th className="px-4 py-3 bg-gray-50 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              <span>Outgoing<br />Conversion Rate (%)</span>
-                              <FormulaInfoPopover
-                                title="Outgoing Conversion Rate"
-                                formulas={[{ label: "Outgoing Conversion Rate (%)", formula: "(Outgoing Conversions ÷ Total Outgoing Connected Calls) × 100" }]}
-                                iconOnly={true}
-                              />
-                            </div>
-                          </th>
-                          <th className="px-4 py-3 bg-gray-50 text-right">Total<br />Connected Calls</th>
-                          <th className="px-4 py-3 bg-gray-50 text-right">Total<br />Conversions</th>
-                          <th className="px-6 py-3 bg-gray-50 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              <span>Overall<br />Conversion Rate (%)</span>
-                              <FormulaInfoPopover
-                                title="Overall Conversion Rate"
-                                formulas={[{ label: "Overall Conversion Rate (%)", formula: "(Total Conversions ÷ Total Connected Calls) × 100" }]}
-                                iconOnly={true}
-                              />
-                            </div>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50 font-semibold text-gray-600">
-                        {attenderPerformance.map((r, i) => (
-                          <tr key={i} className="hover:bg-gray-50/50 transition-colors">
-                            <td className="px-6 py-3.5 font-bold text-gray-800">{r["Attender Name"]}</td>
-                            <td className="px-4 py-3.5 text-right font-bold text-gray-600">
-                              {r["Incoming Connected"]}
-                            </td>
-                            <td className="px-4 py-3.5 text-right font-black text-emerald-700">
-                              {r["Incoming Conversions"]}
-                            </td>
-                            <td className="px-4 py-3.5 text-right font-bold">
-                              <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold">
-                                {r["Incoming Conversion Rate (%)"]}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3.5 text-right font-bold text-gray-600">
-                              {r["Outgoing Connected"]}
-                            </td>
-                            <td className="px-4 py-3.5 text-right font-black text-blue-700">
-                              {r["Outgoing Conversions"]}
-                            </td>
-                            <td className="px-4 py-3.5 text-right font-bold">
-                              <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-bold">
-                                {r["Outgoing Conversion Rate (%)"]}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3.5 text-right font-bold text-gray-700">
-                              {r["Total Connected"]}
-                            </td>
-                            <td className="px-4 py-3.5 text-right font-black text-indigo-600">
-                              {r["Total Conversions"]}
-                            </td>
-                            <td className="px-6 py-3.5 text-right font-bold">
-                              <span className="px-2.5 py-1 bg-indigo-100 text-indigo-800 rounded-full text-xs font-black">
-                                {r["Overall Conversion Rate (%)"]}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                        <tr className="bg-gray-50/70 border-t border-gray-100 font-bold text-gray-900 sticky bottom-0">
-                          <td className="px-6 py-4 bg-gray-50 font-black">Total Assisted</td>
-                          <td className="px-4 py-4 bg-gray-50 text-right text-gray-700 font-extrabold">{attenderPerformanceTotals["Incoming Connected"]}</td>
-                          <td className="px-4 py-4 bg-gray-50 text-right text-emerald-700 font-extrabold">{attenderPerformanceTotals["Incoming Conversions"]}</td>
-                          <td className="px-4 py-4 bg-gray-50 text-right text-emerald-800 font-extrabold">{attenderPerformanceTotals["Incoming Conversion Rate (%)"]}</td>
-                          <td className="px-4 py-4 bg-gray-50 text-right text-gray-700 font-extrabold">{attenderPerformanceTotals["Outgoing Connected"]}</td>
-                          <td className="px-4 py-4 bg-gray-50 text-right text-blue-700 font-extrabold">{attenderPerformanceTotals["Outgoing Conversions"]}</td>
-                          <td className="px-4 py-4 bg-gray-50 text-right text-blue-800 font-extrabold">{attenderPerformanceTotals["Outgoing Conversion Rate (%)"]}</td>
-                          <td className="px-4 py-4 bg-gray-50 text-right text-gray-800 font-extrabold">{attenderPerformanceTotals["Total Connected"]}</td>
-                          <td className="px-4 py-4 bg-gray-50 text-right text-indigo-700 font-extrabold">{attenderPerformanceTotals["Total Conversions"]}</td>
-                          <td className="px-6 py-4 bg-gray-50 text-right text-indigo-900 font-black">{attenderPerformanceTotals["Overall Conversion Rate (%)"]}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </ReportSection>
-              )}
+          {/* ── 4. CONVERSION ANALYSIS ────────────────────────────────────────── */}
 
-              {/* Separate Table: Shared Conversions & Team Assists */}
-              {sharedConversionsBreakdown.length > 0 && (
-                <ReportSection
-                  title="🤝 Shared Conversions & Team Assists"
-                  subtitle="Registrations finalized by an attender on incoming calls for another lead owner (Note: These registrations are already counted under the primary lead owner. No double counting is done.)"
-                >
-                  <div className="overflow-x-auto rounded-2xl border border-gray-100 mt-2">
-                    <table className="w-full text-sm text-left">
-                      <thead className="bg-amber-50/60 text-[11px] font-bold text-amber-900 uppercase tracking-wider border-b border-amber-100">
-                        <tr>
-                          <th className="px-6 py-3">Assisting Attender (Final Call)</th>
-                          <th className="px-6 py-3">Primary Lead Owner (Nurturer)</th>
-                          <th className="px-6 py-3 text-right">Shared Registrations Finalized</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50 font-semibold text-gray-600">
-                        {sharedConversionsBreakdown.map((item, idx) => (
-                          <tr key={idx} className="hover:bg-amber-50/20 transition-colors">
-                            <td className="px-6 py-3.5 font-bold text-gray-900">{item.assistant}</td>
-                            <td className="px-6 py-3.5 font-bold text-indigo-700">{item.primaryOwner}</td>
-                            <td className="px-6 py-3.5 text-right font-black text-amber-700">
-                              <span className="px-3 py-1 bg-amber-100 text-amber-900 rounded-full text-xs font-extrabold border border-amber-200">
-                                🤝 {item.count}
+          {/* Attender Assisted Conversions Table */}
+          {attenderPerformance.length > 0 && (
+            <ReportSection
+              title="Attender Assisted Conversions"
+              subtitle="Conversion volume and rates derived from connected incoming & outgoing call history"
+              action={
+                <FormulaInfoPopover
+                  title="Attender Conversion Rate Formulas"
+                  formulas={[
+                    {
+                      label: "Incoming Conversion Rate (%)",
+                      formula: "(Incoming Conversions ÷ Total Incoming Connected Calls) × 100"
+                    },
+                    {
+                      label: "Outgoing Conversion Rate (%)",
+                      formula: "(Outgoing Conversions ÷ Total Outgoing Connected Calls) × 100"
+                    },
+                    {
+                      label: "Overall Conversion Rate (%)",
+                      formula: "(Total Conversions ÷ Total Connected Calls) × 100"
+                    }
+                  ]}
+                />
+              }
+            >
+              <div className="overflow-x-auto rounded-lg border border-slate-200 max-h-[420px] overflow-y-auto">
+                <table className="w-full text-xs text-left border-collapse min-w-[960px]">
+                  <thead className="bg-slate-50/90 text-[11px] font-semibold text-slate-600 uppercase tracking-wider sticky top-0 z-20 border-b border-slate-200">
+                    {/* Header Grouping Row */}
+                    <tr>
+                      <th className="px-4 py-2.5 bg-slate-50 sticky left-0 z-30 border-r border-slate-200" rowSpan={2}>
+                        Attender Name
+                      </th>
+                      <th colSpan={3} className="px-3 py-1.5 text-center bg-emerald-50/60 text-emerald-800 border-r border-slate-200">
+                        Incoming Calls
+                      </th>
+                      <th colSpan={3} className="px-3 py-1.5 text-center bg-blue-50/60 text-blue-800 border-r border-slate-200">
+                        Outgoing Calls
+                      </th>
+                      <th colSpan={3} className="px-3 py-1.5 text-center bg-slate-100/70 text-slate-800">
+                        Overall Performance
+                      </th>
+                    </tr>
+                    {/* Column Headers */}
+                    <tr className="border-t border-slate-200">
+                      <th className="px-3 py-2 text-right bg-emerald-50/40 text-emerald-900 font-semibold">Connected</th>
+                      <th className="px-3 py-2 text-right bg-emerald-50/40 text-emerald-900 font-semibold">Conversions</th>
+                      <th className="px-3 py-2 text-right bg-emerald-50/40 text-emerald-900 font-semibold border-r border-slate-200">Rate (%)</th>
+
+                      <th className="px-3 py-2 text-right bg-blue-50/40 text-blue-900 font-semibold">Connected</th>
+                      <th className="px-3 py-2 text-right bg-blue-50/40 text-blue-900 font-semibold">Conversions</th>
+                      <th className="px-3 py-2 text-right bg-blue-50/40 text-blue-900 font-semibold border-r border-slate-200">Rate (%)</th>
+
+                      <th className="px-3 py-2 text-right bg-slate-100/50 text-slate-900 font-semibold">Connected</th>
+                      <th className="px-3 py-2 text-right bg-slate-100/50 text-slate-900 font-semibold">Conversions</th>
+                      <th className="px-4 py-2 text-right bg-slate-100/50 text-slate-900 font-semibold">Overall Rate (%)</th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-slate-100 bg-white font-medium text-slate-700">
+                    {attenderPerformance.map((r, i) => {
+                      const incConn = r["Incoming Connected"];
+                      const incConv = r["Incoming Conversions"];
+                      const incRate = r["Incoming Conversion Rate (%)"];
+
+                      const outConn = r["Outgoing Connected"];
+                      const outConv = r["Outgoing Conversions"];
+                      const outRate = r["Outgoing Conversion Rate (%)"];
+
+                      const totConn = r["Total Connected"];
+                      const totConv = r["Total Conversions"];
+                      const totRate = r["Overall Conversion Rate (%)"];
+
+                      return (
+                        <tr key={i} className="hover:bg-slate-50/80 transition-colors duration-150">
+                          {/* Sticky Attender Name Column */}
+                          <td className="px-4 py-2.5 font-semibold text-slate-900 sticky left-0 z-10 bg-white border-r border-slate-200">
+                            {r["Attender Name"]}
+                          </td>
+
+                          {/* Incoming */}
+                          <td className="px-3 py-2.5 text-right font-medium text-slate-600">
+                            {incConn > 0 ? incConn : <span className="text-slate-400 font-normal">0</span>}
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-bold text-emerald-700">
+                            {incConv > 0 ? incConv : <span className="text-slate-400 font-normal">0</span>}
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-medium border-r border-slate-200">
+                            {incConv > 0 ? (
+                              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[11px] font-medium border border-emerald-100">
+                                {incRate}
                               </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </ReportSection>
-              )}
+                            ) : (
+                              <span className="text-slate-400 font-normal">0.0%</span>
+                            )}
+                          </td>
 
-              {/* Called For & Attender Conversions Table */}
-              {calledForAttenderBreakdown.length > 0 && (
-                <ReportSection
-                  title="Conversions by Called For & Attender"
-                  subtitle="Breakdown of conversions by Attender, Called For category, Khoji Type, and Call Type"
-                  action={
-                    <FormulaInfoPopover
-                      title="Conversions Breakdown Information"
-                      formulas={[
-                        {
-                          label: "Conversions Count",
-                          formula: "Count of registrations attributed to each Attender, Called For program, and Khoji Type."
-                        }
-                      ]}
-                    />
-                  }
-                >
-                  <div className="overflow-x-auto rounded-2xl border border-gray-100">
-                    <table className="w-full text-sm text-left">
-                      <thead className="bg-gray-50 text-[10px] font-bold text-gray-500 uppercase tracking-wider border-b border-gray-100">
-                        <tr>
-                          <th className="px-6 py-3 bg-gray-50">Converted By (Attender)</th>
-                          <th className="px-6 py-3 bg-gray-50">Called For</th>
-                          <th className="px-6 py-3 bg-gray-50">Khoji Type</th>
-                          <th className="px-6 py-3 bg-gray-50 text-right">Incoming Conversions</th>
-                          <th className="px-6 py-3 bg-gray-50 text-right">Outgoing Conversions</th>
-                          <th className="px-6 py-3 bg-gray-50 text-right">Total Conversions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50 font-semibold text-gray-600">
-                        {groupedCalledForAttender.map((group, groupIdx) => (
-                          <React.Fragment key={groupIdx}>
-                            {group.rows.map((r, i) => (
-                              <tr key={i} className="hover:bg-gray-50/50 transition-colors">
-                                <td className="px-6 py-3.5 font-bold text-indigo-900">{r["Converted By (Attender)"]}</td>
-                                <td className="px-6 py-3.5 font-bold text-gray-800">{r["Called For"]}</td>
-                                <td className="px-6 py-3.5 font-medium text-purple-700">{r["Khoji Type"]}</td>
-                                <td className="px-6 py-3.5 text-right font-black">
-                                  {r["Incoming Conversions"] > 0 ? (
-                                    <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold">
-                                      {r["Incoming Conversions"]}
-                                    </span>
-                                  ) : (
-                                    <span className="text-gray-300">0</span>
-                                  )}
-                                </td>
-                                <td className="px-6 py-3.5 text-right font-black">
-                                  {r["Outgoing Conversions"] > 0 ? (
-                                    <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-bold">
-                                      {r["Outgoing Conversions"]}
-                                    </span>
-                                  ) : (
-                                    <span className="text-gray-300">0</span>
-                                  )}
-                                </td>
-                                <td className="px-6 py-3.5 text-right font-black text-indigo-600">{r["Total Conversions"]}</td>
-                              </tr>
-                            ))}
-                            {/* Per-Attender Subtotal Row */}
-                            <tr className="bg-indigo-50/60 border-t border-b border-indigo-100 font-extrabold text-indigo-950">
-                              <td className="px-6 py-3 font-black text-xs uppercase tracking-wider text-indigo-900" colSpan={3}>
-                                📊 Total for {group.attenderName}
-                              </td>
-                              <td className="px-6 py-3 text-right text-emerald-700 font-black">{group.totalIncoming}</td>
-                              <td className="px-6 py-3 text-right text-blue-700 font-black">{group.totalOutgoing}</td>
-                              <td className="px-6 py-3 text-right text-indigo-800 font-black">{group.totalConversions}</td>
-                            </tr>
-                          </React.Fragment>
-                        ))}
-                        <tr className="bg-gray-100/90 border-t-2 border-gray-300 font-black text-gray-900">
-                          <td className="px-6 py-4 bg-gray-100 font-black uppercase text-xs tracking-wider" colSpan={3}>Grand Total</td>
-                          <td className="px-6 py-4 bg-gray-100 text-right text-emerald-700 font-extrabold">{calledForAttenderTotals["Incoming Conversions"]}</td>
-                          <td className="px-6 py-4 bg-gray-100 text-right text-blue-700 font-extrabold">{calledForAttenderTotals["Outgoing Conversions"]}</td>
-                          <td className="px-6 py-4 bg-gray-100 text-right text-indigo-700 font-extrabold">{calledForAttenderTotals["Total Conversions"]}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </ReportSection>
-              )}
+                          {/* Outgoing */}
+                          <td className="px-3 py-2.5 text-right font-medium text-slate-600">
+                            {outConn > 0 ? outConn : <span className="text-slate-400 font-normal">0</span>}
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-bold text-blue-700">
+                            {outConv > 0 ? outConv : <span className="text-slate-400 font-normal">0</span>}
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-medium border-r border-slate-200">
+                            {outConv > 0 ? (
+                              <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-[11px] font-medium border border-blue-100">
+                                {outRate}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-normal">0.0%</span>
+                            )}
+                          </td>
 
-          {/* Filtered Registrations Names Table */}
+                          {/* Total */}
+                          <td className="px-3 py-2.5 text-right font-medium text-slate-700">
+                            {totConn > 0 ? totConn : <span className="text-slate-400 font-normal">0</span>}
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-bold text-slate-900">
+                            {totConv > 0 ? totConv : <span className="text-slate-400 font-normal">0</span>}
+                          </td>
+                          <td className="px-4 py-2.5 text-right font-semibold">
+                            {totConv > 0 ? (
+                              <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded text-[11px] font-semibold border border-slate-200">
+                                {totRate}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-normal">0.0%</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+
+                    {/* Total Summary Row */}
+                    <tr className="bg-slate-100/90 backdrop-blur-xs border-t-2 border-slate-300 font-bold text-slate-900 sticky bottom-0 z-20">
+                      <td className="px-4 py-3 sticky left-0 z-30 bg-slate-100 border-r border-slate-300 font-bold">
+                        TOTAL ASSISTED
+                      </td>
+                      <td className="px-3 py-3 text-right text-slate-800">{attenderPerformanceTotals["Incoming Connected"]}</td>
+                      <td className="px-3 py-3 text-right text-emerald-700">{attenderPerformanceTotals["Incoming Conversions"]}</td>
+                      <td className="px-3 py-3 text-right text-emerald-800 border-r border-slate-200">{attenderPerformanceTotals["Incoming Conversion Rate (%)"]}</td>
+                      <td className="px-3 py-3 text-right text-slate-800">{attenderPerformanceTotals["Outgoing Connected"]}</td>
+                      <td className="px-3 py-3 text-right text-blue-700">{attenderPerformanceTotals["Outgoing Conversions"]}</td>
+                      <td className="px-3 py-3 text-right text-blue-800 border-r border-slate-200">{attenderPerformanceTotals["Outgoing Conversion Rate (%)"]}</td>
+                      <td className="px-3 py-3 text-right text-slate-900">{attenderPerformanceTotals["Total Connected"]}</td>
+                      <td className="px-3 py-3 text-right text-slate-900">{attenderPerformanceTotals["Total Conversions"]}</td>
+                      <td className="px-4 py-3 text-right text-slate-900">{attenderPerformanceTotals["Overall Conversion Rate (%)"]}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </ReportSection>
+          )}
+
+          {/* Shared Conversions & Team Assists Table */}
           <ReportSection
-            title={`Registrations Table List (${filteredRegistrations.length})`}
-            subtitle="Verify names and details before exporting"
+            title="🤝 Shared Conversions & Team Assists"
+            subtitle="Registrations finalized by an attender on incoming calls for another lead owner (Note: Counted under primary lead owner; no double counting)."
           >
-            <div className="overflow-x-auto rounded-2xl border border-gray-100 max-h-[500px] overflow-y-auto mt-2">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-gray-50 text-[10px] font-bold text-gray-500 uppercase tracking-wider border-b border-gray-100 sticky top-0">
+            <div className="overflow-x-auto rounded-lg border border-slate-200 mt-1">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-amber-50/60 text-[11px] font-bold text-amber-900 uppercase tracking-wider border-b border-amber-100">
                   <tr>
-                    <th className="px-6 py-3 bg-gray-50">Name</th>
-                    <th className="px-6 py-3 bg-gray-50">Phone Number</th>
-                    <th className="px-6 py-3 bg-gray-50">Mobile Number</th>
-                    <th className="px-6 py-3 bg-gray-50">Attender Name</th>
-                    <th className="px-6 py-3 bg-gray-50 text-center">Calls Done</th>
-                    <th className="px-6 py-3 bg-gray-50">Called For</th>
-                    <th className="px-6 py-3 bg-gray-50">Khoji Type</th>
-                    <th className="px-6 py-3 bg-gray-50">Source</th>
-                    <th className="px-6 py-3 bg-gray-50">Call Type</th>
+                    <th className="px-4 py-2.5">Assisting Attender (Final Call)</th>
+                    <th className="px-4 py-2.5">Primary Lead Owner (Nurturer)</th>
+                    <th className="px-4 py-2.5 text-right">Shared Registrations Finalized</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50 font-semibold text-gray-600">
+                <tbody className="divide-y divide-slate-100 bg-white font-medium text-slate-700">
+                  {sharedConversionsBreakdown.length > 0 ? (
+                    sharedConversionsBreakdown.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-amber-50/20 transition-colors duration-150">
+                        <td className="px-4 py-2.5 font-bold text-slate-900">{item.assistant}</td>
+                        <td className="px-4 py-2.5 font-bold text-indigo-700">{item.primaryOwner}</td>
+                        <td className="px-4 py-2.5 text-right font-black text-amber-700">
+                          <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 rounded-full text-xs font-bold border border-amber-200">
+                            🤝 {item.count}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={3} className="px-4 py-5 text-center text-slate-400 font-medium">
+                        No shared conversions recorded for the selected filter criteria.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </ReportSection>
+
+          {/* Conversions by Called For & Attender Table */}
+          {calledForAttenderBreakdown.length > 0 && (
+            <ReportSection
+              title="Conversions by Called For & Attender"
+              subtitle="Breakdown of conversions by Attender, Called For category, Khoji Type, and Call Type"
+              action={
+                <FormulaInfoPopover
+                  title="Conversions Breakdown Information"
+                  formulas={[
+                    {
+                      label: "Conversions Count",
+                      formula: "Count of registrations attributed to each Attender, Called For program, and Khoji Type."
+                    }
+                  ]}
+                />
+              }
+            >
+              <div className="overflow-x-auto rounded-lg border border-slate-200">
+                <table className="w-full text-xs text-left border-collapse">
+                  <thead className="bg-slate-50 text-[11px] font-semibold text-slate-600 uppercase tracking-wider border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-2.5">Converted By (Attender)</th>
+                      <th className="px-4 py-2.5">Called For</th>
+                      <th className="px-4 py-2.5">Khoji Type</th>
+                      <th className="px-4 py-2.5 text-right">Incoming Conversions</th>
+                      <th className="px-4 py-2.5 text-right">Outgoing Conversions</th>
+                      <th className="px-4 py-2.5 text-right">Total Conversions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white font-medium text-slate-700">
+                    {groupedCalledForAttender.map((group, groupIdx) => (
+                      <React.Fragment key={groupIdx}>
+                        {group.rows.map((r, i) => (
+                          <tr key={i} className="hover:bg-slate-50/80 transition-colors duration-150">
+                            <td className="px-4 py-2.5 font-semibold text-slate-900">{r["Converted By (Attender)"]}</td>
+                            <td className="px-4 py-2.5 font-medium text-slate-700">{r["Called For"]}</td>
+                            <td className="px-4 py-2.5 text-slate-600">{r["Khoji Type"]}</td>
+                            <td className="px-4 py-2.5 text-right font-semibold">
+                              {r["Incoming Conversions"] > 0 ? (
+                                <span className="text-emerald-700">{r["Incoming Conversions"]}</span>
+                              ) : (
+                                <span className="text-slate-400 font-normal">0</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-2.5 text-right font-semibold">
+                              {r["Outgoing Conversions"] > 0 ? (
+                                <span className="text-blue-700">{r["Outgoing Conversions"]}</span>
+                              ) : (
+                                <span className="text-slate-400 font-normal">0</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-2.5 text-right font-bold text-slate-900">{r["Total Conversions"]}</td>
+                          </tr>
+                        ))}
+                        {/* Per-Attender Subtotal Row */}
+                        <tr className="bg-slate-50 border-t border-b border-slate-200 font-bold text-slate-900">
+                          <td className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-800" colSpan={3}>
+                            TOTAL FOR {group.attenderName}
+                          </td>
+                          <td className="px-4 py-2.5 text-right text-emerald-700 font-bold">{group.totalIncoming}</td>
+                          <td className="px-4 py-2.5 text-right text-blue-700 font-bold">{group.totalOutgoing}</td>
+                          <td className="px-4 py-2.5 text-right text-slate-900 font-bold">{group.totalConversions}</td>
+                        </tr>
+                      </React.Fragment>
+                    ))}
+                    {/* Grand Total Row */}
+                    <tr className="bg-slate-100 border-t-2 border-slate-300 font-bold text-slate-900">
+                      <td className="px-4 py-3 uppercase text-xs tracking-wider" colSpan={3}>GRAND TOTAL</td>
+                      <td className="px-4 py-3 text-right text-emerald-700 font-bold">{calledForAttenderTotals["Incoming Conversions"]}</td>
+                      <td className="px-4 py-3 text-right text-blue-700 font-bold">{calledForAttenderTotals["Outgoing Conversions"]}</td>
+                      <td className="px-4 py-3 text-right text-slate-900 font-bold">{calledForAttenderTotals["Total Conversions"]}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </ReportSection>
+          )}
+
+          {/* ── 5. DETAILED REGISTRATION DATA ────────────────────────────────── */}
+          <ReportSection
+            title={`Registrations Table List (${filteredRegistrations.length})`}
+            subtitle="Verify names and details before exporting sheet workbook"
+          >
+            <div className="overflow-x-auto rounded-lg border border-slate-200 max-h-[480px] overflow-y-auto">
+              <table className="w-full text-xs text-left border-collapse min-w-[900px]">
+                <thead className="bg-slate-50/90 text-[11px] font-semibold text-slate-600 uppercase tracking-wider sticky top-0 z-20 border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-2.5 bg-slate-50 sticky left-0 z-30 border-r border-slate-200">Name</th>
+                    <th className="px-4 py-2.5">Phone Number</th>
+                    <th className="px-4 py-2.5">Mobile Number</th>
+                    <th className="px-4 py-2.5">Attender Name</th>
+                    <th className="px-4 py-2.5 text-center">Calls Done</th>
+                    <th className="px-4 py-2.5">Called For</th>
+                    <th className="px-4 py-2.5">Khoji Type</th>
+                    <th className="px-4 py-2.5">Source</th>
+                    <th className="px-4 py-2.5">Call Type</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white font-medium text-slate-700">
                   {filteredRegistrations.map((r, i) => {
-                    const nameVal = r.Name || r.name || r["Contact Name"] || r.contactName || r.contact_name || r["Full Name"] || r.fullName || r.full_name || r["First Name"] || r.first_name || (Array.isArray(r.history) && r.history[0]?.name) || "Unknown";
+                    const nameVal =
+                      r.Name ||
+                      r.name ||
+                      r["Contact Name"] ||
+                      r.contactName ||
+                      r.contact_name ||
+                      r["Full Name"] ||
+                      r.fullName ||
+                      r.full_name ||
+                      r["First Name"] ||
+                      r.first_name ||
+                      (Array.isArray(r.history) && r.history[0]?.name) ||
+                      "Unknown";
                     const phoneVal = r.Phone || r.phone || r["Phone Number"] || r.phoneNumber || r.normalizedPhone || "N/A";
                     const mobileVal = r.Mobile || r.mobile || r["Mobile Number"] || r.mobileNumber || r.normalizedMobile || "N/A";
                     const attenderVal = getRegistrationPrimaryAttender(r);
@@ -1311,16 +1412,27 @@ export default function AbhivyaktiTab({
                     const callTypeVal = r.callType || "N/A";
 
                     return (
-                      <tr key={i} className="hover:bg-gray-50/50 transition-colors">
-                        <td className="px-6 py-3.5 font-bold text-gray-800">{nameVal}</td>
-                        <td className="px-6 py-3.5 font-mono text-xs">{phoneVal}</td>
-                        <td className="px-6 py-3.5 font-mono text-xs">{mobileVal}</td>
-                        <td className="px-6 py-3.5 font-bold text-indigo-700">{attenderVal}</td>
-                        <td className="px-6 py-3.5 text-center font-black text-indigo-600">{callsDoneVal}</td>
-                        <td className="px-6 py-3.5 font-bold">{calledForVal}</td>
-                        <td className="px-6 py-3.5 text-xs text-purple-700 font-bold">{khojiVal}</td>
-                        <td className="px-6 py-3.5 text-xs">{sourceVal}</td>
-                        <td className="px-6 py-3.5 text-xs uppercase">{callTypeVal}</td>
+                      <tr key={i} className="hover:bg-slate-50/80 transition-colors duration-150">
+                        {/* Sticky Name Column */}
+                        <td className="px-4 py-2.5 font-semibold text-slate-900 sticky left-0 z-10 bg-white border-r border-slate-200">
+                          {nameVal}
+                        </td>
+                        <td className="px-4 py-2.5 font-mono text-[11px] text-slate-600">{phoneVal}</td>
+                        <td className="px-4 py-2.5 font-mono text-[11px] text-slate-600">{mobileVal}</td>
+                        <td className="px-4 py-2.5 font-medium text-slate-800">{attenderVal}</td>
+                        <td className="px-4 py-2.5 text-center font-bold text-slate-900">
+                          {callsDoneVal > 0 ? callsDoneVal : <span className="text-slate-400 font-normal">0</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-slate-700">{calledForVal}</td>
+                        <td className="px-4 py-2.5">
+                          {khojiVal === "Yes" ? (
+                            <span className="text-indigo-700 font-semibold">{khojiVal}</span>
+                          ) : (
+                            <span className="text-slate-500 font-normal">{khojiVal}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 text-slate-600">{sourceVal}</td>
+                        <td className="px-4 py-2.5 text-slate-600 uppercase text-[11px]">{callTypeVal}</td>
                       </tr>
                     );
                   })}

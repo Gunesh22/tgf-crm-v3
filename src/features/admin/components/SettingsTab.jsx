@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { toast } from "react-hot-toast";
 import { 
   ShieldCheck, Tag, HelpCircle, Loader, Archive, PhoneCall, PhoneOff
@@ -6,6 +6,7 @@ import {
 import { OptionsManagerCard } from "./OptionsManagerCard";
 import { WhatsAppTemplatesCard } from "./WhatsAppTemplatesCard";
 import CompulsoryFieldBypassCard from "./CompulsoryFieldBypassCard";
+import { SettingsSubnav } from "./SettingsSubnav";
 import { AdminPasswordCard } from "./AdminPasswordCard";
 import { StatusClassificationCard } from "./StatusClassificationCard";
 import { AddStatusCategorizationModal } from "./AddStatusCategorizationModal";
@@ -30,11 +31,51 @@ export default function SettingsTab() {
   const [dragOverCategory, setDragOverCategory] = useState(null);
   const [addStatusModal, setAddStatusModal] = useState(null);
   const [classificationSearch, setClassificationSearch] = useState("");
+  const [activeSection, setActiveSection] = useState("security");
+  const isClickingRef = useRef(false);
 
   useEffect(() => {
     loadOptions();
     loadMonths();
   }, []);
+
+  const sectionIds = ["security", "call-center", "whatsapp-templates", "status-rules", "call-classification", "data-management"];
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    const findScrollContainer = () =>
+      document.querySelector("main .overflow-y-auto") ||
+      document.querySelector(".overflow-y-auto") ||
+      null;
+
+    const container = findScrollContainer();
+
+    const observerOptions = {
+      root: container,
+      rootMargin: "-20% 0px -60% 0px",
+      threshold: 0.01
+    };
+
+    const handleIntersect = (entries) => {
+      if (isClickingRef.current) return;
+
+      const visible = entries.filter((e) => e.isIntersecting);
+      if (visible.length > 0) {
+        visible.sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        setActiveSection(visible[0].target.id);
+      }
+    };
+
+    const observer = new IntersectionObserver(handleIntersect, observerOptions);
+
+    sectionIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, [isLoading]);
 
   const loadOptions = async () => {
     setIsLoading(true);
@@ -258,144 +299,230 @@ export default function SettingsTab() {
     }
   };
 
+
+
+  const scrollToSection = (id) => {
+    setActiveSection(id);
+    isClickingRef.current = true;
+
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    setTimeout(() => {
+      isClickingRef.current = false;
+    }, 800);
+  };
+
+  const sectionTitles = {
+    security: { title: "Security & Master Password", desc: "Manage administrative access, authentication credentials, and security settings." },
+    "call-center": { title: "Call Center Options", desc: "Configure global dropdown options and status lists." },
+    "whatsapp-templates": { title: "WhatsApp Message Templates", desc: "Customize quick message templates used by attenders when sending WhatsApp messages." },
+    "status-rules": { title: "Status Rules & Compulsory Fields", desc: "Configure which fields are required when an attender logs a specific call status." },
+    "call-classification": { title: "Call Classification (Drag & Drop)", desc: "Classify statuses into Connected, Not Connected, or Unassigned categories for reporting." },
+    "data-management": { title: "Data Management & Historical Logs", desc: "Manage monthly log archives, raw database purges, and historical snapshots." }
+  };
+
+  const currentSection = sectionTitles[activeSection] || sectionTitles.security;
+
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-5">
-      {/* Admin Master Password Management */}
-      <AdminPasswordCard highlighted={false} />
-
-      <div>
-        <h2 className="text-lg font-bold text-slate-900 tracking-tight">Call Center Options</h2>
-        <p className="text-xs text-slate-500 mt-0.5">Configure dropdown values for Attenders globally.</p>
-      </div>
-
-      <div className="grid md:grid-cols-3 gap-4">
-        <OptionsManagerCard
-          title="Status Options"
-          icon={ShieldCheck}
-          options={options?.statusOptions || []}
-          onAdd={(val) => handleOptionChange("status", "add", val)}
-          onDelete={(val) => handleOptionChange("status", "delete", val)}
-          onRename={(oldVal, newVal) => handleOptionChange("status", "rename", oldVal, newVal)}
-        />
-        <OptionsManagerCard
-          title="Source Options"
-          icon={Tag}
-          options={options?.sourceOptions || []}
-          onAdd={(val) => handleOptionChange("source", "add", val)}
-          onDelete={(val) => handleOptionChange("source", "delete", val)}
-          onRename={(oldVal, newVal) => handleOptionChange("source", "rename", oldVal, newVal)}
-        />
-        <OptionsManagerCard
-          title="Called For Options"
-          icon={HelpCircle}
-          options={options?.calledForOptions || []}
-          onAdd={(val) => handleOptionChange("calledFor", "add", val)}
-          onDelete={(val) => handleOptionChange("calledFor", "delete", val)}
-          onRename={(oldVal, newVal) => handleOptionChange("calledFor", "rename", oldVal, newVal)}
-        />
-      </div>
-
-      {/* WhatsApp Message Templates Manager */}
-      <WhatsAppTemplatesCard
-        templates={options?.whatsappTemplates || DEFAULT_WHATSAPP_TEMPLATES}
-        onSaveTemplates={handleSaveWhatsappTemplates}
-      />
-
-      {/* Standalone Table: Statuses with Optional Compulsory Fields */}
-      <CompulsoryFieldBypassCard
-        options={options}
-        setOptions={setOptions}
-      />
-
-      {/* Drag & Drop Status Classification Tables */}
-      <StatusClassificationCard
-        classificationSearch={classificationSearch}
-        setClassificationSearch={setClassificationSearch}
-        dragOverCategory={dragOverCategory}
-        setDragOverCategory={setDragOverCategory}
-        draggedItem={draggedItem}
-        setDraggedItem={setDraggedItem}
-        handleMoveStatus={handleMoveStatus}
-        displayConnectedList={displayConnectedList}
-        connectedList={connectedList}
-        displayNotConnectedList={displayNotConnectedList}
-        notConnectedList={notConnectedList}
-        displayUnassignedList={displayUnassignedList}
-        unassignedList={unassignedList}
-      />
-
-      {/* Archive & Purge Section */}
-      <div className="bg-white rounded-lg border border-slate-200 p-4 shadow-2xs space-y-4">
-        <div className="space-y-0.5">
-          <div className="flex items-center gap-2">
-            <Archive size={16} className="text-indigo-600" />
-            <h3 className="text-xs font-semibold text-slate-900 uppercase tracking-wider">Archive & Purge Historical Call Logs</h3>
+    <div className="bg-[#F6F8FB] min-h-screen p-4 md:p-6 pb-24 space-y-6">
+      <div className="max-w-[1240px] mx-auto space-y-6">
+        {/* Page & Active Section Header */}
+        <div className="pt-1 pb-1">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 tracking-wide">
+            <span>Settings</span>
+            <span className="text-[#98A2B3]">/</span>
+            <span className="text-[#172033]">{currentSection.title}</span>
           </div>
-          <p className="text-xs text-slate-500">
-            Historical call logs are automatically locked at the end of each month into static snapshots, and raw entries are purged from the database to optimize space.
+          <h1 className="text-xl md:text-2xl font-bold text-[#172033] tracking-tight mt-1">
+            {currentSection.title}
+          </h1>
+          <p className="text-xs md:text-sm text-[#667085] mt-0.5 font-medium max-w-2xl leading-relaxed">
+            {currentSection.desc}
           </p>
         </div>
 
-        {isLoadingMonths ? (
-          <div className="flex items-center gap-2 text-xs text-slate-500 py-3">
-            <Loader size={15} className="animate-spin text-indigo-600" />
-            Loading historical months...
-          </div>
-        ) : (
-          <div className="overflow-hidden border border-slate-200 rounded-md">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
-                  <th className="p-2.5">Month</th>
-                  <th className="p-2.5">Status</th>
-                  <th className="p-2.5">Details</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {activeMonths.map(month => (
-                  <tr key={month} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-2.5 font-semibold text-slate-900">{month}</td>
-                    <td className="p-2.5">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                        Active Month
-                      </span>
-                    </td>
-                    <td className="p-2.5 text-slate-500">Live logs. Will be archived automatically at the end of the month.</td>
-                  </tr>
-                ))}
+        {/* Compact Settings Navigation Bar */}
+        <SettingsSubnav
+          activeSection={activeSection}
+          onSelectSection={scrollToSection}
+        />
 
-                {lockedMonths.map(item => (
-                  <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-2.5 font-semibold text-slate-900">{item.month}</td>
-                    <td className="p-2.5">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        Archived & Locked
-                      </span>
-                    </td>
-                    <td className="p-2.5 text-slate-500">
-                      Locked automatically by {item.lockedBy || "System"} on {item.lockedAt ? new Date(item.lockedAt).toLocaleDateString() : "month end"}. Contains {item.contactCount} contacts in {item.parts || 1} part(s). Raw logs purged.
-                    </td>
-                  </tr>
-                ))}
+        {/* Section 1: Security */}
+        <div 
+          id="security" 
+          className="relative isolate overflow-hidden bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-4"
+        >
+          <AdminPasswordCard highlighted={false} />
+        </div>
 
-                {activeMonths.length === 0 && lockedMonths.length === 0 && (
-                  <tr>
-                    <td colSpan="3" className="p-4 text-center text-slate-400 font-medium">
-                      No historical months found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+        {/* Section 2: Call Center Options */}
+        <div 
+          id="call-center" 
+          className="relative isolate overflow-hidden bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-5"
+        >
+          <div className="flex items-center gap-3 border-b border-[#E4E7EC] pb-4">
+            <div className="w-8 h-8 rounded-md bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center shrink-0 shadow-2xs">
+              <ShieldCheck size={18} />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-[#172033]">Call Center Options</h3>
+              <p className="text-xs text-[#667085] mt-0.5">Configure dropdown values for Status, Source, and Called For globally.</p>
+            </div>
           </div>
-        )}
+
+          <div className="grid md:grid-cols-3 gap-4">
+            <OptionsManagerCard
+              title="Status Options"
+              icon={ShieldCheck}
+              options={options?.statusOptions || []}
+              onAdd={(val) => handleOptionChange("status", "add", val)}
+              onDelete={(val) => handleOptionChange("status", "delete", val)}
+              onRename={(oldVal, newVal) => handleOptionChange("status", "rename", oldVal, newVal)}
+            />
+            <OptionsManagerCard
+              title="Source Options"
+              icon={Tag}
+              options={options?.sourceOptions || []}
+              onAdd={(val) => handleOptionChange("source", "add", val)}
+              onDelete={(val) => handleOptionChange("source", "delete", val)}
+              onRename={(oldVal, newVal) => handleOptionChange("source", "rename", oldVal, newVal)}
+            />
+            <OptionsManagerCard
+              title="Called For Options"
+              icon={HelpCircle}
+              options={options?.calledForOptions || []}
+              onAdd={(val) => handleOptionChange("calledFor", "add", val)}
+              onDelete={(val) => handleOptionChange("calledFor", "delete", val)}
+              onRename={(oldVal, newVal) => handleOptionChange("calledFor", "rename", oldVal, newVal)}
+            />
+          </div>
+        </div>
+
+        {/* Section 3: WhatsApp Message Templates */}
+        <div 
+          id="whatsapp-templates" 
+          className="relative isolate overflow-hidden bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-4"
+        >
+          <WhatsAppTemplatesCard
+            templates={options?.whatsappTemplates || DEFAULT_WHATSAPP_TEMPLATES}
+            onSaveTemplates={handleSaveWhatsappTemplates}
+          />
+        </div>
+
+        {/* Section 4: Status Rules */}
+        <div 
+          id="status-rules" 
+          className="relative isolate overflow-hidden bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-4"
+        >
+          <CompulsoryFieldBypassCard
+            options={options}
+            setOptions={setOptions}
+          />
+        </div>
+
+        {/* Section 5: Drag & Drop Status Classification */}
+        <div 
+          id="call-classification" 
+          className="relative isolate overflow-hidden bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-4"
+        >
+          <StatusClassificationCard
+            classificationSearch={classificationSearch}
+            setClassificationSearch={setClassificationSearch}
+            dragOverCategory={dragOverCategory}
+            setDragOverCategory={setDragOverCategory}
+            draggedItem={draggedItem}
+            setDraggedItem={setDraggedItem}
+            handleMoveStatus={handleMoveStatus}
+            displayConnectedList={displayConnectedList}
+            connectedList={connectedList}
+            displayNotConnectedList={displayNotConnectedList}
+            notConnectedList={notConnectedList}
+            displayUnassignedList={displayUnassignedList}
+            unassignedList={unassignedList}
+          />
+        </div>
+
+        {/* Section 6: Data Management */}
+        <div 
+          id="data-management" 
+          className="relative isolate overflow-hidden bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-5"
+        >
+          <div className="flex items-center gap-3 border-b border-[#E4E7EC] pb-4">
+            <div className="w-8 h-8 rounded-md bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center shrink-0 shadow-2xs">
+              <Archive size={18} />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-[#172033]">Data Management & Historical Logs</h3>
+              <p className="text-xs text-[#667085] mt-0.5 max-w-2xl">
+                Historical call logs are automatically locked at the end of each month into static snapshots, and raw entries are purged from the database to optimize space.
+              </p>
+            </div>
+          </div>
+
+          {isLoadingMonths ? (
+            <div className="flex items-center gap-2 text-xs text-[#667085] py-4 bg-white rounded-[10px] border border-[#E4E7EC] p-5">
+              <Loader size={14} className="animate-spin text-blue-600" />
+              Loading historical months...
+            </div>
+          ) : (
+            <div className="bg-white border border-[#E4E7EC] rounded-[10px] overflow-hidden shadow-[0_1px_3px_rgba(16,24,40,0.04),0_1px_2px_rgba(16,24,40,0.02)]">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-[#FAFBFD] border-b border-[#E4E7EC] text-[#667085] font-semibold uppercase tracking-wider text-[11px]">
+                    <th className="py-2.5 px-4">Month</th>
+                    <th className="py-2.5 px-4">Status</th>
+                    <th className="py-2.5 px-4">Details</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E4E7EC]/60">
+                  {activeMonths.map(month => (
+                    <tr key={month} className="hover:bg-[#F8FAFC] transition-colors duration-150">
+                      <td className="py-2.5 px-4 font-semibold text-[#172033] text-[13px]">{month}</td>
+                      <td className="py-2.5 px-4">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200/80">
+                          Active Month
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-4 text-[#667085] text-[12px]">Live logs. Will be archived automatically at the end of the month.</td>
+                    </tr>
+                  ))}
+
+                  {lockedMonths.map(item => (
+                    <tr key={item.id} className="hover:bg-[#F8FAFC] transition-colors duration-150">
+                      <td className="py-2.5 px-4 font-semibold text-[#172033] text-[13px]">{item.month}</td>
+                      <td className="py-2.5 px-4">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80">
+                          Archived & Locked
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-4 text-[#667085] text-[12px]">
+                        Locked automatically by {item.lockedBy || "System"} on {item.lockedAt ? new Date(item.lockedAt).toLocaleDateString() : "month end"}. Contains {item.contactCount} contacts in {item.parts || 1} part(s). Raw logs purged.
+                      </td>
+                    </tr>
+                  ))}
+
+                  {activeMonths.length === 0 && lockedMonths.length === 0 && (
+                    <tr>
+                      <td colSpan="3" className="py-8 text-center text-[#98A2B3] font-medium">
+                        No historical months found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* New Status Categorization Modal */}
+        <AddStatusCategorizationModal
+          addStatusModal={addStatusModal}
+          confirmAddStatus={confirmAddStatus}
+        />
       </div>
-
-      {/* New Status Categorization Modal */}
-      <AddStatusCategorizationModal
-        addStatusModal={addStatusModal}
-        confirmAddStatus={confirmAddStatus}
-      />
     </div>
   );
 }
