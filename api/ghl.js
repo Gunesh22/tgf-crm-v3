@@ -10,9 +10,13 @@ export default async function handler(req, res) {
   }
 
   try {
-    const GHL_TOKEN = process.env.GHL_TOKEN || process.env.VITE_GHL_TOKEN || process.env.GHL_API_KEY || process.env.GHL_KEY || process.env.GOHIGHLEVEL_TOKEN || process.env.REACT_APP_GHL_TOKEN;
-    const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID || process.env.VITE_GHL_LOCATION_ID || process.env.LOCATION_ID || process.env.GHL_LOCATION || process.env.REACT_APP_GHL_LOCATION_ID;
-    const GHL_VERSION = process.env.GHL_VERSION || process.env.VITE_GHL_VERSION || "2021-07-28";
+    const DEFAULT_GHL_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsb2NhdGlvbl9pZCI6IkZsTVlXa3ZnNlRKWlJDVVNRNWJXIiwidmVyc2lvbiI6MSwiaWF0IjoxNzUzMjY5NzE3NjUyLCJzdWIiOiJCMnRvbGZ4Qmh4bEJQUzZTdnU1aSJ9.o7P8Z0Jj9OdcSNvkHpnpdsmSGzZp8cnm-o2LLAVp0zo";
+    const DEFAULT_GHL_LOCATION = "FlMYWkvg6TJZRCUSQ5bW";
+    const DEFAULT_GHL_VERSION = "2021-07-28";
+
+    const GHL_TOKEN = process.env.GHL_TOKEN || process.env.VITE_GHL_TOKEN || process.env.GHL_API_KEY || process.env.GHL_KEY || process.env.GOHIGHLEVEL_TOKEN || process.env.REACT_APP_GHL_TOKEN || DEFAULT_GHL_TOKEN;
+    const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID || process.env.VITE_GHL_LOCATION_ID || process.env.LOCATION_ID || process.env.GHL_LOCATION || process.env.REACT_APP_GHL_LOCATION_ID || DEFAULT_GHL_LOCATION;
+    const GHL_VERSION = process.env.GHL_VERSION || process.env.VITE_GHL_VERSION || DEFAULT_GHL_VERSION;
 
     if (!GHL_TOKEN) {
       return res.status(200).json({ configured: false, error: "GHL_TOKEN not configured on server" });
