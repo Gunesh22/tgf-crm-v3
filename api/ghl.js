@@ -10,8 +10,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const GHL_TOKEN = process.env.GHL_TOKEN || process.env.VITE_GHL_TOKEN;
-    const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID || process.env.VITE_GHL_LOCATION_ID;
+    const GHL_TOKEN = process.env.GHL_TOKEN || process.env.VITE_GHL_TOKEN || process.env.GHL_API_KEY || process.env.GHL_KEY || process.env.GOHIGHLEVEL_TOKEN || process.env.REACT_APP_GHL_TOKEN;
+    const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID || process.env.VITE_GHL_LOCATION_ID || process.env.LOCATION_ID || process.env.GHL_LOCATION || process.env.REACT_APP_GHL_LOCATION_ID;
     const GHL_VERSION = process.env.GHL_VERSION || process.env.VITE_GHL_VERSION || "2021-07-28";
 
     if (!GHL_TOKEN) {

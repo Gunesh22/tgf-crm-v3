@@ -38,6 +38,8 @@ export default async function handler(req, res) {
       `0${last10}`
     ]));
 
+    const phoneRegex = new RegExp(last10, 'i');
+
     const queryFilter = {
       $or: [
         { normalizedPhone: { $in: phoneVariations } },
@@ -45,7 +47,12 @@ export default async function handler(req, res) {
         { Phone: { $in: phoneVariations } },
         { mobile: { $in: phoneVariations } },
         { Mobile: { $in: phoneVariations } },
-        { normalizedMobile: { $in: phoneVariations } }
+        { normalizedMobile: { $in: phoneVariations } },
+        { Phone: phoneRegex },
+        { phone: phoneRegex },
+        { Mobile: phoneRegex },
+        { mobile: phoneRegex },
+        { normalizedPhone: phoneRegex }
       ]
     };
 
