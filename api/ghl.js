@@ -15,7 +15,7 @@ export default async function handler(req, res) {
     const GHL_VERSION = process.env.GHL_VERSION || process.env.VITE_GHL_VERSION || "2021-07-28";
 
     if (!GHL_TOKEN) {
-      return res.status(500).json({ error: "Server missing GHL_TOKEN configuration" });
+      return res.status(200).json({ configured: false, error: "GHL_TOKEN not configured on server" });
     }
 
     const isV1 = !GHL_TOKEN.startsWith("pit-");

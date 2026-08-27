@@ -7,9 +7,13 @@ const callGhlApiProxy = async (endpoint, method = "POST", payload = null, params
       signal,
     });
     if (proxyRes.ok) {
-      return await proxyRes.json();
+      const data = await proxyRes.json();
+      if (data.configured === false) {
+        throw new Error(data.error || "GHL not configured");
+      }
+      return data;
     } else {
-        throw new Error(proxyRes.statusText);
+        throw new Error(`GHL Proxy status ${proxyRes.status}: ${proxyRes.statusText}`);
     }
   } catch (e) {
       throw e;
@@ -23,7 +27,7 @@ export const testConnection = async () => {
     console.log(`%c[GHL SUCCESS] %cConnection OK`, "color: #ec4899; font-weight: bold", "color: gray", data);
     return { success: true, total: data.meta?.total || data.total || 0 };
   } catch (e) {
-    console.error(`%c[GHL ERROR] %cTEST CONNECTION`, "color: #ef4444; font-weight: bold", "color: gray", e);
+    console.warn(`[GHL NOTICE] GHL connection test info:`, e.message);
     return { success: false, error: e.message };
   }
 };
