@@ -389,20 +389,8 @@ const shouldGoToEnd = (sourceName) => {
 export default function MonthlyReportTab({ programs, attenders = [], settingsOptions = { statusOptions: [], sourceOptions: [], calledForOptions: [] }, callLogs = [] }) {
   const [selectedProgramIds, setSelectedProgramIds] = useState([]); // empty = ALL
   const [selectedAttenderIds, setSelectedAttenderIds] = useState([]); // empty = ALL
-  const [startDate, setStartDate] = useState(() => {
-    const d = new Date();
-    const yr = d.getFullYear();
-    const mn = String(d.getMonth() + 1).padStart(2, "0");
-    return `${yr}-${mn}-01`;
-  });
-  const [endDate, setEndDate] = useState(() => {
-    const d = new Date();
-    const yr = d.getFullYear();
-    const mn = d.getMonth();
-    const lastDay = new Date(yr, mn + 1, 0).getDate();
-    const mnStr = String(mn + 1).padStart(2, "0");
-    return `${yr}-${mnStr}-${lastDay}`;
-  });
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [selectedSources, setSelectedSources] = useState([]);
   const [selectedCalledFors, setSelectedCalledFors] = useState([]);
   const [selectedStatuses, setSelectedStatuses] = useState([]);

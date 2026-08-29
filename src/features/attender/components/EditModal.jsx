@@ -43,6 +43,7 @@ import ProfileDetailsTab from "./edit-modal/ProfileDetailsTab";
 import CallButton from "./CallButton";
 import WhatsAppButton from "./WhatsAppButton";
 import EditHistoryModal from "./edit-modal/EditHistoryModal";
+import { getEffectiveStage } from "../../../utils/pipelineEngine";
 
 export const EditModal = ({
   row,
@@ -131,25 +132,44 @@ export const EditModal = ({
       normalized.Tags = row.tags.join(", ");
     }
     const attState = findMatchingAttenderState(normalized.attenderStates, activeAttenderId || attenderId, activeAttenderName || attenderName);
-    normalized.history = Array.isArray(attState?.history) ? [...attState.history] : [];
+    const combinedHistory = combineContactHistories(normalized.history, attState?.history);
+    normalized.history = combinedHistory;
+    normalized.pipelineStage = getEffectiveStage(normalized);
 
     console.log(`[EDIT MODAL INIT TRACE] Lead: "${normalized.Name || row.id}"`, {
       contactId: row.id || row.contactId,
       rootRemark: row.remark,
       attenderId: activeAttenderId || attenderId,
       attenderName: activeAttenderName || attenderName,
-      matchedAttState: attState,
-      attStateRemark: attState?.remark,
-      attStateHistoryLength: Array.isArray(attState?.history) ? attState.history.length : 0,
+      effectiveStage: normalized.pipelineStage,
+      attStateHistoryLength: combinedHistory.length,
       attenderStatesKeys: Object.keys(normalized.attenderStates || {})
     });
 
+    // Determine default purpose & status for NEW call event (fresh call state per Section 5)
+    let defaultPurpose = "SALES";
+    let defaultStatus = "Info Given";
+    let defaultCallStatus = "Connected";
+
+    if (normalized.pipelineStage === "Query Desk" || normalized.status === "Query") {
+      defaultPurpose = "QUERY";
+      defaultStatus = "Query";
+    } else if (normalized.pipelineStage === "6. Registered / Won" || normalized.pipelineStage === "Existing Alumni") {
+      defaultPurpose = "REMINDER";
+      defaultStatus = "Reminder Given";
+    }
+
     return {
       ...normalized,
-      // Start with clean empty remark for new note entry — past remarks are displayed in CALL NOTES timeline
-      remark: "",
-      // If status is Query, default queryStatus to Pending for backward compat
-      queryStatus: normalized.status === "Query" ? (normalized.queryStatus || "Pending") : normalized.queryStatus,
+      // Fresh call event properties
+      callType: normalized.callType || "outgoing",
+      callPurpose: defaultPurpose,
+      callStatus: defaultCallStatus,
+      status: defaultStatus,
+      queryStatus: normalized.queryStatus || "Pending",
+      remark: "", // Clean empty note for today's new call
+      callbackDate: null, // Fresh follow-up schedule
+      callbackStatus: null
     };
   };
 
@@ -170,6 +190,7 @@ export const EditModal = ({
   const [showUndoStatusPrompt, setShowUndoStatusPrompt] = useState(false);
   const [activeTab, setActiveTab] = useState(() => (row._isNew ? "profile" : "call"));
   const [showEditHistory, setShowEditHistory] = useState(false);
+  const [validationErrors, setValidationErrors] = useState([]);
 
   useEffect(() => {
     const freshNorm = getNormalizedRow();
@@ -1201,6 +1222,14 @@ export const EditModal = ({
     const newStatus = String(targetEdited.status || "").trim();
     const statusChanged = oldStatus !== newStatus;
 
+    const oldPurpose = String(savedRow.callPurpose || "").trim();
+    const newPurpose = String(targetEdited.callPurpose || "").trim();
+    const purposeChanged = oldPurpose !== newPurpose;
+
+    const oldCallStatus = String(savedRow.callStatus || "").trim();
+    const newCallStatus = String(targetEdited.callStatus || "").trim();
+    const callStatusChanged = oldCallStatus !== newCallStatus;
+
     const oldRemark = String(savedRow.remark || "").trim();
     const newRemark = String(targetEdited.remark || "").trim();
     const remarkChanged = oldRemark !== newRemark;
@@ -1218,7 +1247,8 @@ export const EditModal = ({
     const newObjection = String(targetEdited.objectionReason || "").trim();
     const objectionReasonChanged = oldObjection !== newObjection;
 
-    const isCallAttemptUpdated = statusChanged || remarkChanged || callTypeChanged || callbackDateChanged || objectionReasonChanged;
+    const isCallTab = activeTab === "call";
+    const isCallAttemptUpdated = isCallTab || statusChanged || purposeChanged || callStatusChanged || remarkChanged || callTypeChanged || callbackDateChanged || objectionReasonChanged;
 
     console.log(`[EDIT MODAL SAVE DIAGNOSTIC] Lead: "${getLogName() || row.id}"`, {
       savedRowRemark: savedRow.remark,
@@ -1261,7 +1291,9 @@ export const EditModal = ({
         return val1 !== val2;
       });
 
-      if (!hasChanges) {
+      const isCallTab = activeTab === "call";
+
+      if (!hasChanges && !isCallTab) {
         console.log("No changes detected. Closing modal without saving.");
         toast.success("No changes detected.");
         if (onClose) onClose();
@@ -1270,25 +1302,13 @@ export const EditModal = ({
     }
 
     if (!isFromHistory) {
-      // Compulsory Phone / Mobile Validation
       const phoneVal = String(targetEdited.Phone || targetEdited.Mobile || targetEdited.phone || targetEdited.mobile || "").trim();
-      if (!phoneVal) {
-        toast.error("Please enter a Phone or Mobile number before saving.", { duration: 4000, position: 'top-center' });
-        return;
-      }
-
-      // Compulsory Status Validation
-      if (!targetEdited.status || String(targetEdited.status).trim() === "") {
-        toast.error("Please select a call status before saving.", { duration: 4000, position: 'top-center' });
-        return;
-      }
-
-      if (allowAttenderSelection && !activeAttenderId) {
-        toast.error("Please select an attender on whose behalf this call is being logged.", { duration: 4000, position: 'top-center' });
-        return;
-      }
-
-      const isUnconnected = isNotConnectedStatus(targetEdited.status);
+      const statusVal = String(targetEdited.status || "").trim();
+      const isUnconnected = isNotConnectedStatus(targetEdited.status) || (targetEdited.callStatus && targetEdited.callStatus !== "Connected");
+      const khojiVal = String(targetEdited.Khoji || targetEdited.khoji || "").trim();
+      const cityVal = String(targetEdited.City || targetEdited.city || "").trim();
+      const calledForVal = String(targetEdited[calledForField] || "").trim();
+      const sourceVal = String(targetEdited[sourceField] || "").trim();
 
       if (isUnconnected) {
         if (!targetEdited.City || !String(targetEdited.City).trim()) {
@@ -1299,44 +1319,29 @@ export const EditModal = ({
         }
       }
 
-      if (allowAttenderSelection && !activeAttenderId) {
-        toast.error("Please select an Attender before saving.", { duration: 4000, position: 'top-center' });
-        return;
+      const missingFields = [];
+
+      if (!phoneVal) missingFields.push("Phone Number");
+      if (!statusVal) missingFields.push("Call Status / Outcome");
+      if (allowAttenderSelection && !activeAttenderId) missingFields.push("Attender Selection");
+
+      if (!isUnconnected) {
+        if (!khojiVal) missingFields.push("Khoji Status");
+        if (!cityVal) missingFields.push("City");
+        if (!calledForVal) missingFields.push("Called For");
+        if (!sourceVal) missingFields.push("Source");
       }
 
-      // Compulsory Khoji Validation
-      const khojiVal = String(targetEdited.Khoji || targetEdited.khoji || "").trim();
-      if (!khojiVal && !isUnconnected) {
-        toast.error("Please select Khoji status (Yes / Dew drop khoji / No) before saving.", { duration: 4000, position: 'top-center' });
-        return;
+      if ((statusVal === "Not interested" || statusVal === "Not possible") && !targetEdited.objectionReason) {
+        missingFields.push(`Objection Reason for "${statusVal}"`);
       }
 
-      // Compulsory City Validation
-      const cityVal = String(targetEdited.City || targetEdited.city || "").trim();
-      if (!cityVal && !isUnconnected) {
-        toast.error("Please enter a City before saving.", { duration: 4000, position: 'top-center' });
+      if (missingFields.length > 0) {
+        setValidationErrors(missingFields);
+        toast.error(`Please fill required field(s) before saving: ${missingFields.join(", ")}`, { duration: 5000, position: 'top-center' });
         return;
       }
-
-      // Compulsory Called For Validation
-      const calledForVal = String(targetEdited[calledForField] || "").trim();
-      if (!calledForVal && !isUnconnected) {
-        toast.error("Please select a 'Called For' program/option before saving.", { duration: 4000, position: 'top-center' });
-        return;
-      }
-
-      // Compulsory Source Validation
-      const sourceVal = String(targetEdited[sourceField] || "").trim();
-      if (!sourceVal && !isUnconnected) {
-        toast.error("Please select a 'Source' before saving.", { duration: 4000, position: 'top-center' });
-        return;
-      }
-
-      // Objection Tracker Validation
-      if ((targetEdited.status === "Not interested" || targetEdited.status === "Not possible") && !targetEdited.objectionReason) {
-        toast.error(`Please select a reason for "${targetEdited.status}" before saving.`, { duration: 4000, position: 'top-center' });
-        return;
-      }
+      setValidationErrors([]);
 
       // REGISTRATION DONE VALIDATION
       if (targetEdited.status === "Reg.Done" && CALLED_FOR_OPTIONS.length > 1) {
@@ -1609,50 +1614,75 @@ export const EditModal = ({
         });
       }
 
-      const finalSavedPayload = {
-        ...targetEdited,
-        ...updates,
-        id: targetDocId,
-        attenderStates: currentAttStates,
-        history: mergedDocHistory.length > 0 ? mergedDocHistory : (updates.history || targetEdited.history || [])
-      };
+      let finalAuthoritativePayload = null;
+      let savedDocId = targetDocId;
 
-      // 1. INSTANT 0ms UI UPDATE & MODAL CLOSE
-      if (onSave) onSave(finalSavedPayload, false);
-      if (onClose) onClose();
-      toast.success("Saved!", { duration: 3000, position: 'top-center' });
+      if (isNewWithoutDoc) {
+        delete updates._isNew;
+        const resId = await addIncomingCallLog(
+          activeAttenderId, activeAttenderName, updates, targetEdited.programId, targetEdited.programName
+        );
+        console.log("[SAVE SUCCESS] addIncomingCallLog docId:", resId);
+        savedDocId = resId;
+        finalAuthoritativePayload = {
+          ...targetEdited,
+          ...updates,
+          id: resId,
+          _id: resId,
+          attenderStates: currentAttStates
+        };
+      } else {
+        const existingContext = globalDup?.first
+          ? { ...globalDup.first, ...row, ...targetEdited }
+          : { ...row, ...targetEdited };
+        const res = await updateCallLog(targetDocId, updates, activeAttenderId, activeAttenderName, existingContext);
 
-      // 2. ASYNCHRONOUS BACKGROUND MONGODB PERSISTENCE
-      (async () => {
-        try {
-          let savedDocId = targetDocId;
-          if (isNewWithoutDoc) {
-            delete updates._isNew;
-            const resId = await addIncomingCallLog(
-              activeAttenderId, activeAttenderName, updates, targetEdited.programId, targetEdited.programName
-            );
-            console.log("[INSTANT SAVE BG] addIncomingCallLog docId:", resId);
-            savedDocId = resId;
-          } else {
-            const existingContext = globalDup?.first
-              ? { ...globalDup.first, ...row, ...targetEdited }
-              : { ...row, ...targetEdited };
-            const res = await updateCallLog(targetDocId, updates, activeAttenderId, activeAttenderName, existingContext);
-            if (res?.updatedLead) {
-              targetEdited = { ...targetEdited, ...res.updatedLead };
-            }
+        if (res?.updatedContact) {
+          finalAuthoritativePayload = {
+            ...res.updatedContact,
+            id: res.updatedContact.id || res.updatedContact._id || targetDocId,
+            _id: res.updatedContact._id || res.updatedContact.id || targetDocId
+          };
+        } else {
+          const mergedDocHistory = Array.isArray(savedRow.history) ? [...savedRow.history] : [];
+          if (Array.isArray(updates.history)) {
+            updates.history.forEach(h => {
+              if (!mergedDocHistory.some(ex => ex.timestamp === h.timestamp && ex.remark === h.remark && ex.status === h.status)) {
+                mergedDocHistory.push(h);
+              }
+            });
           }
-          if (onSave && savedDocId && savedDocId !== targetDocId) {
-            onSave({ ...finalSavedPayload, id: savedDocId, contactId: savedDocId }, false);
-          }
-        } catch (bgErr) {
-          console.error("❌ BACKGROUND SAVE ERROR:", bgErr);
-          toast.error("Background sync error: " + (bgErr.message || "Unknown error"));
+          finalAuthoritativePayload = {
+            ...targetEdited,
+            ...updates,
+            id: targetDocId,
+            pipelineStage: res?.pipelineStage || targetEdited.pipelineStage,
+            attemptCount: res?.attemptCount ?? targetEdited.attemptCount,
+            attenderStates: currentAttStates,
+            history: mergedDocHistory.length > 0 ? mergedDocHistory : (updates.history || targetEdited.history || [])
+          };
         }
-      })();
+      }
+
+      // Update Local Cache (IndexedDB) with authoritative document
+      if (finalAuthoritativePayload && db.saveContactToCache) {
+        try {
+          await db.saveContactToCache(finalAuthoritativePayload);
+        } catch (cacheErr) {
+          console.warn("[CACHE UPDATE WARN]", cacheErr);
+        }
+      }
+
+      // 1. UPDATE PARENT STATE AUTHORITATIVELY
+      if (onSave) onSave(finalAuthoritativePayload, false);
+
+      // 2. VISUAL SUCCESS FEEDBACK & CLOSE MODAL
+      toast.success("Saved ✓", { duration: 2500, position: 'top-center' });
+      if (onClose) onClose();
+
     } catch (err) {
       console.error("❌ CRITICAL SAVE ERROR:", err.message || err);
-      toast.error("Save failed: " + (err.message || "Unknown error"), { duration: 6000, position: 'top-center' });
+      toast.error("Save Error: " + (err.message || "Failed to save call log"));
     } finally {
       setSaving(false);
       isSubmittingRef.current = false;
@@ -1846,53 +1876,54 @@ export const EditModal = ({
           </div>
         )}
 
-        <div ref={modalScrollRef} className="overflow-y-auto flex-1 p-8 space-y-8">
-          {/* Tab Switcher */}
-          <div className="flex border-b border-gray-150 gap-6 mb-6">
-            <button
-              type="button"
-              onClick={() => setActiveTab("call")}
-              className={`pb-3 text-sm font-black tracking-wider uppercase flex items-center gap-2 border-b-2 transition-all relative ${
-                activeTab === "call"
-                  ? callTheme.tabClass
-                  : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200"
-              }`}
-            >
-              <Phone size={14} className={activeTab === "call" ? callTheme.iconClass : "text-gray-400"} />
-              Record Call Entry
-              {activeTab === "call" && (
-                <span className={`absolute bottom-[-2px] left-0 right-0 h-0.5 rounded-full ${callTheme.tabLine} animate-pulse`} />
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("profile")}
-              className={`pb-3 text-sm font-black tracking-wider uppercase flex items-center gap-2 border-b-2 transition-all relative ${
-                activeTab === "profile"
-                  ? callTheme.tabClass
-                  : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200"
-              }`}
-            >
-              <User size={14} className={activeTab === "profile" ? callTheme.iconClass : "text-gray-400"} />
-              Edit Profile Details
-              {(isCheckingDuplicate || isSearchingCRM) && (
-                <Loader size={12} className="animate-spin text-indigo-500 shrink-0" />
-              )}
-              {globalDup && globalDup.showWarning && (
-                <AlertCircle size={14} className="text-amber-500 shrink-0 animate-bounce" title={dupWarningMessage} />
-              )}
-              {activeTab === "profile" && (
-                <span className={`absolute bottom-[-2px] left-0 right-0 h-0.5 rounded-full ${callTheme.tabLine} animate-pulse`} />
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowEditHistory(true)}
-              className="pb-3 text-sm font-black tracking-wider uppercase flex items-center gap-2 border-b-2 border-transparent text-amber-600 hover:text-amber-700 hover:border-amber-250 transition-all ml-auto"
-            >
-              ✏️ Edit Past Logs
-            </button>
-          </div>
+        {/* Tab Switcher (Fixed below header) */}
+        <div className="px-6 pt-3 bg-white border-b border-gray-150 flex gap-6 shrink-0 z-10">
+          <button
+            type="button"
+            onClick={() => setActiveTab("call")}
+            className={`pb-2.5 text-xs font-black tracking-wider uppercase flex items-center gap-2 border-b-2 transition-all relative ${
+              activeTab === "call"
+                ? callTheme.tabClass
+                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200"
+            }`}
+          >
+            <Phone size={13} className={activeTab === "call" ? callTheme.iconClass : "text-gray-400"} />
+            Record Call Entry
+            {activeTab === "call" && (
+              <span className={`absolute bottom-[-2px] left-0 right-0 h-0.5 rounded-full ${callTheme.tabLine} animate-pulse`} />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("profile")}
+            className={`pb-2.5 text-xs font-black tracking-wider uppercase flex items-center gap-2 border-b-2 transition-all relative ${
+              activeTab === "profile"
+                ? callTheme.tabClass
+                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200"
+            }`}
+          >
+            <User size={13} className={activeTab === "profile" ? callTheme.iconClass : "text-gray-400"} />
+            Edit Profile Details
+            {(isCheckingDuplicate || isSearchingCRM) && (
+              <Loader size={12} className="animate-spin text-indigo-500 shrink-0" />
+            )}
+            {globalDup && globalDup.showWarning && (
+              <AlertCircle size={14} className="text-amber-500 shrink-0 animate-bounce" title={dupWarningMessage} />
+            )}
+            {activeTab === "profile" && (
+              <span className={`absolute bottom-[-2px] left-0 right-0 h-0.5 rounded-full ${callTheme.tabLine} animate-pulse`} />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowEditHistory(true)}
+            className="pb-2.5 text-xs font-black tracking-wider uppercase flex items-center gap-2 border-b-2 border-transparent text-amber-600 hover:text-amber-700 hover:border-amber-250 transition-all ml-auto"
+          >
+            ✏️ Edit Past Logs
+          </button>
+        </div>
+
+        <div ref={modalScrollRef} className="overflow-y-auto flex-1 p-5 space-y-4 pb-8">
 
           {/* Shared Lead Banner */}
           <SharedBanner
@@ -1945,6 +1976,21 @@ export const EditModal = ({
           )}
         </div>
 
+        {validationErrors.length > 0 && (
+          <div className="px-6 py-3 bg-rose-50 border-t border-rose-200 flex items-center justify-between gap-3 text-xs text-rose-800 shrink-0 animate-fade-in">
+            <div className="flex items-center gap-2 font-bold min-w-0">
+              <AlertCircle size={16} className="text-rose-600 shrink-0" />
+              <span className="shrink-0 font-extrabold text-rose-900">Missing Required Fields:</span>
+              <div className="flex flex-wrap gap-1.5 min-w-0">
+                {validationErrors.map((err, i) => (
+                  <span key={i} className="px-2.5 py-0.5 bg-rose-100 border border-rose-300 text-rose-900 rounded-md text-[11px] font-black uppercase">
+                    {err}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="p-6 border-t border-gray-100 bg-gray-50 flex items-center justify-between shadow-inner">
           {(!row._isNew && row.id) ? (
@@ -1957,7 +2003,7 @@ export const EditModal = ({
           <div className="flex items-center gap-4 text-xs font-bold text-gray-400 tracking-tighter uppercase">
             {saving ? "Saving..." : "All exits auto-save"}
           </div>
-          <button disabled={saving} onClick={handleSaveAndClose} className="px-8 py-3 bg-indigo-600 border border-indigo-600 text-white font-black rounded-2xl shadow-lg shadow-indigo-500/30 hover:bg-indigo-700 transition active:scale-95 leading-none flex items-center justify-center gap-2 disabled:opacity-50">
+          <button disabled={saving} onClick={() => handleSaveAndClose()} className="px-8 py-3 bg-indigo-600 border border-indigo-600 text-white font-black rounded-2xl shadow-lg shadow-indigo-500/30 hover:bg-indigo-700 transition active:scale-95 leading-none flex items-center justify-center gap-2 disabled:opacity-50">
             {saving && <Loader size={14} className="animate-spin" />} Save & Close
           </button>
         </div>

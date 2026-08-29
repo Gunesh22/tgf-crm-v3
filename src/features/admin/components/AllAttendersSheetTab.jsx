@@ -714,8 +714,8 @@ export default function AllAttendersSheetTab({
   const stats = useMemo(() => {
     const total = filteredLogs.length;
     const called = filteredLogs.filter(l => l.status || l.callbackDate || l.remark).length;
-    const interested = filteredLogs.filter(l => l.status === "Interested").length;
-    const regDone = filteredLogs.filter(l => l.status === "Reg.Done").length;
+    const interested = filteredLogs.filter(l => (l.pipelineStage || "").includes("Interested") || l.status === "Interested").length;
+    const regDone = filteredLogs.filter(l => l.pipelineStage === "6. Registered / Won" || l.status === "Reg.Done").length;
     const callbacks = filteredLogs.filter(l => {
       if (!l.callbackDate) return false;
       const cb = parseTimestamp(l.callbackDate);

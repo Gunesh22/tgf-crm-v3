@@ -12,13 +12,40 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'attenderId query parameter is required' });
     }
 
+    // Known attender ID aliases for seamless backwards-compatible query resolution
+    const ID_ALIASES = {
+      'priyanka': 'ZJQsev2aLqi2ispr3j74',
+      'attender_3': 'ZJQsev2aLqi2ispr3j74',
+      'zjqsev2alqi2ispr3j74': 'ZJQsev2aLqi2ispr3j74',
+      'manisha': '9VZZnV00X63PzUSaGTgq',
+      'attender_4': '9VZZnV00X63PzUSaGTgq',
+      '9vzznv00x63pzusagtgq': '9VZZnV00X63PzUSaGTgq',
+      'geeta': 'WbND9Oa4yPUuWXVyibb3',
+      'attender_5': 'WbND9Oa4yPUuWXVyibb3',
+      'wbnd9oa4ypuuwxvyibb3': 'WbND9Oa4yPUuWXVyibb3',
+      'rakhi': 'IrAgizMZzxqzUbJjHIBI',
+      'iragizmzzxqzubjjhibi': 'IrAgizMZzxqzUbJjHIBI',
+    };
+
+    const cleanInput = (attenderId || '').trim();
+    const resolvedId = ID_ALIASES[cleanInput.toLowerCase()] || cleanInput;
+
     const client = await clientPromise;
     const db = client.db('tgf_crm');
     ensureIndexes(db);
 
-    // Query leads where attender is in assignedTo array
+    // Query leads where attender is in assignedTo array, or attenderId/leadOwner matches resolvedId or input name
     const contacts = await db.collection('contacts')
-      .find({ assignedTo: attenderId })
+      .find({
+        $or: [
+          { assignedTo: resolvedId },
+          { assignedTo: cleanInput },
+          { attenderId: resolvedId },
+          { attenderId: cleanInput },
+          { leadOwner: cleanInput },
+          { attenderName: cleanInput }
+        ]
+      })
       .sort({ updatedAt: -1 })
       .toArray();
 
@@ -53,6 +80,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ success: true, count: formattedContacts.length, data: formattedContacts });
   } catch (error) {
+    console.error('[API ERROR STACK IN GET-ASSIGNED]:', error);
     return res.status(500).json({ success: false, error: error.message });
   }
 }

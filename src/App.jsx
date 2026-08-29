@@ -1,5 +1,6 @@
 import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginScreen from './features/auth/LoginScreen';
 import './index.css';
@@ -70,6 +71,7 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <Toaster position="top-center" containerStyle={{ zIndex: 999999 }} />
         <AppRoutes />
       </AuthProvider>
     </BrowserRouter>

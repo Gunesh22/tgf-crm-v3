@@ -132,8 +132,8 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
     const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     return `${todayStr.slice(0, 7)}-${String(lastDay).padStart(2, "0")}`;
   })();
-  const [dateFrom, setDateFrom] = useState(currentMonthFirstDay);
-  const [dateTo, setDateTo] = useState(currentMonthLastDay);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [conversionSearch, setConversionSearch] = useState("");
   const [convPage, setConvPage] = useState(1);
   const [selectedAttenderDetails, setSelectedAttenderDetails] = useState(null);
@@ -586,7 +586,24 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
   }, [filteredLogs]);
 
   const totalRegDone = conversionsList.length;
-  const totalInterested = filteredLogs.filter(l => getCanonicalStatus(l.status) === "Interested").length;
+  const totalInterestedCalls = useMemo(() => {
+    return filteredLogs.filter(l => getCanonicalStatus(l.status) === "Interested").length;
+  }, [filteredLogs]);
+
+  const totalInterestedPeople = useMemo(() => {
+    const uniqueContactIds = new Set();
+    filteredLogs.forEach(l => {
+      const cId = l.contactId || l.id || l.Phone || l.Name;
+      if (!cId) return;
+      const contactDoc = (callLogs || []).find(c => c.id === cId || c._id === cId);
+      const stage = (contactDoc?.pipelineStage || l.pipelineStage || "").trim();
+      const isNurtureInterested = stage === "4. Nurture / Interested" || stage === "Nurture / Interested" || (stage.includes("Interested") && !stage.includes("Reg"));
+      if (isNurtureInterested) {
+        uniqueContactIds.add(cId);
+      }
+    });
+    return uniqueContactIds.size;
+  }, [filteredLogs, callLogs]);
 
   const searchedConversions = useMemo(() => {
     if (!conversionSearch.trim()) return conversionsList;
@@ -813,11 +830,12 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: "Total Entries", value: filteredLogs.length, sub: "All entries in view" },
-          { label: "Interested", value: totalInterested, color: "text-amber-600", sub: "Hot leads" },
-          { label: "Reg.Done", value: totalRegDone, color: "text-emerald-600", sub: "Conversions" },
+          { label: "Total Calls", value: filteredLogs.length, sub: "Event count (all calls)" },
+          { label: "Interested Calls", value: totalInterestedCalls, color: "text-amber-600", sub: "Event count (call history)" },
+          { label: "Interested People", value: totalInterestedPeople, color: "text-indigo-600", sub: "Unique contacts currently Interested" },
+          { label: "Reg.Done", value: totalRegDone, color: "text-emerald-600", sub: "Unique registrations" },
         ].map(s => (
           <div key={s.label} className="bg-white p-3.5 rounded-lg border border-slate-200 shadow-2xs">
             <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{s.label}</p>
@@ -830,7 +848,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
       {/* Charts Row */}
       <div className="grid md:grid-cols-2 gap-4">
         <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-2xs">
-          <h3 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-3">Outcome Distribution</h3>
+          <h3 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-3">Call Outcomes Distribution (Event Count)</h3>
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 h-[220px]">
             <div className="w-full sm:w-1/2 h-[200px]">
               <ResponsiveContainer width="100%" height={200}>
@@ -904,7 +922,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
           <table className="w-full text-xs">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                {["Attender", "Total", "Outgoing", "Incoming", "Interested", "Reg.Done", "Pending", "Progress"].map(h => (
+                {["Attender", "Total Calls", "Outgoing", "Incoming", "Interested Calls", "Reg.Done", "Pending", "Progress"].map(h => (
                   <th key={h} className="px-3.5 py-2.5 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>

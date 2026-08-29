@@ -387,13 +387,23 @@ export function AttenderFilters({
     },
     {
       id: "genStatus",
-      name: "General Status",
+      name: "Pipeline & Status",
       group: "LEAD",
       selected: filterGeneralStatus || [],
       onChange: (vals) => { setFilterGeneralStatus(vals); setPage(1); },
-      options: [...(STATUS_OPTIONS || []).filter(opt => opt !== "Reg.Done"), "Query Pending", "Query Solved"].map(st =>
-        typeof st === "object" ? st : { value: st, label: String(st || "") }
-      )
+      options: [
+        { value: "1. New Lead", label: "1. New Lead" },
+        { value: "2. Attempting Contact", label: "2. Attempting Contact" },
+        { value: "3. Information Given", label: "3. Information Given" },
+        { value: "4. Nurture / Interested", label: "4. Nurture / Interested" },
+        { value: "5. Future Pool", label: "5. Future Pool" },
+        { value: "6. Registered / Won", label: "6. Registered / Won" },
+        { value: "Existing Alumni", label: "Existing Alumni" },
+        { value: "Query Desk", label: "Query Desk" },
+        { value: "Closed / Lost", label: "Closed / Lost" },
+        { value: "Closed / Invalid", label: "Closed / Invalid" },
+        ...(STATUS_OPTIONS || []).filter(opt => opt !== "Reg.Done").map(st => typeof st === "object" ? st : { value: st, label: String(st || "") })
+      ]
     },
     {
       id: "abhivyakti",

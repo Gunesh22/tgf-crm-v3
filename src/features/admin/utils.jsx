@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  BarChart3, FolderOpen, Upload, Users, ClipboardCheck, FileText, Settings, FileSpreadsheet
+  BarChart3, FolderOpen, Upload, Users, ClipboardCheck, FileText, Settings, FileSpreadsheet, TrendingUp
 } from "lucide-react";
 import { isKhojiField } from "../../lib/khojiHelper";
 
@@ -153,6 +153,7 @@ export const COLORS = ["#3b82f6", "#10b981", "#ef4444", "#f59e0b", "#8b5cf6", "#
 
 export const TAB_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: <BarChart3 size={18} /> },
+  { id: "pipeline-calls", label: "Pipeline & Calls 📈", icon: <TrendingUp size={18} /> },
   { id: "monthly", label: "Report", icon: <FileText size={18} /> },
   { id: "abhivyakti", label: "Abhivyakti", icon: <ClipboardCheck size={18} /> },
   { id: "all-attenders", label: "All Attenders Sheet", icon: <FileSpreadsheet size={18} /> },

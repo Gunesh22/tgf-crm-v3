@@ -83,7 +83,46 @@ export const CALLED_FOR_OPTIONS = [
   "Spine Avd",
 ];
 
-export const CALL_TYPE_OPTIONS = ["outgoing", "incoming", "outgoing f", "incoming f"];
+export const CALL_DIRECTION_OPTIONS = ["outgoing", "incoming"];
+export const CALL_PURPOSE_OPTIONS = ["SALES", "QUERY", "REMINDER"];
+
+export const CALL_STATUS_OPTIONS = [
+  "Connected",
+  "Not Picked Up",
+  "Busy",
+  "Call Cut",
+  "Switched Off",
+  "No Network",
+  "Invalid Number"
+];
+
+export const SALES_OUTCOME_OPTIONS = [
+  "Info Given",
+  "Interested",
+  "Next Time",
+  "Not Interested",
+  "Reg.Done",
+  "Already Reg.d",
+  "Shivir done",
+  "Invalid No",
+  "Wrong No",
+  "Called by mistake",
+  "Not possible"
+];
+
+export const QUERY_STATUS_OPTIONS = [
+  "Pending",
+  "Solved"
+];
+
+export const REMINDER_OUTCOME_OPTIONS = [
+  "Reminder Given",
+  "Reminder Confirmed",
+  "Asked Question",
+  "Needs Assistance"
+];
+
+export const CALL_TYPE_OPTIONS = ["outgoing", "incoming"];
 
 export const CONNECTED_STATUSES = [
   "Info given",
@@ -119,10 +158,14 @@ export const OPTIONAL_COMPULSORY_STATUSES = [
   "Call Cut",
   "switched off",
   "Invalid No",
+  "Invalid Number",
   "Called by mistake",
   "No Network",
   "wrong no.",
-  "no answer"
+  "wrong no",
+  "no answer",
+  "not picked up",
+  "Not Picked Up"
 ];
 
 export const isNotConnectedStatus = (status) => {

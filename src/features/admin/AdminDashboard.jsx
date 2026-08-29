@@ -12,6 +12,7 @@ import AttendersTab from "./components/AttendersTab";
 import AbhivyaktiTab from "./components/AbhivyaktiTab";
 import SettingsTab from "./components/SettingsTab";
 import AllAttendersSheetTab from "./components/AllAttendersSheetTab";
+import PipelineCallsTab from "./components/PipelineCallsTab";
 
 export default function AdminPanel({ onExit, onAttendersChange }) {
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -24,10 +25,7 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
   const [callLogs, setCallLogs] = useState([]);
   const [callLogsLoading, setCallLogsLoading] = useState(true);
 
-  const [selectedMonth, setSelectedMonth] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  });
+  const [selectedMonth, setSelectedMonth] = useState("ALL");
   const [registrations, setRegistrations] = useState([]);
   const [registrationsLoading, setRegistrationsLoading] = useState(false);
   const [monthOptions, setMonthOptions] = useState([]);
@@ -272,6 +270,22 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
                     settingsOptions={settingsOptions}
                     callLogs={callLogs}
                     registrations={registrations}
+                  />
+                )
+              )}
+              {activeTab === "pipeline-calls" && (
+                (callLogsLoading && callLogs.length === 0) ? (
+                  <div className="h-full flex flex-col items-center justify-center gap-3 py-20">
+                    <Loader size={28} className="text-indigo-600 animate-spin" />
+                    <p className="text-slate-500 font-semibold text-xs">Loading analytics database...</p>
+                  </div>
+                ) : (
+                  <PipelineCallsTab
+                    callLogs={callLogs}
+                    registrations={registrations}
+                    programs={programs}
+                    attenders={attenders}
+                    settingsOptions={settingsOptions}
                   />
                 )
               )}

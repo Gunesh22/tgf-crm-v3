@@ -2,6 +2,7 @@ import React from "react";
 import { Flame, Clock, RotateCw, Users } from "lucide-react";
 import { normalizePhone } from "../../../lib/db";
 import { getFieldWithFallback, isUnansweredCallback, getCanonicalStatus, getSharedAttenders } from "../utils";
+import { getPipelineStageConfig } from "../../../utils/pipelineEngine";
 
 function CollapsedTags({ tags }) {
   const [expanded, setExpanded] = React.useState(false);
@@ -215,15 +216,47 @@ export function ContactTable({
                   {dynamicCols.map((col, ci) => {
                     if (col === "Calls Done" || hiddenColumns.includes(col)) return null;
 
+                    if (col.toLowerCase().includes("programrelationship")) {
+                      const rels = Array.isArray(log.programRelationships) ? log.programRelationships : [];
+                      if (rels.length === 0) {
+                        return <td key={col} className="py-2 px-3 text-xs text-slate-300 align-top">—</td>;
+                      }
+                      return (
+                        <td key={col} className="py-2 px-3 text-xs text-slate-700 min-w-[200px] align-top">
+                          <div className="flex flex-col gap-1 items-start">
+                            {rels.map((r, rIdx) => {
+                              const progLabel = r.program || r.calledFor || r.calledForKey || 'Program';
+                              const stageLabel = r.pipelineStage || r.status || 'Active';
+                              return (
+                                <span key={rIdx} className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 whitespace-nowrap">
+                                  {progLabel} — {stageLabel}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </td>
+                      );
+                    }
+
                     const getVal = (item, column) => {
                       const standardOrder = ["Name", "Phone", "Mobile", "Email", "City", "State", "Khoji", "Tags", "Source", "Called For"];
                       if (standardOrder.includes(column)) {
                         return getFieldWithFallback(item, column);
                       }
-                      if (item[column] !== undefined && item[column] !== null) return String(item[column]);
-                      const keys = Object.keys(item);
-                      const matchingKey = keys.find(k => k.toLowerCase() === column.toLowerCase());
-                      return matchingKey ? String(item[matchingKey]) : "";
+                      let rawVal = item[column];
+                      if (rawVal === undefined || rawVal === null) {
+                        const keys = Object.keys(item);
+                        const matchingKey = keys.find(k => k.toLowerCase() === column.toLowerCase());
+                        if (matchingKey) rawVal = item[matchingKey];
+                      }
+                      if (rawVal === undefined || rawVal === null) return "";
+                      if (typeof rawVal === "object") {
+                        if (Array.isArray(rawVal)) {
+                          return rawVal.map(x => (typeof x === "object" ? (x.name || x.program || x.stage || JSON.stringify(x)) : String(x))).join(", ");
+                        }
+                        return rawVal.name || rawVal.program || rawVal.stage || "";
+                      }
+                      return String(rawVal);
                     };
                     const val = getVal(log, col);
                     const isName = col.toLowerCase().includes("name") || col.toLowerCase().includes("lead");
@@ -341,6 +374,22 @@ export function ContactTable({
                   {!hiddenColumns.includes("Status") && (
                     <td className="py-2 px-3 align-top">
                       {(() => {
+                        if (log.pipelineStage) {
+                          const pConfig = getPipelineStageConfig(log.pipelineStage);
+                          return (
+                            <div className="flex flex-col gap-0.5">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border ${pConfig.badge}`}>
+                                {log.isHotLead && <Flame size={10} className="inline text-amber-500 mr-0.5" fill="currentColor" />}
+                                {pConfig.label}
+                              </span>
+                              {log.status && (
+                                <span className="text-[9px] text-slate-500 font-medium ml-0.5">
+                                  Outcome: {log.status}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        }
                         const badge = getStatusBadge(log);
                         return (
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider ${badge.bg} ${badge.text}`}>

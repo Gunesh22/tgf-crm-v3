@@ -283,7 +283,7 @@ export const subscribeToAllCallLogs = (programId, month, callback) => {
     if (!isSubscribed) return;
     try {
       const monthParam = (!month || month === 'ALL') ? '' : month;
-      const res = await fetchAPI(`/api/contacts/search?${monthParam ? `month=${monthParam}&` : ''}limit=10000`);
+      const res = await fetchAPI(`/api/contacts/search?includeHistory=true&${monthParam ? `month=${monthParam}&` : ''}limit=15000`);
       if (isSubscribed && res.data) {
         try {
           localStorage.setItem(cacheKey, JSON.stringify(res.data));

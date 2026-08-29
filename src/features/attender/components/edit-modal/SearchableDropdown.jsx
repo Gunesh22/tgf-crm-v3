@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, Search, X, Check, Plus } from "lucide-react";
 
 const SearchableDropdown = ({
@@ -14,11 +15,54 @@ const SearchableDropdown = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
+  const buttonRef = useRef(null);
   const dropdownRef = useRef(null);
+
+  const updateCoords = () => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const popoverHeight = 250;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      
+      // If space below is constrained (< 220px), pop UPWARDS, else pop DOWNWARDS
+      if (spaceBelow < 220 && rect.top > popoverHeight) {
+        setCoords({
+          top: Math.max(10, rect.top - popoverHeight - 4),
+          left: rect.left,
+          width: rect.width
+        });
+      } else {
+        setCoords({
+          top: rect.bottom + 4,
+          left: rect.left,
+          width: rect.width
+        });
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      updateCoords();
+      const handleScrollOrResize = () => {
+        updateCoords();
+      };
+      window.addEventListener("scroll", handleScrollOrResize, true);
+      window.addEventListener("resize", handleScrollOrResize);
+      return () => {
+        window.removeEventListener("scroll", handleScrollOrResize, true);
+        window.removeEventListener("resize", handleScrollOrResize);
+      };
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      if (
+        buttonRef.current && !buttonRef.current.contains(event.target) &&
+        dropdownRef.current && !dropdownRef.current.contains(event.target)
+      ) {
         setIsOpen(false);
       }
     };
@@ -27,7 +71,7 @@ const SearchableDropdown = ({
   }, []);
 
   const isSelected = (opt) => {
-    if (!selected) return false;
+    if (!selected || typeof opt === 'object') return false;
     if (isMulti) {
       return selected.split(",").map(x => x.trim()).filter(Boolean).includes(opt);
     }
@@ -35,17 +79,19 @@ const SearchableDropdown = ({
   };
 
   const handleSelect = (opt) => {
+    if (typeof opt === 'object' && opt.isHeader) return;
+    const val = typeof opt === 'object' ? opt.value : opt;
     if (isMulti) {
       const selectedArr = selected.split(",").map(x => x.trim()).filter(Boolean);
       let updated;
-      if (selectedArr.includes(opt)) {
-        updated = selectedArr.filter(x => x !== opt);
+      if (selectedArr.includes(val)) {
+        updated = selectedArr.filter(x => x !== val);
       } else {
-        updated = [...selectedArr, opt];
+        updated = [...selectedArr, val];
       }
       onChange(updated.join(", "));
     } else {
-      onChange(opt);
+      onChange(val);
       setIsOpen(false);
     }
   };
@@ -53,9 +99,11 @@ const SearchableDropdown = ({
   const filteredOptions = useMemo(() => {
     if (!search.trim()) return options;
     const query = search.trim().toLowerCase();
-    return options.filter(opt =>
-      String(opt || "").toLowerCase().includes(query)
-    );
+    return options.filter(opt => {
+      if (typeof opt === 'object' && opt.isHeader) return true;
+      const str = typeof opt === 'object' ? (opt.label || opt.value) : opt;
+      return String(str || "").toLowerCase().includes(query);
+    });
   }, [options, search]);
 
   const getButtonText = () => {
@@ -70,9 +118,11 @@ const SearchableDropdown = ({
 
   const hasExactMatch = useMemo(() => {
     if (!search.trim()) return true;
-    return options.some(opt =>
-      String(opt || "").toLowerCase() === search.trim().toLowerCase()
-    );
+    return options.some(opt => {
+      if (typeof opt === 'object' && opt.isHeader) return false;
+      const str = typeof opt === 'object' ? (opt.label || opt.value) : opt;
+      return String(str || "").toLowerCase() === search.trim().toLowerCase();
+    });
   }, [options, search]);
 
   const handleCreate = () => {
@@ -90,10 +140,6 @@ const SearchableDropdown = ({
     return true;
   }, [selected, isMulti]);
 
-  const ringClass = colorClass === "amber" ? "focus:ring-amber-500/10 focus:border-amber-500" :
-                    colorClass === "blue" ? "focus:ring-blue-500/10 focus:border-blue-500" :
-                    "focus:ring-indigo-500/10 focus:border-indigo-500";
-
   const buttonStyle = disabled
     ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed"
     : hasValue
@@ -103,19 +149,30 @@ const SearchableDropdown = ({
   const iconColor = hasValue ? "text-indigo-600" : "text-slate-400";
 
   return (
-    <div className="relative w-full" ref={dropdownRef}>
+    <div className="w-full">
       <button
+        ref={buttonRef}
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full px-3 py-2 border rounded-lg text-xs text-left focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 flex justify-between items-center transition cursor-pointer ${buttonStyle}`}
+        className={`w-full px-3 py-2 border rounded-xl text-xs text-left focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 flex justify-between items-center transition cursor-pointer shadow-2xs ${buttonStyle}`}
       >
         <span className="truncate">{getButtonText()}</span>
         <ChevronDown size={14} className={`${iconColor} shrink-0 ml-2`} />
       </button>
 
-      {isOpen && !disabled && (
-        <div className="absolute left-0 right-0 mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-xl max-h-64 overflow-hidden flex flex-col animate-dropdown">
+      {isOpen && !disabled && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{
+            position: "fixed",
+            top: `${coords.top}px`,
+            left: `${coords.left}px`,
+            width: `${coords.width}px`,
+            zIndex: 999999
+          }}
+          className="bg-white border border-slate-200/90 rounded-xl shadow-2xl max-h-60 overflow-hidden flex flex-col animate-dropdown"
+        >
           <div className="p-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
             <Search size={13} className="text-slate-400 shrink-0 ml-1" />
             <input
@@ -132,24 +189,33 @@ const SearchableDropdown = ({
               </button>
             )}
           </div>
-          <div className="overflow-y-auto flex-1 py-1 divide-y divide-slate-50 max-h-52">
+          <div className="overflow-y-auto flex-1 max-h-52">
             {filteredOptions.length === 0 && (!allowCreate || !search.trim()) ? (
               <div className="px-3 py-2 text-xs text-slate-400 italic text-center">No options found</div>
             ) : (
               <>
-                {filteredOptions.map(opt => {
-                  const active = isSelected(opt);
+                {filteredOptions.map((opt, idx) => {
+                  if (typeof opt === 'object' && opt.isHeader) {
+                    return (
+                      <div key={`header-${idx}`} className="px-3 py-1.5 bg-slate-100 text-[10px] font-extrabold text-slate-600 uppercase tracking-wider sticky top-0 z-20 border-b border-slate-200/80 shadow-2xs">
+                        {opt.label}
+                      </div>
+                    );
+                  }
+                  const optVal = typeof opt === 'object' ? opt.value : opt;
+                  const optLabel = typeof opt === 'object' ? opt.label : opt;
+                  const active = isSelected(optVal);
                   const itemStyle = active
                     ? "bg-indigo-50 text-indigo-900 font-semibold"
                     : "text-slate-700 hover:bg-slate-50 font-normal";
                   return (
                     <button
-                      key={opt}
+                      key={optVal}
                       type="button"
-                      onClick={() => handleSelect(opt)}
+                      onClick={() => handleSelect(optVal)}
                       className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between transition cursor-pointer ${itemStyle}`}
                     >
-                      <span className="truncate">{opt}</span>
+                      <span className="truncate">{optLabel}</span>
                       {active && (
                         <Check size={13} className="text-indigo-600 shrink-0 ml-2" />
                       )}
@@ -169,7 +235,8 @@ const SearchableDropdown = ({
               </>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
