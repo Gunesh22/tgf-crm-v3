@@ -20,19 +20,39 @@ export default async function handler(req, res) {
     const collection = db.collection('attenders');
 
     if (req.method === 'GET') {
-      let attenders = await collection.find({}).sort({ name: 1 }).toArray();
+      // ── Sub-query: Count assigned contacts for an attender ─────────────
+      if (req.query.countId) {
+        const attenderId = req.query.countId;
+        const contactsColl = db.collection('contacts');
+        const count = await contactsColl.countDocuments({
+          $or: [
+            { assignedTo: attenderId },
+            { assignedTo: { $in: [attenderId] } },
+            { [`attenderStates.${attenderId}`]: { $exists: true } }
+          ]
+        });
+        return res.status(200).json({ success: true, attenderId, count });
+      }
+
+      let attenders = await collection.find({
+        role: { $ne: 'admin' },
+        name: { $nin: [/admin/i, /super admin/i, /administrator/i] }
+      }).sort({ name: 1 }).toArray();
 
       // Seed initial default attenders if empty
       if (attenders.length === 0) {
         await collection.insertMany(DEFAULT_ATTENDERS);
-        attenders = await collection.find({}).sort({ name: 1 }).toArray();
+        attenders = await collection.find({
+          role: { $ne: 'admin' },
+          name: { $nin: [/admin/i, /super admin/i, /administrator/i] }
+        }).sort({ name: 1 }).toArray();
       }
 
       const formatted = attenders.map(a => ({
         id: a.id || a._id.toString(),
         name: a.name,
         role: a.role || 'attender',
-        password: a.password || 'pass123'
+        password: a.password || '123456'
       }));
 
       return res.status(200).json({ success: true, data: formatted });
@@ -46,7 +66,7 @@ export default async function handler(req, res) {
 
       const cleanName = name.trim();
       const id = 'attender_' + Date.now();
-      const generatedPassword = password || Math.random().toString(36).slice(-8);
+      const generatedPassword = password || Math.floor(100000 + Math.random() * 900000).toString();
 
       const newAttender = {
         id,

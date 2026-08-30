@@ -333,13 +333,18 @@ export default function AllAttendersSheetTab({
     "Remark",
     "Callback"
   ];
-  const DEFAULT_HIDDEN_COLS = ["Attender", "Phone", "Mobile", "Email", "City", "State", "Tags", "Sub Program", "Callback"];
+  const DEFAULT_HIDDEN_COLS = [
+    "Email", "State", "Tags", "Source", "Sub Program", "Attender", "Calls Done",
+    "programRelationships", "programRelationship", "Program Relationship", "ProgramRelationships", "Program Relationships"
+  ];
 
   const [hiddenColumns, setHiddenColumns] = useState(() => {
     try {
       const saved = localStorage.getItem("admin_hidden_cols");
-      const parsed = saved ? JSON.parse(saved) : DEFAULT_HIDDEN_COLS;
-      return parsed.filter(c => c !== "Calls Done");
+      if (!saved) return DEFAULT_HIDDEN_COLS;
+      const parsed = JSON.parse(saved);
+      const legacyMustShow = ["Phone", "Mobile", "City", "Callback", "Name", "Khoji", "Called For", "Type", "Status", "Remark"];
+      return parsed.filter(c => !legacyMustShow.includes(c));
     } catch {
       return DEFAULT_HIDDEN_COLS;
     }

@@ -1,0 +1,4822 @@
+[
+  {
+    "contactId": "11cgoyF2l8SS5IGWo7Sf",
+    "name": "Mohammed Ayoob",
+    "attender": "Geeta",
+    "currentPipelineStage": "5. Future Pool",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "5. Future Pool ➔ 2. Attempting Contact",
+    "historyCount": 2,
+    "classification": "REJECT",
+    "reason": "REJECT: Contact belongs in Future Pool (next batch scheduled). Later unanswered call attempt does not demote to Attempting. (Rule 3 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-16T11:32:45.626Z",
+        "status": "Not Attended",
+        "remark": "travelling mai the so not attended, travelling jada hota hai , next batch mai add kiya hai",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-07-23T06:48:37.952Z",
+        "status": "Not Attended",
+        "remark": "",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "168bzsXLrNyi4VmYY9NH",
+    "name": "Sareeka Margaj",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-14T07:54:33.892Z",
+        "status": "Busy",
+        "remark": "Callback in evening 6:00 PM",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-15T05:51:29.100Z",
+        "status": "Busy",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T10:32:11.804Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-06T09:03:18.937Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "20tHzW2QvUb2nvSIKQq6",
+    "name": "Dr. Tina",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "29HegY8mOjwyXAN1mJgE",
+    "name": "Ashish Bajirao",
+    "attender": "Manisha",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-08-11T07:24:00.075Z",
+        "status": "Query",
+        "remark": "Pranvigyan ka recording mil sakta hai kya",
+        "calledFor": "Pranayam"
+      }
+    ]
+  },
+  {
+    "contactId": "2EIkZlIjD3NFBQutqSPs",
+    "name": "Pralhad Mantri",
+    "attender": "Test",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-21T07:21:25.224Z",
+        "status": "Query",
+        "remark": "Mini MA shivir hua hai, Shrvan chalu nahi hua hai, unko kaha tha ki shivir ke baad weekly shrvan chalu hua hoga, but abhi tak nahi hua hai, guide him",
+        "calledFor": "Other"
+      },
+      {
+        "date": "2026-08-23T16:40:09.860Z",
+        "status": "NA",
+        "remark": "testing",
+        "calledFor": "Other"
+      },
+      {
+        "date": "2026-08-23T17:03:05.020Z",
+        "status": "NA",
+        "remark": "test",
+        "calledFor": "Other"
+      },
+      {
+        "date": "2026-08-21T07:21:24.829Z",
+        "status": "Query",
+        "remark": "Mini MA shivir hua hai, Shrvan chalu nahi hua hai, unko kaha tha ki shivir ke baad weekly shrvan chalu hua hoga, but abhi tak nahi hua hai, guide him",
+        "calledFor": "Other"
+      }
+    ]
+  },
+  {
+    "contactId": "2Lqd31gbl2h6PzqMVpoU",
+    "name": "Rupali Dudhale",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 2,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-07-09T11:52:39.499Z",
+        "status": "Query",
+        "remark": "whatsapp group mai add nahi hai",
+        "calledFor": "CBT Basic"
+      },
+      {
+        "date": "2026-07-18T06:33:37.317Z",
+        "status": "Query",
+        "remark": "group mai add ho gaye",
+        "calledFor": "CBT Basic"
+      }
+    ]
+  },
+  {
+    "contactId": "2Z9o5eto9GGhsdLdn5XW",
+    "name": "Annasaheb Lawand",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 2,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-07T10:58:15.503Z",
+        "status": "Not Attended",
+        "remark": "1 attended, 2 day miss , recording sunenge",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-08-11T07:12:50.769Z",
+        "status": "Not Attended",
+        "remark": "",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "38tdIHZDFRznY8WaipWX",
+    "name": "Rahul Gupta",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-07T10:49:32.436Z",
+        "status": "Busy",
+        "remark": "Busy on another call, Callback",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-08T05:35:29.389Z",
+        "status": "Busy",
+        "remark": "call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T11:13:21.509Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-06T05:08:59.737Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "3KApWUGkIeHzDn5k1AbE",
+    "name": "Manisha Patil",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-08-16T07:05:44.762Z",
+        "status": "Query",
+        "remark": "Nisarg dhyan shivir ka reg. kiya tha but abhi wo off MA mai transfer karna hai ., 30 sep mai aayenge",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "3SJXMBKxp6WxedXMeAGk",
+    "name": "Sarita Sharma",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-08-11T11:28:30.155Z",
+        "status": "Query",
+        "remark": "",
+        "calledFor": "Pranayam"
+      }
+    ]
+  },
+  {
+    "contactId": "3YjkPganEvxiskTvG6EL",
+    "name": "Ranjeet Singh Rana",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "3aYnbDURfLmT6QfCGq7Q",
+    "name": "Jatin Gala",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-08-09T08:26:37.284Z",
+        "status": "Query",
+        "remark": "Pranayam ka reg.k iya tha but group mai add nahi hai",
+        "calledFor": "Pranayam"
+      }
+    ]
+  },
+  {
+    "contactId": "3t9wKR8qklYD3VsAKL5C",
+    "name": "Testing 6622",
+    "attender": "Test",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "6. Registered / Won",
+    "transition": "2. Attempting Contact ➔ 6. Registered / Won",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '2. Attempting Contact ➔ 6. Registered / Won' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-08-22T11:42:51.726Z",
+        "status": "NA",
+        "remark": "vnfd",
+        "calledFor": "Other"
+      }
+    ]
+  },
+  {
+    "contactId": "48mjM2VC7sEFZ1iGJmp4",
+    "name": "Vinay Hiwarkar",
+    "attender": "Priyanka",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "4fu2wSdjamlxCTZB2SDn",
+    "name": "Kiran Sonvalkar",
+    "attender": "Rakhi",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-08-15T08:23:58.022Z",
+        "status": "Query",
+        "remark": "Simaran dhyan ka reg. aaj ka but link nahi mili ",
+        "calledFor": "Dhyan"
+      }
+    ]
+  },
+  {
+    "contactId": "4q69rOrLug4zqh9neWGX",
+    "name": "Manoji",
+    "attender": "Manisha",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "2. Attempting Contact ➔ 3. Information Given",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '2. Attempting Contact ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-07-27T06:12:01.162Z",
+        "status": "NA",
+        "remark": "Offline MA shivir repeat karna hai, or discount chahi ye",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "5ev5qJwactCAQAaHdpQJ",
+    "name": "Diya Shingavi",
+    "attender": "Manisha",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "1. New Lead ➔ 3. Information Given",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "5k1KHch290qMyFEL1pkL",
+    "name": "Prashant Pimple",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "6JjpZazbDPNZvEuhoJ16",
+    "name": "Shilpa Goyal",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-08T10:51:03.314Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-07-16T11:16:56.708Z",
+        "status": "Busy",
+        "remark": "bahar hai ,she will call",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-08-01T13:41:35.146Z",
+        "status": "Not Attended",
+        "remark": "shsh not attended, abhi bhi busy hai so jab possible hoga tab karenge",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "6ad2u1IODUVqlYsCeJ2H",
+    "name": "Vijay Risbud",
+    "attender": "Test",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 6,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-21T05:43:18.612Z",
+        "status": "NA",
+        "remark": "testing",
+        "calledFor": "App"
+      },
+      {
+        "date": "2026-08-21T05:43:18.612Z",
+        "status": "Query",
+        "remark": "App renew karna hai, guide him",
+        "calledFor": "App"
+      },
+      {
+        "date": "2026-08-23T17:21:23.202Z",
+        "status": "NA",
+        "remark": "testing",
+        "calledFor": "App"
+      },
+      {
+        "date": "2026-08-23T17:21:51.683Z",
+        "status": "Query",
+        "remark": "testing manisha",
+        "calledFor": "App"
+      },
+      {
+        "date": "2026-08-23T17:29:48.255Z",
+        "status": "NA",
+        "remark": "testing test",
+        "calledFor": "App"
+      },
+      {
+        "date": "2026-08-23T17:31:00.664Z",
+        "status": "Query",
+        "remark": "testing manisha 3",
+        "calledFor": "App"
+      }
+    ]
+  },
+  {
+    "contactId": "7jYdwqPpKnkBP58V9Str",
+    "name": "Sachin Dessai",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-03T09:32:37.313Z",
+        "status": "Busy",
+        "remark": "call not received Busy",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-04T09:08:32.524Z",
+        "status": "Busy",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-04T09:11:16.361Z",
+        "status": "Busy",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T11:14:42.981Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "7uCh8aN8nz9hyAg3zb3C",
+    "name": "Kishor Gangane",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-21T12:11:54.784Z",
+        "status": "Busy",
+        "remark": "Call Back",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-23T05:34:37.018Z",
+        "status": "Busy",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T10:27:52.035Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-06T09:53:53.136Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "8qlkUDKfjS0ICrXuNMp6",
+    "name": "Mallikarjun",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "9sOrjrfYNTd020tzKGch",
+    "name": "Poonam",
+    "attender": "Priyanka",
+    "currentPipelineStage": "6. Registered / Won",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "6. Registered / Won ➔ 2. Attempting Contact",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Registration evidence exists (Reg.Done/registrations record), but proposed stage is '2. Attempting Contact'. (Rule 4 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-11T06:19:18.894Z",
+        "status": "no answer",
+        "remark": "want to registered for Pranayama ,payment failed call but not received",
+        "calledFor": "Pranayam"
+      }
+    ]
+  },
+  {
+    "contactId": "A1YJsgWpAZa31paMipMe",
+    "name": "Maruti Patil",
+    "attender": "Manisha",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-07-30T06:30:20.315Z",
+        "status": "Query",
+        "remark": "SSP2 shivir ka registration karna hai,but kis ke sath baat karni pata nahi, icchalkarnji center co ordineter ke no send kiye hai",
+        "calledFor": "Other"
+      }
+    ]
+  },
+  {
+    "contactId": "B4XdMaqzGU7s1PhieyeG",
+    "name": "Devidas Raut",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-07T10:51:21.901Z",
+        "status": "Not Attended",
+        "remark": "not attended, recording sunenge",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-08-11T07:14:28.297Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-08-11T10:43:37.218Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "B6AeaqmVerO5SJdxV0Tm",
+    "name": "Vinod Kumar",
+    "attender": "Geeta",
+    "currentPipelineStage": "5. Future Pool",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "5. Future Pool ➔ 2. Attempting Contact",
+    "historyCount": 2,
+    "classification": "REJECT",
+    "reason": "REJECT: Contact belongs in Future Pool (next batch scheduled). Later unanswered call attempt does not demote to Attempting. (Rule 3 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-08T08:48:48.548Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-08-10T07:09:01.577Z",
+        "status": "Not Attended",
+        "remark": "some medicle emergency not attended last 2 days , so next batch karenge",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "BJ7vXyGAq2JHGyKl1HC2",
+    "name": "Nishitha Gowda",
+    "attender": "Priyanka",
+    "currentPipelineStage": "5. Future Pool",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "5. Future Pool ➔ 2. Attempting Contact",
+    "historyCount": 2,
+    "classification": "REJECT",
+    "reason": "REJECT: Contact belongs in Future Pool (next batch scheduled). Later unanswered call attempt does not demote to Attempting. (Rule 3 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-08T08:21:49.395Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-08-10T05:37:43.322Z",
+        "status": "Not Attended",
+        "remark": "not attended , added in next batch",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "BJE5CsTBLa9cvY7kJZuA",
+    "name": "Sanjay Bidari",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-18T09:36:23.000Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "Digestive Basic"
+      },
+      {
+        "date": "2026-08-19T05:28:09.647Z",
+        "status": "no answer",
+        "remark": "Call received ,but unable to talk",
+        "calledFor": "Digestive Basic"
+      },
+      {
+        "date": "2026-08-20T05:52:47.420Z",
+        "status": "no answer",
+        "remark": "call not received",
+        "calledFor": "Digestive Basic"
+      }
+    ]
+  },
+  {
+    "contactId": "Be29eCnv7xw0TuoaW7cu",
+    "name": "Kapil",
+    "attender": "Geeta",
+    "currentPipelineStage": "5. Future Pool",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "5. Future Pool ➔ 2. Attempting Contact",
+    "historyCount": 2,
+    "classification": "REJECT",
+    "reason": "REJECT: Contact belongs in Future Pool (next batch scheduled). Later unanswered call attempt does not demote to Attempting. (Rule 3 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-07T08:19:04.273Z",
+        "status": "no answer",
+        "remark": "Shayad unhone off MA ka booking kiya hai , but wo attend nahi kar paye , unko next batch ka batana hai , no answer hai, ",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-08-11T11:52:30.089Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "BexHw7w0WWZzx93UvZ3i",
+    "name": "Santosh Bhosale",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 2,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-07-27T10:39:49.193Z",
+        "status": "Query",
+        "remark": "group mai add nahi huaa hai",
+        "calledFor": "Yoga 3 Month"
+      },
+      {
+        "date": "2026-08-04T10:00:31.013Z",
+        "status": "Query",
+        "remark": "group mai add ho gaye ",
+        "calledFor": "Yoga 3 Month"
+      }
+    ]
+  },
+  {
+    "contactId": "BidF97l301c8xXZuE9h5",
+    "name": "Paresh Malkar",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-04T12:07:34.292Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-06T10:33:38.036Z",
+        "status": "no answer",
+        "remark": "Call connected but not answered",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-08T05:59:54.435Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "D0JveqK0qBBZU8KzSR8g",
+    "name": "Sudarshan L. Bingewar",
+    "attender": "Priyanka",
+    "currentPipelineStage": "6. Registered / Won",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "6. Registered / Won ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-14T07:36:32.751Z",
+        "status": "no answer",
+        "remark": "Called for failed payment of CBT basic program , he is not answering call",
+        "calledFor": "CBT Basic"
+      },
+      {
+        "date": "2026-08-14T09:05:53.230Z",
+        "status": "Reg.Done",
+        "remark": "Details Send on whats app, ready to registered",
+        "calledFor": "CBT Basic"
+      },
+      {
+        "date": "2026-08-14T10:45:25.000Z",
+        "status": "Reg.Done",
+        "remark": "Registration Done",
+        "calledFor": "CBT Basic"
+      }
+    ]
+  },
+  {
+    "contactId": "DM3QIOwvIU8U9th7D4sH",
+    "name": "Ca. Vikas Bhageria",
+    "attender": "Priyanka",
+    "currentPipelineStage": "6. Registered / Won",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "6. Registered / Won ➔ 2. Attempting Contact",
+    "historyCount": 2,
+    "classification": "REJECT",
+    "reason": "REJECT: Registration evidence exists (Reg.Done/registrations record), but proposed stage is '2. Attempting Contact'. (Rule 4 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-13T08:50:57.992Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-15T06:32:30.944Z",
+        "status": "no answer",
+        "remark": "Not registered, call cut",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "Dn8BhwnsvSKAlfnw6MrJ",
+    "name": "Shashikala Patil",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-18T06:34:45.975Z",
+        "status": "no answer",
+        "remark": "call not received",
+        "calledFor": "CBT Basic"
+      },
+      {
+        "date": "2026-08-19T06:48:02.884Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Basic"
+      },
+      {
+        "date": "2026-08-20T05:17:43.513Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Basic"
+      }
+    ]
+  },
+  {
+    "contactId": "EKZLBz0Yo0mcEj8I2wqW",
+    "name": "Valmik Godase",
+    "attender": "Manisha",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "1. New Lead ➔ 3. Information Given",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "EajYs5ZcuJ3QbYnJ68GC",
+    "name": "Dipak Honde",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "Closed / Lost",
+    "transition": "1. New Lead ➔ Closed / Lost",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ Closed / Lost' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "EmwUAfgLnLnuekm8OWJ4",
+    "name": "Suresh Sangvikar",
+    "attender": "Priyanka",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "6. Registered / Won",
+    "transition": "1. New Lead ➔ 6. Registered / Won",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 6. Registered / Won' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "EpKYLKHNrNsznt66ZXAW",
+    "name": "Trupti Salvi",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "2. Attempting Contact ➔ 3. Information Given",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '2. Attempting Contact ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-08-11T12:08:07.354Z",
+        "status": "Call Cut",
+        "remark": "Call Cut",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "F6X34eomtH17jtc4nrqc",
+    "name": "Dnyaneshwar Kisanrao Sabale",
+    "attender": "Priyanka",
+    "currentPipelineStage": "6. Registered / Won",
+    "proposedPipelineStage": "4. Nurture / Interested",
+    "transition": "6. Registered / Won ➔ 4. Nurture / Interested",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Registration evidence exists (Reg.Done/registrations record), but proposed stage is '4. Nurture / Interested'. (Rule 4 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-12T08:57:46.122Z",
+        "status": "Interested",
+        "remark": "MA Info given ready to registered for MA, follow up in next month",
+        "calledFor": "TGF Info"
+      }
+    ]
+  },
+  {
+    "contactId": "FNJadBWe5LqRPwM1C0PJ",
+    "name": "Santosh\tSulakhiya",
+    "attender": "Priyanka",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "FZMthbqm4vLB3xBlvEdY",
+    "name": "Soma Ghosh",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "2. Attempting Contact ➔ 3. Information Given",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '2. Attempting Contact ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-08-11T09:45:47.289Z",
+        "status": "Call Cut",
+        "remark": "Call Cut ",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "GFuCbeO6mPc2iRfXZ1R5",
+    "name": "Cunesh",
+    "attender": "Test",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "1. New Lead",
+    "transition": "2. Attempting Contact ➔ 1. New Lead",
+    "historyCount": 6,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is New Lead, but contact has 6 history entries. (Rule 5 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-04T12:48:10.397Z",
+        "status": "Call Log Added",
+        "remark": "",
+        "calledFor": ""
+      },
+      {
+        "date": "2026-07-04T12:50:22.028Z",
+        "status": "",
+        "remark": "",
+        "calledFor": ""
+      },
+      {
+        "date": "2026-07-04T12:50:27.057Z",
+        "status": "",
+        "remark": "",
+        "calledFor": ""
+      },
+      {
+        "date": "2026-07-04T12:50:38.761Z",
+        "status": "",
+        "remark": "",
+        "calledFor": ""
+      },
+      {
+        "date": "2026-07-04T15:14:08.527Z",
+        "status": "",
+        "remark": "",
+        "calledFor": ""
+      },
+      {
+        "date": "2026-07-04T15:56:58.345Z",
+        "status": "",
+        "remark": "tetette",
+        "calledFor": ""
+      }
+    ]
+  },
+  {
+    "contactId": "GovVxI0tKRbLuVFxSNqx",
+    "name": "Jitendra Pawar",
+    "attender": "Manisha",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "1. New Lead ➔ 3. Information Given",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "GvpjS6nEXhf6Ajy1eAdH",
+    "name": "kunesh",
+    "attender": "Test",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "GvzhxQTEQR3QdYaCfaOD",
+    "name": "Leena Bhutada",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-07-02T08:05:06.209Z",
+        "status": "Query",
+        "remark": "Sadhana shivir hai 4-5 july ko to possible nahi hai to next date kab hai",
+        "calledFor": "Shravan"
+      }
+    ]
+  },
+  {
+    "contactId": "HDEIadV3HHnBg8iIx8AL",
+    "name": "Dhanjay Takras",
+    "attender": "Manisha",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "1. New Lead ➔ Query Desk",
+    "historyCount": 0,
+    "classification": "REVIEW",
+    "reason": "REVIEW: Proposed stage is Query Desk, but explicit query evidence in history is weak or ambiguous.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "IW5oHVW1LfXVOXW96OuK",
+    "name": "Alka\tAghi",
+    "attender": "Priyanka",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "4. Nurture / Interested",
+    "transition": "1. New Lead ➔ 4. Nurture / Interested",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 4. Nurture / Interested' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "IfsTvkp2dlVFRBRPUo5A",
+    "name": "Sarika Hinge",
+    "attender": "Manisha",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-08-11T07:10:28.958Z",
+        "status": "Query",
+        "remark": "Pranvigyan ka registration kiya hai but group me add nahi hue hai",
+        "calledFor": "Pranayam"
+      }
+    ]
+  },
+  {
+    "contactId": "IiAjeYk29cFrCCagGfNy",
+    "name": "Test 7772",
+    "attender": "Test",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "6. Registered / Won",
+    "transition": "2. Attempting Contact ➔ 6. Registered / Won",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '2. Attempting Contact ➔ 6. Registered / Won' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-08-22T11:23:21.899Z",
+        "status": "NA",
+        "calledFor": "Other"
+      }
+    ]
+  },
+  {
+    "contactId": "Itc3Mzekt7zz8EvdyYut",
+    "name": "Smita Gawaskar",
+    "attender": "Manisha",
+    "currentPipelineStage": "3. Information Given",
+    "proposedPipelineStage": "Closed / Lost",
+    "transition": "3. Information Given ➔ Closed / Lost",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '3. Information Given ➔ Closed / Lost' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-07-27T07:45:34.327Z",
+        "status": "Not interested",
+        "remark": "TGF info given",
+        "calledFor": "Other, TGF Info"
+      }
+    ]
+  },
+  {
+    "contactId": "JQtlm89WK6TNJJThMYyo",
+    "name": "Shivam Divya",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-08T11:09:24.985Z",
+        "status": "No Network",
+        "remark": "",
+        "calledFor": "Reminder, Off MA"
+      },
+      {
+        "date": "2026-07-09T12:11:05.468Z",
+        "status": "No Network",
+        "remark": "vicharo ko samazha, Positive hai , 11 th mai hai , study samter ka bhi bataya hai",
+        "calledFor": "Reminder, Off MA"
+      },
+      {
+        "date": "2026-07-11T08:20:51.323Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "Reminder, Off MA"
+      },
+      {
+        "date": "2026-07-23T10:26:16.683Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "Reminder, Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "JerbWfj5nCioBiR6XfHq",
+    "name": "Gaurang Shah",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-22T08:05:19.327Z",
+        "status": "Busy",
+        "remark": "Call back",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-23T05:19:16.110Z",
+        "status": "Busy",
+        "remark": "Switch Off",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T10:30:23.636Z",
+        "status": "Call Cut",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "JppmrSY2YyrezolxQ5sD",
+    "name": "Surekha Bagul",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "JsrwuO5zwXBp887Nmy9K",
+    "name": "Vikas Kodmur",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "Jsu9uWXFh4SM1iKeq5Vc",
+    "name": "Alen Dsouza",
+    "attender": "Geeta",
+    "currentPipelineStage": "3. Information Given",
+    "proposedPipelineStage": "6. Registered / Won",
+    "transition": "3. Information Given ➔ 6. Registered / Won",
+    "historyCount": 4,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '3. Information Given ➔ 6. Registered / Won' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-08-04T12:12:03.701Z",
+        "status": "Info given",
+        "remark": "",
+        "calledFor": "Reminder, Off MA"
+      },
+      {
+        "date": "2026-08-06T12:25:05.739Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "Reminder, Off MA"
+      },
+      {
+        "date": "2026-08-08T06:07:00.501Z",
+        "status": "no answer",
+        "remark": "No answer",
+        "calledFor": "Reminder, Off MA"
+      },
+      {
+        "date": "2026-08-11T12:11:41.866Z",
+        "status": "no answer",
+        "remark": "No answer",
+        "calledFor": "Reminder, Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "KBiggwyttcduSt8NIzut",
+    "name": "Abhinav Dubey",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-08T10:57:06.308Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "Reminder, Off MA"
+      },
+      {
+        "date": "2026-07-09T11:16:10.308Z",
+        "status": "no answer",
+        "remark": "no answer",
+        "calledFor": "Reminder, Off MA"
+      },
+      {
+        "date": "2026-07-11T07:53:26.282Z",
+        "status": "no answer",
+        "remark": "no answer",
+        "calledFor": "Reminder, Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "KL4ZBovjftgxp3Ubxqtk",
+    "name": "Tahir Ali",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-22T08:13:59.059Z",
+        "status": "Busy",
+        "remark": "Unable to understand , back ground Noise, call cut",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T10:30:49.588Z",
+        "status": "Busy",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-06T09:48:02.679Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "KRtoAsBhbMYzCVGzWx88",
+    "name": "Manjushri\tBhalerao",
+    "attender": "Priyanka",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "KWhLUpFUbRzLgHW3GIrG",
+    "name": "Vrew",
+    "attender": "Test",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-10T19:01:19.259Z",
+        "status": "Busy",
+        "remark": "",
+        "calledFor": "Pranayam"
+      }
+    ]
+  },
+  {
+    "contactId": "LFxEAcqCOiCTqGYW493f",
+    "name": "Pradeep Garg",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Lost",
+    "transition": "2. Attempting Contact ➔ Closed / Lost",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '2. Attempting Contact ➔ Closed / Lost' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-08-11T10:39:52.023Z",
+        "status": "no answer",
+        "remark": "not audible call",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "LH3tkyWBToOohR2R0Bty",
+    "name": "Sunil kumar",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "1. New Lead ➔ 3. Information Given",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "LkPBBRjpvumO80blHMxJ",
+    "name": "Jijaram Kawale",
+    "attender": "Priyanka",
+    "currentPipelineStage": "6. Registered / Won",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "6. Registered / Won ➔ 3. Information Given",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Registration evidence exists (Reg.Done/registrations record), but proposed stage is '3. Information Given'. (Rule 4 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-16T11:34:31.594Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "Study smarter"
+      },
+      {
+        "date": "2026-07-17T09:10:30.488Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "Study smarter"
+      },
+      {
+        "date": "2026-07-17T10:00:16.458Z",
+        "status": "no answer",
+        "remark": "ready to registered  details send",
+        "calledFor": "Study smarter"
+      }
+    ]
+  },
+  {
+    "contactId": "Lrl9alpdEiRLtJ69R4ts",
+    "name": "Lubna Yousuf",
+    "attender": "Priyanka",
+    "currentPipelineStage": "6. Registered / Won",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "6. Registered / Won ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-14T08:02:19.605Z",
+        "status": "Interested",
+        "remark": "Failed payment call but, call not received ",
+        "calledFor": "CBT Basic"
+      },
+      {
+        "date": "2026-08-15T06:20:53.479Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Basic"
+      },
+      {
+        "date": "2026-08-15T09:55:34.089Z",
+        "status": "Reg.Done",
+        "remark": "Registration Done",
+        "calledFor": "CBT Basic"
+      }
+    ]
+  },
+  {
+    "contactId": "LwcihAzq6bwkNcOeC1rg",
+    "name": "Anil Goel",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-12T09:34:12.601Z",
+        "status": "Call Cut",
+        "remark": "call back",
+        "calledFor": "TGF Info"
+      },
+      {
+        "date": "2026-08-13T05:35:37.869Z",
+        "status": "no answer",
+        "remark": "call not received",
+        "calledFor": "TGF Info"
+      },
+      {
+        "date": "2026-08-13T06:33:22.845Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "TGF Info"
+      },
+      {
+        "date": "2026-08-14T06:45:15.760Z",
+        "status": "no answer",
+        "remark": "Call multiple times call not received",
+        "calledFor": "TGF Info"
+      }
+    ]
+  },
+  {
+    "contactId": "MHqqyNyCnOg9yqWBFfeI",
+    "name": "(blank)",
+    "attender": "Manisha",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "1. New Lead ➔ Closed / Invalid",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-18T05:46:54.644Z",
+        "status": "Called by mistake",
+        "remark": "missed call, but call by mistake",
+        "calledFor": "Other"
+      }
+    ]
+  },
+  {
+    "contactId": "MSziJ885udOfKDC9cO5E",
+    "name": "Puspajit Das",
+    "attender": "Priyanka",
+    "currentPipelineStage": "6. Registered / Won",
+    "proposedPipelineStage": "Closed / Lost",
+    "transition": "6. Registered / Won ➔ Closed / Lost",
+    "historyCount": 2,
+    "classification": "REJECT",
+    "reason": "REJECT: Registration evidence exists (Reg.Done/registrations record), but proposed stage is 'Closed / Lost'. (Rule 4 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-07T11:38:59.252Z",
+        "status": "no answer",
+        "remark": "call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-08T05:19:13.128Z",
+        "status": "no answer",
+        "remark": "Call on 8/7/2026  not interested now,  busy schedule  they will call when wants to registered",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "NFOrRwPBjwASTzSud6Th",
+    "name": "Ajay Sudrik",
+    "attender": "Manisha",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-08-20T08:04:37.685Z",
+        "status": "Query",
+        "remark": "MNN Asharam me shivir ke liye khoji aate hai tho aage se Ajay ji ko call karna hai, Sandeep ji ko call nahi karna hai",
+        "calledFor": "Other"
+      }
+    ]
+  },
+  {
+    "contactId": "NGSx3FuVN7NxygGTA0Hk",
+    "name": "Vinay Mithari",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-09T06:14:43.721Z",
+        "status": "Busy",
+        "remark": "Busy in meeting, call back in afternoon  2:00 PM",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-09T11:56:28.225Z",
+        "status": "Busy",
+        "remark": "Call Not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T11:11:20.175Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-06T05:14:05.016Z",
+        "status": "Not Attended",
+        "remark": "do not want to attend program",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "NyjCkp9gmj94chzBbk0W",
+    "name": "Ajit",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "Closed / Lost",
+    "transition": "1. New Lead ➔ Closed / Lost",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ Closed / Lost' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "O946olrS0Ts8DHkAEnO0",
+    "name": "Meena Vaidya ",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "1. New Lead ➔ 3. Information Given",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "O9BTswlK0Z995AQ8IF7f",
+    "name": "Ashok Joshi",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "2. Attempting Contact ➔ 3. Information Given",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '2. Attempting Contact ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-07-23T06:30:33.260Z",
+        "status": "Query",
+        "remark": "whatsapp link nahi mili",
+        "calledFor": "Dhyan"
+      }
+    ]
+  },
+  {
+    "contactId": "OOUAjjw8q7DuVkTozCWc",
+    "name": "Jayant Deshpande",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 2,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-07T08:54:33.345Z",
+        "status": "Not Attended",
+        "remark": "2nd shift ke karan attend nahi kar paye, recording attend karenge ",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-08-11T09:47:39.263Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "PCoDlXN3T1RRRGPeHFf2",
+    "name": "Manohar\tPawar",
+    "attender": "Priyanka",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "PP3L4a7xpGe3PfyHX1a2",
+    "name": "Manjusha Jagtap",
+    "attender": "Priyanka",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "1. New Lead ➔ 3. Information Given",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "PT47kHH7Q4OELDwZ86Mg",
+    "name": "Amit Kumar",
+    "attender": "Manisha",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "4. Nurture / Interested",
+    "transition": "1. New Lead ➔ 4. Nurture / Interested",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 4. Nurture / Interested' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "PaEaUVFrW6hBTIS0yxTt",
+    "name": "Robin Khobragade",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-04T06:44:40.748Z",
+        "status": "Busy",
+        "remark": "Call 2  times busy every time",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T11:15:07.156Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-06T04:52:51.881Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "PakZB8L8bV20GTAlSkM3",
+    "name": "Ant Man",
+    "attender": "Test",
+    "currentPipelineStage": "4. Nurture / Interested",
+    "proposedPipelineStage": "6. Registered / Won",
+    "transition": "4. Nurture / Interested ➔ 6. Registered / Won",
+    "historyCount": 2,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '4. Nurture / Interested ➔ 6. Registered / Won' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-08-23T21:27:19.711Z",
+        "status": "Interested",
+        "remark": "Test 2 1st comment ",
+        "calledFor": "Other"
+      },
+      {
+        "date": "2026-08-23T21:27:40.431Z",
+        "status": "Interested",
+        "remark": "Test 2 2nd comment ",
+        "calledFor": "Other"
+      }
+    ]
+  },
+  {
+    "contactId": "PuW1wCLInZPeewQq6T1a",
+    "name": "Vandana chavan",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "Q2piK9WPiH0AZA76OotR",
+    "name": "Rakhi Somkuwar",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-08T11:05:34.274Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "Reminder, Off MA"
+      },
+      {
+        "date": "2026-07-09T11:42:01.208Z",
+        "status": "no answer",
+        "remark": "no answer",
+        "calledFor": "Reminder, Off MA"
+      },
+      {
+        "date": "2026-07-11T08:16:38.100Z",
+        "status": "no answer",
+        "remark": "no answer",
+        "calledFor": "Reminder, Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "QTqvvUdQtgeNXVgmzrf1",
+    "name": "Yuyuy",
+    "attender": "Test",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "2. Attempting Contact ➔ 3. Information Given",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '2. Attempting Contact ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-08-20T18:51:37.695Z",
+        "status": "NA",
+        "remark": "vfd",
+        "calledFor": "CBT Basic"
+      }
+    ]
+  },
+  {
+    "contactId": "QfkUE9tYGShgwIM5foBx",
+    "name": "Maya Yadav",
+    "attender": "Rakhi",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-08-19T09:51:44.116Z",
+        "status": "Query",
+        "remark": "Nov. Offline MA ka reg. kiya he bete ki rep. mili he inki nahi mili ",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "Ql0G7woBoF8RRSL4Pir5",
+    "name": "Amol Otari",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "Closed / Lost",
+    "transition": "1. New Lead ➔ Closed / Lost",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ Closed / Lost' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "QlTY4dkJeoCY4Fo225xh",
+    "name": "Rajani Ghate",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "R2B06jFNhO4LN1wrb9hH",
+    "name": "(blank)",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "1. New Lead ➔ Closed / Invalid",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-03T11:07:55.111Z",
+        "status": "Called by mistake",
+        "remark": "",
+        "calledFor": ""
+      }
+    ]
+  },
+  {
+    "contactId": "RaG3sWwQLDN0uss1tUOX",
+    "name": "(blank)",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "1. New Lead ➔ Closed / Invalid",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-02T12:12:24.485Z",
+        "status": "Called by mistake",
+        "remark": "",
+        "calledFor": ""
+      }
+    ]
+  },
+  {
+    "contactId": "Rp6R5PEtcg2SnhtvxKob",
+    "name": "Madhav Kulkarni",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "SKFxCdmYIYrQKhg8lTib",
+    "name": "Sharma Rajendra Prasad",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-08T09:28:19.564Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-08-10T05:15:50.187Z",
+        "status": "no answer",
+        "remark": "Call Cut",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-08-13T07:28:54.918Z",
+        "status": "Busy",
+        "remark": "Busy on another call",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-08-14T06:41:20.993Z",
+        "status": "Busy",
+        "remark": "not responded call, call several time",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "SjOWiwii39DGDe0r41bW",
+    "name": "K Santosh",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-11T12:06:53.531Z",
+        "status": "No answer",
+        "remark": "Call not answer",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "Spq8EeWS4BOLNWH5ysLX",
+    "name": "Biman Mahato",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 2,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-01T08:06:38.697Z",
+        "status": "no answer",
+        "remark": "whatsapp per msg. dala hai , 'SHSH ke details bheje hai ",
+        "calledFor": "TGF Info"
+      },
+      {
+        "date": "2026-08-11T07:44:08.818Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "TGF Info"
+      }
+    ]
+  },
+  {
+    "contactId": "SruN4NOvAb6Q3GpU7i6O",
+    "name": "Swati Mahesh Gundecha",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-13T09:17:38.639Z",
+        "status": "Busy",
+        "remark": "will call back after some time",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-15T06:29:43.478Z",
+        "status": "Busy",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T10:31:31.053Z",
+        "status": "Busy",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-06T09:44:34.913Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "T6QyhW3d204eYLihZ5w0",
+    "name": "Aditya Sahoo",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-09T07:05:12.226Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": ""
+      }
+    ]
+  },
+  {
+    "contactId": "TC7154wRHlpOZIpRsVs2",
+    "name": "Kiran Tupe",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-01T11:43:55.458Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "Nisarg Dhyan"
+      },
+      {
+        "date": "2026-08-01T11:51:48.514Z",
+        "status": "no answer",
+        "remark": "Patrakar aahet, off sathi shedual baghato. SHSH sathi guide kel aahe , ",
+        "calledFor": "Nisarg Dhyan"
+      },
+      {
+        "date": "2026-08-06T11:27:58.922Z",
+        "status": "no answer",
+        "remark": "No answer",
+        "calledFor": "Nisarg Dhyan"
+      },
+      {
+        "date": "2026-08-11T12:06:04.642Z",
+        "status": "Query",
+        "remark": "",
+        "calledFor": "Nisarg Dhyan"
+      }
+    ]
+  },
+  {
+    "contactId": "TNUGV7KxzEJrwetaeWWW",
+    "name": "(blank)",
+    "attender": "Test",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "6. Registered / Won",
+    "transition": "2. Attempting Contact ➔ 6. Registered / Won",
+    "historyCount": 2,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '2. Attempting Contact ➔ 6. Registered / Won' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-08-07T10:06:44.605Z",
+        "status": "Call Cut",
+        "remark": "tets",
+        "calledFor": ""
+      },
+      {
+        "date": "2026-08-07T10:09:47.197Z",
+        "status": "Shivir done",
+        "remark": "",
+        "calledFor": "Other"
+      }
+    ]
+  },
+  {
+    "contactId": "UGD1uF9416aBdWdsEabn",
+    "name": "Gunesh",
+    "attender": "Test",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "UHbkdfsgeGLZFVv9Hdyq",
+    "name": "Geeta Gangawani",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-07-23T07:41:16.077Z",
+        "status": "Query",
+        "remark": "link nahi mili",
+        "calledFor": "Dhyan"
+      }
+    ]
+  },
+  {
+    "contactId": "UQSSPeUWZ9XUtmf6Jzf2",
+    "name": "Prabhat Singh Patel",
+    "attender": "Priyanka",
+    "currentPipelineStage": "5. Future Pool",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "5. Future Pool ➔ 2. Attempting Contact",
+    "historyCount": 2,
+    "classification": "REJECT",
+    "reason": "REJECT: Contact belongs in Future Pool (next batch scheduled). Later unanswered call attempt does not demote to Attempting. (Rule 3 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-07T09:31:46.093Z",
+        "status": "Not Attended",
+        "remark": "Not attended basic program , recommended for next batch",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-16T06:12:21.666Z",
+        "status": "Not Attended",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "WRLWe10BEHx9IXBySCBP",
+    "name": "Bhaven Gandhi",
+    "attender": "Rakhi",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-08-08T12:34:36.863Z",
+        "status": "Query",
+        "remark": "online MA kar rahe he frd. to unhekoi reminder nahi diya jata ",
+        "calledFor": "On MA Hindi"
+      }
+    ]
+  },
+  {
+    "contactId": "WaFktjFD0Bn1hW3osFPQ",
+    "name": "Sandhya Salunkhe",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "2. Attempting Contact ➔ 3. Information Given",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '2. Attempting Contact ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-07-27T12:44:33.578Z",
+        "status": "Busy",
+        "remark": "baher gelya aahet",
+        "calledFor": "NA"
+      }
+    ]
+  },
+  {
+    "contactId": "WcuuGtAJfKDJKRTF1mVZ",
+    "name": "Manoj Shetty",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 2,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-08-09T07:32:26.556Z",
+        "status": "Query",
+        "remark": "Group mai add nahi huaa hai",
+        "calledFor": "Pranayam"
+      },
+      {
+        "date": "2026-08-10T12:08:11.370Z",
+        "status": "Query",
+        "remark": "add ho gaye",
+        "calledFor": "Pranayam"
+      }
+    ]
+  },
+  {
+    "contactId": "X4ATZoahCWeGYyHuAR9u",
+    "name": "Reshma Tupe",
+    "attender": "Priyanka",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "X4Yfoc9tzgIPL9pJlURo",
+    "name": "Ms Suvarna",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "2. Attempting Contact ➔ 3. Information Given",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '2. Attempting Contact ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-08-11T10:55:34.573Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "X597XA48nu1PJRGOBK9B",
+    "name": "Sunesh",
+    "attender": "Test",
+    "currentPipelineStage": "4. Nurture / Interested",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "4. Nurture / Interested ➔ Closed / Invalid",
+    "historyCount": 6,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-09T18:05:58.410Z",
+        "status": "Interested",
+        "remark": "etts",
+        "calledFor": "TGF Info"
+      },
+      {
+        "date": "2026-07-09T18:11:34.301Z",
+        "status": "NA",
+        "remark": "",
+        "calledFor": "TGF Info"
+      },
+      {
+        "date": "2026-07-09T18:11:45.465Z",
+        "status": "switched off",
+        "remark": "",
+        "calledFor": "TGF Info"
+      },
+      {
+        "date": "2026-07-09T18:14:17.891Z",
+        "status": "switched off",
+        "remark": "tetsjkvs111",
+        "calledFor": "TGF Info"
+      },
+      {
+        "date": "2026-07-09T18:32:07.744Z",
+        "status": "Next time",
+        "remark": "",
+        "calledFor": "CBT Basic"
+      },
+      {
+        "date": "2026-07-09T18:35:49.728Z",
+        "status": "Called by mistake",
+        "remark": "",
+        "calledFor": "Program"
+      }
+    ]
+  },
+  {
+    "contactId": "XWFhO4lHSkZ1urovD06b",
+    "name": "hitesh selokar",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "XmbFvujwXwluwBvcAYZt",
+    "name": "Dinesh Sarsar",
+    "attender": "Priyanka",
+    "currentPipelineStage": "5. Future Pool",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "5. Future Pool ➔ 2. Attempting Contact",
+    "historyCount": 2,
+    "classification": "REJECT",
+    "reason": "REJECT: Contact belongs in Future Pool (next batch scheduled). Later unanswered call attempt does not demote to Attempting. (Rule 3 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-23T09:54:33.242Z",
+        "status": "Not Attended",
+        "remark": "not getting any information about that  reminder call , not attended",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-10T06:41:24.432Z",
+        "status": "Not Attended",
+        "remark": "Added in the next batch 22nd August",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "XtaVsXI2iwjwxNb0KCqf",
+    "name": "Usr",
+    "attender": "Test",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-10T13:41:24.434Z",
+        "status": "NA",
+        "remark": "test",
+        "calledFor": "Other"
+      },
+      {
+        "date": "2026-08-10T17:34:27.960Z",
+        "status": "Called by mistake",
+        "remark": "test",
+        "calledFor": "Other"
+      },
+      {
+        "date": "2026-08-10T17:53:58.059Z",
+        "status": "Busy",
+        "remark": "TEST 65656",
+        "calledFor": "Other"
+      }
+    ]
+  },
+  {
+    "contactId": "XzX8m8UIh7YoGalsUDjW",
+    "name": "Test 100",
+    "attender": "Manisha",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Lost",
+    "transition": "2. Attempting Contact ➔ Closed / Lost",
+    "historyCount": 2,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '2. Attempting Contact ➔ Closed / Lost' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-08-10T19:13:39.145Z",
+        "status": "NA",
+        "remark": "tetet",
+        "calledFor": "CBT Basic"
+      },
+      {
+        "date": "2026-08-10T19:16:36.379Z",
+        "status": "Call Cut",
+        "remark": "",
+        "calledFor": "CBT Basic"
+      }
+    ]
+  },
+  {
+    "contactId": "Y4YFjkAzSV2go3s92Bgc",
+    "name": "Veena Parchure",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-13T06:40:34.428Z",
+        "status": "Busy",
+        "remark": "call Back  after some time",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-15T06:40:20.426Z",
+        "status": "Busy",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T10:31:15.068Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-06T09:46:37.075Z",
+        "status": "Busy",
+        "remark": "not have time to attend any program ",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "YIDBmdk9hetSl6Nnic2k",
+    "name": "Prashant Rathod",
+    "attender": "Rakhi",
+    "currentPipelineStage": "Query Desk",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "Query Desk ➔ 2. Attempting Contact",
+    "historyCount": 2,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition 'Query Desk ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-08-08T08:05:16.976Z",
+        "status": "Query",
+        "remark": "25 Oct2025  ka reg he but miss huva abhi Aug me karge ",
+        "calledFor": "Nisarg Dhyan"
+      },
+      {
+        "date": "2026-08-08T08:10:49.224Z",
+        "status": "Query",
+        "remark": "",
+        "calledFor": "Nisarg Dhyan"
+      }
+    ]
+  },
+  {
+    "contactId": "YnSjioM8cgZW2XAPAEVG",
+    "name": "Gopal Purushottam Deshmane",
+    "attender": "Priyanka",
+    "currentPipelineStage": "6. Registered / Won",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "6. Registered / Won ➔ Closed / Invalid",
+    "historyCount": 2,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-14T07:30:30.618Z",
+        "status": "Reg.Done",
+        "remark": "Falied payment call, ready to registered for CBT basic details send",
+        "calledFor": "CBT Basic"
+      },
+      {
+        "date": "2026-08-14T07:49:54.444Z",
+        "status": "Reg.Done",
+        "remark": "Registration Done",
+        "calledFor": "CBT Basic"
+      }
+    ]
+  },
+  {
+    "contactId": "YrCusNjoRIlIt1CChHXn",
+    "name": "Rangnath Ramphale",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-23T10:11:26.432Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-28T05:41:59.118Z",
+        "status": "Not Attended",
+        "remark": "Not attended program",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-10T06:12:53.968Z",
+        "status": "Not Attended",
+        "remark": "Added in 22nd August Batch",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "Z8HVhf6MuP32YBm2LOcm",
+    "name": "Vimal Kumar Namdeo",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-27T06:36:53.017Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-28T05:38:21.746Z",
+        "status": "no answer",
+        "remark": "Call 2 PM",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-30T06:18:18.182Z",
+        "status": "no answer",
+        "remark": "call at 2:30 PM",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-31T05:29:47.485Z",
+        "status": "no answer",
+        "remark": "call not received",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "Z8PUZwn9Z70xFoSpn0N0",
+    "name": "Rajesh Bhatia",
+    "attender": "Priyanka",
+    "currentPipelineStage": "6. Registered / Won",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "6. Registered / Won ➔ 2. Attempting Contact",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Registration evidence exists (Reg.Done/registrations record), but proposed stage is '2. Attempting Contact'. (Rule 4 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-11T06:36:37.761Z",
+        "status": "no answer",
+        "remark": "Call not received wants to registered for Pranayama basic, failed payment ",
+        "calledFor": "Pranayam"
+      }
+    ]
+  },
+  {
+    "contactId": "ZXlgbw8v0PVTmPAF689S",
+    "name": "Khyati shah",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "Zxo6T1lDQniuciEHAxzR",
+    "name": "Subhalaxmi Udandaray",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "2. Attempting Contact ➔ 3. Information Given",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '2. Attempting Contact ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-08-11T12:56:43.072Z",
+        "status": "No answer",
+        "remark": "Call not received",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "aL5dTF8PSW1G4MrdJVjX",
+    "name": "Vaishali Sonowane",
+    "attender": "Priyanka",
+    "currentPipelineStage": "6. Registered / Won",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "6. Registered / Won ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-27T06:42:02.425Z",
+        "status": "Busy",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-28T05:36:58.068Z",
+        "status": "Busy",
+        "remark": "Call cut",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T10:25:04.188Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-06T10:16:24.145Z",
+        "status": "Not Attended",
+        "remark": "wants to registered for another program. wrongly registered",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "amYc74jg7gxMFpXgd7hH",
+    "name": "Neha Jawale",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-08-01T06:22:50.457Z",
+        "status": "Query",
+        "remark": "Link chahiye thi kisi ko bhejana hai ",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "b6bKbRdjLOiiSfc62Slh",
+    "name": "Vijay Mogal",
+    "attender": "Rakhi",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-08-17T12:28:01.882Z",
+        "status": "Query",
+        "remark": "Pranayam Adv. ka reg. kiya he but grp. add nahi he ",
+        "calledFor": "Pranayam Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "b7gAH402WUGi9c9QzqNz",
+    "name": "MOHAMMED KHAJA MOINODDIN",
+    "attender": "Geeta",
+    "currentPipelineStage": "3. Information Given",
+    "proposedPipelineStage": "4. Nurture / Interested",
+    "transition": "3. Information Given ➔ 4. Nurture / Interested",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '3. Information Given ➔ 4. Nurture / Interested' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-07-04T10:12:08.402Z",
+        "status": "Info given",
+        "remark": "Kolkata gaye job ke karan oct tak vaha per hai so after that will see,SHSH huaa hai ",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "bOlkYQ9KOeIhhsoyl5R3",
+    "name": "Archana Pathak",
+    "attender": "Geeta",
+    "currentPipelineStage": "5. Future Pool",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "5. Future Pool ➔ 2. Attempting Contact",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Contact belongs in Future Pool (next batch scheduled). Later unanswered call attempt does not demote to Attempting. (Rule 3 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-03T10:04:51.630Z",
+        "status": "Not Attended",
+        "remark": "next batch madhye add kel aahe",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "bar59mxmpFrMXRoIpInw",
+    "name": "Tarachand Sanghvi",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-27T08:05:10.140Z",
+        "status": "Not Attended",
+        "remark": "Program Not attended",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-27T09:02:35.885Z",
+        "status": "Not Attended",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-10T06:40:03.097Z",
+        "status": "Not Attended",
+        "remark": "Added in the batch 22nd August",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "bb2gK5ICpaXbxtNYgyyi",
+    "name": "Swapnil Raut",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-27T08:08:37.426Z",
+        "status": "Busy",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-27T09:02:14.614Z",
+        "status": "Busy",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T10:26:42.061Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-06T09:54:59.061Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "bsb2KuyBdeWJST0oTIey",
+    "name": "Shridhar Gutte",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-16T10:49:04.884Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "Study smarter"
+      },
+      {
+        "date": "2026-07-16T10:52:50.835Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "Study smarter"
+      },
+      {
+        "date": "2026-07-17T09:28:23.120Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "Study smarter"
+      }
+    ]
+  },
+  {
+    "contactId": "cNWLETC3ePfJgqtB8CGw",
+    "name": "Praveen Morpaka",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-27T09:07:43.762Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "cc7IoKZDkUVSnBOjliex",
+    "name": "Ganesh",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-08-11T12:31:13.543Z",
+        "status": "Query",
+        "remark": "",
+        "calledFor": "Pranayam"
+      }
+    ]
+  },
+  {
+    "contactId": "dqRXfmmqr7f98XsjL9HI",
+    "name": "Raj Bajhaiya",
+    "attender": "Priyanka",
+    "currentPipelineStage": "6. Registered / Won",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "6. Registered / Won ➔ 2. Attempting Contact",
+    "historyCount": 2,
+    "classification": "REJECT",
+    "reason": "REJECT: Registration evidence exists (Reg.Done/registrations record), but proposed stage is '2. Attempting Contact'. (Rule 4 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-09T05:52:12.569Z",
+        "status": "Not Attended",
+        "remark": "Not reminder call get, not attended program added in next batch",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-13T07:26:46.168Z",
+        "status": "Not Attended",
+        "remark": "Added for next program, again registered",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "eQ8iO8AaeaO2yn7pnDFg",
+    "name": "Anirban M",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "2. Attempting Contact ➔ 3. Information Given",
+    "historyCount": 2,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '2. Attempting Contact ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-08-08T12:04:31.742Z",
+        "status": "No Network",
+        "remark": "",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-08-10T07:01:09.623Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "eXcxKrPRfggBDSlYIPG1",
+    "name": "Shilpa Jadav",
+    "attender": "Rakhi",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-08-17T11:17:32.890Z",
+        "status": "Query",
+        "remark": "sp.MA ka reg. kiiya he but grp. add nahi he ",
+        "calledFor": "Special MA"
+      }
+    ]
+  },
+  {
+    "contactId": "ejyLZpWkDfiaUEYCy0NF",
+    "name": "Radhika Mohite",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-31T07:43:15.751Z",
+        "status": "Busy",
+        "remark": "Call Back",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-08-06T10:30:34.836Z",
+        "status": "no answer",
+        "remark": "call not received",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-08-07T05:58:26.606Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "emwcT7Q97LipyOLGdRk1",
+    "name": "Suguna Rao Ch",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-27T09:36:39.261Z",
+        "status": "Busy",
+        "remark": "call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T10:26:23.717Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-06T10:01:52.754Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "esTWwgkHVOxntMH0zci5",
+    "name": "Gopalkrishna Wandhare",
+    "attender": "Priyanka",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "fReICLI0HLgG0iL4z4TH",
+    "name": "Yogesh Kumar",
+    "attender": "Priyanka",
+    "currentPipelineStage": "6. Registered / Won",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "6. Registered / Won ➔ 3. Information Given",
+    "historyCount": 2,
+    "classification": "REJECT",
+    "reason": "REJECT: Registration evidence exists (Reg.Done/registrations record), but proposed stage is '3. Information Given'. (Rule 4 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-16T08:27:51.401Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "Study smarter"
+      },
+      {
+        "date": "2026-07-17T09:45:30.344Z",
+        "status": "no answer",
+        "remark": "Details send , ready to registered",
+        "calledFor": "Study smarter"
+      }
+    ]
+  },
+  {
+    "contactId": "fgHcis8YUBNCvRKSSSC7",
+    "name": "Sanjay Singh",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-12T08:42:29.146Z",
+        "status": "no answer",
+        "remark": "Call  not received ",
+        "calledFor": "TGF Info"
+      },
+      {
+        "date": "2026-08-14T06:47:18.625Z",
+        "status": "no answer",
+        "remark": "call not received",
+        "calledFor": "TGF Info"
+      },
+      {
+        "date": "2026-08-15T06:19:33.906Z",
+        "status": "no answer",
+        "remark": "call not received, call multiple times",
+        "calledFor": "TGF Info"
+      }
+    ]
+  },
+  {
+    "contactId": "fqJBSWAy2soJNiApXCzc",
+    "name": "Kalpesh Shaha",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-07-19T07:26:03.122Z",
+        "status": "Query",
+        "remark": "Hiral Shaha, Mumbai, husbend lene ke liye nahi aa rahe hai",
+        "calledFor": "Other"
+      }
+    ]
+  },
+  {
+    "contactId": "fw87EMc2jpOPRKqlN6qY",
+    "name": "Ravindra Matre",
+    "attender": "Geeta",
+    "currentPipelineStage": "Query Desk",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "Query Desk ➔ 3. Information Given",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition 'Query Desk ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-07-18T09:33:39.137Z",
+        "status": "Query",
+        "remark": "not add in group",
+        "calledFor": "CBT Basic"
+      }
+    ]
+  },
+  {
+    "contactId": "gF5Mko4dnSULAfsUIB3F",
+    "name": "Sanket Uttam Jadhav",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-08T06:40:20.064Z",
+        "status": "Busy",
+        "remark": "In Meeting , call back in evening 6:00 PM",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-10T05:42:10.455Z",
+        "status": "Busy",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T11:08:22.678Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-06T05:19:21.124Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "gwxpkPD2V5ZFF4nvxQJb",
+    "name": "Abhay Tiwari",
+    "attender": "Manisha",
+    "currentPipelineStage": "4. Nurture / Interested",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "4. Nurture / Interested ➔ Query Desk",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Query Desk, but contact has higher sales progression (Reg/Interested/InfoGiven). (Rule 2 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-21T09:22:14.606Z",
+        "status": "Interested",
+        "remark": "TGF info given, Offline MA shivir info given & details send, unke mummy ko karna hai, unko depration ki medicine chalu hai,  unko guide kiya hau",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "hFlaTykcVeQksR0pNHqG",
+    "name": "Hemant Gopalrao Pawar",
+    "attender": "Manisha",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "6. Registered / Won",
+    "transition": "2. Attempting Contact ➔ 6. Registered / Won",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '2. Attempting Contact ➔ 6. Registered / Won' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-07-28T05:30:20.108Z",
+        "status": "NA",
+        "remark": "repeat SSP1 ka registration ho nahi raha hai",
+        "calledFor": "Other"
+      }
+    ]
+  },
+  {
+    "contactId": "hu9c1Z8odmklhjOwRMXv",
+    "name": "Sushma Gire",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-04T09:44:39.361Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-07-05T07:45:59.125Z",
+        "status": "Busy",
+        "remark": "",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-07-06T08:19:50.071Z",
+        "status": "Busy",
+        "remark": "call at 4 pm",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-07-06T11:22:28.651Z",
+        "status": "no answer",
+        "remark": "no answer",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "iWdPwtLuiNbbTlUBb0zb",
+    "name": "Punisher",
+    "attender": "Test",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "4. Nurture / Interested",
+    "transition": "2. Attempting Contact ➔ 4. Nurture / Interested",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '2. Attempting Contact ➔ 4. Nurture / Interested' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-08-23T20:12:05.801Z",
+        "status": "Busy",
+        "remark": "rrr",
+        "calledFor": "Other"
+      }
+    ]
+  },
+  {
+    "contactId": "jbavZ48UmRcxGkLTUXTh",
+    "name": "Eunehs",
+    "attender": "Test",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "4. Nurture / Interested",
+    "transition": "1. New Lead ➔ 4. Nurture / Interested",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 4. Nurture / Interested' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "jvUtor6HbrJKAyNvxCTC",
+    "name": "Raaju Vavilala",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "kA4dZ65v1LWlQ2Y8I5wX",
+    "name": "Kuldeep",
+    "attender": "Priyanka",
+    "currentPipelineStage": "6. Registered / Won",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "6. Registered / Won ➔ 3. Information Given",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Registration evidence exists (Reg.Done/registrations record), but proposed stage is '3. Information Given'. (Rule 4 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-09T06:45:55.164Z",
+        "status": "Busy",
+        "remark": "Busy in meeting, call back",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-10T05:28:42.428Z",
+        "status": "Busy",
+        "remark": "Info Given  link send  ready to registered",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T11:08:57.711Z",
+        "status": "Info given",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "kOsL8LPdxljwYQehojFq",
+    "name": "Nilesh Shelke",
+    "attender": "Priyanka",
+    "currentPipelineStage": "6. Registered / Won",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "6. Registered / Won ➔ 2. Attempting Contact",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Registration evidence exists (Reg.Done/registrations record), but proposed stage is '2. Attempting Contact'. (Rule 4 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-07T11:45:12.962Z",
+        "status": "Not Attended",
+        "remark": "Not registered for basic Program",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "kYzR74X3duUvHvKFMatC",
+    "name": "Sena Sena",
+    "attender": "Rakhi",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "1. New Lead ➔ Closed / Invalid",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-14T12:32:47.181Z",
+        "status": "Called by mistake",
+        "remark": "missed call tha but galti se lag gaya",
+        "calledFor": ""
+      }
+    ]
+  },
+  {
+    "contactId": "krvejlm0kxVi60Mh7e8S",
+    "name": "Priti",
+    "attender": "Manisha",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "1. New Lead",
+    "transition": "2. Attempting Contact ➔ 1. New Lead",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is New Lead, but contact has 1 history entries. (Rule 5 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-04T06:22:43.751Z",
+        "status": "",
+        "remark": "One year ka yoga ka registrationkiya hai but group me add nahi hue hai",
+        "calledFor": ""
+      }
+    ]
+  },
+  {
+    "contactId": "lE0RrUbPtKsYjjW5ynsC",
+    "name": "Suraj Dhawan",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-18T07:11:52.794Z",
+        "status": "no answer",
+        "remark": "call not received",
+        "calledFor": "CBT Basic"
+      },
+      {
+        "date": "2026-08-19T06:13:11.886Z",
+        "status": "no answer",
+        "remark": "Call Cut",
+        "calledFor": "CBT Basic"
+      },
+      {
+        "date": "2026-08-20T05:49:11.501Z",
+        "status": "no answer",
+        "remark": "call not received",
+        "calledFor": "CBT Basic"
+      }
+    ]
+  },
+  {
+    "contactId": "lJty6pFuh5IVoPjt7MSk",
+    "name": "Raghav Mahesh Kandalgaonkar",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-09T07:25:32.920Z",
+        "status": "Busy",
+        "remark": "Busy , Call back",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T11:11:42.863Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-06T05:10:01.165Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "lLAs1dOY2YnNHNw90mkJ",
+    "name": "Samrat Sanyal",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-12T09:51:18.167Z",
+        "status": "Call Cut",
+        "remark": "busy unable to call received",
+        "calledFor": "TGF Info"
+      },
+      {
+        "date": "2026-08-13T05:28:38.576Z",
+        "status": "Call Cut",
+        "remark": "Call Cut , call not received",
+        "calledFor": "TGF Info"
+      },
+      {
+        "date": "2026-08-14T06:46:13.584Z",
+        "status": "Call Cut",
+        "remark": "Call multiple times call not received",
+        "calledFor": "TGF Info"
+      }
+    ]
+  },
+  {
+    "contactId": "local_inc_1787390860260_xcf9",
+    "name": "Test 003829",
+    "attender": "Test",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "6. Registered / Won",
+    "transition": "2. Attempting Contact ➔ 6. Registered / Won",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '2. Attempting Contact ➔ 6. Registered / Won' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-08-22T09:27:40.260Z",
+        "status": "NA",
+        "remark": "ttt"
+      }
+    ]
+  },
+  {
+    "contactId": "mHdknaZppuG444ngXlEY",
+    "name": "Sushant Gupta",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-02T11:45:51.898Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-07-08T08:01:10.726Z",
+        "status": "no answer",
+        "remark": "Whatsapp per msg. dala hai",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-07-22T06:24:54.596Z",
+        "status": "no answer",
+        "remark": "Travelling ka business hai so karna hai but online hi karna hai, off nahi karna hai, dekhate hai",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "mS98PnBkGn0zabg76VNI",
+    "name": "Amol Tejalkar",
+    "attender": "Manisha",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "1. New Lead ➔ 3. Information Given",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "mYLtEQSp0Zoq0XuBdJMV",
+    "name": "Subodh Kumar",
+    "attender": "Priyanka",
+    "currentPipelineStage": "5. Future Pool",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "5. Future Pool ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-27T10:37:18.433Z",
+        "status": "Busy",
+        "remark": "Call Back",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T10:25:45.502Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-06T10:12:04.825Z",
+        "status": "Not Attended",
+        "remark": "Not attended program added in next batch",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "mx8SAyQVG1lDMCCuuuFc",
+    "name": "Kishor Gohil",
+    "attender": "Priyanka",
+    "currentPipelineStage": "6. Registered / Won",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "6. Registered / Won ➔ 3. Information Given",
+    "historyCount": 2,
+    "classification": "REJECT",
+    "reason": "REJECT: Registration evidence exists (Reg.Done/registrations record), but proposed stage is '3. Information Given'. (Rule 4 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-16T11:30:15.181Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "Study smarter"
+      },
+      {
+        "date": "2026-07-17T09:20:36.060Z",
+        "status": "no answer",
+        "remark": "Details Send , ready to registered",
+        "calledFor": "Study smarter"
+      }
+    ]
+  },
+  {
+    "contactId": "n0CaLuCUA3cUywwNT0i8",
+    "name": "Vunhes",
+    "attender": "Test",
+    "currentPipelineStage": "4. Nurture / Interested",
+    "proposedPipelineStage": "Closed / Lost",
+    "transition": "4. Nurture / Interested ➔ Closed / Lost",
+    "historyCount": 2,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '4. Nurture / Interested ➔ Closed / Lost' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-07-16T18:57:58.183Z",
+        "status": "Interested",
+        "remark": "test",
+        "calledFor": "TGF Info"
+      },
+      {
+        "date": "2026-07-31T17:41:51.563Z",
+        "status": "Not interested",
+        "remark": "",
+        "calledFor": "TGF Info"
+      }
+    ]
+  },
+  {
+    "contactId": "n0f2jzGIFONZBdnYp8oZ",
+    "name": "Laxmi Devmani",
+    "attender": "Manisha",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "1. New Lead ➔ Closed / Invalid",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-15T05:22:21.025Z",
+        "status": "Called by mistake",
+        "remark": "missed call, but call by mistake",
+        "calledFor": "Other"
+      }
+    ]
+  },
+  {
+    "contactId": "nNdxeNVt7oy4Q77Oi0rZ",
+    "name": "Antara",
+    "attender": "Geeta",
+    "currentPipelineStage": "5. Future Pool",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "5. Future Pool ➔ 2. Attempting Contact",
+    "historyCount": 2,
+    "classification": "REJECT",
+    "reason": "REJECT: Contact belongs in Future Pool (next batch scheduled). Later unanswered call attempt does not demote to Attempting. (Rule 3 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-05T08:49:55.374Z",
+        "status": "Not Attended",
+        "remark": "Akela pan ,stress is vajahase kar rahe the, wo ek make up artist hai so possible nahi hua, so add in next batch,give reminder",
+        "calledFor": "CBT Basic"
+      },
+      {
+        "date": "2026-07-18T06:48:32.381Z",
+        "status": "no answer",
+        "remark": "whatsapp msg send kiya  hai ",
+        "calledFor": "CBT Basic"
+      }
+    ]
+  },
+  {
+    "contactId": "nS1T4Hs17pxAfYHKttSo",
+    "name": "Tushar Zagade",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-07-19T07:11:05.764Z",
+        "status": "Query",
+        "remark": "sat dhyan shivir ka reg. kiya tha but time dhyan mai nahi tha so miss huaa",
+        "calledFor": "Dhyan"
+      }
+    ]
+  },
+  {
+    "contactId": "nZI5L141wkKXt5lsbP7f",
+    "name": "Ananthnag V",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "Closed / Lost",
+    "transition": "1. New Lead ➔ Closed / Lost",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ Closed / Lost' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "nfsTHegq6osZfspu5G9k",
+    "name": "Pallavi Shrijit Marathe",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-12T08:44:52.893Z",
+        "status": "Busy",
+        "remark": "Busy on another call",
+        "calledFor": "TGF Info"
+      },
+      {
+        "date": "2026-08-13T07:09:59.146Z",
+        "status": "no answer",
+        "remark": "Call not received ",
+        "calledFor": "TGF Info"
+      },
+      {
+        "date": "2026-08-14T06:43:31.562Z",
+        "status": "no answer",
+        "remark": "Call several time , call not received",
+        "calledFor": "TGF Info"
+      }
+    ]
+  },
+  {
+    "contactId": "o5vRqDcHqcUkhJTTNXMd",
+    "name": "Kavita Malviya",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-02T10:57:37.703Z",
+        "status": "no answer",
+        "remark": "Call Back after some time",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-03T06:06:38.026Z",
+        "status": "no answer",
+        "remark": "2nd Follow up will be call for Registration",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-04T08:58:17.911Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-07T09:16:08.747Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "oHqo9aIIWmcHey6iy42L",
+    "name": "Hemant Ravat",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-03T07:13:03.768Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": ""
+      },
+      {
+        "date": "2026-07-04T08:08:16.285Z",
+        "status": "Busy",
+        "remark": "taking launch ,he will call",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-04T09:10:23.526Z",
+        "status": "Busy",
+        "remark": "call cut",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "oTzzH0635MMyuOCMSori",
+    "name": "Bhavana Anupam",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-07-18T11:11:05.152Z",
+        "status": "Query",
+        "remark": "group mai add nahi kiya hai",
+        "calledFor": "CBT Basic"
+      }
+    ]
+  },
+  {
+    "contactId": "odYN0F6bmZLS59ADNzaX",
+    "name": "Aaradhya Dayanand",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "2. Attempting Contact ➔ 3. Information Given",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '2. Attempting Contact ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-08-11T12:55:29.799Z",
+        "status": "No answer",
+        "remark": "Call not received",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "og6EDL7tw2EtW21H9kUK",
+    "name": "Ravnath Tripathi",
+    "attender": "Manisha",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "1. New Lead ➔ 3. Information Given",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "oj8bZA5Z5LFkAUtczS23",
+    "name": "Mohini Mane",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "1. New Lead ➔ 3. Information Given",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "p2C3tFFpSKdgHno04fX0",
+    "name": "Rajendra Navnath Maral",
+    "attender": "Priyanka",
+    "currentPipelineStage": "Closed / Invalid",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "Closed / Invalid ➔ 2. Attempting Contact",
+    "historyCount": 2,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition 'Closed / Invalid ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-07-13T08:47:21.280Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-15T06:33:41.453Z",
+        "status": "no answer",
+        "remark": "Invalid Number , call not connected",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "p36BeYVJj9V27hyybkz3",
+    "name": "Umesh Shrma",
+    "attender": "Rakhi",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "4. Nurture / Interested",
+    "transition": "1. New Lead ➔ 4. Nurture / Interested",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 4. Nurture / Interested' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "pISoOgSdoReX53NO9CBo",
+    "name": "Chandra Prakash",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-12T09:26:15.943Z",
+        "status": "Call Cut",
+        "remark": "attend small child call, unable to talk",
+        "calledFor": "TGF Info"
+      },
+      {
+        "date": "2026-08-13T07:48:50.825Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "TGF Info"
+      },
+      {
+        "date": "2026-08-14T06:48:11.138Z",
+        "status": "no answer",
+        "remark": "Call multiple times call not received",
+        "calledFor": "TGF Info"
+      }
+    ]
+  },
+  {
+    "contactId": "pKsGegtkIAY8uKZydbdL",
+    "name": "ANNASO\tPATIL",
+    "attender": "Priyanka",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "4. Nurture / Interested",
+    "transition": "1. New Lead ➔ 4. Nurture / Interested",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 4. Nurture / Interested' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "pmj2KwL5bwyo79eacXUZ",
+    "name": "Anamol Dubey",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-08T10:55:01.003Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "Reminder"
+      },
+      {
+        "date": "2026-07-09T10:40:55.027Z",
+        "status": "no answer",
+        "remark": "no answer",
+        "calledFor": "Reminder"
+      },
+      {
+        "date": "2026-07-11T07:50:34.051Z",
+        "status": "no answer",
+        "remark": "no answer",
+        "calledFor": "Reminder"
+      }
+    ]
+  },
+  {
+    "contactId": "q1a890vaiGPgozqlT9ow",
+    "name": "Testing Ururu",
+    "attender": "Test",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "6. Registered / Won",
+    "transition": "2. Attempting Contact ➔ 6. Registered / Won",
+    "historyCount": 2,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '2. Attempting Contact ➔ 6. Registered / Won' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-08-20T10:03:11.331Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": ""
+      },
+      {
+        "date": "2026-08-20T10:34:01.806Z",
+        "status": "Shivir done",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "q4sMJ8IileLyGRvU2ULn",
+    "name": "Deepak Honde",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "Closed / Lost",
+    "transition": "1. New Lead ➔ Closed / Lost",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ Closed / Lost' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "qOLmnoEWQyhrgKfjdxZs",
+    "name": "(blank)",
+    "attender": "Manisha",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "1. New Lead ➔ Closed / Invalid",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-13T08:23:04.215Z",
+        "status": "Called by mistake",
+        "remark": "missed call, but call by mistake",
+        "calledFor": "Other"
+      }
+    ]
+  },
+  {
+    "contactId": "r2rH5qM2oIzK7OXXlJAn",
+    "name": "Yash Mishra",
+    "attender": "Priyanka",
+    "currentPipelineStage": "6. Registered / Won",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "6. Registered / Won ➔ 3. Information Given",
+    "historyCount": 2,
+    "classification": "REJECT",
+    "reason": "REJECT: Registration evidence exists (Reg.Done/registrations record), but proposed stage is '3. Information Given'. (Rule 4 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-16T07:44:07.196Z",
+        "status": "Busy",
+        "remark": "Call back",
+        "calledFor": "Special MA, Study smarter"
+      },
+      {
+        "date": "2026-07-16T08:01:41.834Z",
+        "status": "Busy",
+        "remark": "Info given ready to registered",
+        "calledFor": "Special MA, Study smarter"
+      }
+    ]
+  },
+  {
+    "contactId": "rYwy0w1ViwhR2VaBPNFM",
+    "name": "Munesh",
+    "attender": "Test",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "4. Nurture / Interested",
+    "transition": "1. New Lead ➔ 4. Nurture / Interested",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 4. Nurture / Interested' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "rfBD6UVBfuHgOEGkZo91",
+    "name": "Hemant",
+    "attender": "Manisha",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "5. Future Pool",
+    "transition": "1. New Lead ➔ 5. Future Pool",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 5. Future Pool' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "rwXz8R2Ervj3CD1AZvsY",
+    "name": "Rajendra R Vhatkar",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-12T11:25:08.447Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-07-14T10:20:19.354Z",
+        "status": "no answer",
+        "remark": "No answer",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-07-16T11:25:09.879Z",
+        "status": "no answer",
+        "remark": "No answer",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "s9AgJSqojg4UbrBWV6iv",
+    "name": "Rupali Mahadik",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-31T06:31:37.097Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-07-31T06:32:34.254Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-07-31T06:34:42.130Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-08-03T06:29:40.068Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "sG90Ej0K08czF5Q3mnSn",
+    "name": "Mohan Gaikwad",
+    "attender": "Priyanka",
+    "currentPipelineStage": "5. Future Pool",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "5. Future Pool ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-28T10:36:33.661Z",
+        "status": "Busy",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-30T05:27:22.460Z",
+        "status": "Busy",
+        "remark": "not  attended , added in next batch",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T10:24:17.061Z",
+        "status": "Not Attended",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "sHG3yk8fbmrf4I9m2pa5",
+    "name": "Sushant Patil",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "1. New Lead ➔ Closed / Invalid",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-05T06:37:00.481Z",
+        "status": "Called by mistake",
+        "remark": "bymistake call",
+        "calledFor": "Other"
+      }
+    ]
+  },
+  {
+    "contactId": "sILKibOHjE46gKX2eoIc",
+    "name": "Utkarsha Thorat",
+    "attender": "Manisha",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-07-30T06:34:58.050Z",
+        "status": "Query",
+        "remark": "SSP2 shivir ka registration karna hai,but kis ke sath baat karni pata nahi, icchalkarnji center co ordineter ke no send kiye hai",
+        "calledFor": "Other"
+      }
+    ]
+  },
+  {
+    "contactId": "sIi4hSKp4zxsiIjZfR2X",
+    "name": "Leela Manhar",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-28T10:44:44.491Z",
+        "status": "Busy",
+        "remark": "Call Back",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-30T05:22:09.869Z",
+        "status": "Busy",
+        "remark": "call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T10:23:01.054Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-06T10:23:57.438Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "sQTKIgqqgVeqjVRc0WHY",
+    "name": "dunesh",
+    "attender": "Test",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "sSuTFd5dFXx6K1gGa4ZA",
+    "name": "Dr Renu Jatwa",
+    "attender": "Priyanka",
+    "currentPipelineStage": "5. Future Pool",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "5. Future Pool ➔ 2. Attempting Contact",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Contact belongs in Future Pool (next batch scheduled). Later unanswered call attempt does not demote to Attempting. (Rule 3 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-28T10:47:19.910Z",
+        "status": "Not Attended",
+        "remark": "added in next batch ",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "tFzMnCEuXMTmqqQxGJYW",
+    "name": "Divyankaa Joshi",
+    "attender": "Geeta",
+    "currentPipelineStage": "5. Future Pool",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "5. Future Pool ➔ 2. Attempting Contact",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Contact belongs in Future Pool (next batch scheduled). Later unanswered call attempt does not demote to Attempting. (Rule 3 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-03T12:10:46.250Z",
+        "status": "Not Attended",
+        "remark": "next batch mai add kiya hai",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "tJRXsCdLsqwNyueNKcbD",
+    "name": "Tilak Raj",
+    "attender": "Rakhi",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "4. Nurture / Interested",
+    "transition": "1. New Lead ➔ 4. Nurture / Interested",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 4. Nurture / Interested' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "th974iTBWnOeX7OPUdPe",
+    "name": "Anaya\tJoshi",
+    "attender": "Priyanka",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "1. New Lead ➔ 3. Information Given",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "tohVWsnhZme1teOcc2uc",
+    "name": "Mandakinimishra Mandakini",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-08T06:14:24.064Z",
+        "status": "Busy",
+        "remark": "she is busy in classroom will call in  evening",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-10T05:42:57.078Z",
+        "status": "Busy",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T11:07:27.183Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-06T05:20:51.530Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "u8RFHqcPVQ2CEFawqke7",
+    "name": "B Shiva Krishna",
+    "attender": "Geeta",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-06T09:22:38.363Z",
+        "status": "Busy",
+        "remark": "busy hai so 12 july ko call karna",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-07-16T11:59:24.859Z",
+        "status": "Busy",
+        "remark": "busy hai 22 july ko bat karenge",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-07-23T09:45:12.467Z",
+        "status": "Busy",
+        "remark": "grahpravesh kiya, big family, mother handle karte hai, restaurent ka planing chal raha hai, 27 sep unka kuch porgram hai jo complete hone wala ha i. to uske bad karenge oct- nov mai",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "uHPlcetFoJeO8M4jcfHP",
+    "name": "Parvej Shaikh",
+    "attender": "Priyanka",
+    "currentPipelineStage": "5. Future Pool",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "5. Future Pool ➔ 2. Attempting Contact",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Contact belongs in Future Pool (next batch scheduled). Later unanswered call attempt does not demote to Attempting. (Rule 3 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-28T11:12:05.821Z",
+        "status": "Not Attended",
+        "remark": "not attended  program , added in next batch",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "udF3AhtCN8qSFUyRYxJq",
+    "name": "Alka Sarada",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "uj9glrclvW0bx8xOudOO",
+    "name": "Sneha Ramesh Tambe",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-27T10:07:46.976Z",
+        "status": "Busy",
+        "remark": "Call Back",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T10:26:07.334Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-06T10:03:28.585Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "vtwSTirFZpTHR39Cncar",
+    "name": "Varun Dwivedi",
+    "attender": "Priyanka",
+    "currentPipelineStage": "5. Future Pool",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "5. Future Pool ➔ 2. Attempting Contact",
+    "historyCount": 2,
+    "classification": "REJECT",
+    "reason": "REJECT: Contact belongs in Future Pool (next batch scheduled). Later unanswered call attempt does not demote to Attempting. (Rule 3 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-30T06:31:24.471Z",
+        "status": "Not Attended",
+        "remark": "not attended, not getting any reminder call",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-10T06:06:51.412Z",
+        "status": "Not Attended",
+        "remark": "Added in next batch",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "vwnivVP1B7OtTBtf7Jrm",
+    "name": "SANJAY LAXMAN LOKHANDE",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "1. New Lead ➔ Query Desk",
+    "historyCount": 0,
+    "classification": "REVIEW",
+    "reason": "REVIEW: Proposed stage is Query Desk, but explicit query evidence in history is weak or ambiguous.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "vxkGE4Ej5cZX3XAHMvLv",
+    "name": "Swati Sharma",
+    "attender": "Priyanka",
+    "currentPipelineStage": "5. Future Pool",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "5. Future Pool ➔ 2. Attempting Contact",
+    "historyCount": 2,
+    "classification": "REJECT",
+    "reason": "REJECT: Contact belongs in Future Pool (next batch scheduled). Later unanswered call attempt does not demote to Attempting. (Rule 3 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-10T08:12:53.316Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-13T10:35:00.888Z",
+        "status": "no answer",
+        "remark": "not attended, added in next batch",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "wJ6K571WNF978vmGw7Wr",
+    "name": "Balaji Topaji",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-08T07:21:40.700Z",
+        "status": "Busy",
+        "remark": "Busy in meeting Call back",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-09T12:00:34.385Z",
+        "status": "Busy",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T11:10:59.823Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-06T05:17:14.033Z",
+        "status": "Busy",
+        "remark": "Number Busy",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "wMKuWK55TCVD9xtyNUb7",
+    "name": "Parbat Ram",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-18T07:39:40.947Z",
+        "status": "no answer",
+        "remark": "Switch off",
+        "calledFor": "CBT Basic"
+      },
+      {
+        "date": "2026-08-19T06:04:25.931Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Basic"
+      },
+      {
+        "date": "2026-08-20T05:52:25.105Z",
+        "status": "no answer",
+        "remark": "call not received",
+        "calledFor": "CBT Basic"
+      }
+    ]
+  },
+  {
+    "contactId": "wuLFKPjTx5YxtVtMJxmd",
+    "name": "Vinay Dixit",
+    "attender": "Priyanka",
+    "currentPipelineStage": "6. Registered / Won",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "6. Registered / Won ➔ 2. Attempting Contact",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Registration evidence exists (Reg.Done/registrations record), but proposed stage is '2. Attempting Contact'. (Rule 4 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-11T06:21:02.496Z",
+        "status": "no answer",
+        "remark": "wants to registered for pranyama , Payment Failed but not received called ",
+        "calledFor": "Pranayam"
+      }
+    ]
+  },
+  {
+    "contactId": "x3RjJneONfQJ3WWrHXPQ",
+    "name": "Navnath Shitole",
+    "attender": "Geeta",
+    "currentPipelineStage": "3. Information Given",
+    "proposedPipelineStage": "4. Nurture / Interested",
+    "transition": "3. Information Given ➔ 4. Nurture / Interested",
+    "historyCount": 5,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '3. Information Given ➔ 4. Nurture / Interested' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-07-05T06:44:59.621Z",
+        "status": "Query",
+        "remark": "SHSH reg. kiya but not add in group",
+        "calledFor": "SHSH"
+      },
+      {
+        "date": "2026-07-06T10:11:39.768Z",
+        "status": "Info given",
+        "remark": "Off MA shivir details given",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-07-12T11:23:04.766Z",
+        "status": "Busy",
+        "remark": "Attended all day, taking launch so call later",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-07-14T10:23:07.383Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-07-16T11:23:17.845Z",
+        "status": "no answer",
+        "remark": "No answer",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "xyC4oolGuqOwQxehh48t",
+    "name": "Sajid M Kothia",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 4,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-04T12:01:39.278Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-06T10:37:57.332Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-06T10:39:59.283Z",
+        "status": "no answer",
+        "remark": "not getting any reminder call,",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-16T06:12:32.288Z",
+        "status": "no answer",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "y6yQ6semzueTjTXC7T3S",
+    "name": "Pankaj Galgale",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-31T07:55:16.637Z",
+        "status": "Busy",
+        "remark": "Call not received",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-08-06T10:29:21.812Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-08-07T05:58:50.934Z",
+        "status": "no answer",
+        "remark": "call not received",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "yASXlkMCX1TmyS1FRizn",
+    "name": "Dinesh Chavan",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "2. Attempting Contact ➔ Closed / Invalid",
+    "historyCount": 3,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-31T06:47:31.464Z",
+        "status": "Busy",
+        "remark": "Call after 2 PM",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-08-03T06:13:38.384Z",
+        "status": "Busy",
+        "remark": "Call after 2 PM",
+        "calledFor": "Off MA"
+      },
+      {
+        "date": "2026-08-06T10:26:28.581Z",
+        "status": "no answer",
+        "remark": "Call not received",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "yD1SvClYkpPNvZJUjSEs",
+    "name": "Radhika",
+    "attender": "Manisha",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "Query Desk",
+    "transition": "2. Attempting Contact ➔ Query Desk",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Genuine query/support interaction with 0 connected sales progression.",
+    "historyDetails": [
+      {
+        "date": "2026-07-21T05:14:19.864Z",
+        "status": "Query",
+        "remark": "SHSH ka registration kiya hai but group me add nahi hue hai",
+        "calledFor": "SHSH"
+      }
+    ]
+  },
+  {
+    "contactId": "yjAiqnJm2JfmUmjzAcfN",
+    "name": "Ravindra s wagh",
+    "attender": "Geeta",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "2. Attempting Contact",
+    "transition": "1. New Lead ➔ 2. Attempting Contact",
+    "historyCount": 0,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '1. New Lead ➔ 2. Attempting Contact' is supported by history evidence.",
+    "historyDetails": []
+  },
+  {
+    "contactId": "yqzYgpEvlX5oYctpmXHn",
+    "name": "Sheetal Jain",
+    "attender": "Rakhi",
+    "currentPipelineStage": "1. New Lead",
+    "proposedPipelineStage": "Closed / Invalid",
+    "transition": "1. New Lead ➔ Closed / Invalid",
+    "historyCount": 1,
+    "classification": "REJECT",
+    "reason": "REJECT: Proposed stage is Closed / Invalid, but history contains 0 explicit invalid/wrong-number keywords. (Rule 1 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-08-17T11:04:04.487Z",
+        "status": "Called by mistake",
+        "remark": "call aaya tha tgf ke taraf se isliye call kiya tha ",
+        "calledFor": ""
+      }
+    ]
+  },
+  {
+    "contactId": "zdw43oE8hdv4bWlo1nZi",
+    "name": "Kumar Dhiraj",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "2. Attempting Contact ➔ 3. Information Given",
+    "historyCount": 1,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '2. Attempting Contact ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-08-11T12:57:57.228Z",
+        "status": "No answer",
+        "remark": "call not received",
+        "calledFor": "Off MA"
+      }
+    ]
+  },
+  {
+    "contactId": "zqPV1F98ahJF5AMCSUsN",
+    "name": "Shweta Mittal",
+    "attender": "Priyanka",
+    "currentPipelineStage": "2. Attempting Contact",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "2. Attempting Contact ➔ 3. Information Given",
+    "historyCount": 4,
+    "classification": "CONFIRMED",
+    "reason": "CONFIRMED: Proposed transition '2. Attempting Contact ➔ 3. Information Given' is supported by history evidence.",
+    "historyDetails": [
+      {
+        "date": "2026-07-30T07:12:34.839Z",
+        "status": "Busy",
+        "remark": " Busy in lecture ,call  later after 4 PM",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-31T05:12:54.913Z",
+        "status": "Busy",
+        "remark": "Call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-03T10:22:30.896Z",
+        "status": "Busy",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-08-06T10:24:46.869Z",
+        "status": "Busy",
+        "remark": "",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  },
+  {
+    "contactId": "zvCWkMZbgPec6IcwxA6W",
+    "name": "Rajanikantha Rudrappa",
+    "attender": "Priyanka",
+    "currentPipelineStage": "6. Registered / Won",
+    "proposedPipelineStage": "3. Information Given",
+    "transition": "6. Registered / Won ➔ 3. Information Given",
+    "historyCount": 2,
+    "classification": "REJECT",
+    "reason": "REJECT: Registration evidence exists (Reg.Done/registrations record), but proposed stage is '3. Information Given'. (Rule 4 violation)",
+    "historyDetails": [
+      {
+        "date": "2026-07-30T07:24:47.759Z",
+        "status": "no answer",
+        "remark": "call not received",
+        "calledFor": "CBT Avd"
+      },
+      {
+        "date": "2026-07-30T07:46:27.291Z",
+        "status": "no answer",
+        "remark": "details send, ready to registered",
+        "calledFor": "CBT Avd"
+      }
+    ]
+  }
+]

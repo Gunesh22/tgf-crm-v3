@@ -22,7 +22,8 @@ import {
   isKhojiNegative,
   isKhojiField,
   formatContactName,
-  isNotConnectedStatus
+  isNotConnectedStatus,
+  getSharedAttenders
 } from "../utils";
 
 function parseTimestamp(t) {
@@ -56,7 +57,8 @@ export const EditModal = ({
   onDelete,
   onClose,
   onRefreshLead,
-  isFetchingShared = false
+  isFetchingShared = false,
+  freshSharedLead = null
 }) => {
   const [selectedAttenderId, setSelectedAttenderId] = useState(() => (attenderId || row?.attenderId || ""));
   const [selectedAttenderName, setSelectedAttenderName] = useState(() => (attenderName || row?.attenderName || ""));
@@ -81,7 +83,7 @@ export const EditModal = ({
     // 1. Get fallback values for all standard fields
     const standardVals = {};
     standardFields.forEach(col => {
-      standardVals[col] = getFieldWithFallback(row, col);
+      standardVals[col] = getFieldWithFallback(row, col, activeAttenderId || activeAttenderName || attenderId || attenderName);
     });
 
     // 2. Delete all aliases of standard fields from the normalized object to avoid duplicate keys
@@ -134,7 +136,21 @@ export const EditModal = ({
     const attState = findMatchingAttenderState(normalized.attenderStates, activeAttenderId || attenderId, activeAttenderName || attenderName);
     const combinedHistory = combineContactHistories(normalized.history, attState?.history);
     normalized.history = combinedHistory;
-    normalized.pipelineStage = getEffectiveStage(normalized);
+
+    // Fresh call event properties: STRICT BLANK STATE (No default pre-selected outcome/result)
+    normalized.callType = normalized.callType || "outgoing";
+    normalized.callPurpose = "SALES";
+    normalized.callStatus = "";
+    normalized.status = "";
+    normalized.queryStatus = "";
+    normalized.queryDetails = "";
+    normalized.objectionReason = "";
+    normalized.remark = ""; // Clean empty note for new call
+    normalized.callbackDate = null; // Fresh follow-up schedule
+    normalized.callbackStatus = null;
+
+    // Preserve MongoDB pipelineStage as Source of Truth directly from record
+    normalized.pipelineStage = normalized.pipelineStage || row.pipelineStage;
 
     console.log(`[EDIT MODAL INIT TRACE] Lead: "${normalized.Name || row.id}"`, {
       contactId: row.id || row.contactId,
@@ -146,31 +162,7 @@ export const EditModal = ({
       attenderStatesKeys: Object.keys(normalized.attenderStates || {})
     });
 
-    // Determine default purpose & status for NEW call event (fresh call state per Section 5)
-    let defaultPurpose = "SALES";
-    let defaultStatus = "Info Given";
-    let defaultCallStatus = "Connected";
-
-    if (normalized.pipelineStage === "Query Desk" || normalized.status === "Query") {
-      defaultPurpose = "QUERY";
-      defaultStatus = "Query";
-    } else if (normalized.pipelineStage === "6. Registered / Won" || normalized.pipelineStage === "Existing Alumni") {
-      defaultPurpose = "REMINDER";
-      defaultStatus = "Reminder Given";
-    }
-
-    return {
-      ...normalized,
-      // Fresh call event properties
-      callType: normalized.callType || "outgoing",
-      callPurpose: defaultPurpose,
-      callStatus: defaultCallStatus,
-      status: defaultStatus,
-      queryStatus: normalized.queryStatus || "Pending",
-      remark: "", // Clean empty note for today's new call
-      callbackDate: null, // Fresh follow-up schedule
-      callbackStatus: null
-    };
+    return normalized;
   };
 
   const [savedRow, setSavedRow] = useState(getNormalizedRow);
@@ -392,79 +384,7 @@ export const EditModal = ({
     }
   };
 
-  const handleAddField = () => {
-    const name = window.prompt("Enter new field name:");
-    if (!name) return;
-    const cleanName = name.trim();
-    if (!cleanName) return;
 
-    // Check if standard or already exists
-    const existingKeys = Object.keys(edited).map(k => k.toLowerCase());
-    if (existingKeys.includes(cleanName.toLowerCase())) {
-      toast.error("Field already exists!");
-      return;
-    }
-
-    setAddedFields(prev => [...prev, cleanName]);
-    setEdited(prev => ({
-      ...prev,
-      [cleanName]: ""
-    }));
-  };
-
-  // Identify fields from the contact that aren't internal bookkeeping fields
-  const dynamicFields = useMemo(() => {
-    const standardOrder = ["Name", "Phone", "Mobile", "Email", "City", "State", "Khoji", "Tags", "Source", "Called For"];
-    const excludedKeysLower = new Set([
-      "id", "contactid", "programid", "programname", "attenderid", "attendername",
-      "calltype", "call type", "status", "remark", "callbackdate", "callbackstatus", "iscallbackdue",
-      "ishotlead", "createdat", "updatedat", "lastcalledat", "firstcalledat", "history",
-      "_callbackdue", "_deleted", "_isnew", "registeredat", "conversionsource", "convertedby",
-      "ghl_id", "ghlid", "sub program", "subprogram", "objectionreason",
-      "lasteditedby", "lasteditedat", "attenderstates", "assignedto",
-      "assignedname", "assignedat", "isassigned", "normalizedphone", "normalizedmobile", "registeredyearmonth",
-      "name", "phone", "mobile", "email", "city", "state", "khoji", "tags", "source", "called for", "calledfor", "sourse",
-      "ismanualentry", "ismanual", "is_manual_entry"
-    ]);
-
-    const contactKeys = Object.keys(edited).filter(k => {
-      const kLower = k.toLowerCase().trim();
-      if (excludedKeysLower.has(kLower)) return false;
-      if (k.startsWith("_")) return false;
-
-      // Always show newly added fields in this modal session
-      if (addedFields.includes(k)) return true;
-
-      // If the contact has recorded mapped fields list, only allow if explicitly mapped.
-      if (edited._mappedFields && Array.isArray(edited._mappedFields)) {
-        return edited._mappedFields.includes(k);
-      }
-
-      if (isIgnoredField(k)) return false;
-      
-      // Only show other fields if they have a non-empty, non-dummy value
-      const val = edited[k];
-      if (val === null || val === undefined) return false;
-      const strVal = String(val).trim();
-      if (!strVal) return false;
-      
-      const lowerVal = strVal.toLowerCase();
-      if (["none", "n/a", "null", "undefined", "false"].includes(lowerVal)) return false;
-      
-      return true;
-    });
-
-    const sortedKeys = [...contactKeys].sort((a, b) => {
-      const idxA = standardOrder.indexOf(a);
-      const idxB = standardOrder.indexOf(b);
-      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-      if (idxA !== -1) return -1;
-      if (idxB !== -1) return 1;
-      return a.localeCompare(b);
-    });
-
-    return sortedKeys;
-  }, [edited, addedFields]);
 
   // Debounced duplicate check — only on phone/mobile value change, not every keystroke
   const phoneVal = useMemo(() => {
@@ -482,6 +402,23 @@ export const EditModal = ({
   const initialMobile = useMemo(() => {
     return getFieldWithFallback(row, "Mobile");
   }, [row]);
+
+  // Compute fully fetched contact combining row, edited state, and globalDup document
+  const effectiveEdited = useMemo(() => {
+    if (!globalDup?.first) return edited;
+    const dup = globalDup.first;
+    return {
+      ...dup,
+      ...edited,
+      pipelineStage: edited.pipelineStage || dup.pipelineStage,
+      programRelationships: edited.programRelationships || dup.programRelationships,
+      attenderStates: {
+        ...(dup.attenderStates || {}),
+        ...(edited.attenderStates || {})
+      },
+      history: combineContactHistories(dup.history, edited.history)
+    };
+  }, [edited, globalDup]);
 
   const dupTimerRef = useRef(null);
   const activeToastRef = useRef(null);
@@ -581,6 +518,16 @@ export const EditModal = ({
             if (!String(updated.Tags || "").trim() && dupTagsVal) updated.Tags = dupTagsVal;
             if (!updated.contactId) updated.contactId = dup.contactId || dup.id;
             if (!updated.GHL_ID && dup.GHL_ID) updated.GHL_ID = dup.GHL_ID;
+
+            // Merge stage, relationships, attender states & history from full DB record
+            if (!updated.pipelineStage && dup.pipelineStage) updated.pipelineStage = dup.pipelineStage;
+            if (!updated.programRelationships && dup.programRelationships) updated.programRelationships = dup.programRelationships;
+            if (dup.attenderStates) {
+              updated.attenderStates = { ...(dup.attenderStates || {}), ...(updated.attenderStates || {}) };
+            }
+            if (dup.history) {
+              updated.history = combineContactHistories(dup.history, updated.history);
+            }
             return updated;
           });
         } else {
@@ -785,7 +732,8 @@ export const EditModal = ({
           "attenderid", "attendername", "programid", "programname", "remark", "status",
           "calltype", "querystatus", "objectionreason", "callbackdate", "callbackstatus",
           "ishotlead", "firstcalledat", "lastcalledat", "_isnew", "_rawdata", "_deleted",
-          "attenderstates", "tags", "source", "called for", "called_for", "calledfor"
+          "attenderstates", "tags", "source", "called for", "called_for", "calledfor",
+          "callpurpose", "call_purpose", "callstatus", "call_status", "options"
         ].includes(kl)) {
           return;
         }
@@ -1174,20 +1122,7 @@ export const EditModal = ({
       fLower.includes("shivir done");
   };
 
-  const isQuestion = (f) => f.length > 40 || /^(what|how|why|describe|tell)[\s_]/i.test(f);
-  const isCampaign = (f) => { const k = f.toLowerCase().replace(/[_\s]/g, ""); return k.includes("adid") || k.includes("adname") || k.includes("adsetid") || k.includes("adsetname") || k.includes("campaignid") || k.includes("campaignname") || k.includes("formid") || k.includes("formname") || k.includes("isorganic") || k.includes("createdtime"); };
-  const iconFor = (f) => { const k = f.toLowerCase(); return k.includes("name") || k.includes("lead") || k.includes("khoji") || k.includes("caller") ? <User size={11} className="text-emerald-500" /> : k.includes("phone") || k.includes("mobile") ? <Phone size={11} className="text-blue-500" /> : k.includes("city") || k.includes("location") ? <MapPin size={11} className="text-red-500" /> : k.includes("email") ? <Hash size={11} className="text-purple-500" /> : k.includes("when") || k.includes("suitable") ? <Clock size={11} className="text-amber-500" /> : k.includes("asmani") || k.includes("aasmani") || k.includes("आसमानी") ? <CheckCircle2 size={11} className="text-pink-500" /> : <Tag size={11} className="text-indigo-500" />; };
-  const labelFor = (f) => f.replace(/_/g, " ").replace(/\?/g, "").trim();
 
-  const basicFields = useMemo(() => {
-    return dynamicFields.filter(f => !isQuestion(f) && !isCampaign(f));
-  }, [dynamicFields]);
-  const questionFields = useMemo(() => {
-    return dynamicFields.filter(f => isQuestion(f));
-  }, [dynamicFields]);
-  const campaignFields = useMemo(() => {
-    return dynamicFields.filter(f => isCampaign(f));
-  }, [dynamicFields]);
 
   const handleSaveAndClose = async (overrideFields = null, isFromHistory = false) => {
     if (saving) return; // Prevent double save
@@ -1308,7 +1243,7 @@ export const EditModal = ({
       const khojiVal = String(targetEdited.Khoji || targetEdited.khoji || "").trim();
       const cityVal = String(targetEdited.City || targetEdited.city || "").trim();
       const calledForVal = String(targetEdited[calledForField] || "").trim();
-      const sourceVal = String(targetEdited[sourceField] || "").trim();
+      const sourceVal = String(targetEdited[sourceField] || targetEdited.Source || targetEdited.source || targetEdited.original_source || savedRow.original_source || "").trim();
 
       if (isUnconnected) {
         if (!targetEdited.City || !String(targetEdited.City).trim()) {
@@ -1759,11 +1694,11 @@ export const EditModal = ({
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in" onClick={handleDismiss}>
       <div
-        className="bg-white rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl border-0 animate-modal-in"
+        className="bg-white rounded-2xl w-full max-w-4xl h-[88vh] max-h-[88vh] flex flex-col overflow-hidden shadow-2xl border-0 animate-modal-in"
         onClick={e => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className={`px-5 py-3.5 flex items-center justify-between rounded-t-2xl ${edited._callbackDue ? "bg-rose-800 text-white shadow-xs" : isIncomingCall ? "bg-emerald-800 text-white shadow-xs" : "bg-slate-900 text-white shadow-xs"}`}>
+        <div className={`px-5 py-3.5 flex items-center justify-between rounded-t-2xl shrink-0 ${edited._callbackDue ? "bg-rose-800 text-white shadow-xs" : isIncomingCall ? "bg-emerald-800 text-white shadow-xs" : "bg-slate-900 text-white shadow-xs"}`}>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-white/10 border border-white/20 rounded-lg flex items-center justify-center text-white shrink-0">
               {edited.callType === "incoming" ? <PhoneIncoming size={18} /> : <PhoneOutgoing size={18} />}
@@ -1914,22 +1849,16 @@ export const EditModal = ({
               <span className={`absolute bottom-[-2px] left-0 right-0 h-0.5 rounded-full ${callTheme.tabLine} animate-pulse`} />
             )}
           </button>
-          <button
-            type="button"
-            onClick={() => setShowEditHistory(true)}
-            className="pb-2.5 text-xs font-black tracking-wider uppercase flex items-center gap-2 border-b-2 border-transparent text-amber-600 hover:text-amber-700 hover:border-amber-250 transition-all ml-auto"
-          >
-            ✏️ Edit Past Logs
-          </button>
         </div>
 
-        <div ref={modalScrollRef} className="overflow-y-auto flex-1 p-5 space-y-4 pb-8">
+        <div ref={modalScrollRef} className="overflow-y-auto flex-1 p-6 md:p-7 space-y-6 pb-8">
 
           {/* Shared Lead Banner */}
           <SharedBanner
             edited={edited}
             row={row}
             globalDup={globalDup}
+            freshSharedLead={freshSharedLead}
             currentAttenderName={activeAttenderName}
             onRefreshLead={onRefreshLead}
             isFetchingShared={isFetchingShared}
@@ -1940,11 +1869,12 @@ export const EditModal = ({
             globalDup={globalDup}
             dupWarningMessage={dupWarningMessage}
             onAutofill={handleAutofillFromDuplicate}
+            isShared={(getSharedAttenders(freshSharedLead || globalDup?.first || row || edited).filter(n => n && n.toLowerCase().trim() !== (activeAttenderName || "").toLowerCase().trim()).length > 0)}
           />
 
           {activeTab === "call" ? (
             <CallEntryTab
-              edited={edited}
+              edited={effectiveEdited}
               row={row}
               callTheme={callTheme}
               calledForField={calledForField}
@@ -1968,10 +1898,6 @@ export const EditModal = ({
               getEditable={getEditable}
               isCheckingDuplicate={isCheckingDuplicate}
               isSearchingCRM={isSearchingCRM}
-              basicFields={basicFields}
-              questionFields={questionFields}
-              campaignFields={campaignFields}
-              handleAddField={handleAddField}
             />
           )}
         </div>
@@ -1992,18 +1918,18 @@ export const EditModal = ({
           </div>
         )}
 
-        <div className="p-6 border-t border-gray-100 bg-gray-50 flex items-center justify-between shadow-inner">
+        <div className="px-7 py-4 bg-slate-50 border-t border-slate-200/80 flex items-center justify-between shadow-inner shrink-0 z-10">
           {(!row._isNew && row.id) ? (
-            <button onClick={handleDelete} className="flex items-center gap-2 text-xs font-bold text-red-400 hover:text-red-600 transition">
+            <button onClick={handleDelete} className="flex items-center gap-2 text-xs font-bold text-red-500 hover:text-red-700 transition cursor-pointer">
               <Trash2 size={14} /> Remove Entry
             </button>
           ) : (
             <div />
           )}
-          <div className="flex items-center gap-4 text-xs font-bold text-gray-400 tracking-tighter uppercase">
+          <div className="flex items-center gap-4 text-xs font-bold text-slate-400 tracking-wider uppercase">
             {saving ? "Saving..." : "All exits auto-save"}
           </div>
-          <button disabled={saving} onClick={() => handleSaveAndClose()} className="px-8 py-3 bg-indigo-600 border border-indigo-600 text-white font-black rounded-2xl shadow-lg shadow-indigo-500/30 hover:bg-indigo-700 transition active:scale-95 leading-none flex items-center justify-center gap-2 disabled:opacity-50">
+          <button disabled={saving} onClick={() => handleSaveAndClose()} className="px-8 py-3.5 bg-indigo-600 border border-indigo-600 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md shadow-indigo-500/20 hover:bg-indigo-700 transition active:scale-95 leading-none flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer">
             {saving && <Loader size={14} className="animate-spin" />} Save & Close
           </button>
         </div>

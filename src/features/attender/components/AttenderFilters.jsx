@@ -2,7 +2,7 @@ import React from "react";
 import {
   Search, SlidersHorizontal, FileSpreadsheet, Flame, Clock, Tag,
   ChevronDown, X, AlertCircle, Phone, PhoneOff, Calendar, CalendarDays,
-  User, CheckCircle2, CheckSquare, MoreHorizontal, PhoneOutgoing, RefreshCw, Loader
+  User, Users, CheckCircle2, CheckSquare, MoreHorizontal, PhoneOutgoing, RefreshCw, Loader
 } from "lucide-react";
 import { STATUS_OPTIONS } from "../utils";
 
@@ -537,42 +537,49 @@ export function AttenderFilters({
       {/* Row 2: Data Controls (Search contacts, Tag selection, Get Numbers, More menu) */}
       <div className="bg-white border-b border-slate-200 px-5 py-2 flex items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-3 flex-wrap flex-1">
-          {/* Search contacts input (No separate Search text button) */}
-          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 focus-within:ring-2 focus-within:ring-indigo-100 focus-within:bg-white transition flex-1 min-w-[220px] max-w-md">
-            <Search size={14} className="text-slate-400 shrink-0" />
-            <input
-              type="text"
-              placeholder="Search contacts..."
-              value={searchDraft}
-              onChange={e => {
-                const val = e.target.value;
-                setSearchDraft(val);
-                if (!val) {
-                  setSearchQuery("");
-                  setPage(1);
-                }
-              }}
-              onKeyDown={e => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleExecuteSearch();
-                }
-              }}
-              className="bg-transparent text-xs font-medium outline-none w-full text-slate-800 placeholder-slate-400"
-            />
-            {searchDraft && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchDraft("");
-                  setSearchQuery("");
-                  setPage(1);
+          {/* Search contacts input with Search button */}
+          <div className="flex items-center gap-1.5 flex-1 min-w-[240px] max-w-md">
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 focus-within:ring-2 focus-within:ring-indigo-100 focus-within:bg-white transition flex-1">
+              <Search size={14} className="text-slate-400 shrink-0" />
+              <input
+                type="text"
+                placeholder="Search contacts..."
+                value={searchDraft}
+                onChange={e => setSearchDraft(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleExecuteSearch();
+                  }
                 }}
-                className="text-slate-400 hover:text-slate-600 p-0.5 shrink-0"
-              >
-                <X size={12} />
-              </button>
-            )}
+                className="bg-transparent text-xs font-medium outline-none w-full text-slate-800 placeholder-slate-400"
+              />
+              {searchDraft && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchDraft("");
+                    setSearchQuery("");
+                    setPage(1);
+                    if (onTriggerSearch) onTriggerSearch("");
+                  }}
+                  className="text-slate-400 hover:text-slate-600 p-0.5 shrink-0 cursor-pointer"
+                  title="Clear search"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleExecuteSearch}
+              className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white rounded-lg font-semibold text-xs transition shadow-2xs cursor-pointer shrink-0"
+              title="Search contacts (Enter)"
+            >
+              <Search size={13} />
+              <span>Search</span>
+            </button>
           </div>
 
           {/* Get Numbers Workflow Group */}
@@ -772,6 +779,7 @@ export function AttenderFilters({
             { id: "Follow up", label: "Follow up", icon: Clock, iconActive: "text-white", iconInactive: "text-blue-500", activeBg: "bg-blue-600 text-white border-blue-600 shadow-2xs" },
             { id: "Unanswered Callback", label: "Unanswered Callback", icon: PhoneOff, iconActive: "text-white", iconInactive: "text-amber-500", activeBg: "bg-amber-500 text-white border-amber-500 shadow-2xs" },
             { id: "Today Activity", label: "Today Activity", icon: Calendar, iconActive: "text-white", iconInactive: "text-teal-500", activeBg: "bg-teal-600 text-white border-teal-600 shadow-2xs" },
+            { id: "Shared", label: "Shared", icon: Users, iconActive: "text-white", iconInactive: "text-purple-500", activeBg: "bg-purple-600 text-white border-purple-600 shadow-2xs" },
           ].map(tab => {
             const isActive = filterStatus === tab.id;
             const IconComp = tab.icon;

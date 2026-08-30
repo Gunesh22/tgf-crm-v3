@@ -277,6 +277,91 @@ function makeCall(purpose = 'SALES', callStatus = 'Connected', status = 'Info Gi
   assert('30e. Registered → showConvertToSales = false', shouldShowConvertToSales(makeContact('6. Registered / Won')) === false);
 }
 
+// ── Test 31: Same contact + SAME calledFor journey evaluation ────────────────
+{
+  const contactSameProg = {
+    "Called For": "CBT Basic",
+    pipelineStage: "3. Information Given",
+    history: [{ calledFor: "CBT Basic", status: "Info Given", callPurpose: "SALES" }]
+  };
+  const stageSame = getEffectiveStage(contactSameProg, "CBT Basic");
+  assert('31. Same contact + SAME calledFor preserves program stage', stageSame === PIPELINE_STAGES.INFO_GIVEN, `got: ${stageSame}`);
+}
+
+// ── Test 32: Same contact + DIFFERENT calledFor journey evaluation ────────────
+{
+  const contactDiffProg = {
+    "Called For": "CBT Basic",
+    pipelineStage: "6. Registered / Won",
+    programRelationships: [{ program: "CBT Basic", status: "Registered / Won" }],
+    history: [{ calledFor: "CBT Basic", status: "Reg.Done", callPurpose: "SALES" }]
+  };
+  const stageDiff = getEffectiveStage(contactDiffProg, "Self Care Shivir 2026");
+  assert('32. Same contact + DIFFERENT calledFor preserves contact canonical stage', stageDiff === PIPELINE_STAGES.REGISTERED_WON, `got: ${stageDiff}`);
+}
+
+// ── Test 33: Fresh lead with blank status and empty history ───────────────────
+{
+  const freshContact = {
+    "Called For": "CBT Basic",
+    status: "",
+    callStatus: "",
+    history: []
+  };
+  const stageFresh = getEffectiveStage(freshContact, "CBT Basic");
+  assert('33. Fresh contact with blank status returns 1. New Lead', stageFresh === PIPELINE_STAGES.NEW_LEAD, `got: ${stageFresh}`);
+}
+
+// ── Test 34: Canonical Current Stage Badge Preservation (Exact 6 User Cases) ──
+{
+  // Case 1: Registered / Won + program history Info Given -> Registered / Won
+  const c1 = { pipelineStage: "6. Registered / Won", "Called For": "Off MA", history: [{ calledFor: "Off MA", status: "Info Given" }] };
+  assert('34a. Registered / Won + Info Given history -> Registered / Won', getEffectiveStage(c1) === PIPELINE_STAGES.REGISTERED_WON, `got: ${getEffectiveStage(c1)}`);
+
+  // Case 2: Nurture / Interested + program history Info Given -> Nurture / Interested
+  const c2 = { pipelineStage: "4. Nurture / Interested", "Called For": "Off MA", history: [{ calledFor: "Off MA", status: "Info Given" }] };
+  assert('34b. Nurture / Interested + Info Given history -> Nurture / Interested', getEffectiveStage(c2) === PIPELINE_STAGES.NURTURE_INTERESTED, `got: ${getEffectiveStage(c2)}`);
+
+  // Case 3: Future Pool + Not Attended history -> Future Pool
+  const c3 = { pipelineStage: "5. Future Pool", "Called For": "Off MA", history: [{ calledFor: "Off MA", status: "Not Attended" }] };
+  assert('34c. Future Pool + Not Attended history -> Future Pool', getEffectiveStage(c3) === PIPELINE_STAGES.FUTURE_POOL, `got: ${getEffectiveStage(c3)}`);
+
+  // Case 4: Closed / Invalid + Invalid history -> Closed / Invalid
+  const c4 = { pipelineStage: "Closed / Invalid", "Called For": "Study Smarter", history: [{ calledFor: "Study Smarter", status: "Invalid No" }] };
+  assert('34d. Closed / Invalid + Invalid history -> Closed / Invalid', getEffectiveStage(c4) === PIPELINE_STAGES.CLOSED_INVALID, `got: ${getEffectiveStage(c4)}`);
+
+  // Case 5: Information Given -> Information Given
+  const c5 = { pipelineStage: "3. Information Given", "Called For": "Off MA", history: [{ calledFor: "Off MA", status: "Info Given" }] };
+  assert('34e. Information Given -> Information Given', getEffectiveStage(c5) === PIPELINE_STAGES.INFO_GIVEN, `got: ${getEffectiveStage(c5)}`);
+
+  // Case 6: New Lead -> New Lead
+  const c6 = { pipelineStage: "1. New Lead", "Called For": "Off MA", history: [] };
+  assert('34f. New Lead -> New Lead', getEffectiveStage(c6) === PIPELINE_STAGES.NEW_LEAD, `got: ${getEffectiveStage(c6)}`);
+}
+
+// ── Test 35: Acceptance Test — Bhanwar Lal Shared Contact Stage Resolution ──
+{
+  const bhanwarLal = {
+    Name: "Bhanwar Lal",
+    pipelineStage: "4. Nurture / Interested",
+    programRelationships: [
+      { program: "Off MA", calledForKey: "off-ma", status: "Nurture / Interested", pipelineStage: "4. Nurture / Interested" }
+    ],
+    attenderStates: {
+      "attender1": { attenderName: "Manisha", "Called For": "Off MA", status: "Interested" }
+    },
+    history: [
+      { calledFor: "Off MA", status: "Interested", attenderName: "Manisha" }
+    ]
+  };
+
+  const stageUnselected = getEffectiveStage(bhanwarLal, "");
+  assert('35a. Bhanwar Lal unselected Called For shows 4. Nurture / Interested', stageUnselected === PIPELINE_STAGES.NURTURE_INTERESTED, `got: ${stageUnselected}`);
+
+  const stageOffMA = getEffectiveStage(bhanwarLal, "Off MA");
+  assert('35b. Bhanwar Lal selecting Off MA shows 4. Nurture / Interested', stageOffMA === PIPELINE_STAGES.NURTURE_INTERESTED, `got: ${stageOffMA}`);
+}
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('\n═══════════════════════════════════════');
 console.log(' PIPELINE ENGINE V2 — TEST RESULTS');

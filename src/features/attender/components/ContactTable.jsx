@@ -1,7 +1,7 @@
 import React from "react";
-import { Flame, Clock, RotateCw, Users } from "lucide-react";
+import { Flame, Clock, RotateCw, Users, Loader } from "lucide-react";
 import { normalizePhone } from "../../../lib/db";
-import { getFieldWithFallback, isUnansweredCallback, getCanonicalStatus, getSharedAttenders } from "../utils";
+import { getFieldWithFallback, isUnansweredCallback, getCanonicalStatus, getSharedAttenders, getAttenderStatus, getAttenderRemark, getContactView } from "../utils";
 import { getPipelineStageConfig } from "../../../utils/pipelineEngine";
 
 function CollapsedTags({ tags }) {
@@ -81,6 +81,7 @@ function parseTimestamp(t) {
 }
 
 export function ContactTable({
+  isLoadingProgram = false,
   scrollRef,
   onMouseDown,
   onMouseMove,
@@ -96,14 +97,12 @@ export function ContactTable({
   setEditingRow,
   onRefreshLead,
   onClearFilters,
-  callLogs
+  callLogs,
+  attenderId,
+  attenderName
 }) {
-  const getStatusBadge = (log) => {
-    let rawStatus = log.status || log.Status;
-    if (!rawStatus && Array.isArray(log.history) && log.history.length > 0) {
-      const lastH = log.history[log.history.length - 1];
-      if (lastH && lastH.status) rawStatus = lastH.status;
-    }
+  const getStatusBadge = (log, activeAttenderCtx) => {
+    let rawStatus = getAttenderStatus(log, activeAttenderCtx);
     const status = getCanonicalStatus(rawStatus || "");
 
     if (isUnansweredCallback(log)) {
@@ -131,8 +130,9 @@ export function ContactTable({
     return d && !isNaN(d.getTime()) ? d.toLocaleDateString("en-IN") : "";
   };
 
-  const visibleCount = 1 + dynamicCols.filter(col => !hiddenColumns.includes(col) && col !== "Calls Done").length
-    + (!hiddenColumns.includes("Calls Done") ? 1 : 0)
+  const isColHidden = (c) => hiddenColumns.includes(c) || hiddenColumns.some(h => h.toLowerCase().replace(/[\s_-]/g, "") === c.toLowerCase().replace(/[\s_-]/g, ""));
+
+  const visibleCount = 1 + dynamicCols.filter(col => !isColHidden(col)).length
     + (!hiddenColumns.includes("Type") ? 1 : 0)
     + (!hiddenColumns.includes("Status") ? 1 : 0)
     + (!hiddenColumns.includes("Remark") ? 1 : 0)
@@ -154,16 +154,13 @@ export function ContactTable({
             <tr>
               <th className="py-2.5 px-3 text-[11px] font-semibold text-slate-500 uppercase w-10 text-center">#</th>
               {dynamicCols.map(col => {
-                if (col === "Calls Done" || hiddenColumns.includes(col)) return null;
+                if (col === "Calls Done" || isColHidden(col)) return null;
                 return (
                   <th key={col} className="py-2.5 px-3 text-[11px] font-semibold text-slate-500 uppercase min-w-[130px] whitespace-nowrap">
                     {col}
                   </th>
                 );
               })}
-              {!hiddenColumns.includes("Calls Done") && (
-                <th className="py-2.5 px-3 text-[11px] font-semibold text-slate-500 uppercase min-w-[80px] text-center">Calls</th>
-              )}
               {!hiddenColumns.includes("Type") && (
                 <th className="py-2.5 px-3 text-[11px] font-semibold text-slate-500 uppercase min-w-[80px]">Type</th>
               )}
@@ -180,11 +177,14 @@ export function ContactTable({
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
             {paginated.map((log, idx) => {
+              const activeAttenderCtx = attenderId || attenderName;
+              const view = getContactView(log, activeAttenderCtx);
+
               const isDue = log._callbackDue;
               const isHot = log.isHotLead;
-              const hasFollowup = log.callbackDate || log.status === "reminder" || log.status === "Next time";
+              const hasFollowup = view.callbackDate || view.status === "reminder" || view.status === "Next time" || log.callbackDate;
               const isUnanswered = isUnansweredCallback(log);
-              const isCalled = !!(log.status || log.callbackDate || log.remark || log.Remark || log.remarks);
+              const isCalled = !!(view.status || view.callbackDate || view.remark);
 
               let statusBorder = "border-l-2 border-l-transparent";
               if (isDue) {
@@ -214,34 +214,12 @@ export function ContactTable({
                     {(page - 1) * rowsPerPage + idx + 1}
                   </td>
                   {dynamicCols.map((col, ci) => {
-                    if (col === "Calls Done" || hiddenColumns.includes(col)) return null;
-
-                    if (col.toLowerCase().includes("programrelationship")) {
-                      const rels = Array.isArray(log.programRelationships) ? log.programRelationships : [];
-                      if (rels.length === 0) {
-                        return <td key={col} className="py-2 px-3 text-xs text-slate-300 align-top">—</td>;
-                      }
-                      return (
-                        <td key={col} className="py-2 px-3 text-xs text-slate-700 min-w-[200px] align-top">
-                          <div className="flex flex-col gap-1 items-start">
-                            {rels.map((r, rIdx) => {
-                              const progLabel = r.program || r.calledFor || r.calledForKey || 'Program';
-                              const stageLabel = r.pipelineStage || r.status || 'Active';
-                              return (
-                                <span key={rIdx} className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 whitespace-nowrap">
-                                  {progLabel} — {stageLabel}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        </td>
-                      );
-                    }
+                    if (col === "Calls Done" || isColHidden(col)) return null;
 
                     const getVal = (item, column) => {
                       const standardOrder = ["Name", "Phone", "Mobile", "Email", "City", "State", "Khoji", "Tags", "Source", "Called For"];
                       if (standardOrder.includes(column)) {
-                        return getFieldWithFallback(item, column);
+                        return getFieldWithFallback(item, column, activeAttenderCtx);
                       }
                       let rawVal = item[column];
                       if (rawVal === undefined || rawVal === null) {
@@ -276,7 +254,7 @@ export function ContactTable({
                       } else if (log.tag) {
                         rawTags = [log.tag];
                       } else {
-                        const fallbackVal = getFieldWithFallback(log, "Tags");
+                        const fallbackVal = getFieldWithFallback(log, "Tags", activeAttenderCtx);
                         if (fallbackVal) {
                           rawTags = [fallbackVal];
                         }
@@ -307,7 +285,7 @@ export function ContactTable({
                     const isShared = sharedList.length > 1;
 
                     return (
-                      <td key={col} className={`py-2 px-3 text-xs ${isName ? "font-semibold text-slate-900" : "text-slate-700"} min-w-[130px] whitespace-normal align-top`}>
+                      <td key={col} title={typeof val === "string" ? val : undefined} className={`py-2 px-3 text-xs ${isName ? "font-semibold text-slate-900" : "text-slate-700"} min-w-[120px] max-w-[200px] break-words align-top`}>
                         {ci === 0 && log.isHotLead && <Flame size={14} className="text-amber-500 shrink-0 inline mr-1" fill="currentColor" />}
                         {val || "\u2014"}
                         {isName && isShared && (
@@ -330,67 +308,34 @@ export function ContactTable({
                       </td>
                     );
                   })}
-                  {!hiddenColumns.includes("Calls Done") && (
-                    <td className="py-2 px-3 text-center font-medium align-top">
-                      {(() => {
-                        const targetId = log.attenderId;
-                        const targetName = (log.attenderName || "").toLowerCase().trim();
-                        let count = 0;
-
-                        if (targetId && log.attenderStates && log.attenderStates[targetId]) {
-                          const st = log.attenderStates[targetId];
-                          if (Array.isArray(st.history) && st.history.length > 0) {
-                            count = st.history.length;
-                          } else if (st.lastCalledAt || st.status || st.remark) {
-                            count = 1;
-                          }
-                        } else if (Array.isArray(log.history) && log.history.length > 0) {
-                          const attenderHistory = log.history.filter(h => {
-                            if (targetId && (h.attenderId === targetId || h.assignedTo === targetId)) return true;
-                            const hName = (h.attenderName || h.name || "").toLowerCase().trim();
-                            if (targetName && hName === targetName) return true;
-                            return false;
-                          });
-                          count = attenderHistory.length > 0 ? attenderHistory.length : 1;
-                        } else if (log.status || log.remark || log.Remark || log.callbackDate) {
-                          count = 1;
-                        }
-
-                        return (
-                          <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[11px] font-mono font-medium ${count > 0 ? "bg-slate-100 text-slate-700 border border-slate-200" : "text-slate-300"}`}>
-                            {count}
-                          </span>
-                        );
-                      })()}
-                    </td>
-                  )}
                   {!hiddenColumns.includes("Type") && (
                     <td className="py-2 px-3 align-top">
-                      <span className={`text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.2 rounded border ${log.callType === "incoming" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-700 border-slate-200"}`}>
-                        {log.callType || "outgoing"}
+                      <span className={`text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.2 rounded border ${view.callType === "incoming" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-700 border-slate-200"}`}>
+                        {view.callType || "outgoing"}
                       </span>
                     </td>
                   )}
                   {!hiddenColumns.includes("Status") && (
                     <td className="py-2 px-3 align-top">
                       {(() => {
-                        if (log.pipelineStage) {
-                          const pConfig = getPipelineStageConfig(log.pipelineStage);
+                        const stageToUse = view.pipelineStage;
+                        if (stageToUse) {
+                          const pConfig = getPipelineStageConfig(stageToUse);
                           return (
                             <div className="flex flex-col gap-0.5">
                               <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border ${pConfig.badge}`}>
                                 {log.isHotLead && <Flame size={10} className="inline text-amber-500 mr-0.5" fill="currentColor" />}
                                 {pConfig.label}
                               </span>
-                              {log.status && (
+                              {view.status && (
                                 <span className="text-[9px] text-slate-500 font-medium ml-0.5">
-                                  Outcome: {log.status}
+                                  Outcome: {view.status}
                                 </span>
                               )}
                             </div>
                           );
                         }
-                        const badge = getStatusBadge(log);
+                        const badge = getStatusBadge(log, activeAttenderCtx);
                         return (
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider ${badge.bg} ${badge.text}`}>
                             {log.isHotLead && <Flame size={10} className="inline text-amber-500" fill="currentColor" />}
@@ -401,49 +346,45 @@ export function ContactTable({
                     </td>
                   )}
                   {!hiddenColumns.includes("Remark") && (
-                    <td className="py-2 px-3 text-slate-700 text-xs leading-relaxed min-w-[280px] whitespace-normal align-top">
+                    <td className="py-2 px-3 text-slate-700 text-xs leading-relaxed min-w-[200px] max-w-[320px] break-words align-top">
                       {(() => {
-                        const directRemark = getFieldWithFallback(log, "remark") || log.remark || log.Remark || "";
-                        if (directRemark) return directRemark;
-                        if (Array.isArray(log.history) && log.history.length > 0) {
-                          const lastRemark = [...log.history].reverse().find(h => h.remark)?.remark;
-                          if (lastRemark) {
-                            return (
-                              <span className="text-slate-500 italic text-xs">
-                                {lastRemark}
-                              </span>
-                            );
-                          }
-                        }
+                        const remarkVal = view.remark;
+                        if (remarkVal) return remarkVal;
                         return <span className="text-slate-300">—</span>;
                       })()}
                     </td>
                   )}
                   {!hiddenColumns.includes("Callback") && (
                     <td className="py-2 px-3 align-top whitespace-nowrap">
-                      {getCallbackStr(log) ? (
-                        <div className="flex flex-col gap-0.5">
-                          {isDue ? (
-                            <span className="text-xs font-semibold text-rose-600 flex items-center gap-1">
-                              <Clock size={12} className="animate-pulse" /> {getCallbackStr(log)}
-                            </span>
-                          ) : (
-                            <span className="text-xs font-semibold text-amber-700">{getCallbackStr(log)}</span>
-                          )}
-                          {log.callbackStatus && (
-                            <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded w-fit border ${
-                              log.callbackStatus === "done" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                              log.callbackStatus === "rescheduled" ? "bg-sky-50 text-sky-700 border-sky-200" :
-                              log.callbackStatus === "cancelled" ? "bg-rose-50 text-rose-700 border-rose-200" :
-                              "bg-amber-50 text-amber-700 border-amber-200"
-                            }`}>
-                              {log.callbackStatus === "done" ? "✓ Done" : log.callbackStatus === "rescheduled" ? "↺ Rescheduled" : log.callbackStatus === "cancelled" ? "✕ Cancelled" : "⏳ Pending"}
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-slate-300">—</span>
-                      )}
+                      {(() => {
+                        const rawCb = view.callbackDate || log.callbackDate;
+                        const cbStr = rawCb ? (parseTimestamp(rawCb)?.toLocaleDateString("en-IN") || getCallbackStr(log)) : "";
+                        const cbStatus = view.callbackStatus || log.callbackStatus;
+                        if (cbStr) {
+                          return (
+                            <div className="flex flex-col gap-0.5">
+                              {isDue ? (
+                                <span className="text-xs font-semibold text-rose-600 flex items-center gap-1">
+                                  <Clock size={12} className="animate-pulse" /> {cbStr}
+                                </span>
+                              ) : (
+                                <span className="text-xs font-semibold text-amber-700">{cbStr}</span>
+                              )}
+                              {cbStatus && (
+                                <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded w-fit border ${
+                                  cbStatus === "done" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                                  cbStatus === "rescheduled" ? "bg-sky-50 text-sky-700 border-sky-200" :
+                                  cbStatus === "cancelled" ? "bg-rose-50 text-rose-700 border-rose-200" :
+                                  "bg-amber-50 text-amber-700 border-amber-200"
+                                }`}>
+                                  {cbStatus === "done" ? "✓ Done" : cbStatus === "rescheduled" ? "↺ Rescheduled" : cbStatus === "cancelled" ? "✕ Cancelled" : "⏳ Pending"}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        }
+                        return <span className="text-slate-300">—</span>;
+                      })()}
                     </td>
                   )}
                 </tr>
@@ -453,7 +394,17 @@ export function ContactTable({
               <tr>
                 <td colSpan={visibleCount}>
                   <div className="py-16 text-center bg-slate-50/50 flex flex-col items-center justify-center p-6">
-                    {callLogs.length === 0 ? (
+                    {isLoadingProgram && callLogs.length === 0 ? (
+                      <>
+                        <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mb-2 border border-indigo-100">
+                          <Loader size={22} className="animate-spin" />
+                        </div>
+                        <p className="text-sm font-bold text-slate-800">Loading contacts from database…</p>
+                        <p className="text-xs text-slate-500 max-w-sm mt-1 leading-relaxed">
+                          Please wait while your call sheet is syncing.
+                        </p>
+                      </>
+                    ) : callLogs.length === 0 ? (
                       <>
                         <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-2 border border-slate-200">
                           <Users size={20} />

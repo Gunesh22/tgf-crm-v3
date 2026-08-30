@@ -150,8 +150,12 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
     { value: "Dew drop khoji", label: "Dew drop khoji" }
   ], []);
 
+  const EXCLUDED_ATTENDER_NAMES = ["admin", "super admin", "administrator", "admin test", "test 2", "test2", "test"];
+
   const programOptions = programs.map(p => ({ value: p.id, label: p.name }));
-  const attenderOptions = attenders.map(a => ({ value: a.id, label: a.name }));
+  const attenderOptions = attenders
+    .filter(a => a.role !== 'admin' && !EXCLUDED_ATTENDER_NAMES.includes((a.name || "").toLowerCase().trim()))
+    .map(a => ({ value: a.id, label: a.name }));
 
   const sourceOptions = useMemo(() => {
     const sources = new Set(settingsOptions?.sourceOptions || []);
@@ -230,139 +234,118 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
         return parseTimestamp(val);
       };
 
-      const hasAttenderStates = log.attenderStates && typeof log.attenderStates === "object" && Object.keys(log.attenderStates).length > 0;
       const hasTopHistory = Array.isArray(log.history) && log.history.length > 0;
+      const hasAttenderStates = log.attenderStates && typeof log.attenderStates === "object" && Object.keys(log.attenderStates).length > 0;
+      const seenCallKeys = new Set();
 
-      // Track processed event keys per lead document to prevent double-counting
-      const seenEventKeys = new Set();
+      // 1. Extract ALL physical call events directly from contact.history (Canonical call count)
+      if (hasTopHistory) {
+        log.history.forEach((h, index) => {
+          const canonicalStatus = getCanonicalStatus(h.status || "Pending");
+          const attemptDate = getAttemptDate(h.timestamp || h.date || h.createdAt) || parseTimestamp(log.createdAt);
+          const attId = h.attenderId || log.attenderId || "legacy";
+          const attName = h.attenderName || log.attenderName || "Legacy Attender";
+          const callKey = `${log.id}_h_${index}`;
 
-      const addAttemptIfNew = (status, dateVal, remark, callType, source, calledFor, attId, attName, isHistory, index, stateObj) => {
-        const canonicalStatus = getCanonicalStatus(status || "Pending");
-        const attemptDate = getAttemptDate(dateVal) || parseTimestamp(log.createdAt);
-        if (!attemptDate) return;
+          if (!seenCallKeys.has(callKey)) {
+            seenCallKeys.add(callKey);
+            list.push({
+              ...log,
+              id: `${log.id}_h_${index}`,
+              contactId: log.id,
+              Name: contactName,
+              Phone: contactPhone,
+              programId: log.programId,
+              programName: log.programName || "Unknown Program",
+              tags: log.tags || [],
+              attenderId: attId,
+              attenderName: attName,
+              status: canonicalStatus,
+              pipelineStage: log.pipelineStage || "",
+              remark: h.remark || "",
+              callType: h.callType || log.callType || "outgoing",
+              history: log.history || [],
+              callbackDate: log.callbackDate || null,
+              createdAt: parseTimestamp(log.createdAt) || attemptDate,
+              timestamp: attemptDate || new Date(),
+              updatedAt: attemptDate || new Date(),
+              source: h.source || log.Source || log.source || sourceVal,
+              calledFor: h.calledFor || log["Called For"] || log.calledFor || calledForVal,
+              feedback: feedbackVal,
+              Khoji: khojiVal,
+              isHistory: true
+            });
+          }
+        });
+      }
 
-        const eventKey = isHistory
-          ? `${log.id}_${attId}_h${index}_${canonicalStatus}`
-          : `${log.id}_${attId}_latest_${canonicalStatus}`;
-        if (seenEventKeys.has(eventKey)) return;
-        seenEventKeys.add(eventKey);
-
-        const attItem = {
-          ...log,
-          id: `${log.id}_${attId}_${isHistory ? `h_${index}` : "latest"}_${attemptDate.getTime()}`,
-          contactId: log.id,
-          Name: contactName,
-          Phone: contactPhone,
-          programId: log.programId,
-          programName: log.programName || "Unknown Program",
-          tags: log.tags || [],
-          attenderId: attId,
-          attenderName: attName || stateObj?.attenderName || "Unknown",
-          status: canonicalStatus,
-          remark: remark || "",
-          callType: callType || stateObj?.callType || "outgoing",
-          history: stateObj?.history || [],
-          callbackDate: stateObj?.callbackDate || null,
-          createdAt: parseTimestamp(log.createdAt) || attemptDate,
-          timestamp: attemptDate, // Canonical event timestamp
-          updatedAt: attemptDate,
-          lastCalledAt: stateObj?.lastCalledAt || null,
-          source: source || stateObj?.Source || stateObj?.source || sourceVal,
-          calledFor: calledFor || stateObj?.["Called For"] || stateObj?.calledFor || calledForVal,
-          feedback: feedbackVal,
-          Khoji: khojiVal
-        };
-
-        if (attItem && attItem.timestamp) list.push(attItem);
-      };
-
-      // Tier 1: Extract from matching attenderStates
+      // 2. Extract fallback attender state status/remarks when no history array entry was created
       if (hasAttenderStates) {
         Object.entries(log.attenderStates).forEach(([attId, state]) => {
           if (!state) return;
           const stateAttName = state.attenderName || "Unknown";
-
-          const hasStateHistory = Array.isArray(state.history) && state.history.length > 0;
-          if (hasStateHistory) {
-            state.history.forEach((h, index) => {
-              const dateVal = h.timestamp || h.date || h.createdAt || state.lastCalledAt || log.createdAt;
-              addAttemptIfNew(
-                h.status,
-                dateVal,
-                h.remark,
-                h.callType || state.callType,
-                h.source || state.Source || state.source,
-                h.calledFor || state["Called For"] || state.calledFor,
-                attId,
-                h.attenderName || stateAttName,
-                true,
-                index,
-                state
-              );
+          const stateHasHistory = Array.isArray(state.history) && state.history.length > 0;
+          if (!stateHasHistory && (state.lastCalledAt || (state.status && state.status !== "Pending") || state.remark)) {
+            const canonicalStatus = getCanonicalStatus(state.status || "Pending");
+            const attemptDate = getAttemptDate(state.lastCalledAt) || parseTimestamp(log.createdAt);
+            list.push({
+              ...log,
+              id: `${log.id}_${attId}_latest`,
+              contactId: log.id,
+              Name: contactName,
+              Phone: contactPhone,
+              programId: log.programId,
+              programName: log.programName || "Unknown Program",
+              tags: log.tags || [],
+              attenderId: attId,
+              attenderName: stateAttName,
+              status: canonicalStatus,
+              pipelineStage: log.pipelineStage || "",
+              remark: state.remark || "",
+              callType: state.callType || "outgoing",
+              history: [],
+              callbackDate: state.callbackDate || null,
+              createdAt: parseTimestamp(log.createdAt) || attemptDate,
+              timestamp: attemptDate || new Date(),
+              updatedAt: attemptDate || new Date(),
+              source: state.Source || state.source || sourceVal,
+              calledFor: state["Called For"] || state.calledFor || calledForVal,
+              feedback: feedbackVal,
+              Khoji: khojiVal,
+              isHistory: false
             });
           }
-          if (state.lastCalledAt || (state.status && state.status !== "Pending") || state.remark) {
-            const dateVal = state.lastCalledAt || log.createdAt;
-            addAttemptIfNew(
-              state.status,
-              dateVal,
-              state.remark,
-              state.callType,
-              state.Source || state.source,
-              state["Called For"] || state.calledFor,
-              attId,
-              stateAttName,
-              false,
-              0,
-              state
-            );
-          }
         });
-      }
-
-      // Tier 2: Extract from top-level log.history ONLY for attenders NOT covered by attenderStates
-      // (Prevents double-counting when both attenderStates.history and log.history hold the same call)
-      if (hasTopHistory) {
-        const coveredAttenderIds = hasAttenderStates ? new Set(Object.keys(log.attenderStates)) : new Set();
-        log.history.forEach((h, index) => {
-          const itemAttId = h.attenderId || log.attenderId || "legacy";
-          // Skip if this attender's data is already captured via attenderStates
-          if (coveredAttenderIds.has(itemAttId)) return;
-          const itemAttName = h.attenderName || log.attenderName || "Legacy Attender";
-          const dateVal = h.timestamp || h.date || h.createdAt || log.createdAt;
-          addAttemptIfNew(
-            h.status,
-            dateVal,
-            h.remark,
-            h.callType || log.callType,
-            h.source || log.Source || log.source,
-            h.calledFor || log["Called For"] || log.calledFor,
-            itemAttId,
-            itemAttName,
-            true,
-            index,
-            { attenderName: itemAttName }
-          );
-        });
-      }
-
-      // Tier 3: Extract from top-level document fields (if legacy without attenderStates & without history)
-      if (!hasAttenderStates && !hasTopHistory) {
+      } else if (!hasTopHistory) {
         if (log.lastCalledAt || (log.status && log.status !== "Pending") || log.remark) {
-          const dateVal = log.lastCalledAt || log.createdAt;
-          addAttemptIfNew(
-            log.status,
-            dateVal,
-            log.remark,
-            log.callType,
-            log.Source || log.source,
-            log["Called For"] || log.calledFor,
-            log.attenderId || "legacy",
-            log.attenderName || "Legacy Attender",
-            false,
-            0,
-            { attenderName: log.attenderName || "Legacy Attender" }
-          );
+          const canonicalStatus = getCanonicalStatus(log.status || "Pending");
+          const attemptDate = getAttemptDate(log.lastCalledAt) || parseTimestamp(log.createdAt);
+          list.push({
+            ...log,
+            id: `${log.id}_legacy_latest`,
+            contactId: log.id,
+            Name: contactName,
+            Phone: contactPhone,
+            programId: log.programId,
+            programName: log.programName || "Unknown Program",
+            tags: log.tags || [],
+            attenderId: log.attenderId || "legacy",
+            attenderName: log.attenderName || "Legacy Attender",
+            status: canonicalStatus,
+            pipelineStage: log.pipelineStage || "",
+            remark: log.remark || "",
+            callType: log.callType || "outgoing",
+            history: [],
+            callbackDate: log.callbackDate || null,
+            createdAt: parseTimestamp(log.createdAt) || attemptDate,
+            timestamp: attemptDate || new Date(),
+            updatedAt: attemptDate || new Date(),
+            source: log.Source || log.source || sourceVal,
+            calledFor: log["Called For"] || log.calledFor || calledForVal,
+            feedback: feedbackVal,
+            Khoji: khojiVal,
+            isHistory: false
+          });
         }
       }
     });
@@ -452,17 +435,22 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
     const map = {};
     const seenRegsPerAttender = new Set();
 
-    const TEST_NAMES = ["admin test", "test 2", "test2", "test"];
+    const EXCLUDED_ATTENDER_NAMES = ["admin", "super admin", "administrator", "admin test", "test 2", "test2", "test"];
 
     filteredLogs.forEach(log => {
       const rawName = (log.attenderName || "").trim() || "Unknown Attender";
-      // Skip test entries
-      if (TEST_NAMES.includes(rawName.toLowerCase())) return;
       const normName = rawName.toLowerCase();
+      // Skip admin and test entries
+      if (EXCLUDED_ATTENDER_NAMES.includes(normName)) return;
+
       // Match with official attenders list if available
       const foundAttender = (attenders || []).find(a => (a.name || "").toLowerCase().trim() === normName);
+      if (foundAttender && (foundAttender.role === "admin" || EXCLUDED_ATTENDER_NAMES.includes((foundAttender.name || "").toLowerCase().trim()))) return;
+
       const canonicalName = foundAttender ? foundAttender.name : rawName;
       const canonicalId = foundAttender ? foundAttender.id : (log.attenderId && log.attenderId !== "unknown" && log.attenderId !== "legacy" ? log.attenderId : normName);
+
+      if (canonicalId === "admin" || EXCLUDED_ATTENDER_NAMES.includes(canonicalName.toLowerCase().trim())) return;
 
       // Use canonicalId as map key to prevent same attender appearing twice
       const key = canonicalId;
@@ -493,6 +481,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
     const byName = {};
     Object.values(map).forEach(entry => {
       const nameKey = entry.name.toLowerCase().trim();
+      if (EXCLUDED_ATTENDER_NAMES.includes(nameKey)) return;
       if (!byName[nameKey]) {
         byName[nameKey] = { ...entry };
       } else {
@@ -585,9 +574,26 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
     return result;
   }, [filteredLogs]);
 
-  const totalRegDone = conversionsList.length;
+  const totalPhysicalCalls = useMemo(() => {
+    return filteredLogs.filter(l => l.isHistory).length;
+  }, [filteredLogs]);
+
+  const totalRegisteredPeople = useMemo(() => {
+    const uniqueContactIds = new Set();
+    filteredLogs.forEach(l => {
+      const cId = l.contactId || l.id || l.Phone || l.Name;
+      if (!cId) return;
+      const contactDoc = (callLogs || []).find(c => String(c.id || c._id) === String(cId));
+      const stage = (contactDoc?.pipelineStage || l.pipelineStage || "").trim();
+      if (stage === "6. Registered / Won" || stage === "Registered / Won" || stage.includes("Registered")) {
+        uniqueContactIds.add(String(cId));
+      }
+    });
+    return uniqueContactIds.size;
+  }, [filteredLogs, callLogs]);
+
   const totalInterestedCalls = useMemo(() => {
-    return filteredLogs.filter(l => getCanonicalStatus(l.status) === "Interested").length;
+    return filteredLogs.filter(l => l.isHistory && getCanonicalStatus(l.status) === "Interested").length;
   }, [filteredLogs]);
 
   const totalInterestedPeople = useMemo(() => {
@@ -595,11 +601,11 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
     filteredLogs.forEach(l => {
       const cId = l.contactId || l.id || l.Phone || l.Name;
       if (!cId) return;
-      const contactDoc = (callLogs || []).find(c => c.id === cId || c._id === cId);
+      const contactDoc = (callLogs || []).find(c => String(c.id || c._id) === String(cId));
       const stage = (contactDoc?.pipelineStage || l.pipelineStage || "").trim();
       const isNurtureInterested = stage === "4. Nurture / Interested" || stage === "Nurture / Interested" || (stage.includes("Interested") && !stage.includes("Reg"));
       if (isNurtureInterested) {
-        uniqueContactIds.add(cId);
+        uniqueContactIds.add(String(cId));
       }
     });
     return uniqueContactIds.size;
@@ -655,7 +661,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
   const activeFilters = selectedProgramIds.length + selectedAttenderIds.length + selectedSources.length + selectedCalledFors.length + selectedStatuses.length + selectedCallTypes.length + selectedKhojiStatuses.length;
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
+    <div className="space-y-6 max-w-[1400px] mx-auto">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -832,10 +838,10 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: "Total Calls", value: filteredLogs.length, sub: "Event count (all calls)" },
+          { label: "Total Calls", value: totalPhysicalCalls, sub: "Physical call events (contact.history)" },
           { label: "Interested Calls", value: totalInterestedCalls, color: "text-amber-600", sub: "Event count (call history)" },
           { label: "Interested People", value: totalInterestedPeople, color: "text-indigo-600", sub: "Unique contacts currently Interested" },
-          { label: "Reg.Done", value: totalRegDone, color: "text-emerald-600", sub: "Unique registrations" },
+          { label: "Registered People", value: totalRegisteredPeople, color: "text-emerald-600", sub: "Unique contacts (6. Registered / Won)" },
         ].map(s => (
           <div key={s.label} className="bg-white p-3.5 rounded-lg border border-slate-200 shadow-2xs">
             <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{s.label}</p>

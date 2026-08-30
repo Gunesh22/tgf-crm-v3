@@ -17,7 +17,8 @@ import {
   isKhojiField,
   getFieldWithFallback,
   formatContactName,
-  isNotConnectedStatus
+  isNotConnectedStatus,
+  getSharedAttenders
 } from "../utils";
 
 import SearchableDropdown from "../components/edit-modal/SearchableDropdown";
@@ -46,7 +47,8 @@ export default function MobileEditModal({
   onDelete,
   onClose,
   onRefreshLead,
-  isFetchingShared = false
+  isFetchingShared = false,
+  freshSharedLead = null
 }) {
   const getNormalizedRow = () => {
     const normalized = { ...row };
@@ -57,7 +59,7 @@ export default function MobileEditModal({
     const standardFields = ["Name", "Phone", "Mobile", "Email", "City", "State", "Khoji", "Tags", "Source", "Called For"];
     const standardVals = {};
     standardFields.forEach(col => {
-      standardVals[col] = getFieldWithFallback(row, col);
+      standardVals[col] = getFieldWithFallback(row, col, attenderId || attenderName);
     });
 
     const keysToDelete = new Set();
@@ -83,7 +85,12 @@ export default function MobileEditModal({
       normalized.Khoji = "No";
     }
 
+    normalized.callStatus = "";
+    normalized.status = "";
+    normalized.queryStatus = "";
     normalized.remark = "";
+
+    normalized.pipelineStage = normalized.pipelineStage || row.pipelineStage;
 
     return normalized;
   };
@@ -173,7 +180,11 @@ export default function MobileEditModal({
               Email: prev.Email || dup.email || dup.Email || "",
               City: prev.City || dup.city || dup.City || "",
               State: prev.State || dup.state || dup.State || "",
-              Tags: prev.Tags || (Array.isArray(dup.tags) ? dup.tags.join(", ") : dup.Tags || "")
+              Tags: prev.Tags || (Array.isArray(dup.tags) ? dup.tags.join(", ") : dup.Tags || ""),
+              pipelineStage: prev.pipelineStage || dup.pipelineStage,
+              programRelationships: prev.programRelationships || dup.programRelationships,
+              attenderStates: { ...(dup.attenderStates || {}), ...(prev.attenderStates || {}) },
+              history: combineContactHistories(dup.history, prev.history)
             }));
             toast.success("Duplicate lead found! Info auto-filled.");
           }
@@ -615,6 +626,7 @@ export default function MobileEditModal({
             edited={edited}
             row={row}
             globalDup={globalDup}
+            freshSharedLead={freshSharedLead}
             currentAttenderName={attenderName}
             onRefreshLead={onRefreshLead}
             isFetchingShared={isFetchingShared}

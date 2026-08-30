@@ -1,0 +1,3395 @@
+{
+  "rawRegDoneEvents": 145,
+  "uniqueRegisteredContacts": 184,
+  "uniqueRegistrations": 160,
+  "rawRegistrationsCollectionDocs": 130,
+  "deduplicatedRegistrationsCollection": 130,
+  "pipelineRegisteredWonPeople": 183,
+  "duplicatesCount": 139,
+  "totalDuplicateEntries": 279,
+  "duplicatesList": [
+    {
+      "contactId": "59gNCg0gZmFXpwR1oHOP",
+      "name": "Gopa Samanta",
+      "phone": "9433794850",
+      "calledFor": "Yoga 1 Yr",
+      "normalizedProgramKey": "yoga_1_yr",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-07T10:35:40.683Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-07T10:35:40.683Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "Q9QDwQ32SeqXjEc1M0u6",
+      "name": "Amol Raut",
+      "phone": "+918879211929",
+      "calledFor": "Study smarter",
+      "normalizedProgramKey": "study_smarter",
+      "totalOccurrences": 2,
+      "duplicateCount": 1,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-31T11:21:54.812Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "dXJVk1ZrvwTSs299K02e",
+      "name": "Radha",
+      "phone": "8669862902",
+      "calledFor": "SHSH",
+      "normalizedProgramKey": "shsh",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-08T12:39:22.728Z"
+        },
+        {
+          "source": "attenderStates[Geeta].history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-08T12:39:22.728Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "Qw7XdmfVvwHfPVqOiWsu",
+      "name": "Sunil",
+      "phone": "099214 08202",
+      "calledFor": "Study smarter",
+      "normalizedProgramKey": "study_smarter",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-23T11:34:39.422Z"
+        },
+        {
+          "source": "attenderStates[Geeta].history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-23T11:34:39.422Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "T9vQkJuV7s9YG4FcOciC",
+      "name": "Dr. shelake madam",
+      "phone": "099605 68439",
+      "calledFor": "SHSH",
+      "normalizedProgramKey": "shsh",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-06-22T06:12:01.146Z"
+        },
+        {
+          "source": "attenderStates[Geeta].history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-06-22T06:12:01.146Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "4aoqFiQSESOnui1kJvHc",
+      "name": "Manisha Rajurkar",
+      "phone": "9518532711",
+      "calledFor": "Yoga 1 Yr",
+      "normalizedProgramKey": "yoga_1_yr",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-28T06:23:28.683Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-28T06:23:28.683Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "VAxdvkBGoLLsoEtS05TK",
+      "name": "Prachee Khandade",
+      "phone": "093593 62428",
+      "calledFor": "SHSH",
+      "normalizedProgramKey": "shsh",
+      "totalOccurrences": 4,
+      "duplicateCount": 3,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-06T09:19:48.472Z"
+        },
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-08-04T13:10:22.025Z"
+        },
+        {
+          "source": "attenderStates[Geeta].history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-08-04T13:10:22.025Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "24NryUilHw3dveaT0Ewu",
+      "name": "Rajesh Nigam",
+      "phone": "918097147247",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-17T09:08:33.250Z"
+        },
+        {
+          "source": "attenderStates[Geeta].history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-17T09:08:33.250Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "zDaKDv0RxxPp2uTehJSM",
+      "name": "Gaur Shankar Bhanja",
+      "phone": "+919836733737",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-21T11:39:13.637Z"
+        },
+        {
+          "source": "attenderStates[Geeta].history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-21T11:39:13.637Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "PgVdDc232Hi3zFplFqiD",
+      "name": "Milind Trimbak Shete",
+      "phone": "9623648155",
+      "calledFor": "Appointment",
+      "normalizedProgramKey": "appointment",
+      "totalOccurrences": 2,
+      "duplicateCount": 1,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-07T09:30:57.701Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-07T09:30:57.941Z"
+        }
+      ]
+    },
+    {
+      "contactId": "JtdOgNGIMrsKqrdelBGl",
+      "name": "Shamarao Desai",
+      "phone": "9481569584",
+      "calledFor": "Ashram Visit",
+      "normalizedProgramKey": "ashram_visit",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-28T09:53:08.646Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-28T09:53:08.781Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "6sAGHImQzsElTMmNF1e3",
+      "name": "Atulkumar Chaudhari",
+      "phone": "9925755986",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-28T08:30:07.857Z"
+        },
+        {
+          "source": "attenderStates[Geeta].history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-28T08:30:07.857Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "OhpX9ZB5YaN3tlXxteHe",
+      "name": "Supriya Shingare",
+      "phone": "9657143564",
+      "calledFor": "CBT Avd",
+      "normalizedProgramKey": "cbt_avd",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-13T10:26:37.533Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-13T10:26:37.533Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "Oo8NVkBzdstsVqpfjqLy",
+      "name": "Akash Dattatraya Jadhav",
+      "phone": "+919325849356",
+      "calledFor": "CBT Avd",
+      "normalizedProgramKey": "cbt_avd",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-23T06:36:27.156Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-23T06:36:27.156Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "0tX2Tzv4QiviCZHiRhb5",
+      "name": "Sanskar Rahate",
+      "phone": "8767872421",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-14T10:09:36.719Z"
+        },
+        {
+          "source": "attenderStates[Geeta].history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-14T10:09:36.719Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "8Yt1dWhzkDdWLBpI9N84",
+      "name": "Vaishali Vaidya",
+      "phone": "9822401592",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 4,
+      "duplicateCount": 3,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-31T06:14:11.439Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-31T06:10:45.741Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-31T06:14:11.564Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "3phFuDFG6krXe4T3LDOO",
+      "name": "Nikita Paliwal",
+      "phone": "9329880445",
+      "calledFor": "Study smarter",
+      "normalizedProgramKey": "study_smarter",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-27T12:28:54.619Z"
+        },
+        {
+          "source": "attenderStates[Geeta].history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-27T12:28:54.845Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "61L1LsDoOw0CCPw9JH56",
+      "name": "Ramesh Shinde",
+      "phone": "9823249387",
+      "calledFor": "Other",
+      "normalizedProgramKey": "other",
+      "totalOccurrences": 2,
+      "duplicateCount": 1,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-27T10:23:26.370Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-27T10:23:26.723Z"
+        }
+      ]
+    },
+    {
+      "contactId": "4lgKXqpaeovcvxbLw6su",
+      "name": "Ritik Kumar",
+      "phone": "7761076026",
+      "calledFor": "SHSH",
+      "normalizedProgramKey": "shsh",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-28T09:54:41.286Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-28T09:54:41.431Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "3hNuIoOuk9ofOfnRn9tp",
+      "name": "Ramshetti Patil",
+      "phone": "7775953215",
+      "calledFor": "Yoga 1 Yr",
+      "normalizedProgramKey": "yoga_1_yr",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-07T05:11:57.604Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-07T05:11:57.604Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "9aBRCwZEQTOdcWQAHnlD",
+      "name": "Rupesh Bhavsar",
+      "phone": "9767890051",
+      "calledFor": "Study smarter",
+      "normalizedProgramKey": "study_smarter",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-27T06:57:17.203Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-27T06:57:17.644Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "4BzWDIk0aVNeBrkIIqgy",
+      "name": "Umesh Kadam",
+      "phone": "9552540371",
+      "calledFor": "Study smarter",
+      "normalizedProgramKey": "study_smarter",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-28T11:47:47.415Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-28T11:47:47.583Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "LtsiSloKIgTRn1ze7HL1",
+      "name": "Nagling Mhetre",
+      "phone": "9028501210",
+      "calledFor": "CBT Avd",
+      "normalizedProgramKey": "cbt_avd",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-09T06:43:16.129Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-09T06:43:16.435Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "Cz7MTDYLLZjoVqmFUn7w",
+      "name": "Mayuri Kandale",
+      "phone": "8698014499",
+      "calledFor": "CBT Avd",
+      "normalizedProgramKey": "cbt_avd",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-09T06:07:22.138Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-09T06:07:22.411Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "CGl9PjHMwHYAaQSBEt2M",
+      "name": "Baig Fatima",
+      "phone": "9588454564",
+      "calledFor": "SHSH",
+      "normalizedProgramKey": "shsh",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-08-04T12:55:50.801Z"
+        },
+        {
+          "source": "attenderStates[Geeta].history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-08-04T12:55:50.801Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "4reb5hSocdsniw5D9RVa",
+      "name": "Shubhangi Kute",
+      "phone": "8956793162",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T08:18:23.447Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T08:18:23.447Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "PKO0ggmNH3PzFX7wuF5X",
+      "name": "Swati Bopinwar",
+      "phone": "8788871696",
+      "calledFor": "Swasthya Shivir",
+      "normalizedProgramKey": "swasthya_shivir",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-08-05T06:27:52.287Z"
+        },
+        {
+          "source": "attenderStates[Geeta].history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-08-05T06:27:52.287Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "1ZflJHckVfGZXjXwG2gI",
+      "name": "Rashmi Jaware",
+      "phone": "8104139769",
+      "calledFor": "Yoga 1 Yr",
+      "normalizedProgramKey": "yoga_1_yr",
+      "totalOccurrences": 5,
+      "duplicateCount": 4,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-30T07:51:03.054Z"
+        },
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-30T11:00:00.959Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-30T07:51:03.054Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-30T11:00:00.959Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "1n52u2wGhSaMeS5faszg",
+      "name": "Amit Chavan",
+      "phone": "  9130180301",
+      "calledFor": "CBT Avd",
+      "normalizedProgramKey": "cbt_avd",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-14T06:47:08.042Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-14T06:47:09.695Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "oYGPtYIP60AZqlo3K8Cb",
+      "name": "Priti Bagul",
+      "phone": "8380867278",
+      "calledFor": "Appointment",
+      "normalizedProgramKey": "appointment",
+      "totalOccurrences": 2,
+      "duplicateCount": 1,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-28T05:52:13.357Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-28T05:52:13.518Z"
+        }
+      ]
+    },
+    {
+      "contactId": "mzMQ1bhYsFqKw8ty5uPh",
+      "name": "Chandan Bhowmick",
+      "phone": "+919801492603",
+      "calledFor": "Study smarter",
+      "normalizedProgramKey": "study_smarter",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-27T11:14:24.487Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-27T11:14:24.487Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "eeKVEtNayqKtO6eONnYm",
+      "name": "Anil Shukla",
+      "phone": "+919460479178",
+      "calledFor": "CBT Avd",
+      "normalizedProgramKey": "cbt_avd",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-27T09:32:32.423Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-27T09:32:32.423Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "eP6hqtWTweBsACq1Sn4w",
+      "name": "Manohar Kumbhare",
+      "phone": "919423252359",
+      "calledFor": "Special MA",
+      "normalizedProgramKey": "special_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-31T10:27:06.106Z"
+        },
+        {
+          "source": "attenderStates[Geeta].history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-31T10:27:06.514Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "SpWHul6qSk53fjx6oUdv",
+      "name": "Sandeep Kapse",
+      "phone": "9422835877",
+      "calledFor": "SHSH",
+      "normalizedProgramKey": "shsh",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-22T08:04:20.744Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-22T08:04:20.899Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "aWzLW5H3tVH4H8B9bjRl",
+      "name": "Vaishali Gade",
+      "phone": "+919657362313",
+      "calledFor": "CBT Avd",
+      "normalizedProgramKey": "cbt_avd",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-27T07:36:21.441Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-27T07:36:21.441Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "cfNc6VxUjMqwhEFqcf0G",
+      "name": "Sonal Gupta",
+      "phone": "9913456907",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T05:52:58.681Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T05:52:58.876Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "TEVRj3vMnpXyMq3HbCFQ",
+      "name": "Rupali Shinde",
+      "phone": "9822410192",
+      "calledFor": "Other",
+      "normalizedProgramKey": "other",
+      "totalOccurrences": 2,
+      "duplicateCount": 1,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-10T08:23:42.330Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-10T08:23:42.426Z"
+        }
+      ]
+    },
+    {
+      "contactId": "a1mqJ8NWs7RrQyUgCKyp",
+      "name": "Sanjay Vasantrao Deokate",
+      "phone": "8668271306",
+      "calledFor": "CBT Avd",
+      "normalizedProgramKey": "cbt_avd",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-15T11:56:55.812Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-15T11:56:55.812Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "bcbBuO5aeIlLSdoAzDLx",
+      "name": "Ishwar Baburao Gade",
+      "phone": "+917350002778",
+      "calledFor": "CBT Avd",
+      "normalizedProgramKey": "cbt_avd",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-27T08:53:21.726Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-27T08:53:21.726Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "eQ2vdwuptxRlmY9aP2t6",
+      "name": "Javid Ahmed Mir",
+      "phone": "+919797267568",
+      "calledFor": "CBT Avd",
+      "normalizedProgramKey": "cbt_avd",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-27T09:27:53.198Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-27T09:27:53.198Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "oRxP8JpbrQ1AxExpoZsQ",
+      "name": "Sushama Gugale",
+      "phone": "9975062705",
+      "calledFor": "SHSH",
+      "normalizedProgramKey": "shsh",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-22T07:56:54.128Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-22T07:56:54.270Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "UaHBYgSDvcowzIKUcfEH",
+      "name": "Samir Soni",
+      "phone": "919890648499",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-31T10:53:43.467Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-31T10:53:43.467Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "oD5u5uXxaq0WbwB5uxAb",
+      "name": "Rajat Chawala",
+      "phone": "9960366770 ",
+      "calledFor": "Swasthya Shivir",
+      "normalizedProgramKey": "swasthya_shivir",
+      "totalOccurrences": 4,
+      "duplicateCount": 3,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-28T09:16:00.303Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-24T09:31:10.581Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-28T09:16:00.485Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "VpDQWEOElyuIuHfsrTTr",
+      "name": "Santosh Bhanudas Padmawar",
+      "phone": "9359265941",
+      "calledFor": "Other",
+      "normalizedProgramKey": "other",
+      "totalOccurrences": 2,
+      "duplicateCount": 1,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-30T06:23:31.278Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-30T06:23:31.444Z"
+        }
+      ]
+    },
+    {
+      "contactId": "S5si8Y6RHfejnb5v2u0z",
+      "name": "Indranil Ghosh",
+      "phone": "919641698775",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-19T09:25:19.803Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-19T09:25:19.803Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "bjYBozX2ZsZ8GfxdgelT",
+      "name": "Kalpana Gaikwad",
+      "phone": "9921469825",
+      "calledFor": "Dhyan",
+      "normalizedProgramKey": "dhyan",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-23T05:12:35.007Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-23T05:12:35.240Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "aFbiRVZ03U47uBvUr2RP",
+      "name": "Manohar Joshi",
+      "phone": "9890953245",
+      "calledFor": "Yoga 1 Yr",
+      "normalizedProgramKey": "yoga_1_yr",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-07T10:32:30.421Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-07T10:32:30.774Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "d2UdpFFj6tshBf97BWZ6",
+      "name": "Yojana Zambaulikar",
+      "phone": "918329618056",
+      "calledFor": "Study smarter",
+      "normalizedProgramKey": "study_smarter",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-18T10:40:40.370Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-18T10:40:40.510Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "fiWBLcYCREmjKTB5yuCl",
+      "name": "Anuradha Garg",
+      "phone": "9891509896",
+      "calledFor": "Other",
+      "normalizedProgramKey": "other",
+      "totalOccurrences": 2,
+      "duplicateCount": 1,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-22T07:17:03.049Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-22T07:17:03.190Z"
+        }
+      ]
+    },
+    {
+      "contactId": "jjLRIwXH90IJVOJHOb4A",
+      "name": "Nalini Bhagat Totade",
+      "phone": "919665216553",
+      "calledFor": "Digestive Basic",
+      "normalizedProgramKey": "digestive_basic",
+      "totalOccurrences": 2,
+      "duplicateCount": 1,
+      "occurrences": [
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-21T07:27:38.153Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "oj3SK0rMc3FFcGthrpGL",
+      "name": "Sanjesh Yadav",
+      "phone": "+919555140092",
+      "calledFor": "CBT Avd",
+      "normalizedProgramKey": "cbt_avd",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-27T11:37:56.535Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-27T11:37:56.535Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "RaVJIHiYChPfZca3Yc5J",
+      "name": "Pramod Shriram Nikhare",
+      "phone": "9422913394",
+      "calledFor": "Swasthya Shivir",
+      "normalizedProgramKey": "swasthya_shivir",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-31T11:20:10.748Z"
+        },
+        {
+          "source": "attenderStates[Geeta].history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-31T11:20:10.748Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "r4XF9fAleYow2fEXk91S",
+      "name": "Ashwini Kunte",
+      "phone": "+919970304986",
+      "calledFor": "CBT Avd",
+      "normalizedProgramKey": "cbt_avd",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-30T08:34:38.829Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-30T08:34:38.829Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "zKCyVIJuyEdmBhYega5X",
+      "name": "Renuka Pandaw",
+      "phone": "9579511287",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-14T08:15:39.196Z"
+        },
+        {
+          "source": "attenderStates[Geeta].history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-14T08:15:39.678Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "sG5OYn9192oEyI9962zZ",
+      "name": "Kailash Sharma",
+      "phone": "9422619547",
+      "calledFor": "CBT Avd",
+      "normalizedProgramKey": "cbt_avd",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-13T07:45:52.493Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-13T07:45:52.493Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "zT8u7gvltcscAVtmlFTT",
+      "name": "Pradip Patil",
+      "phone": "+919004418577",
+      "calledFor": "CBT Avd",
+      "normalizedProgramKey": "cbt_avd",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-30T07:21:49.049Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-30T07:21:49.049Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "rKGyumDt46r9vAvCoW8s",
+      "name": "Kanchana",
+      "phone": "+919892723994",
+      "calledFor": "CBT Avd",
+      "normalizedProgramKey": "cbt_avd",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-28T10:28:53.743Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-28T10:28:53.743Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "ojZhXccGqf23nT1UMQly",
+      "name": "Dr Suma Mamadapur",
+      "phone": "+917019847906",
+      "calledFor": "CBT Avd",
+      "normalizedProgramKey": "cbt_avd",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-30T06:09:05.336Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-30T06:09:05.336Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "ouSEaWk4YdrOPcXZgtBm",
+      "name": "Kalyan Pawar",
+      "phone": "9075975333",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-20T04:56:01.946Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-20T04:56:02.310Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "soo0q8vh7JQEPUBzWljF",
+      "name": "Kunal Raut",
+      "phone": "8879997449",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-31T11:35:05.141Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-31T11:35:05.141Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "wJma8BXey0eEeKnUdVSx",
+      "name": "Satish Pandaw",
+      "phone": "9420483974",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 5,
+      "duplicateCount": 4,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-14T08:09:40.718Z"
+        },
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-14T09:55:08.229Z"
+        },
+        {
+          "source": "attenderStates[Geeta].history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-14T08:09:40.718Z"
+        },
+        {
+          "source": "attenderStates[Geeta].history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-14T09:55:08.229Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "xjUsMjJKYuUqbaQ7vucY",
+      "name": "Sachin Doiphode",
+      "phone": "8999816801",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T07:39:02.839Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T07:39:02.839Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "ycBQFFDHoQQF4oB62E2q",
+      "name": "Charudatta Vaidya",
+      "phone": "9922504074",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-31T06:05:07.810Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-07-31T06:05:07.810Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "u73oT5dymNBkstIrK4Yb",
+      "name": "Kishor Japtap",
+      "phone": "7776874463",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-14T09:55:41.180Z"
+        },
+        {
+          "source": "attenderStates[Geeta].history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-07-14T09:55:41.180Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "yPIvVq0vQ9kd9E56GxO3",
+      "name": "Shruti Jawale",
+      "phone": "9372129294",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T07:53:01.943Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T07:53:01.943Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "uj3VjmDrdgsiDfKhoQRL",
+      "name": "Anil Sonawane",
+      "phone": "9420943851",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-06T11:54:48.350Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-06T11:54:48.350Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "r568RdPC04ibvBFmDGcl",
+      "name": "Santosh Dhaygude",
+      "phone": "+919767107510",
+      "calledFor": "CBT Avd",
+      "normalizedProgramKey": "cbt_avd",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-30T06:00:25.729Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-30T06:00:25.729Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "vZsUJ0JhoBIchlQFAaTl",
+      "name": "Nilay Ladke",
+      "phone": "+919529272531",
+      "calledFor": "CBT Avd",
+      "normalizedProgramKey": "cbt_avd",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-30T05:43:13.567Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-07-30T05:43:13.567Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "FryrjVt061N3NT2uilkh",
+      "name": "Test 6665501",
+      "phone": "4532648325",
+      "calledFor": "Other",
+      "normalizedProgramKey": "other",
+      "totalOccurrences": 7,
+      "duplicateCount": 6,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Test",
+          "timestamp": "2026-08-23T13:46:42.269Z"
+        },
+        {
+          "source": "contacts.history[]",
+          "attender": "Test",
+          "timestamp": "2026-08-23T16:28:17.576Z"
+        },
+        {
+          "source": "contacts.history[]",
+          "attender": "Test",
+          "timestamp": "2026-08-23T16:37:26.756Z"
+        },
+        {
+          "source": "attenderStates[Test].history[]",
+          "attender": "Test",
+          "timestamp": "2026-08-23T13:46:42.269Z"
+        },
+        {
+          "source": "attenderStates[Test].history[]",
+          "attender": "Test",
+          "timestamp": "2026-08-23T16:28:17.576Z"
+        },
+        {
+          "source": "attenderStates[Test].history[]",
+          "attender": "Test",
+          "timestamp": "2026-08-23T16:37:26.756Z"
+        },
+        {
+          "source": "attenderStates[Test].history[]",
+          "attender": "Test",
+          "timestamp": "2026-08-23T18:44:54.385Z"
+        }
+      ]
+    },
+    {
+      "contactId": "local_inc_1787397268680_kazr",
+      "name": "Test 66556",
+      "phone": "5324637833",
+      "calledFor": "Other",
+      "normalizedProgramKey": "other",
+      "totalOccurrences": 2,
+      "duplicateCount": 1,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Test",
+          "timestamp": "2026-08-22T11:14:48.530Z"
+        },
+        {
+          "source": "attenderStates[Test].history[]",
+          "attender": "Test",
+          "timestamp": "2026-08-23T13:22:39.899Z"
+        }
+      ]
+    },
+    {
+      "contactId": "OC7Ijadp4EEqkEpo6toF",
+      "name": "Super Man",
+      "phone": "66663973720",
+      "calledFor": "Other",
+      "normalizedProgramKey": "other",
+      "totalOccurrences": 4,
+      "duplicateCount": 3,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Test",
+          "timestamp": "2026-08-22T09:59:41.542Z"
+        },
+        {
+          "source": "contacts.history[]",
+          "attender": "Test",
+          "timestamp": "2026-08-23T13:30:32.463Z"
+        },
+        {
+          "source": "attenderStates[Test].history[]",
+          "attender": "Test",
+          "timestamp": "2026-08-22T09:59:41.542Z"
+        },
+        {
+          "source": "attenderStates[Test].history[]",
+          "attender": "Test",
+          "timestamp": "2026-08-23T13:30:32.463Z"
+        }
+      ]
+    },
+    {
+      "contactId": "D0JveqK0qBBZU8KzSR8g",
+      "name": "Sudarshan L. Bingewar",
+      "phone": "919860869919",
+      "calledFor": "CBT Basic",
+      "normalizedProgramKey": "cbt_basic",
+      "totalOccurrences": 4,
+      "duplicateCount": 3,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-14T09:05:53.230Z"
+        },
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-14T10:45:25.000Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-14T09:05:53.230Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-14T10:45:25.000Z"
+        }
+      ]
+    },
+    {
+      "contactId": "595Cxw91UbBuoqQDqBCP",
+      "name": "Rustum Hinge",
+      "phone": "9763382022",
+      "calledFor": "Other",
+      "normalizedProgramKey": "other",
+      "totalOccurrences": 2,
+      "duplicateCount": 1,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-11T07:14:26.987Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-11T07:14:27.200Z"
+        }
+      ]
+    },
+    {
+      "contactId": "NUjCnN2lIyZQq1J7se8j",
+      "name": "Renu Notani",
+      "phone": "9423286270",
+      "calledFor": "Other",
+      "normalizedProgramKey": "other",
+      "totalOccurrences": 2,
+      "duplicateCount": 1,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-18T07:09:27.729Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-18T07:09:28.034Z"
+        }
+      ]
+    },
+    {
+      "contactId": "5v3UKlS0xnrj6x7Vn6Ts",
+      "name": "Sheetal Manek",
+      "phone": "9892061800",
+      "calledFor": "Pranayam",
+      "normalizedProgramKey": "pranayam",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-05T06:11:38.933Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-05T06:11:39.108Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "HbR39qsZH6RUwH9YUWn6",
+      "name": "Nidhi Tiwani",
+      "phone": "6260340295",
+      "calledFor": "SHSH",
+      "normalizedProgramKey": "shsh",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-05T06:34:06.580Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-05T06:34:06.757Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "92UM6zmgfLQhOJ7whp8T",
+      "name": "Shivangi",
+      "phone": "7843095732",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T06:18:26.984Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T06:18:27.145Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "RdwMdmCsenhoqf1Elstf",
+      "name": "Ishan Tripude",
+      "phone": "8600671333",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 2,
+      "duplicateCount": 1,
+      "occurrences": [
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-05T07:42:50.344Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "Pa1oCi1Ljx8NHr6Ys9ra",
+      "name": "Chaitnya Bhoj",
+      "phone": "9657620946",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T05:56:29.360Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T05:56:29.360Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "EsU8j7T0Oju7GEhHjiBs",
+      "name": "Dinesh Pawar",
+      "phone": "9011037850",
+      "calledFor": "SHSH",
+      "normalizedProgramKey": "shsh",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-03T05:03:57.380Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-03T05:03:57.520Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "Lrl9alpdEiRLtJ69R4ts",
+      "name": "Lubna Yousuf",
+      "phone": "916398106704",
+      "calledFor": "CBT Basic",
+      "normalizedProgramKey": "cbt_basic",
+      "totalOccurrences": 2,
+      "duplicateCount": 1,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-15T09:55:34.089Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-15T09:55:34.089Z"
+        }
+      ]
+    },
+    {
+      "contactId": "G4n7hEJZJaPsOVoSlO2x",
+      "name": "Rahul Raut",
+      "phone": "9881476252",
+      "calledFor": "Yoga 3 Month",
+      "normalizedProgramKey": "yoga_3_month",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-05T08:00:25.748Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-05T08:00:26.015Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "fKlR50pGeWdXef8Ps4Xx",
+      "name": "Test Gunesh",
+      "phone": "777777774356",
+      "calledFor": "Other",
+      "normalizedProgramKey": "other",
+      "totalOccurrences": 5,
+      "duplicateCount": 4,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Test 2",
+          "timestamp": "2026-08-23T18:46:56.336Z"
+        },
+        {
+          "source": "contacts.history[]",
+          "attender": "Test 2",
+          "timestamp": "2026-08-23T18:51:38.247Z"
+        },
+        {
+          "source": "attenderStates[Test 2].history[]",
+          "attender": "Test 2",
+          "timestamp": "2026-08-23T18:46:56.336Z"
+        },
+        {
+          "source": "attenderStates[Test 2].history[]",
+          "attender": "Test 2",
+          "timestamp": "2026-08-23T18:51:38.247Z"
+        },
+        {
+          "source": "attenderStates[Test 2].history[]",
+          "attender": "Test 2",
+          "timestamp": "2026-08-23T19:00:04.059Z"
+        }
+      ]
+    },
+    {
+      "contactId": "MGbl8KQM9gxljhmiiYej",
+      "name": "Mayur Dubale",
+      "phone": "9529276661",
+      "calledFor": "Special MA",
+      "normalizedProgramKey": "special_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-19T04:43:36.615Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-19T04:43:36.615Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "5rdZvlod5iEIIhERvLHW",
+      "name": "Bhushan Sonavane",
+      "phone": "917756025610",
+      "calledFor": "CBT Basic",
+      "normalizedProgramKey": "cbt_basic",
+      "totalOccurrences": 2,
+      "duplicateCount": 1,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-18T07:54:32.290Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-18T07:54:32.290Z"
+        }
+      ]
+    },
+    {
+      "contactId": "KG5zzq0MZM7viREgANH0",
+      "name": "Vandana Sonawane",
+      "phone": "9403342700",
+      "calledFor": "Swasthya Shivir",
+      "normalizedProgramKey": "swasthya_shivir",
+      "totalOccurrences": 5,
+      "duplicateCount": 4,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-11T11:28:58.682Z"
+        },
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-12T04:43:10.987Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-11T11:28:58.682Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-12T04:43:10.987Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "YnSjioM8cgZW2XAPAEVG",
+      "name": "Gopal Purushottam Deshmane",
+      "phone": "919158607607",
+      "calledFor": "CBT Basic",
+      "normalizedProgramKey": "cbt_basic",
+      "totalOccurrences": 4,
+      "duplicateCount": 3,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-14T07:30:30.618Z"
+        },
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-14T07:49:54.444Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-14T07:30:30.618Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-14T07:49:54.444Z"
+        }
+      ]
+    },
+    {
+      "contactId": "YGqixFWxlKHeWxWcp38N",
+      "name": "Krishna Shisode",
+      "phone": "9767336118",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T07:42:40.822Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T07:42:40.822Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "XVCSZ5L46ugbNUBelFC5",
+      "name": "Dr Padmakar N",
+      "phone": "919702999999",
+      "calledFor": "Special MA",
+      "normalizedProgramKey": "special_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-08-14T12:58:47.985Z"
+        },
+        {
+          "source": "attenderStates[Geeta].history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-08-14T12:58:48.488Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "oyqdqo8nguNnkSY7aGvx",
+      "name": "Hulk",
+      "phone": "0009995362",
+      "calledFor": "Other",
+      "normalizedProgramKey": "other",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Test",
+          "timestamp": "2026-08-23T19:23:20.226Z"
+        },
+        {
+          "source": "attenderStates[Test].history[]",
+          "attender": "Test",
+          "timestamp": "2026-08-23T19:23:20.226Z"
+        },
+        {
+          "source": "attenderStates[Test].history[]",
+          "attender": "Test",
+          "timestamp": "2026-08-23T19:29:49.560Z"
+        }
+      ]
+    },
+    {
+      "contactId": "6dnMGIvqOXHe1XKq80UU",
+      "name": "Vijaya Rupesh Ingole",
+      "phone": "9370334592",
+      "calledFor": "SHSH",
+      "normalizedProgramKey": "shsh",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-05T06:35:18.798Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-05T06:35:18.982Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "NybChRfy5Mn0rYJPa99f",
+      "name": "Kaustubh S Chaudhari",
+      "phone": "919175085331",
+      "calledFor": "CBT Basic",
+      "normalizedProgramKey": "cbt_basic",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-20T10:21:59.352Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-20T10:21:59.352Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "NOSCrS2CBiaN40jvprIv",
+      "name": "Rajendra Gote/sanjay",
+      "phone": "9325555171",
+      "calledFor": "Nisarg Dhyan",
+      "normalizedProgramKey": "nisarg_dhyan",
+      "totalOccurrences": 5,
+      "duplicateCount": 4,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-13T08:04:09.897Z"
+        },
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-18T11:11:18.519Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-13T08:04:09.897Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-18T11:11:18.519Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "TsTnIOUpPmTlzK6D7Kcn",
+      "name": "Test Gunesh 2",
+      "phone": "66664646483",
+      "calledFor": "Other",
+      "normalizedProgramKey": "other",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Test 2",
+          "timestamp": "2026-08-23T18:44:33.976Z"
+        },
+        {
+          "source": "attenderStates[Test 2].history[]",
+          "attender": "Test 2",
+          "timestamp": "2026-08-23T18:44:33.976Z"
+        },
+        {
+          "source": "attenderStates[Test 2].history[]",
+          "attender": "Test 2",
+          "timestamp": "2026-08-23T19:04:05.955Z"
+        }
+      ]
+    },
+    {
+      "contactId": "PjWFLy0nQtg8EbVVK7q7",
+      "name": "Sarika Kunjir",
+      "phone": "7972737525",
+      "calledFor": "Swasthya Shivir",
+      "normalizedProgramKey": "swasthya_shivir",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T07:36:50.374Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T07:36:50.374Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "5olLPj8j2Gyjaa8XQulL",
+      "name": "Abhijeet Satpute",
+      "phone": "9405802646",
+      "calledFor": "Swasthya Shivir",
+      "normalizedProgramKey": "swasthya_shivir",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-07T08:21:42.782Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-07T08:21:42.782Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "PYaAS1rfL9516x9iRCYv",
+      "name": "Sapana Rahul Badkhal",
+      "phone": "919158712444",
+      "calledFor": "Pranayam",
+      "normalizedProgramKey": "pranayam",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-11T06:29:00.242Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-11T06:29:00.690Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "4ydhbN5Nxs1zN0C1GDFZ",
+      "name": "Snehal Maheshwari",
+      "phone": "9423917009",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-08-12T12:08:44.684Z"
+        },
+        {
+          "source": "attenderStates[Geeta].history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-08-12T12:08:44.684Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "4ptuMyyIxfqkPHlplcgS",
+      "name": "Shobha Mohta",
+      "phone": "919406010143",
+      "calledFor": "Pranayam",
+      "normalizedProgramKey": "pranayam",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-11T06:11:36.962Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-11T06:11:36.962Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "3V5TnAqu1QubKNgd8igj",
+      "name": "Somnath Tirvir",
+      "phone": "9881956676",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-12T11:02:23.983Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-12T11:02:23.983Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "Qm7uq0l6mGGb3UxSW4hb",
+      "name": "Sonali Gaikwad",
+      "phone": "9767295252",
+      "calledFor": "Swasthya Shivir",
+      "normalizedProgramKey": "swasthya_shivir",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T07:37:41.845Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T07:37:41.845Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "YmdBxYGJD7ZDoOFFtmvf",
+      "name": "Jyoti Tirvir",
+      "phone": "8830311381",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-15T04:50:50.352Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-15T04:50:50.352Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "QufWuSvgiB5VDsCHv9UL",
+      "name": "Ujwal Afre",
+      "phone": "9028249424",
+      "calledFor": "Pranayam",
+      "normalizedProgramKey": "pranayam",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-05T06:22:50.861Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-05T06:22:51.033Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "QjddXniRO9uv4l5xe8TC",
+      "name": "Vilas Sheshrao Ghongade Patil",
+      "phone": "+919763645065",
+      "calledFor": "Digestive Basic",
+      "normalizedProgramKey": "digestive_basic",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-19T05:35:41.084Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-19T05:35:41.084Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "5LDpB6jXavFFxsAUssGn",
+      "name": "Nishi Irani",
+      "phone": "8287018492",
+      "calledFor": "Yoga 3 Month",
+      "normalizedProgramKey": "yoga_3_month",
+      "totalOccurrences": 2,
+      "duplicateCount": 1,
+      "occurrences": [
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-19T05:24:05.945Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "96B96tElKOjvxNxdD9DT",
+      "name": "Sanjay Hasare",
+      "phone": "9284765001",
+      "calledFor": "Nisarg Dhyan",
+      "normalizedProgramKey": "nisarg_dhyan",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-18T11:08:51.020Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-18T11:08:51.020Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "M9aXs02vMbUarLP3du7N",
+      "name": "Nilesh Bhatiya",
+      "phone": "9322965465",
+      "calledFor": "Nisarg Dhyan",
+      "normalizedProgramKey": "nisarg_dhyan",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-19T12:27:50.645Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-19T12:27:50.645Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "v3eu96N6KAaUEcQrNJ0V",
+      "name": "Monica Chaudhary",
+      "phone": "919888811735",
+      "calledFor": "On MA Hindi",
+      "normalizedProgramKey": "on_ma_hindi",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-08T08:00:01.723Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-08T08:00:02.405Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "x9rC8nmt3y5kbKu260un",
+      "name": "Kailash Gole",
+      "phone": "9359024077",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-07T08:23:15.397Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-07T08:23:15.397Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "ijo62kTxqvDssFCAtElk",
+      "name": "Dr Pradnya Kirtiraj Vatkar",
+      "phone": "919890693904",
+      "calledFor": "CBT Basic",
+      "normalizedProgramKey": "cbt_basic",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-18T06:53:10.749Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-18T06:53:10.749Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-21T10:44:13.334Z"
+        }
+      ]
+    },
+    {
+      "contactId": "nDGHg7swWWlWIpEOc7Ud",
+      "name": "Paresh Patil",
+      "phone": "9561820223",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-10T11:22:33.875Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-10T11:22:33.875Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "nQkBst5UGUKoTLVK5AlY",
+      "name": "Kanhaiya Vichave",
+      "phone": "918080134839",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-08-14T15:07:36.960Z"
+        },
+        {
+          "source": "attenderStates[Geeta].history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-08-14T15:07:36.960Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "zN5wX0AtoGG70lB3NvW7",
+      "name": "Kailash Rani",
+      "phone": "9811821965",
+      "calledFor": "Dhyan",
+      "normalizedProgramKey": "dhyan",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-07T08:27:56.948Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-07T08:27:57.100Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "ZyfwvED8seWWjNOTZeTy",
+      "name": "Santu Kumar",
+      "phone": "7001799095",
+      "calledFor": "Dhyan",
+      "normalizedProgramKey": "dhyan",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-13T07:52:43.976Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-13T07:52:44.228Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "xfjvGJuNzBNgvRUJMcoc",
+      "name": "Santu Kumar Dhal",
+      "phone": "9474642950",
+      "calledFor": "Dhyan",
+      "normalizedProgramKey": "dhyan",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-12T05:12:19.433Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-12T05:12:19.698Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "okXGJhj7WZTQnTvEGxKy",
+      "name": "Seema Yuvraj Kulkarni",
+      "phone": "8087200306",
+      "calledFor": "Yoga 1 Yr",
+      "normalizedProgramKey": "yoga_1_yr",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T11:42:53.514Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T11:42:53.514Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "v6ViVGa6MF8E5whrsjXa",
+      "name": "Raju Vitthalrao Ghulepatil",
+      "phone": "9545524111",
+      "calledFor": "Hair Avd",
+      "normalizedProgramKey": "hair_avd",
+      "totalOccurrences": 2,
+      "duplicateCount": 1,
+      "occurrences": [
+        {
+          "source": "attenderStates[Geeta].history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-08-16T11:39:11.171Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "fmIjxYwfco1A7RCyjxMK",
+      "name": "Shubhangi Sawant",
+      "phone": "9158320049",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-05T06:09:35.983Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-05T06:09:36.177Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "iNduxT0kHuD731MePBSW",
+      "name": "Pradeep Tambe",
+      "phone": "7720022175",
+      "calledFor": "Swasthya Shivir",
+      "normalizedProgramKey": "swasthya_shivir",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-11T07:58:20.868Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-11T07:58:20.868Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "uRlTTJpmWn0TKlKDtlHo",
+      "name": "Soniyaa Shah",
+      "phone": "9820215302",
+      "calledFor": "Pranayam",
+      "normalizedProgramKey": "pranayam",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-08-11T06:28:28.793Z"
+        },
+        {
+          "source": "attenderStates[Geeta].history[]",
+          "attender": "Geeta",
+          "timestamp": "2026-08-11T06:28:28.793Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "sYP9ZZ73j4wwvc8Muy8W",
+      "name": "Pradip Patil",
+      "phone": "7387092664",
+      "calledFor": "Appointment",
+      "normalizedProgramKey": "appointment",
+      "totalOccurrences": 2,
+      "duplicateCount": 1,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T08:14:13.916Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T08:14:14.076Z"
+        }
+      ]
+    },
+    {
+      "contactId": "j9C5Hw4NgigEaU1zCutR",
+      "name": "Purushottam",
+      "phone": "9923377022",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-03T06:14:46.727Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-03T06:14:46.894Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "syZKBVi0ANWhsXbtopUO",
+      "name": "Mandar Naravane",
+      "phone": "9561071370",
+      "calledFor": "TGF Info",
+      "normalizedProgramKey": "tgf_info",
+      "totalOccurrences": 2,
+      "duplicateCount": 1,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-12T08:31:19.129Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-12T08:31:19.129Z"
+        }
+      ]
+    },
+    {
+      "contactId": "dzjbxmpD6SLuwLtWFoi5",
+      "name": "Pravin Hanegavkar",
+      "phone": "9890059987",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T07:49:40.402Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T07:49:40.402Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "zmR5KFZyAYmtOR8G6TEc",
+      "name": "Darshit Parikh",
+      "phone": "9328287502",
+      "calledFor": "Pranayam",
+      "normalizedProgramKey": "pranayam",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-05T07:55:11.084Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-05T07:55:11.301Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "vLmlw9F2EOMCAn4aNPqN",
+      "name": "Ravindra Angawar",
+      "phone": "9595110290",
+      "calledFor": "Swasthya Shivir",
+      "normalizedProgramKey": "swasthya_shivir",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-07T08:21:05.709Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-07T08:21:05.709Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "w1t0KFUWyOsZUcZOhAn6",
+      "name": "Rupali Shisode",
+      "phone": "9881155356",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T07:43:37.485Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T07:43:37.485Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "fMsq9PxC80882EFySSlH",
+      "name": "Surendra Divya",
+      "phone": "919644832293",
+      "calledFor": "Pranayam",
+      "normalizedProgramKey": "pranayam",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-11T06:09:27.019Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-11T06:09:27.386Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "hzr8ZZY6VCmGnbzAjzOp",
+      "name": "Vaibhav Atram",
+      "phone": "918788553325",
+      "calledFor": "SHSH",
+      "normalizedProgramKey": "shsh",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-19T05:59:03.599Z"
+        },
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-19T05:59:03.599Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "Z7bNJfMNjsISxGcUisUy",
+      "name": "Amol Powar",
+      "phone": "9527576919",
+      "calledFor": "Special MA",
+      "normalizedProgramKey": "special_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-19T12:28:53.385Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-19T12:28:53.385Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "qYIS1PnlGb4d1xxLfwwr",
+      "name": "Akshata Pota",
+      "phone": "8999275741",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T05:54:25.984Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T05:54:25.984Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "oCZNk0KURh1pfx5l79RY",
+      "name": "Somesh",
+      "phone": "9575191306",
+      "calledFor": "Pranayam",
+      "normalizedProgramKey": "pranayam",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-10T07:09:58.571Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-10T07:09:58.771Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "r90yLTrnrUgqhX8KsuYc",
+      "name": "Suryakant J",
+      "phone": "9371126347",
+      "calledFor": "Nisarg Dhyan",
+      "normalizedProgramKey": "nisarg_dhyan",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-18T12:26:05.778Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-18T12:26:05.778Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "zZm1aorRg2YtBNfdvO8Q",
+      "name": "Sambhaji Gargole",
+      "phone": "9373002462",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-07T08:23:59.462Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-07T08:23:59.462Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "kSwkH5mPeKpSr7e2IvIA",
+      "name": "Tanaji Parit",
+      "phone": "9404990616",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T11:50:28.840Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T11:50:29.043Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "xOIqzZ7WV2srOxWjD8o9",
+      "name": "Smita Doifode",
+      "phone": "7499718731",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T07:39:45.533Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-04T07:39:45.533Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "XF5xyPsdk7Q5LgmGzC0x",
+      "name": "Usha Jogi",
+      "phone": "919823429654",
+      "calledFor": "Digestive Basic",
+      "normalizedProgramKey": "digestive_basic",
+      "totalOccurrences": 2,
+      "duplicateCount": 1,
+      "occurrences": [
+        {
+          "source": "attenderStates[Priyanka].history[]",
+          "attender": "Priyanka",
+          "timestamp": "2026-08-21T07:32:56.796Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "hjG2XzF9jPaviyVc82NA",
+      "name": "Satyabhama Chirimar",
+      "phone": "9874122247",
+      "calledFor": "Dhyan",
+      "normalizedProgramKey": "dhyan",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-13T07:54:06.080Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-13T07:54:06.336Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    },
+    {
+      "contactId": "Zy0GS81m3SXWsfl4OX1n",
+      "name": "Yashraj Gaikwad",
+      "phone": "9923105099",
+      "calledFor": "Off MA",
+      "normalizedProgramKey": "off_ma",
+      "totalOccurrences": 3,
+      "duplicateCount": 2,
+      "occurrences": [
+        {
+          "source": "contacts.history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-05T10:28:07.223Z"
+        },
+        {
+          "source": "attenderStates[Manisha].history[]",
+          "attender": "Manisha",
+          "timestamp": "2026-08-05T10:28:07.223Z"
+        },
+        {
+          "source": "registrations collection"
+        }
+      ]
+    }
+  ]
+}

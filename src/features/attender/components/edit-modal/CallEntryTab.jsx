@@ -1,10 +1,11 @@
-import React, { useRef, useMemo } from "react";
+import React, { useRef, useMemo, useState } from "react";
 import {
   Phone, Tag, CheckCircle2, AlertCircle, MessageSquare,
-  CalendarDays, Flame, HelpCircle, Bell, ArrowRightLeft, Shield
+  CalendarDays, Flame, HelpCircle, Bell, ArrowRightLeft, Shield, Info
 } from "lucide-react";
 import SearchableDropdown from "./SearchableDropdown";
 import HistoryTimeline from "./HistoryTimeline";
+import StageInfoModal from "./StageInfoModal";
 import {
   CALL_DIRECTION_OPTIONS,
   CALL_PURPOSE_OPTIONS,
@@ -14,9 +15,10 @@ import {
   REMINDER_OUTCOME_OPTIONS,
   CALLED_FOR_OPTIONS,
   SOURCE_OPTIONS,
+  CALL_SOURCE_OPTIONS,
   OBJECTION_REASONS
 } from "../../utils";
-import { evaluatePipeline, getPipelineStageConfig, shouldShowConvertToSales } from "../../../../utils/pipelineEngine";
+import { evaluatePipeline, getPipelineStageConfig, getEffectiveStage, shouldShowConvertToSales } from "../../../../utils/pipelineEngine";
 
 export const CallEntryTab = ({
   edited,
@@ -39,15 +41,16 @@ export const CallEntryTab = ({
   const newNoteRef = useRef(null);
 
   // Compute active Call Purpose (SALES, QUERY, REMINDER)
-  const activePurpose = (edited.callPurpose || (edited.status === "Query" ? "QUERY" : String(edited[calledForField] || "").toLowerCase().includes("reminder") ? "REMINDER" : "SALES")).toUpperCase();
+  const activePurpose = (edited.callPurpose || "SALES").toUpperCase();
   
-  // Compute active Call Status (Connected vs Unconnected)
-  const activeCallStatus = edited.callStatus || (["NA", "Busy", "Call Cut", "switched off", "Invalid No", "no answer", "Not Attended"].includes(edited.status) ? "Not Picked Up" : "Connected");
+  // Compute active Call Status (Connected vs Unconnected vs blank)
+  const activeCallStatus = edited.callStatus || "";
 
   // Filter Sales Called For options (exclude Query/Reminder)
   const salesCalledForOptions = CALLED_FOR_OPTIONS.filter(o => o !== "Reminder" && o !== "Query");
 
-  // Determine current pipeline stage preview
+  const selectedProgram = String(edited[calledForField] || "").trim();
+
   const evalResult = evaluatePipeline(
     edited,
     {
@@ -57,7 +60,11 @@ export const CallEntryTab = ({
       queryStatus: edited.queryStatus
     }
   );
-  const stageConfig = getPipelineStageConfig(evalResult.pipelineStage);
+
+  // Direct DB pipeline stage display for modal header (previews evalResult stage only when user selects today's outcome)
+  const dbStage = getEffectiveStage(edited, selectedProgram) || edited.pipelineStage || row.pipelineStage;
+  const displayStage = (edited.status && edited.callStatus) ? evalResult.pipelineStage : dbStage;
+  const stageConfig = getPipelineStageConfig(displayStage);
 
   // Whether this contact qualifies for "Convert to Sales" (only for new/query-only contacts)
   const showConvertToSales = useMemo(() => shouldShowConvertToSales(edited), [edited]);
@@ -66,21 +73,16 @@ export const CallEntryTab = ({
     setEdited(prev => {
       const next = { ...prev, callPurpose: purpose };
       if (purpose === "QUERY") {
-        // IMPORTANT: Do NOT force calledFor to "Query".
-        // The attender selects which program/context this query concerns.
-        // Keep calledFor as-is (or blank for a new contact).
-        next.queryStatus = prev.queryStatus || "Pending";
-        // Only reset status if it was a non-query status
         if (!["Query", "Pending", "Solved"].includes(prev.status)) {
-          next.status = "Pending";
+          next.status = "";
         }
       } else if (purpose === "REMINDER") {
-        // Keep calledFor as-is for reminder; just reset status to reminder outcome
-        next.status = "Reminder Given";
+        if (!REMINDER_OUTCOME_OPTIONS.includes(prev.status)) {
+          next.status = "";
+        }
       } else {
-        // SALES — clean up if previously in Reminder mode
-        if (["Reminder Given", "Reminder Confirmed", "Asked Question", "Needs Assistance"].includes(next.status)) {
-          next.status = "Info Given";
+        if (["Reminder Given", "Reminder Confirmed", "Asked Question", "Needs Assistance", "Query"].includes(next.status)) {
+          next.status = "";
         }
       }
       return next;
@@ -93,33 +95,37 @@ export const CallEntryTab = ({
       if (cStatus !== "Connected") {
         if (cStatus === "Invalid Number") {
           next.status = "Invalid No";
-        } else {
-          next.status = cStatus;
+        } else if (cStatus === "Not Picked Up" || cStatus === "Not Connected") {
+          if (!["Not Picked Up", "NA", "Busy", "Call Cut", "switched off", "no answer", "Not Attended", "No Network"].includes(prev.status)) {
+            next.status = "Not Picked Up";
+          }
         }
       } else if (prev.callStatus !== "Connected") {
-        next.status = activePurpose === "SALES" ? "Info Given" : activePurpose === "QUERY" ? "Query" : "Reminder Given";
+        next.status = "";
       }
       return next;
     });
   };
 
-  // Determine primary Call Result (Connected, Not Connected, Invalid Number)
+  // Determine primary Call Result (Connected, Not Connected, Invalid Number, or Blank)
   const isInvalid = edited.callStatus === "Invalid Number" || edited.status === "Invalid No";
   const isUnconnectedReason = ["Not Picked Up", "NA", "Busy", "Call Cut", "switched off", "no answer", "Not Attended", "No Network"].includes(edited.status);
   
   const activePrimaryResult = edited.callStatus === "Connected"
     ? "Connected"
-    : edited.callStatus === "Not Connected" || isUnconnectedReason
+    : edited.callStatus === "Not Connected" || (edited.callStatus !== "" && isUnconnectedReason)
     ? "Not Connected"
     : isInvalid
     ? "Invalid Number"
-    : "Connected";
+    : "";
 
   const handlePrimaryResultChange = (res) => {
     setEdited(prev => {
       const next = { ...prev, callStatus: res };
       if (res === "Connected") {
-        next.status = activePurpose === "SALES" ? (["Info Given", "Interested", "Next Time", "Not Interested", "Reg.Done", "Already Reg.d", "Shivir done", "Wrong No", "Called by mistake", "Not possible"].includes(prev.status) ? prev.status : "Info Given") : activePurpose === "QUERY" ? "Query" : "Reminder Given";
+        if (isUnconnectedReason || prev.status === "Invalid No") {
+          next.status = "";
+        }
       } else if (res === "Not Connected") {
         next.status = isUnconnectedReason ? prev.status : "Not Picked Up";
       } else if (res === "Invalid Number") {
@@ -154,23 +160,41 @@ export const CallEntryTab = ({
     ? lastCall.status
     : null;
 
+  console.log("ACTUAL CURRENT STAGE BADGE:", {
+    rowPipelineStage: row?.pipelineStage,
+    editedPipelineStage: edited?.pipelineStage,
+    dbStage,
+    displayStage,
+    stageConfigLabel: stageConfig?.label
+  });
+
+  const [showStageInfoModal, setShowStageInfoModal] = useState(false);
+
   return (
-    <div className="space-y-3.5 text-xs bg-white">
+    <div className="space-y-5 md:space-y-6 text-xs bg-white">
       
       {/* 0. READ-ONLY HEADER: PIPELINE STAGE & LAST CALL CONTEXT */}
-      <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl">
-        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-          <Shield size={13} className="text-indigo-600 shrink-0" />
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-slate-50/70 border border-slate-100 rounded-xl">
+        <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+          <Shield size={14} className="text-indigo-600 shrink-0" />
           <span>Current Stage:</span>
-          <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold border ${stageConfig.badge}`}>
+          <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${stageConfig.badge}`}>
             {stageConfig.label}
           </span>
+          <button
+            type="button"
+            onClick={() => setShowStageInfoModal(true)}
+            className="w-5 h-5 rounded-full bg-indigo-50 hover:bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-[11px] border border-indigo-200 shadow-2xs transition-all cursor-pointer hover:scale-105 shrink-0"
+            title="Click for information about all pipeline stages"
+          >
+            i
+          </button>
         </div>
 
         {lastCall ? (
-          <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
             <span>Last Call:</span>
-            <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border ${
+            <span className={`font-bold px-2 py-0.5 rounded-md text-[11px] uppercase border ${
               primaryCallStatus === "Connected" || lastCall.status === "Info Given"
                 ? "bg-emerald-50 text-emerald-800 border-emerald-200"
                 : "bg-rose-50 text-rose-800 border-rose-200"
@@ -189,22 +213,15 @@ export const CallEntryTab = ({
         )}
       </div>
 
-      {/* RECORD NEW CALL BANNER */}
-      <div className="flex items-center gap-2 pt-0.5 pb-0.5 border-b border-slate-100">
-        <div className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse"></div>
-        <h4 className="text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">
-          Record New Call Entry
-        </h4>
-      </div>
 
       {/* 1. CALL DIRECTION & CALL PURPOSE ROW */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center relative z-20">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center relative z-20">
         {/* Call Direction */}
-        <div className="md:col-span-5 space-y-1">
-          <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
             Call Direction
           </label>
-          <div className="flex gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
+          <div className="flex gap-1.5 bg-slate-100/80 p-1.5 rounded-xl border border-slate-200/60">
             {["outgoing", "incoming"].map(opt => {
               const isSelected = (edited.callType || "outgoing").toLowerCase().startsWith(opt);
               return (
@@ -212,7 +229,7 @@ export const CallEntryTab = ({
                   key={opt}
                   type="button"
                   onClick={() => handleCallTypeChange(opt)}
-                  className={`flex-1 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer capitalize ${
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all cursor-pointer capitalize ${
                     isSelected
                       ? "bg-slate-900 text-white border-slate-900 shadow-2xs"
                       : "bg-transparent text-slate-600 border-transparent hover:text-slate-900"
@@ -225,47 +242,29 @@ export const CallEntryTab = ({
           </div>
         </div>
 
-        {/* Call Purpose Switcher */}
-        <div className="md:col-span-7 space-y-1">
-          <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+        {/* Call Purpose Dropdown */}
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
             Call Purpose <span className="text-rose-500 font-bold">*</span>
           </label>
-          <div className="flex gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
-            {[
-              { id: "SALES", label: "Sales" },
-              { id: "QUERY", label: "Query" },
-              { id: "REMINDER", label: "Reminder" }
-            ].map(p => {
-              const isSelected = activePurpose === p.id;
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setCallPurpose(p.id)}
-                  className={`flex-1 py-1 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-                    isSelected
-                      ? p.id === "SALES"
-                        ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
-                        : p.id === "QUERY"
-                        ? "bg-orange-600 text-white border-orange-600 shadow-2xs"
-                        : "bg-sky-600 text-white border-sky-600 shadow-2xs"
-                      : "bg-transparent text-slate-600 border-transparent hover:text-slate-900"
-                  }`}
-                >
-                  {p.label}
-                </button>
-              );
-            })}
-          </div>
+          <SearchableDropdown
+            options={["Sales", "Query", "Reminder"]}
+            selected={activePurpose === "QUERY" ? "Query" : activePurpose === "REMINDER" ? "Reminder" : "Sales"}
+            onChange={val => {
+              if (val) setCallPurpose(val.toUpperCase());
+            }}
+            placeholder="Select Call Purpose..."
+            colorClass="indigo"
+          />
         </div>
       </div>
 
       {/* 2. PROGRAM & ORIGINAL SOURCE (SALES MODE) */}
       {activePurpose === "SALES" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 relative z-30 animate-fade-in">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-30 animate-fade-in">
           {/* Program (Called For) */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-bold text-slate-700">
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
               Program (Called For) <span className="text-rose-500 font-bold">*</span>
             </label>
             <SearchableDropdown
@@ -279,37 +278,35 @@ export const CallEntryTab = ({
             />
           </div>
 
-          {/* Original Source */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-bold text-slate-700">
-              Original Source
-            </label>
-            {(edited.original_source || edited[sourceField]) ? (
-              <div className="px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 flex items-center justify-between">
-                <span>{edited.original_source || edited[sourceField]}</span>
-                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">(Read-Only)</span>
-              </div>
-            ) : (
-              <SearchableDropdown
-                options={SOURCE_OPTIONS}
-                selected=""
-                onChange={val => {
-                  handleChange("original_source", val);
-                  handleChange(sourceField, val);
-                }}
-                placeholder="Acquisition source..."
-                colorClass="amber"
-              />
-            )}
+          {/* Call Source (Current Call) */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-1">
+              <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+                Call Source (Current Call) <span className="text-rose-500 font-bold">*</span>
+              </label>
+              {(edited.original_source || row.original_source || edited.originalSource) && (
+                <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200" title="Permanent Original Acquisition Source">
+                  Orig: <strong className="text-slate-700 font-bold">{edited.original_source || row.original_source || edited.originalSource}</strong>
+                </span>
+              )}
+            </div>
+            <SearchableDropdown
+              options={CALL_SOURCE_OPTIONS}
+              selected={String(edited[sourceField] || edited.Source || edited.source || edited.original_source || row.original_source || edited.originalSource || "")}
+              onChange={val => handleChange(sourceField, val)}
+              placeholder="Select call source..."
+              colorClass="amber"
+              disabled={!getEditable(sourceField)}
+            />
           </div>
         </div>
       )}
 
       {/* --- QUERY CONTEXT BANNER --- */}
       {activePurpose === "QUERY" && (
-        <div className="p-2.5 bg-orange-50/70 border border-orange-200/80 rounded-xl flex items-start justify-between gap-3 animate-fade-in">
+        <div className="p-3 bg-orange-50/70 border border-orange-200/80 rounded-xl flex items-start justify-between gap-3 animate-fade-in">
           <div className="flex items-center gap-2">
-            <HelpCircle size={15} className="text-orange-600 shrink-0 mt-0.5" />
+            <HelpCircle size={16} className="text-orange-600 shrink-0 mt-0.5" />
             <div>
               <span className="font-bold text-orange-950 text-xs">Query / Helpdesk Mode</span>
               <p className="text-[11px] text-orange-800 leading-tight mt-0.5">
@@ -317,14 +314,14 @@ export const CallEntryTab = ({
               </p>
             </div>
           </div>
-          {/* Only show Convert-to-Sales for NEW / query-only contacts (rank &lt; Info Given) */}
+          {/* Only show Convert-to-Sales for NEW / query-only contacts (rank < Info Given) */}
           {showConvertToSales && (
             <button
               type="button"
               onClick={() => setCallPurpose("SALES")}
-              className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 bg-white px-2.5 py-1 rounded-lg border border-indigo-200 hover:bg-indigo-50 flex items-center gap-1 transition cursor-pointer shadow-2xs shrink-0"
+              className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 bg-white px-3 py-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-50 flex items-center gap-1 transition cursor-pointer shadow-2xs shrink-0"
             >
-              <ArrowRightLeft size={11} /> Convert to Sales
+              <ArrowRightLeft size={12} /> Convert to Sales
             </button>
           )}
         </div>
@@ -332,8 +329,8 @@ export const CallEntryTab = ({
 
       {/* --- REMINDER CONTEXT BANNER — NO Convert-to-Sales button --- */}
       {activePurpose === "REMINDER" && (
-        <div className="p-2.5 bg-sky-50/70 border border-sky-200/80 rounded-xl flex items-center gap-3 animate-fade-in">
-          <Bell size={15} className="text-sky-600 shrink-0" />
+        <div className="p-3 bg-sky-50/70 border border-sky-200/80 rounded-xl flex items-center gap-3 animate-fade-in">
+          <Bell size={16} className="text-sky-600 shrink-0" />
           <div>
             <span className="font-bold text-sky-950 text-xs">Event / Shivir Reminder Mode</span>
             <p className="text-[11px] text-sky-800 leading-tight">
@@ -345,8 +342,8 @@ export const CallEntryTab = ({
 
       {/* QUERY: Program selector (which program is this query about?) */}
       {activePurpose === "QUERY" && (
-        <div className="space-y-1 relative z-30 animate-fade-in">
-          <label className="text-[11px] font-bold text-slate-700">
+        <div className="space-y-1.5 relative z-30 animate-fade-in">
+          <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
             Query About (Program / Context)
           </label>
           <SearchableDropdown
@@ -360,58 +357,34 @@ export const CallEntryTab = ({
         </div>
       )}
 
-      {/* 3. CALL RESULT (SIMPLIFIED 3-BUTTON SELECTOR) */}
-      <div className="space-y-1.5">
-        <label className="text-[11px] font-extrabold text-slate-600 uppercase tracking-wider flex items-center gap-1">
-          Call Result <span className="text-rose-500 font-bold">*</span>
-        </label>
-        <div className="flex gap-2">
-          {[
-            { id: "Connected", label: "Connected", activeClass: "bg-emerald-600 text-white border-emerald-600 shadow-2xs font-bold" },
-            { id: "Not Connected", label: "Not Connected", activeClass: "bg-rose-600 text-white border-rose-600 shadow-2xs font-bold" },
-            { id: "Invalid Number", label: "Invalid Number", activeClass: "bg-slate-900 text-white border-slate-900 shadow-2xs font-bold" }
-          ].map(res => (
-            <button
-              key={res.id}
-              type="button"
-              onClick={() => handlePrimaryResultChange(res.id)}
-              className={`flex-1 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                activePrimaryResult === res.id
-                  ? res.activeClass
-                  : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
-              }`}
-            >
-              {res.label}
-            </button>
-          ))}
+      {/* 3. CALL RESULT & OUTCOME (2-COLUMN GRID) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start relative z-10">
+        {/* Call Result Dropdown */}
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+            Call Result <span className="text-rose-500 font-bold">*</span>
+          </label>
+          <SearchableDropdown
+            options={["Connected", "Not Connected", "Invalid Number"]}
+            selected={activePrimaryResult || ""}
+            onChange={val => {
+              if (val) handlePrimaryResultChange(val);
+            }}
+            placeholder="[ Select Call Result... ]"
+            colorClass="indigo"
+          />
         </div>
-      </div>
 
-
-      {/* 5. CALL OUTCOME (SHOWN ONLY WHEN CONNECTED) */}
-      {activePrimaryResult === "Connected" && (
-        <div className="space-y-2.5 animate-fade-in">
-          
-          {/* SALES OUTCOME DROPDOWN */}
-          {activePurpose === "SALES" && (
-            <div className="space-y-1 relative z-20">
-              <label className="text-[11px] font-extrabold text-slate-600 uppercase tracking-wider flex items-center gap-1">
-                Call Outcome <span className="text-rose-500 font-bold">*</span>
+        {/* Outcome Selector Column */}
+        <div>
+          {/* CONNECTED SALES OUTCOME DROPDOWN */}
+          {activePrimaryResult === "Connected" && activePurpose === "SALES" && (
+            <div className="space-y-1.5 relative z-20 animate-fade-in">
+              <label className="text-[11px] font-extrabold text-emerald-900 uppercase tracking-wider flex items-center gap-1">
+                Connected Outcome <span className="text-rose-500 font-bold">*</span>
               </label>
               <SearchableDropdown
-                options={[
-                  "Info Given",
-                  "Interested",
-                  "Next Time",
-                  "Not Interested",
-                  "Reg.Done",
-                  "Already Reg.d",
-                  "Shivir done",
-                  "Invalid No",
-                  "Wrong No",
-                  "Called by mistake",
-                  "Not possible"
-                ]}
+                options={SALES_OUTCOME_OPTIONS}
                 selected={edited.status || ""}
                 onChange={val => {
                   if (!val) return;
@@ -433,50 +406,37 @@ export const CallEntryTab = ({
             </div>
           )}
 
-          {/* QUERY OUTCOME */}
-          {activePurpose === "QUERY" && (
-            <div className="space-y-2.5">
-              <div className="space-y-1">
-                <label className="text-[11px] font-extrabold text-slate-600 uppercase tracking-wider flex items-center gap-1">
-                  Query Status <span className="text-rose-500 font-bold">*</span>
-                </label>
-                <div className="flex gap-2 max-w-sm">
-                  {QUERY_STATUS_OPTIONS.map(qs => (
-                    <button
-                      key={qs}
-                      type="button"
-                      onClick={() => handleChange("queryStatus", qs)}
-                      className={`flex-1 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                        (edited.queryStatus || "Pending") === qs
-                          ? qs === "Pending"
-                            ? "bg-amber-500 text-white border-amber-500 shadow-2xs"
-                            : "bg-emerald-600 text-white border-emerald-600 shadow-2xs"
-                          : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
-                      }`}
-                    >
-                      {qs === "Pending" ? "⏳ Pending Query" : "✓ Query Solved"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {/* Query details / what was asked */}
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-600">Query Details (What was asked)</label>
-                <textarea
-                  value={edited.queryDetails || ""}
-                  onChange={e => handleChange("queryDetails", e.target.value)}
-                  rows={2}
-                  className="w-full px-3 py-2 bg-orange-50 border border-orange-200 rounded-xl text-xs resize-none focus:outline-none focus:ring-2 focus:ring-orange-400/20 focus:border-orange-400 transition text-slate-800"
-                  placeholder="Summarise the question or inquiry..."
-                />
+          {/* CONNECTED QUERY OUTCOME */}
+          {activePrimaryResult === "Connected" && activePurpose === "QUERY" && (
+            <div className="space-y-2 animate-fade-in">
+              <label className="text-[11px] font-extrabold text-amber-900 uppercase tracking-wider flex items-center gap-1">
+                Query Status <span className="text-rose-500 font-bold">*</span>
+              </label>
+              <div className="flex gap-2">
+                {QUERY_STATUS_OPTIONS.map(qs => (
+                  <button
+                    key={qs}
+                    type="button"
+                    onClick={() => handleChange("queryStatus", qs)}
+                    className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      edited.queryStatus === qs
+                        ? qs === "Pending"
+                          ? "bg-amber-500 text-white border-amber-500 shadow-2xs"
+                          : "bg-emerald-600 text-white border-emerald-600 shadow-2xs"
+                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    {qs === "Pending" ? "⏳ Pending" : "✓ Solved"}
+                  </button>
+                ))}
               </div>
             </div>
           )}
 
-          {/* REMINDER OUTCOME */}
-          {activePurpose === "REMINDER" && (
-            <div className="space-y-1">
-              <label className="text-[11px] font-extrabold text-slate-600 uppercase tracking-wider flex items-center gap-1">
+          {/* CONNECTED REMINDER OUTCOME */}
+          {activePrimaryResult === "Connected" && activePurpose === "REMINDER" && (
+            <div className="space-y-1.5 animate-fade-in">
+              <label className="text-[11px] font-extrabold text-sky-900 uppercase tracking-wider flex items-center gap-1">
                 Reminder Result <span className="text-rose-500 font-bold">*</span>
               </label>
               <div className="flex flex-wrap gap-1.5">
@@ -485,8 +445,8 @@ export const CallEntryTab = ({
                     key={ro}
                     type="button"
                     onClick={() => handleChange("status", ro)}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                      (edited.status || "Reminder Given") === ro
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                      edited.status === ro
                         ? "bg-sky-600 text-white border-sky-600 shadow-2xs font-bold"
                         : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
                     }`}
@@ -498,38 +458,78 @@ export const CallEntryTab = ({
             </div>
           )}
 
-          {/* Objection Reason for Not Interested */}
-          {(edited.status?.toLowerCase() === "not interested") && (
-            <div className="space-y-1.5 p-2.5 bg-rose-50 border border-rose-200 rounded-xl animate-slide-up">
-              <label className="text-xs font-bold text-rose-800 flex items-center gap-1">
-                <AlertCircle size={12} /> Reason for Not Interested:
+          {/* UNCONNECTED REASON SELECTOR */}
+          {activePrimaryResult === "Not Connected" && (
+            <div className="space-y-1.5 animate-fade-in">
+              <label className="text-[11px] font-extrabold text-rose-900 uppercase tracking-wider flex items-center gap-1">
+                Unanswered Reason <span className="text-rose-500 font-bold">*</span>
               </label>
-              <div className="flex flex-wrap gap-1">
-                {OBJECTION_REASONS.map(reason => (
+              <div className="flex flex-wrap gap-1.5">
+                {["Not Picked Up", "Busy", "Call Cut", "switched off", "No Network", "no answer", "NA"].map(reason => (
                   <button
                     key={reason}
                     type="button"
-                    onClick={() => handleChange("objectionReason", edited.objectionReason === reason ? "" : reason)}
-                    className={`px-2 py-0.5 rounded-md text-xs font-medium border transition-all cursor-pointer ${
-                      edited.objectionReason === reason
+                    onClick={() => handleChange("status", reason)}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                      (edited.status || "Not Picked Up").toLowerCase() === reason.toLowerCase()
                         ? "bg-rose-600 text-white border-rose-600 shadow-2xs font-bold"
-                        : "bg-white text-rose-700 border-rose-200 hover:bg-rose-100"
+                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
                     }`}
                   >
-                    {reason}
+                    {reason === "switched off" ? "Switched Off" : reason === "no answer" ? "No Answer" : reason}
                   </button>
                 ))}
               </div>
             </div>
           )}
 
+
+        </div>
+      </div>
+
+      {/* Query Details (What was asked) - full width below if Query mode */}
+      {activePrimaryResult === "Connected" && activePurpose === "QUERY" && (
+        <div className="space-y-1.5 animate-fade-in pt-1">
+          <label className="text-[11px] font-bold text-slate-700">Query Details (What was asked)</label>
+          <textarea
+            value={edited.queryDetails || ""}
+            onChange={e => handleChange("queryDetails", e.target.value)}
+            rows={2}
+            className="w-full px-3.5 py-2.5 bg-white border border-amber-200 rounded-xl text-xs resize-none focus:outline-none focus:ring-2 focus:ring-amber-400/20 focus:border-amber-400 transition text-slate-800"
+            placeholder="Summarise the question or inquiry..."
+          />
+        </div>
+      )}
+
+      {/* Objection Reason for Not Interested - full width below */}
+      {activePrimaryResult === "Connected" && (edited.status?.toLowerCase() === "not interested") && (
+        <div className="space-y-2 p-3 bg-rose-50/70 border border-rose-200/80 rounded-xl animate-slide-up">
+          <label className="text-xs font-bold text-rose-800 flex items-center gap-1">
+            <AlertCircle size={13} /> Reason for Not Interested:
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            {OBJECTION_REASONS.map(reason => (
+              <button
+                key={reason}
+                type="button"
+                onClick={() => handleChange("objectionReason", edited.objectionReason === reason ? "" : reason)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
+                  edited.objectionReason === reason
+                    ? "bg-rose-600 text-white border-rose-600 shadow-2xs font-bold"
+                    : "bg-white text-rose-700 border-rose-200 hover:bg-rose-100"
+                }`}
+              >
+                {reason}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
       {/* 6. CALL NOTES */}
-      <div className="space-y-1.5">
-        <label className="text-[11px] font-extrabold text-slate-600 uppercase tracking-wider flex items-center gap-1">
-          <MessageSquare size={12} className="text-slate-400" /> Call Notes
+      <div className="space-y-2">
+        <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+          <MessageSquare size={13} className="text-slate-400" /> Call Notes
           {mergedHistory && mergedHistory.length > 0 && (
             <span className="ml-1 px-1.5 py-0.2 bg-slate-100 text-slate-600 border border-slate-200 rounded text-[10px] font-semibold">
               {mergedHistory.length} past
@@ -561,17 +561,17 @@ export const CallEntryTab = ({
               }
             }}
             rows={2}
-            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-normal resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition leading-relaxed text-slate-800"
+            className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition leading-relaxed text-slate-800 min-h-[65px]"
             placeholder="Add note for today's call..."
           />
         </div>
       </div>
 
       {/* 7. ACTION-DRIVEN FOLLOW-UP SCHEDULER */}
-      <div className="space-y-1.5 p-2.5 bg-slate-50/80 border border-slate-200/80 rounded-xl">
+      <div className="space-y-2 p-3 bg-slate-50/70 border border-slate-100 rounded-xl">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-            <CalendarDays size={13} className={edited.callbackDate ? "text-amber-600" : "text-slate-400"} />
+          <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-slate-600 uppercase tracking-wider">
+            <CalendarDays size={14} className={edited.callbackDate ? "text-amber-600" : "text-slate-400"} />
             <span>Follow-up</span>
           </div>
 
@@ -583,7 +583,7 @@ export const CallEntryTab = ({
                 handleChange("callbackDate", today);
                 handleChange("callbackStatus", "pending");
               }}
-              className="px-2.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold rounded-lg text-xs hover:bg-indigo-100 transition cursor-pointer flex items-center gap-1"
+              className="px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold rounded-lg text-xs hover:bg-indigo-100 transition cursor-pointer flex items-center gap-1"
             >
               + Schedule Follow-up
             </button>
@@ -591,7 +591,7 @@ export const CallEntryTab = ({
             <button
               type="button"
               onClick={() => { handleChange("callbackDate", null); handleChange("callbackStatus", null); }}
-              className="px-2 py-0.5 bg-rose-50 border border-rose-200 text-rose-700 font-bold rounded-md text-[11px] hover:bg-rose-100 transition cursor-pointer"
+              className="px-2.5 py-1 bg-rose-50 border border-rose-200 text-rose-700 font-bold rounded-md text-[11px] hover:bg-rose-100 transition cursor-pointer"
             >
               Remove
             </button>
@@ -599,7 +599,7 @@ export const CallEntryTab = ({
         </div>
 
         {edited.callbackDate && (
-          <div className="space-y-2 pt-1 border-t border-slate-200/60 animate-fade-in">
+          <div className="space-y-2 pt-2 border-t border-slate-200/60 animate-fade-in">
             <div className="flex gap-2">
               <input
                 type="date"
@@ -608,13 +608,13 @@ export const CallEntryTab = ({
                   handleChange("callbackDate", e.target.value);
                   if (e.target.value && !edited.callbackStatus) handleChange("callbackStatus", "pending");
                 }}
-                className="flex-1 px-3 py-1.5 bg-amber-50 border border-amber-300 text-amber-900 font-bold rounded-lg text-xs focus:outline-none"
+                className="flex-1 px-3.5 py-2 bg-amber-50 border border-amber-300 text-amber-900 font-bold rounded-lg text-xs focus:outline-none"
               />
               <input
                 type="time"
                 value={edited.callbackTime || ""}
                 onChange={e => handleChange("callbackTime", e.target.value)}
-                className="w-28 px-2 py-1.5 bg-amber-50 border border-amber-300 text-amber-900 font-bold rounded-lg text-xs focus:outline-none"
+                className="w-28 px-3 py-2 bg-amber-50 border border-amber-300 text-amber-900 font-bold rounded-lg text-xs focus:outline-none"
                 placeholder="HH:MM"
               />
             </div>
@@ -629,7 +629,7 @@ export const CallEntryTab = ({
                   key={opt.value}
                   type="button"
                   onClick={() => handleChange("callbackStatus", opt.value)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
                     (edited.callbackStatus || "pending") === opt.value
                       ? opt.activeClass
                       : opt.inactiveClass
@@ -645,18 +645,18 @@ export const CallEntryTab = ({
 
       {/* 8. CONTEXTUAL REGISTRATION DETAILS (ONLY WHEN REGISTERED) */}
       {(edited.status === "Reg.Done" || row.status === "Reg.Done" || edited.pipelineStage === "6. Registered / Won") && (
-        <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between gap-3 animate-fade-in">
+        <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3 animate-fade-in">
           <div className="flex items-center gap-1.5 text-slate-700 font-bold text-xs">
-            <Flame size={14} className="text-amber-500" fill="currentColor" /> Abhivyakti Registration
+            <Flame size={15} className="text-amber-500" fill="currentColor" /> Abhivyakti Registration
           </div>
-          <div className="flex gap-1.5">
-            <span className="px-2.5 py-1 rounded-lg font-bold bg-emerald-600 text-white flex items-center gap-1 text-xs">
-              <CheckCircle2 size={13} /> Registered
+          <div className="flex gap-2">
+            <span className="px-3 py-1.5 rounded-lg font-bold bg-emerald-600 text-white flex items-center gap-1 text-xs">
+              <CheckCircle2 size={14} /> Registered
             </span>
             <button
               type="button"
               onClick={() => setShowUndoStatusPrompt(true)}
-              className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold rounded-lg text-xs transition cursor-pointer"
+              className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold rounded-lg text-xs transition cursor-pointer"
             >
               Undo
             </button>
@@ -664,6 +664,11 @@ export const CallEntryTab = ({
         </div>
       )}
 
+      {/* STAGE INFO MODAL */}
+      <StageInfoModal
+        isOpen={showStageInfoModal}
+        onClose={() => setShowStageInfoModal(false)}
+      />
     </div>
   );
 };

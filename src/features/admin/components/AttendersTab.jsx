@@ -15,6 +15,10 @@ import { AttenderSheetModal } from "./AttenderSheetModal";
 import { ReassignModal } from "./ReassignModal";
 
 export default function AttendersTab({ programs, attenders, onReloadAttenders }) {
+  const EXCLUDED_ATTENDER_NAMES = React.useMemo(() => ["admin", "super admin", "administrator"], []);
+  const filteredAttenders = React.useMemo(() => {
+    return (attenders || []).filter(a => a.role !== 'admin' && !EXCLUDED_ATTENDER_NAMES.includes((a.name || "").toLowerCase().trim()));
+  }, [attenders, EXCLUDED_ATTENDER_NAMES]);
 
   const [newAttenderName, setNewAttenderName] = useState("");
   const [editingAttender, setEditingAttender] = useState(null);
@@ -280,9 +284,9 @@ export default function AttendersTab({ programs, attenders, onReloadAttenders })
         {/* Right List Column */}
         <div className="md:col-span-2 space-y-5">
           <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-2xs">
-            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3.5">Attenders List ({attenders.length})</h3>
+            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3.5">Attenders List ({filteredAttenders.length})</h3>
             <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden">
-              {attenders.map(a => {
+              {filteredAttenders.map(a => {
                 const isPassVisible = visiblePasswords[a.id];
                 const currentPass = a.password || "------";
                 return (
@@ -340,7 +344,7 @@ export default function AttendersTab({ programs, attenders, onReloadAttenders })
                   </div>
                 );
               })}
-              {attenders.length === 0 && (
+              {filteredAttenders.length === 0 && (
                 <div className="py-8 text-center text-slate-400 font-medium">No attenders registered.</div>
               )}
             </div>

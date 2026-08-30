@@ -250,7 +250,7 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
       {/* Main Content Area */}
       <main className="flex-1 overflow-hidden flex flex-col h-full bg-slate-50">
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
           {isLoading ? (
             <div className="h-full flex items-center justify-center">
               <Loader size={28} className="text-indigo-600 animate-spin" />

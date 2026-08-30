@@ -155,7 +155,7 @@ const SearchableDropdown = ({
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full px-3 py-2 border rounded-xl text-xs text-left focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 flex justify-between items-center transition cursor-pointer shadow-2xs ${buttonStyle}`}
+        className={`w-full px-3.5 py-2.5 border rounded-xl text-xs text-left focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 flex justify-between items-center transition cursor-pointer shadow-2xs ${buttonStyle}`}
       >
         <span className="truncate">{getButtonText()}</span>
         <ChevronDown size={14} className={`${iconColor} shrink-0 ml-2`} />

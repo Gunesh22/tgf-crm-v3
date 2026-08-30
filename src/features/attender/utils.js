@@ -1,4 +1,5 @@
 import { isKhojiField } from "../../lib/khojiHelper";
+import { getEffectiveStage } from "../../utils/pipelineEngine";
 export { isKhojiField };
 
 export const STATUS_OPTIONS = [
@@ -17,7 +18,6 @@ export const STATUS_OPTIONS = [
   "reminder",
   "Query",
   "Called by mistake",
-  "Not possible",
   "Shivir done",
   "no answer"
 ];
@@ -42,7 +42,9 @@ export const SOURCE_OPTIONS = [
   "Program",
   "Khoji",
   "Other",
-  "NA"
+  "NA",
+  "SHSH",
+  "CBT Basic"
 ];
 
 export const CALLED_FOR_OPTIONS = [
@@ -81,7 +83,15 @@ export const CALLED_FOR_OPTIONS = [
   "Digestive Avd",
   "Spine Basic",
   "Spine Avd",
+  "Book",
+  "Studya Smater",
+  "Appointment"
 ];
+
+export const CALL_SOURCE_OPTIONS = Array.from(new Set([
+  ...SOURCE_OPTIONS,
+  ...CALLED_FOR_OPTIONS.filter(o => o !== "Reminder" && o !== "Query")
+]));
 
 export const CALL_DIRECTION_OPTIONS = ["outgoing", "incoming"];
 export const CALL_PURPOSE_OPTIONS = ["SALES", "QUERY", "REMINDER"];
@@ -103,11 +113,7 @@ export const SALES_OUTCOME_OPTIONS = [
   "Not Interested",
   "Reg.Done",
   "Already Reg.d",
-  "Shivir done",
-  "Invalid No",
-  "Wrong No",
-  "Called by mistake",
-  "Not possible"
+  "Shivir done"
 ];
 
 export const QUERY_STATUS_OPTIONS = [
@@ -371,7 +377,20 @@ export const IGNORED_FIELDS = [
   "normalizedmobile",
   "assignedat",
   "registeredyearmonth",
-  "querystatus"
+  "querystatus",
+  "callpurpose",
+  "call_purpose",
+  "call purpose",
+  "callstatus",
+  "call_status",
+  "call status",
+  "options",
+  "attemptcount",
+  "attempt_count",
+  "attempt count",
+  "originalsource",
+  "original_source",
+  "original source"
 ];
 
 export const isIgnoredField = (key) => {
@@ -385,7 +404,7 @@ export const isIgnoredField = (key) => {
   });
 };
 
-export const getFieldWithFallback = (log, fieldName) => {
+export const getFieldWithFallback = (log, fieldName, currentAttenderIdOrName) => {
   if (!log) return "";
   const name = fieldName.toLowerCase().trim();
   const keys = Object.keys(log);
@@ -448,44 +467,45 @@ export const getFieldWithFallback = (log, fieldName) => {
     const tagAlias = log.tag ? String(log.tag) : "";
     tagAlias.split(",").map(x => x.trim()).filter(Boolean).forEach(x => merged.add(x));
 
-    if (log.attenderStates && typeof log.attenderStates === "object") {
-      Object.values(log.attenderStates).forEach(st => {
-        if (st) {
-          const stTags = Array.isArray(st.tags) ? st.tags : (st.Tags ? String(st.Tags).split(",") : []);
-          stTags.forEach(t => String(t).split(",").map(x => x.trim()).filter(Boolean).forEach(x => merged.add(x)));
-        }
-      });
-    }
-
     return Array.from(merged).sort().join(", ");
   }
 
-  for (const c of candidates) {
-    const val = getVal(c);
-    if (val) return val;
-  }
+  // 1. Primary: Check active attender's own state FIRST (if currentAttenderIdOrName is provided)
+  if (currentAttenderIdOrName && log.attenderStates && typeof log.attenderStates === "object") {
+    const searchTarget = String(currentAttenderIdOrName).toLowerCase().trim();
+    const matchingKey = Object.keys(log.attenderStates).find(k => {
+      if (k.toLowerCase().trim() === searchTarget) return true;
+      const st = log.attenderStates[k];
+      return st && (
+        String(st.attenderId || "").toLowerCase().trim() === searchTarget ||
+        String(st.attenderName || "").toLowerCase().trim() === searchTarget
+      );
+    });
 
-  // Fallback to checking attenderStates if top-level field is empty
-  if (log.attenderStates && typeof log.attenderStates === "object") {
-    for (const stateObj of Object.values(log.attenderStates)) {
-      if (stateObj && typeof stateObj === "object") {
-        for (const c of candidates) {
-          const valInState = String(stateObj[c] || "").trim();
-          if (valInState) return valInState;
-        }
-        const keysInState = Object.keys(stateObj);
-        const directKeyInState = keysInState.find(k => k.toLowerCase() === name);
-        if (directKeyInState && String(stateObj[directKeyInState] || "").trim()) {
-          return String(stateObj[directKeyInState]).trim();
-        }
-        if (aliases.length > 0) {
-          const aliasKeyInState = keysInState.find(k => aliases.includes(k.toLowerCase()));
-          if (aliasKeyInState && String(stateObj[aliasKeyInState] || "").trim()) {
-            return String(stateObj[aliasKeyInState]).trim();
-          }
+    if (matchingKey && log.attenderStates[matchingKey]) {
+      const stateObj = log.attenderStates[matchingKey];
+      for (const c of candidates) {
+        const valInState = String(stateObj[c] || "").trim();
+        if (valInState) return valInState;
+      }
+      const keysInState = Object.keys(stateObj);
+      const directKeyInState = keysInState.find(k => k.toLowerCase() === name);
+      if (directKeyInState && String(stateObj[directKeyInState] || "").trim()) {
+        return String(stateObj[directKeyInState]).trim();
+      }
+      if (aliases.length > 0) {
+        const aliasKeyInState = keysInState.find(k => aliases.includes(k.toLowerCase()));
+        if (aliasKeyInState && String(stateObj[aliasKeyInState] || "").trim()) {
+          return String(stateObj[aliasKeyInState]).trim();
         }
       }
     }
+  }
+
+  // 2. Secondary: Fall back to top-level root contact properties (for non-shared contacts or initial assignment)
+  for (const c of candidates) {
+    const val = getVal(c);
+    if (val) return val;
   }
 
   if (candidates.length > 0) {
@@ -494,9 +514,160 @@ export const getFieldWithFallback = (log, fieldName) => {
   return "";
 };
 
-export const getKhojiValue = (log) => {
-  return getFieldWithFallback(log, "Khoji");
+export const getKhojiValue = (log, currentAttenderIdOrName) => {
+  return getFieldWithFallback(log, "Khoji", currentAttenderIdOrName);
 };
+
+export function getAttenderStatus(log, currentAttenderIdOrName) {
+  if (!log) return "";
+
+  // 1. Primary: Check getFieldWithFallback first for status
+  const fallbackStatus = getFieldWithFallback(log, "status", currentAttenderIdOrName);
+  if (fallbackStatus && String(fallbackStatus).trim()) {
+    return String(fallbackStatus).trim();
+  }
+
+  // 2. Secondary: Check attenderStates[currentAttenderIdOrName]
+  if (currentAttenderIdOrName && log.attenderStates && typeof log.attenderStates === "object") {
+    const searchTarget = String(currentAttenderIdOrName).toLowerCase().trim();
+    const stateKey = Object.keys(log.attenderStates).find(k => {
+      if (k.toLowerCase().trim() === searchTarget) return true;
+      const st = log.attenderStates[k];
+      return st && (
+        String(st.attenderId || "").toLowerCase().trim() === searchTarget ||
+        String(st.attenderName || "").toLowerCase().trim() === searchTarget
+      );
+    });
+
+    if (stateKey && log.attenderStates[stateKey]) {
+      const st = log.attenderStates[stateKey];
+      const statusInState = st.status || st.Status || st.callStatus;
+      if (statusInState && String(statusInState).trim()) {
+        return String(statusInState).trim();
+      }
+    }
+  }
+
+  // 3. Check top-level history[] filtered by currentAttenderIdOrName
+  if (currentAttenderIdOrName && Array.isArray(log.history) && log.history.length > 0) {
+    const searchTarget = String(currentAttenderIdOrName).toLowerCase().trim();
+    const myHistory = log.history.filter(h => {
+      if (!h) return false;
+      const hId = String(h.attenderId || h.by || h.editedBy || "").toLowerCase().trim();
+      const hName = String(h.attenderName || h.assignedName || h.name || "").toLowerCase().trim();
+      return hId === searchTarget || hName === searchTarget;
+    });
+
+    if (myHistory.length > 0) {
+      const lastMyHist = [...myHistory].reverse().find(h => h && h.status);
+      if (lastMyHist && lastMyHist.status) {
+        return String(lastMyHist.status).trim();
+      }
+    }
+  }
+
+  // 4. Fallback for non-shared leads
+  const sharedList = getSharedAttenders(log);
+  if (sharedList.length <= 1 || !currentAttenderIdOrName) {
+    const directStatus = log.status || log.Status || "";
+    if (directStatus && String(directStatus).trim()) return String(directStatus).trim();
+  }
+
+  return "";
+}
+
+export function getAttenderRemark(log, currentAttenderIdOrName) {
+  if (!log) return "";
+
+  // 1. Primary: Check attenderStates[currentAttenderIdOrName]
+  if (currentAttenderIdOrName && log.attenderStates && typeof log.attenderStates === "object") {
+    const searchTarget = String(currentAttenderIdOrName).toLowerCase().trim();
+    const stateKey = Object.keys(log.attenderStates).find(k => {
+      if (k.toLowerCase().trim() === searchTarget) return true;
+      const st = log.attenderStates[k];
+      return st && (
+        String(st.attenderId || "").toLowerCase().trim() === searchTarget ||
+        String(st.attenderName || "").toLowerCase().trim() === searchTarget
+      );
+    });
+
+    if (stateKey && log.attenderStates[stateKey]) {
+      const st = log.attenderStates[stateKey];
+      const remarkInState = st.remark || st.Remark || st.remarks || st.comment || st.notes;
+      if (remarkInState && String(remarkInState).trim()) {
+        return String(remarkInState).trim();
+      }
+      if (Array.isArray(st.history) && st.history.length > 0) {
+        const lastStHist = [...st.history].reverse().find(h => h && (h.remark || h.comment));
+        if (lastStHist) {
+          const r = lastStHist.remark || lastStHist.comment;
+          if (r && String(r).trim()) return String(r).trim();
+        }
+      }
+    }
+  }
+
+  // 2. Check top-level history[] filtered by currentAttenderIdOrName
+  if (currentAttenderIdOrName && Array.isArray(log.history) && log.history.length > 0) {
+    const searchTarget = String(currentAttenderIdOrName).toLowerCase().trim();
+    const myHistory = log.history.filter(h => {
+      if (!h) return false;
+      const hId = String(h.attenderId || h.by || h.editedBy || "").toLowerCase().trim();
+      const hName = String(h.attenderName || h.assignedName || h.name || "").toLowerCase().trim();
+      return hId === searchTarget || hName === searchTarget;
+    });
+
+    if (myHistory.length > 0) {
+      const lastMyHist = [...myHistory].reverse().find(h => h && (h.remark || h.comment));
+      if (lastMyHist) {
+        const r = lastMyHist.remark || lastMyHist.comment;
+        if (r && String(r).trim()) return String(r).trim();
+      }
+    }
+  }
+
+  // 3. Fallback for non-shared leads
+  const sharedList = getSharedAttenders(log);
+  if (sharedList.length <= 1 || !currentAttenderIdOrName) {
+    const directRemark = log.remark || log.Remark || log.remarks || "";
+    if (directRemark && String(directRemark).trim()) return String(directRemark).trim();
+    if (Array.isArray(log.history) && log.history.length > 0) {
+      const lastHist = [...log.history].reverse().find(h => h && (h.remark || h.comment));
+      if (lastHist) {
+        const r = lastHist.remark || lastHist.comment;
+        if (r && String(r).trim()) return String(r).trim();
+      }
+    }
+  }
+
+  return "";
+}
+
+export function getContactView(contact, currentAttenderIdOrName) {
+  if (!contact) return {};
+
+  const activeAttender = currentAttenderIdOrName || "";
+
+  const calledFor = getFieldWithFallback(contact, "Called For", activeAttender);
+  const source = getFieldWithFallback(contact, "Source", activeAttender);
+  const status = getAttenderStatus(contact, activeAttender);
+  const remark = getAttenderRemark(contact, activeAttender);
+  const pipelineStage = getEffectiveStage(contact, calledFor);
+  const callbackDate = getFieldWithFallback(contact, "callbackDate", activeAttender) || contact.callbackDate || "";
+  const callbackStatus = getFieldWithFallback(contact, "callbackStatus", activeAttender) || contact.callbackStatus || "";
+  const callType = getFieldWithFallback(contact, "callType", activeAttender) || contact.callType || "outgoing";
+
+  return {
+    calledFor,
+    source,
+    status,
+    remark,
+    pipelineStage,
+    callbackDate,
+    callbackStatus,
+    callType,
+  };
+}
 
 export const isKhojiAffirmative = (val) => {
   if (!val) return false;

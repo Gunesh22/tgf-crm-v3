@@ -95,36 +95,146 @@ export function canTransition(fromStage, toStage, event = {}) {
  * - Legacy pipelineStage values of "Query Desk" / "Existing Alumni" are treated as New Lead
  *   for rank purposes so a new Sales call can move the contact forward.
  */
-export function getEffectiveStage(contact = {}) {
-  const current = contact.pipelineStage || PIPELINE_STAGES.NEW_LEAD;
-  const isLegacy = LEGACY_NON_PIPELINE_STAGES.has(current);
+export function getEffectiveStage(contact = {}, targetCalledFor = null) {
+  const normalizeStageStr = (s) => {
+    if (!s) return null;
+    const str = String(s).trim();
+    if (str === PIPELINE_STAGES.NEW_LEAD || str === "New Lead" || str === "1. New Lead") return PIPELINE_STAGES.NEW_LEAD;
+    if (str === PIPELINE_STAGES.ATTEMPTING || str === "Attempting Contact" || str === "Attempting" || str === "2. Attempting Contact") return PIPELINE_STAGES.ATTEMPTING;
+    if (str === PIPELINE_STAGES.INFO_GIVEN || str === "Information Given" || str === "Info Given" || str === "3. Information Given") return PIPELINE_STAGES.INFO_GIVEN;
+    if (str === PIPELINE_STAGES.NURTURE_INTERESTED || str === "Nurture / Interested" || str === "Interested" || str === "4. Nurture / Interested") return PIPELINE_STAGES.NURTURE_INTERESTED;
+    if (str === PIPELINE_STAGES.FUTURE_POOL || str === "Future Pool" || str === "Next Time" || str === "5. Future Pool") return PIPELINE_STAGES.FUTURE_POOL;
+    if (str === PIPELINE_STAGES.REGISTERED_WON || str === "Registered / Won" || str === "Reg.Done" || str === "6. Registered / Won" || str === "Registered") return PIPELINE_STAGES.REGISTERED_WON;
+    if (str === PIPELINE_STAGES.CLOSED_LOST || str === "Closed / Lost" || str === "Closed Lost" || str === "7. Closed / Lost" || str === "Not Interested") return PIPELINE_STAGES.CLOSED_LOST;
+    if (str === PIPELINE_STAGES.CLOSED_INVALID || str === "Closed / Invalid" || str === "Invalid") return PIPELINE_STAGES.CLOSED_INVALID;
+    return null;
+  };
 
-  let highestRank = isLegacy ? 1 : (STAGE_RANKS[current] || 1);
-  let stage       = isLegacy ? PIPELINE_STAGES.NEW_LEAD : current;
+  // 1. Direct Source of Truth: MongoDB contact.pipelineStage
+  let contactStage = normalizeStageStr(contact.pipelineStage);
 
-  const history = Array.isArray(contact.history) ? contact.history : [];
-  for (const h of history) {
-    // Only consider SALES events for pipeline; skip QUERY and REMINDER
-    const callPurpose = (h.callPurpose || "").toUpperCase();
-    if (callPurpose && callPurpose !== "SALES") continue;
+  // If pipelineStage is missing on contact object, derive from programRelationships, attenderStates, or history
+  if (!contactStage) {
+    if (Array.isArray(contact.programRelationships)) {
+      contact.programRelationships.forEach(r => {
+        const st = normalizeStageStr(r.pipelineStage || r.status);
+        if (st && (!contactStage || (STAGE_RANKS[st] || 1) > (STAGE_RANKS[contactStage] || 1))) {
+          contactStage = st;
+        }
+      });
+    }
+    if (contact.attenderStates && typeof contact.attenderStates === "object") {
+      Object.values(contact.attenderStates).forEach(st => {
+        if (!st) return;
+        const stStage = normalizeStageStr(st.status || st.pipelineStage);
+        if (stStage && (!contactStage || (STAGE_RANKS[stStage] || 1) > (STAGE_RANKS[contactStage] || 1))) {
+          contactStage = stStage;
+        }
+      });
+    }
+    const history = Array.isArray(contact.history) ? contact.history : [];
+    if (history.length > 0) {
+      let hRank = 0;
+      let hStage = null;
+      for (const h of history) {
+        const stat = (h.status || h.purposeOutcome || "").trim().toLowerCase();
+        const rem = (h.remark || "").toLowerCase().trim();
+        const combined = `${stat} ${rem}`;
+        let st = null;
+        if (combined.includes("already reg") || combined.includes("reg.done") || combined.includes("registered")) st = PIPELINE_STAGES.REGISTERED_WON;
+        else if (combined.includes("info given") || combined.includes("information given") || combined.includes("details send")) st = PIPELINE_STAGES.INFO_GIVEN;
+        else if (combined.includes("interested") && !combined.includes("not interested")) st = PIPELINE_STAGES.NURTURE_INTERESTED;
+        else if (combined.includes("next time")) st = PIPELINE_STAGES.FUTURE_POOL;
+        else if (combined.includes("not interested")) st = PIPELINE_STAGES.CLOSED_LOST;
+        else if (INVALID_NUMBER_STATUSES.some(inv => combined.includes(inv.toLowerCase()))) st = PIPELINE_STAGES.CLOSED_INVALID;
 
-    const outcome = (h.status || h.purposeOutcome || "").trim().toLowerCase();
-    let hStage = null;
-
-    if (outcome === "info given" || outcome === "info")    hStage = PIPELINE_STAGES.INFO_GIVEN;
-    else if (outcome === "interested")                      hStage = PIPELINE_STAGES.NURTURE_INTERESTED;
-    else if (outcome === "next time")                       hStage = PIPELINE_STAGES.FUTURE_POOL;
-    else if (outcome === "reg.done" || outcome === "registered") hStage = PIPELINE_STAGES.REGISTERED_WON;
-    else if (["not interested", "not possible"].includes(outcome)) hStage = PIPELINE_STAGES.CLOSED_LOST;
-    // NOTE: "already reg.d", "shivir done" → programRelationships[] only, never pipeline
-
-    if (hStage) {
-      const hRank = STAGE_RANKS[hStage] || 1;
-      if (hRank > highestRank) { highestRank = hRank; stage = hStage; }
+        if (st) {
+          const r = STAGE_RANKS[st] || 1;
+          if (r > hRank) {
+            hRank = r;
+            hStage = st;
+          }
+        }
+      }
+      if (hStage && (!contactStage || (STAGE_RANKS[hStage] || 1) > (STAGE_RANKS[contactStage] || 1))) {
+        contactStage = hStage;
+      }
     }
   }
 
-  return stage;
+  const finalContactStage = contactStage || PIPELINE_STAGES.NEW_LEAD;
+
+  // 2. Program-specific evaluation ONLY if targetCalledFor is passed and non-empty
+  const targetKey = targetCalledFor ? String(targetCalledFor).trim().toLowerCase() : "";
+  if (targetKey) {
+    // Check programRelationships for explicit targetKey match
+    if (Array.isArray(contact.programRelationships) && contact.programRelationships.length > 0) {
+      const rel = contact.programRelationships.find(r => {
+        const progKey = String(r.program || r.calledForKey || "").trim().toLowerCase();
+        return progKey === targetKey || (r.calledForKey && r.calledForKey === targetKey.replace(/[\s_-]/g, ""));
+      });
+      if (rel) {
+        const relStage = normalizeStageStr(rel.pipelineStage || rel.status);
+        if (relStage) return relStage;
+      }
+    }
+
+    // Check attenderStates for explicit targetKey match
+    if (contact.attenderStates && typeof contact.attenderStates === "object") {
+      let highestAttenderStage = null;
+      let highestAttenderRank = 0;
+      Object.values(contact.attenderStates).forEach(st => {
+        if (!st) return;
+        const stCf = String(st["Called For"] || st.calledFor || "").trim().toLowerCase();
+        if (stCf === targetKey) {
+          const stStage = normalizeStageStr(st.pipelineStage || st.status);
+          if (stStage) {
+            const r = STAGE_RANKS[stStage] || 1;
+            if (r > highestAttenderRank) {
+              highestAttenderRank = r;
+              highestAttenderStage = stStage;
+            }
+          }
+        }
+      });
+      if (highestAttenderStage) return highestAttenderStage;
+    }
+
+    // Check history for explicit targetKey match
+    const history = Array.isArray(contact.history) ? contact.history : [];
+    const progHistory = history.filter(h => {
+      const hCf = String(h.calledFor || h.called_for || h["Called For"] || "").trim().toLowerCase();
+      return hCf === targetKey;
+    });
+    if (progHistory.length > 0) {
+      let highestRank = 0;
+      let stage = null;
+      for (const h of progHistory) {
+        const stat = (h.status || h.purposeOutcome || "").trim().toLowerCase();
+        const rem = (h.remark || "").toLowerCase().trim();
+        const combined = `${stat} ${rem}`;
+        let hStage = null;
+        if (combined.includes("already reg") || combined.includes("reg.done") || combined.includes("registered")) hStage = PIPELINE_STAGES.REGISTERED_WON;
+        else if (combined.includes("info given") || combined.includes("information given") || combined.includes("details send")) hStage = PIPELINE_STAGES.INFO_GIVEN;
+        else if (combined.includes("interested") && !combined.includes("not interested")) hStage = PIPELINE_STAGES.NURTURE_INTERESTED;
+        else if (combined.includes("next time")) hStage = PIPELINE_STAGES.FUTURE_POOL;
+        else if (combined.includes("not interested")) hStage = PIPELINE_STAGES.CLOSED_LOST;
+        else if (INVALID_NUMBER_STATUSES.some(inv => combined.includes(inv.toLowerCase()))) hStage = PIPELINE_STAGES.CLOSED_INVALID;
+
+        if (hStage) {
+          const hRank = STAGE_RANKS[hStage] || 1;
+          if (hRank > highestRank) {
+            highestRank = hRank;
+            stage = hStage;
+          }
+        }
+      }
+      if (stage) return stage;
+    }
+  }
+
+  // 3. If no matching program journey exists for targetKey, return finalContactStage
+  return finalContactStage;
 }
 
 /**
@@ -290,6 +400,6 @@ export function getPipelineStageConfig(stage) {
     case "Alumni":
       return { label: "Existing Alumni (Legacy)", bg: "bg-cyan-50", border: "border-cyan-300", text: "text-cyan-800", badge: "bg-cyan-100 text-cyan-900 border-cyan-300" };
     default:
-      return { label: stage || "1. New Lead", bg: "bg-gray-100", border: "border-gray-200", text: "text-gray-700", badge: "bg-gray-100 text-gray-700 border-gray-200" };
+      return { label: stage || "", bg: "bg-gray-100", border: "border-gray-200", text: "text-gray-700", badge: "bg-gray-100 text-gray-700 border-gray-200" };
   }
 }

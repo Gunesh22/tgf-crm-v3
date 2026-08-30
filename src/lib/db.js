@@ -8,6 +8,27 @@ export const DEFAULT_WHATSAPP_TEMPLATES = [];
 export const DEFAULT_NOT_CONNECTED_STATUSES = ["NA", "Busy", "Call Cut", "switched off", "Invalid No", "Called by mistake", "No Network", "wrong no.", "no answer"];
 export const DEFAULT_CONNECTED_STATUSES = ["Info given", "Interested", "Reg.Done", "reminder", "Query", "Already Reg.d", "Next time", "Shivir done", "Not possible", "Pending", "Not interested", "Not Attended", "Call Log Added"];
 
+const safeSetLocalStorage = (key, value) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch (err) {
+    if (err && (err.name === 'QuotaExceededError' || err.code === 22 || err.code === 1014)) {
+      try {
+        // Evict old large cache entries if storage quota is exceeded
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const k = localStorage.key(i);
+          if (k && (k.startsWith('all_call_logs_') || k.startsWith('attender_call_logs_') || k.startsWith('registrations_cache_'))) {
+            localStorage.removeItem(k);
+          }
+        }
+        localStorage.setItem(key, value);
+      } catch (e) {
+        // Safe fallback — API response is passed directly to callback
+      }
+    }
+  }
+};
+
 // API FETCH HELPERS
 export const fetchAPI = async (endpoint, method = "GET", body = null) => {
   console.log(`%c[API CALL] %c${method} %c${endpoint}`, "color: #3b82f6; font-weight: bold", "color: #10b981; font-weight: bold", "color: gray");
@@ -121,36 +142,84 @@ export const getProgramContactStats = async (programId) => {
 // ============================================
 // ATTENDERS & PROGRAMS BACKEND INTEGRATION
 // ============================================
-export const getSettingsOptions = async () => ({
-  statusOptions: [...DEFAULT_CONNECTED_STATUSES, ...DEFAULT_NOT_CONNECTED_STATUSES],
-  connectedStatuses: DEFAULT_CONNECTED_STATUSES,
-  notConnectedStatuses: DEFAULT_NOT_CONNECTED_STATUSES,
-  whatsappTemplates: DEFAULT_WHATSAPP_TEMPLATES
-});
+let settingsCache = null;
+let settingsFetchPromise = null;
+
+const applyDynamicOptions = async (data) => {
+  if (!data) return;
+  try {
+    const utils = await import("../features/attender/utils.js");
+    if (utils && utils.updateDynamicOptions) {
+      utils.updateDynamicOptions(data);
+    }
+  } catch (e) {}
+};
+
+export const getSettingsOptions = async (opts = {}) => {
+  const forceRefresh = Boolean(opts && opts.forceRefresh);
+
+  if (settingsCache && !forceRefresh) {
+    return settingsCache;
+  }
+
+  if (settingsFetchPromise && !forceRefresh) {
+    return settingsFetchPromise;
+  }
+
+  settingsFetchPromise = (async () => {
+    try {
+      const res = await fetchAPI(`/api/admin/settings`);
+      if (res && res.data) {
+        settingsCache = res.data;
+        applyDynamicOptions(res.data);
+        return res.data;
+      }
+    } catch (e) {
+      console.error("Failed to fetch settings from DB, using defaults", e);
+    } finally {
+      settingsFetchPromise = null;
+    }
+
+    const fallback = {
+      statusOptions: [...DEFAULT_CONNECTED_STATUSES, ...DEFAULT_NOT_CONNECTED_STATUSES],
+      connectedStatuses: DEFAULT_CONNECTED_STATUSES,
+      notConnectedStatuses: DEFAULT_NOT_CONNECTED_STATUSES,
+      whatsappTemplates: DEFAULT_WHATSAPP_TEMPLATES
+    };
+    settingsCache = fallback;
+    return fallback;
+  })();
+
+  return settingsFetchPromise;
+};
 
 export const updateCallCenterOptions = async (options) => {
-  console.log("Updated settings", options);
+  const res = await fetchAPI(`/api/admin/settings`, "POST", options);
+  if (res && res.data) {
+    settingsCache = res.data;
+    applyDynamicOptions(res.data);
+  }
+  return res;
 };
 
 export const getAttenders = async () => {
   try {
+    const res = await fetchAPI(`/api/admin/attenders`);
+    if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
+      localStorage.setItem("admin_attenders_cache", JSON.stringify(res.data));
+      return res.data;
+    }
+  } catch (e) {
+    console.error("Failed to fetch fresh attenders, falling back to cache", e);
+  }
+  try {
     const cached = localStorage.getItem("admin_attenders_cache");
     if (cached) {
       const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        fetchAPI(`/api/admin/attenders`).then(res => {
-          if (res.data) localStorage.setItem("admin_attenders_cache", JSON.stringify(res.data));
-        }).catch(() => {});
-        return parsed;
-      }
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }
-    const res = await fetchAPI(`/api/admin/attenders`);
-    if (res.data) localStorage.setItem("admin_attenders_cache", JSON.stringify(res.data));
-    return res.data || [];
-  } catch (e) {
-    console.error("Failed to fetch attenders", e);
-    return [];
-  }
+  } catch (e) {}
+  return [];
 };
 
 export const createAttender = async (name, password) => {
@@ -165,7 +234,16 @@ export const deleteAttender = async (id) => {
   return fetchAPI(`/api/admin/attenders?id=${encodeURIComponent(id)}`, "DELETE");
 };
 
-export const getAttenderContactCount = async () => 0;
+export const getAttenderContactCount = async (attenderId) => {
+  if (!attenderId) return 0;
+  try {
+    const res = await fetchAPI(`/api/admin/attenders?countId=${encodeURIComponent(attenderId)}`);
+    return typeof res?.count === 'number' ? res.count : 0;
+  } catch (e) {
+    console.error("Failed to fetch attender contact count", e);
+    return 0;
+  }
+};
 
 export const getPrograms = async () => {
   try {
@@ -285,11 +363,7 @@ export const subscribeToAllCallLogs = (programId, month, callback) => {
       const monthParam = (!month || month === 'ALL') ? '' : month;
       const res = await fetchAPI(`/api/contacts/search?includeHistory=true&${monthParam ? `month=${monthParam}&` : ''}limit=15000`);
       if (isSubscribed && res.data) {
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify(res.data));
-        } catch (err) {
-          console.warn("[All Logs Cache Write Error]", err);
-        }
+        safeSetLocalStorage(cacheKey, JSON.stringify(res.data));
         callback(res.data);
       }
     } catch (e) {
@@ -400,10 +474,18 @@ export const checkGlobalDuplicate = async (phone, excludeId = null) => {
   }
 };
 
-// Admin password synced from production settings
-export const getAdminPassword = async () => "198219";
-export const setAdminPassword = async () => {};
-export const generateRandomPassword = () => "pass123";
+// Database-backed Admin Authentication & Security
+export const setAdminPassword = async (newPassword, currentPassword) => {
+  return fetchAPI(`/api/admin/admin-auth`, "POST", {
+    action: "change-password",
+    currentPassword,
+    newPassword
+  });
+};
+
+export const generateRandomPassword = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
 export const runAutoLockAndPurgeCheck = async () => {};
 
 export const findMatchingAttenderState = (attenderStates, attenderId, attenderName) => {
@@ -430,4 +512,23 @@ export const assignContactsToAttender = async () => {};
 export const claimContact = async () => {};
 export const removeAttenderFromContact = async () => {};
 export const claimCRMContact = async () => {};
-export const fetchFreshSharedLead = async () => null;
+export const getSingleContact = async (contactIdOrPhone) => {
+  if (!contactIdOrPhone) return null;
+  try {
+    const cleanStr = String(contactIdOrPhone).trim();
+    const isPhone = /^\+?\d{7,15}$/.test(cleanStr.replace(/[\s-]/g, ''));
+    const param = isPhone ? `phone=${encodeURIComponent(cleanStr)}` : `id=${encodeURIComponent(cleanStr)}`;
+    const res = await fetchAPI(`/api/contacts/get-single?${param}`);
+    return (res && res.success) ? res.data : null;
+  } catch (err) {
+    console.error(`[DB] Failed to fetch single contact:`, err);
+    return null;
+  }
+};
+
+export const fetchFreshSharedLead = async (row, attenderId, attenderName, force = false) => {
+  const contactId = row?.id || row?.contactId || row?._id;
+  const phone = row?.Phone || row?.phone || row?.Mobile || row?.mobile;
+  if (!contactId && !phone) return null;
+  return getSingleContact(contactId || phone);
+};

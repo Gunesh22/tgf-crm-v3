@@ -238,8 +238,14 @@ export default async function handler(req, res) {
 
     // ── original_source — immutable ────────────────────────────────────────
     const originalSource = existingContact.original_source ||
+      existingContact.originalSource ||
       existingContact.Source || existingContact.source ||
+      rootUpdates.original_source || rootUpdates.originalSource ||
       rootUpdates.Source || rootUpdates.source || "Direct Entry";
+
+    const currentCallSource = req.body.callSource ||
+      rootUpdates.Source || rootUpdates.source ||
+      existingContact.Source || existingContact.source || originalSource;
 
     // ── Build callId ───────────────────────────────────────────────────────
     const callId = 'call_' + Date.now() + '_' + process.hrtime.bigint().toString(36) + '_' + Math.random().toString(36).substring(2, 7);
@@ -266,6 +272,7 @@ export default async function handler(req, res) {
       callbackDate: callbackDate || null,
       callbackTime: callbackTime || null,
       calledFor:    calledFor || rootUpdates['Called For'] || existingContact['Called For'] || '',
+      callSource:   currentCallSource,
       original_source: originalSource,
       timestamp: nowIso,
     };
@@ -280,6 +287,21 @@ export default async function handler(req, res) {
     delete rootUpdates.leadOwner;          // ownership never changes via log-call
     delete rootUpdates.leadOwnerName;
     delete rootUpdates.ownerHistory;
+
+    // If this is a call logged by a non-owner on a shared contact, do not pollute root Called For or Source
+    const isNonOwnerSharedCall = !!(
+      existingContact.leadOwner &&
+      existingContact.leadOwner !== attenderId &&
+      Array.isArray(existingContact.assignedTo) &&
+      existingContact.assignedTo.length > 1
+    );
+
+    if (isNonOwnerSharedCall) {
+      delete rootUpdates['Called For'];
+      delete rootUpdates.calledFor;
+      delete rootUpdates.Source;
+      delete rootUpdates.source;
+    }
 
     // Normalize phone numbers if modified
     if (rootUpdates.Phone || rootUpdates.phone) {
@@ -318,8 +340,19 @@ export default async function handler(req, res) {
         callbackTime: callbackTime || null,
         lastCalledAt: nowIso,
         calledFor:    calledFor || rootUpdates['Called For'] || existingContact['Called For'] || '',
+        source:       currentCallSource,
+        original_source: originalSource,
       },
     };
+
+    if (!isNonOwnerSharedCall) {
+      setPayload.Source = currentCallSource;
+      setPayload.source = currentCallSource;
+      if (calledFor || rootUpdates['Called For']) {
+        setPayload['Called For'] = calledFor || rootUpdates['Called For'];
+        setPayload.calledFor = calledFor || rootUpdates['Called For'];
+      }
+    }
 
     // Set leadOwner only on FIRST assignment (additive — never overwrites)
     if (isNewOwnerAssignment) {

@@ -47,7 +47,9 @@ export function ReassignModal({
               <select value={reassignFromId} onChange={e => setReassignFromId(e.target.value)}
                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 <option value="">-- Source --</option>
-                {attenders.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                {attenders
+                  .filter(a => a.role !== 'admin' && !["admin", "super admin", "administrator"].includes((a.name || "").toLowerCase().trim()))
+                  .map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </div>
             <div>
@@ -55,7 +57,9 @@ export function ReassignModal({
               <select value={reassignToId} onChange={e => setReassignToId(e.target.value)}
                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 <option value="">🌟 GENERAL POOL (Unassigned)</option>
-                {attenders.filter(a => a.id !== reassignFromId).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                {attenders
+                  .filter(a => a.id !== reassignFromId && a.role !== 'admin' && !["admin", "super admin", "administrator"].includes((a.name || "").toLowerCase().trim()))
+                  .map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </div>
           </div>

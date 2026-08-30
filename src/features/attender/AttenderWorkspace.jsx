@@ -6,7 +6,7 @@ import {
   Edit3, X, Save, FileText, Calendar, Tag, User, MapPin, MessageSquare,
   Hash, Clock, PhoneOff, CheckCircle2, AlertCircle, Trash2,
   PhoneIncoming, PhoneOutgoing, CalendarDays, Loader, Flame, SlidersHorizontal, FileSpreadsheet, CheckSquare,
-  Bell, Sparkles, UserCheck, RefreshCw, Info
+  Bell, Sparkles, UserCheck, RefreshCw, Info, Eye
 } from "lucide-react";
 import {
   subscribeToCallLogs, updateCallLog, addIncomingCallLog,
@@ -25,6 +25,10 @@ import {
   NOT_CONNECTED_STATUSES,
   getFieldWithFallback,
   getKhojiValue,
+  getAttenderStatus,
+  getAttenderRemark,
+  getContactView,
+  getSharedAttenders,
   isKhojiAffirmative,
   isKhojiNegative,
   isIgnoredField,
@@ -34,6 +38,8 @@ import {
 import { EditModal } from "./components/EditModal";
 import { MyPerformanceDashboard } from "./components/MyPerformanceDashboard";
 import { ColumnsSelector } from "./components/ColumnsSelector";
+import StageInfoModal from "./components/edit-modal/StageInfoModal";
+import QuickGuideModal from "./components/QuickGuideModal";
 import CommandPalette from "../../components/ui/CommandPalette";
 
 function parseTimestamp(t) {
@@ -103,6 +109,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   const [callLogs, setCallLogs] = useState([]);
   const [editingRow, setEditingRow] = useState(null);
   const [isFetchingShared, setIsFetchingShared] = useState(false);
+  const [freshSharedLead, setFreshSharedLead] = useState(null);
   const [isLoadingProgram, setIsLoadingProgram] = useState(true); // skeleton state
   const [loadError, setLoadError] = useState(null); // error state
   const [requestCount, setRequestCount] = useState(10);
@@ -134,15 +141,20 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   const [selectedTags, setSelectedTags] = useState([]);
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
   const [tagSearchQuery, setTagSearchQuery] = useState("");
-  const DEFAULT_HIDDEN_COLS = ["Phone", "Mobile", "Email", "City", "State", "Tags", "Callback", "Sub Program", "Attender"];
+  const ALLOWED_ATTENDER_COLS = useMemo(() => [
+    "Name", "Phone", "Mobile", "City", "Khoji", "Tags", "Called For", "Type", "Status", "Remark", "Callback"
+  ], []);
 
   const [hiddenColumns, setHiddenColumns] = useState(() => {
     try {
       const saved = localStorage.getItem(`hidden_cols_${attenderId}`);
-      const parsed = saved ? JSON.parse(saved) : DEFAULT_HIDDEN_COLS;
-      return parsed.filter(c => c !== "Calls Done");
+      if (!saved) return [];
+      const parsed = JSON.parse(saved);
+      if (!Array.isArray(parsed)) return [];
+      // Filter out any legacy or unknown columns not in ALLOWED_ATTENDER_COLS
+      return parsed.filter(c => ["Name", "Phone", "Mobile", "City", "Khoji", "Tags", "Called For", "Type", "Status", "Remark", "Callback"].includes(c));
     } catch {
-      return DEFAULT_HIDDEN_COLS;
+      return [];
     }
   });
   const [isColumnModalOpen, setIsColumnModalOpen] = useState(false);
@@ -150,6 +162,8 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   const [programDropOpen, setProgramDropOpen] = useState(false);
   const [programSearch, setProgramSearch] = useState("");
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [showStageInfoModal, setShowStageInfoModal] = useState(false);
+  const [isQuickGuideOpen, setIsQuickGuideOpen] = useState(false);
 
 
 
@@ -317,6 +331,8 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
       );
     }
     setEditingRow(null);
+    setFreshSharedLead(null);
+    setIsFetchingShared(false);
   }, [editingRow]);
 
   // Trigger 1: Handle Row Selection to open EditModal (On-demand fetch for shared leads)
@@ -340,20 +356,21 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     );
 
     setEditingRow(row); // 0ms Instant Modal Render from local cache
+    setFreshSharedLead(null);
 
-    // Fetch fresh copy for shared leads (0 Reads for solo leads or fresh cache)
-    if (row.id && !row._isNew) {
+    // Fetch fresh copy from MongoDB for SharedBanner reference ONLY
+    const contactId = row.id || row.contactId || row._id;
+    if (contactId && !row._isNew) {
       setIsFetchingShared(true);
-      console.log(`[MODAL OPEN] Triggering fetchFreshSharedLead for leadId: ${row.id}`);
+      console.log(`[MODAL OPEN] Triggering fetchFreshSharedLead for leadId: ${contactId}`);
       try {
         const fresh = await fetchFreshSharedLead(row, attenderId, attenderName, false);
         if (fresh) {
-          console.log(`[MODAL OPEN SUCCESS] Loaded lead data for leadId: ${fresh.id}`);
-          setEditingRow(fresh);
-          setCallLogs(prev => prev.map(l => l.id === fresh.id ? { ...l, ...fresh } : l));
+          console.log(`[MODAL OPEN SUCCESS] Loaded fresh lead data for SharedBanner reference: ${fresh.id || contactId}`);
+          setFreshSharedLead(fresh);
         }
       } catch (err) {
-        console.error(`[MODAL OPEN ERROR] Failed to fetch shared lead ${row.id}:`, err);
+        console.error(`[MODAL OPEN ERROR] Failed to fetch contact ${contactId}:`, err);
       } finally {
         setIsFetchingShared(false);
       }
@@ -362,10 +379,12 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
 
   // Trigger 3: Handle Manual Single-Lead Refresh
   const handleRefreshSingleLead = useCallback(async (row) => {
-    if (!row || !row.id) return;
+    if (!row) return;
+    const contactId = row.id || row.contactId || row._id;
+    if (!contactId) return;
     const leadName = row.Name || row.name || "Lead";
     console.log(
-      `%c🔄 [MANUAL SYNC TRIGGERED] Manual refresh requested for shared lead "${leadName}" (${row.id})`,
+      `%c🔄 [MANUAL SYNC TRIGGERED] Manual refresh requested for lead "${leadName}" (${contactId})`,
       "background: #0284c7; color: #e0f2fe; font-weight: bold; padding: 3px 8px; border-radius: 4px;"
     );
     setIsFetchingShared(true);
@@ -377,11 +396,10 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
         await new Promise(res => setTimeout(res, 800 - elapsed));
       }
       if (fresh) {
-        setEditingRow(fresh);
-        setCallLogs(prev => prev.map(l => l.id === fresh.id ? { ...l, ...fresh } : l));
-        toast.success(`Updated details for ${leadName}!`, { id: `sync-${row.id}` });
+        setFreshSharedLead(fresh);
+        toast.success(`Updated shared activity for ${leadName}!`, { id: `sync-${contactId}` });
       } else {
-        toast.dismiss(`sync-${row.id}`);
+        toast.dismiss(`sync-${contactId}`);
       }
     } finally {
       setIsFetchingShared(false);
@@ -406,13 +424,6 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
 
     if (localMatch) {
       console.log("[TRIGGER 2 SEARCH] Local match found in memory/IndexedDB");
-      if (Array.isArray(localMatch.assignedTo) && localMatch.assignedTo.length > 1) {
-        console.log(`[TRIGGER 2 SEARCH REFRESH] Fetching fresh copy of shared lead ${localMatch.id}...`);
-        const fresh = await fetchFreshSharedLead(localMatch, attenderId, attenderName);
-        if (fresh) {
-          setCallLogs(prev => prev.map(l => l.id === fresh.id ? { ...l, ...fresh } : l));
-        }
-      }
       return;
     }
 
@@ -929,31 +940,31 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   const uniqueSources = useMemo(() => {
     const set = new Set(SOURCE_OPTIONS);
     tagFilteredLogs.forEach(log => {
-      const k = Object.keys(log).find(key => key.toLowerCase().includes("source") || key.toLowerCase().includes("sourse"));
-      if (k && log[k]) set.add(String(log[k]).trim());
+      const srcVal = getFieldWithFallback(log, "Source", attenderId || attenderName);
+      if (srcVal) set.add(srcVal);
     });
     return Array.from(set).sort();
-  }, [tagFilteredLogs, optionsVersion]);
+  }, [tagFilteredLogs, optionsVersion, attenderId, attenderName]);
 
   const uniqueCities = useMemo(() => {
     const set = new Set();
     tagFilteredLogs.forEach(log => {
-      const k = Object.keys(log).find(key => key.toLowerCase().includes("city") || key.toLowerCase().includes("location") || key.toLowerCase().includes("khoji city"));
-      if (k && log[k]) set.add(String(log[k]).trim());
+      const cityVal = getFieldWithFallback(log, "City", attenderId || attenderName);
+      if (cityVal) set.add(cityVal);
     });
     return Array.from(set).sort();
-  }, [tagFilteredLogs]);
+  }, [tagFilteredLogs, optionsVersion, attenderId, attenderName]);
 
   const uniqueCalledFor = useMemo(() => {
     const set = new Set(CALLED_FOR_OPTIONS);
     tagFilteredLogs.forEach(log => {
-      const k = Object.keys(log).find(key => key.toLowerCase().includes("called for") || key.toLowerCase().includes("called_for") || key.toLowerCase().includes("calledfor"));
-      if (k && log[k]) {
-        String(log[k]).split(",").map(x => x.trim()).filter(Boolean).forEach(cf => set.add(cf));
+      const cfVal = getFieldWithFallback(log, "Called For", attenderId || attenderName);
+      if (cfVal) {
+        cfVal.split(",").map(x => x.trim()).filter(Boolean).forEach(cf => set.add(cf));
       }
     });
     return Array.from(set).sort();
-  }, [tagFilteredLogs, optionsVersion]);
+  }, [tagFilteredLogs, optionsVersion, attenderId, attenderName]);
 
   const uniqueSubPrograms = useMemo(() => {
     const set = new Set();
@@ -1056,10 +1067,12 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
       }
 
       // 2. Quick Status Filter
+      const activeAttenderStatus = getAttenderStatus(log, attenderId || attenderName);
       if (filterStatus === "Hot Leads" && !log.isHotLead) return false;
       if (filterStatus === "Callback" && !log.callbackDate) return false;
-      if (filterStatus === "Follow up" && !(log.callbackDate || log.status === "reminder" || log.status === "Next time")) return false;
+      if (filterStatus === "Follow up" && !(log.callbackDate || activeAttenderStatus === "reminder" || activeAttenderStatus === "Next time")) return false;
       if (filterStatus === "Unanswered Callback" && !isUnansweredCallback(log)) return false;
+      if (filterStatus === "Shared" && getSharedAttenders(log).length <= 1) return false;
       if (filterStatus === "Today Activity") {
         const dateCandidates = [
           log.lastCalledAt,
@@ -1088,33 +1101,34 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
         filterStatus !== "Follow up" && 
         filterStatus !== "Unanswered Callback" && 
         filterStatus !== "Today Activity" && 
-        log.status !== filterStatus
+        filterStatus !== "Shared" && 
+        activeAttenderStatus !== filterStatus
       ) return false;
 
       // 3. Source Filter
       if (filterSource.length > 0) {
-        const k = Object.keys(log).find(key => key.toLowerCase().includes("source") || key.toLowerCase().includes("sourse"));
-        if (!k || !filterSource.includes(String(log[k] || "").trim())) return false;
+        const srcVal = getFieldWithFallback(log, "Source", attenderId || attenderName);
+        if (!srcVal || !filterSource.includes(srcVal)) return false;
       }
 
       // 4. Called For Filter
       if (filterCalledFor.length > 0) {
-        const k = Object.keys(log).find(key => key.toLowerCase().includes("called for") || key.toLowerCase().includes("called_for") || key.toLowerCase().includes("calledfor"));
-        if (!k) return false;
-        const calledForVal = String(log[k] || "").trim();
-        const logCalledFors = calledForVal.split(",").map(x => x.trim()).filter(Boolean);
+        const cfVal = getFieldWithFallback(log, "Called For", attenderId || attenderName);
+        if (!cfVal) return false;
+        const logCalledFors = cfVal.split(",").map(x => x.trim()).filter(Boolean);
         if (!logCalledFors.some(cf => filterCalledFor.includes(cf))) return false;
       }
 
       // 5. City/Location Filter
       if (filterCity.length > 0) {
-        const k = Object.keys(log).find(key => key.toLowerCase().includes("city") || key.toLowerCase().includes("location") || key.toLowerCase().includes("khoji city"));
-        if (!k || !filterCity.includes(String(log[k] || "").trim())) return false;
+        const cityVal = getFieldWithFallback(log, "City", attenderId || attenderName);
+        if (!cityVal || !filterCity.includes(cityVal)) return false;
       }
 
       // 6. Call Type Filter
       if (filterCallType.length > 0) {
-        const cType = log.callType || "outgoing";
+        const activeView = getContactView(log, attenderId || attenderName);
+        const cType = activeView.callType || "outgoing";
         if (!filterCallType.includes(cType)) return false;
       }
 
@@ -1130,8 +1144,9 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
 
       // 9. Callback Status Filter
       if (filterCallbackStatus.length > 0) {
-        if (!log.callbackDate) return false;
-        const cbStatus = log.callbackStatus || "pending";
+        const activeView = getContactView(log, attenderId || attenderName);
+        if (!activeView.callbackDate && !log.callbackDate) return false;
+        const cbStatus = activeView.callbackStatus || log.callbackStatus || "pending";
         if (!filterCallbackStatus.includes(cbStatus)) return false;
       }
 
@@ -1151,7 +1166,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
         }
 
         if (attenderCallCount === 0) {
-          const hasAttempt = log.status || log.callbackDate || log.remark || log.remarks;
+          const hasAttempt = activeAttenderStatus || log.callbackDate || log.remark || log.remarks;
           const isMyLead = (log.attenderId && String(log.attenderId).toLowerCase().trim() === String(attenderId || "").toLowerCase().trim()) ||
                            (log.assignedName && String(log.assignedName).toLowerCase().trim() === String(attenderName || "").toLowerCase().trim());
           if (isMyLead) {
@@ -1173,7 +1188,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
 
       // 10b. General Result Status Filter
       if (filterGeneralStatus.length > 0) {
-        const logStatus = log.status;
+        const logStatus = activeAttenderStatus;
         const logQueryStatus = log.queryStatus || "Pending";
 
         const matched = filterGeneralStatus.some(f => {
@@ -1188,13 +1203,13 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
       if (filterAbhivyakti.length > 0) {
         const hasYes = filterAbhivyakti.includes("Yes");
         const hasNo = filterAbhivyakti.includes("No");
-        if (hasYes && !hasNo && log.status !== "Reg.Done") return false;
-        if (hasNo && !hasYes && log.status === "Reg.Done") return false;
+        if (hasYes && !hasNo && activeAttenderStatus !== "Reg.Done") return false;
+        if (hasNo && !hasYes && activeAttenderStatus === "Reg.Done") return false;
       }
 
       // 10d. Khoji Filter
       if (filterKhoji.length > 0) {
-        const val = getKhojiValue(log);
+        const val = getKhojiValue(log, attenderId || attenderName);
         const affirmative = isKhojiAffirmative(val);
         const isDew = String(val || "").toLowerCase().includes("dew d") || String(val || "").toLowerCase().includes("dewdrop");
         const isNo = isKhojiNegative(val) || !val;
@@ -1282,45 +1297,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     "calledfor", "called_for"
   ]), []);
 
-  const dynamicCols = useMemo(() => {
-    const standardOrder = ["Name", "Phone", "Mobile", "Email", "City", "State", "Khoji", "Tags", "Source", "Called For"];
-    const allKeysSet = new Set();
-    tagFilteredLogs.forEach(log => {
-      Object.keys(log).forEach(key => {
-        const kLower = key.toLowerCase();
-        if (!INTERNAL_KEYS_LOWER.has(kLower) && !key.startsWith("_")) {
-          const isStandard = standardOrder.some(col => col.toLowerCase() === kLower);
-          if (isStandard) {
-            allKeysSet.add(key);
-          } else if (log._mappedFields && Array.isArray(log._mappedFields)) {
-            if (log._mappedFields.includes(key)) {
-              allKeysSet.add(key);
-            }
-          } else {
-            if (!isIgnoredField(key)) {
-              allKeysSet.add(key);
-            }
-          }
-        }
-      });
-    });
-
-    standardOrder.forEach(col => {
-      const colLower = col.toLowerCase();
-      Array.from(allKeysSet).forEach(k => {
-        if (k.toLowerCase() === colLower) {
-          allKeysSet.delete(k);
-        }
-      });
-    });
-
-    const sorted = [...standardOrder, ...Array.from(allKeysSet).sort()];
-    return sorted;
-  }, [tagFilteredLogs, INTERNAL_KEYS_LOWER]);
-
-  const allPossibleCols = useMemo(() => {
-    return [...dynamicCols, "Type", "Status", "Remark", "Callback"];
-  }, [dynamicCols]);
+  const allPossibleCols = ALLOWED_ATTENDER_COLS;
 
   const visibleCount = useMemo(() => {
     return 1 + allPossibleCols.filter(col => !hiddenColumns.includes(col)).length;
@@ -1351,12 +1328,8 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
       if (aDue !== bDue) return bDue - aDue;
 
       if (sortBy === "nameAsc") {
-        const aKeys = Object.keys(a);
-        const bKeys = Object.keys(b);
-        const aNameKey = aKeys.find(k => k.toLowerCase() === "name" || k.toLowerCase().includes("caller") || k.toLowerCase().includes("khoji")) || "Name";
-        const bNameKey = bKeys.find(k => k.toLowerCase() === "name" || k.toLowerCase().includes("caller") || k.toLowerCase().includes("khoji")) || "Name";
-        const aName = String(a[aNameKey] || "").toLowerCase();
-        const bName = String(b[bNameKey] || "").toLowerCase();
+        const aName = getFieldWithFallback(a, "Name", attenderId || attenderName).toLowerCase();
+        const bName = getFieldWithFallback(b, "Name", attenderId || attenderName).toLowerCase();
         return aName.localeCompare(bName);
       } else if (sortBy === "createdDesc") {
         const aDate = parseTimestamp(a.createdAt) || new Date(0);
@@ -1375,15 +1348,20 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   const stats = useMemo(() => {
     const active = sortedLogs;
     const total = active.length;
-    const called = active.filter(l => l.status || l.callbackDate || l.remark || l.remarks).length;
-    const interested = active.filter(l => l.status === "Interested").length;
-    const regDone = active.filter(l => l.status === "Reg.Done").length;
+    const called = active.filter(l => {
+      const st = getAttenderStatus(l, attenderId || attenderName);
+      const rm = getAttenderRemark(l, attenderId || attenderName);
+      return st || rm || l.callbackDate;
+    }).length;
+    const interested = active.filter(l => getAttenderStatus(l, attenderId || attenderName) === "Interested").length;
+    const regDone = active.filter(l => getAttenderStatus(l, attenderId || attenderName) === "Reg.Done").length;
     const callbacks = active.filter(l => l._callbackDue).length;
-    const incoming = active.filter(l => l.callType === "incoming").length;
-    const outgoing = active.filter(l => l.callType !== "incoming").length;
+    const incoming = active.filter(l => getContactView(l, attenderId || attenderName).callType === "incoming").length;
+    const outgoing = active.filter(l => getContactView(l, attenderId || attenderName).callType !== "incoming").length;
     const hotLeads = active.filter(l => l.isHotLead).length;
-    return { total, called, interested, regDone, callbacks, incoming, outgoing, hotLeads };
-  }, [sortedLogs]);
+    const shared = active.filter(l => getSharedAttenders(l).length > 1).length;
+    return { total, called, interested, regDone, callbacks, incoming, outgoing, hotLeads, shared };
+  }, [sortedLogs, attenderId, attenderName]);
 
   const totalPages = Math.ceil(sortedLogs.length / rowsPerPage);
   const paginated = sortedLogs.slice((page - 1) * rowsPerPage, page * rowsPerPage);
@@ -1401,9 +1379,18 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     const dailyActivity = {}; // date string -> attempts count
 
     tagFilteredLogs.forEach(log => {
-      const hist = log.history || [];
-      const isCalled = log.status || log.callbackDate || log.remark || log.remarks || hist.length > 0;
-      const status = isCalled ? getCanonicalStatus(log.status || "Pending") : "";
+      const activeStatus = getAttenderStatus(log, attenderId || attenderName);
+      const activeRemark = getAttenderRemark(log, attenderId || attenderName);
+      const hist = Array.isArray(log.history)
+        ? log.history.filter(h => {
+            const hId = String(h?.attenderId || h?.by || h?.editedBy || "").toLowerCase().trim();
+            const hName = String(h?.attenderName || h?.assignedName || h?.name || "").toLowerCase().trim();
+            const target = String(attenderId || attenderName || "").toLowerCase().trim();
+            return !target || hId === target || hName === target;
+          })
+        : [];
+      const isCalled = activeStatus || log.callbackDate || activeRemark || hist.length > 0;
+      const status = isCalled ? getCanonicalStatus(activeStatus || "Pending") : "";
 
       const attemptsCount = hist.length || (status ? 1 : 0);
       totalAttempts += attemptsCount;
@@ -1729,14 +1716,14 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
               )}
             </div>
 
-            {/* Quick Command Palette & Shortcuts (i) Button */}
+            {/* Quick Guide Eye Button */}
             <button
               type="button"
-              onClick={() => setCommandPaletteOpen(true)}
+              onClick={() => setIsQuickGuideOpen(true)}
               className="p-2 rounded-xl border border-gray-200 bg-white hover:bg-slate-50 text-gray-500 hover:text-indigo-600 transition-all flex items-center justify-center cursor-pointer shadow-2xs"
-              title="Quick Search & Keyboard Shortcuts (Ctrl + K / Alt + A)"
+              title="CRM Quick Guide & Stage Definitions (English / Hindi / Marathi)"
             >
-              <Info size={18} />
+              <Eye size={18} />
             </button>
           </div>
 
@@ -2067,12 +2054,13 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
           </div>
 
           <ContactTable
+            isLoadingProgram={isLoadingProgram}
             scrollRef={scrollRef}
             onMouseDown={onMouseDown}
             onMouseMove={onMouseMove}
             onMouseUp={onMouseUp}
             onMouseLeave={onMouseUp}
-            dynamicCols={dynamicCols}
+            dynamicCols={["Name", "Phone", "Mobile", "City", "Khoji", "Tags", "Called For"]}
             hiddenColumns={hiddenColumns}
             paginated={paginated}
             page={page}
@@ -2083,6 +2071,8 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
             onRefreshLead={handleRefreshSingleLead}
             onClearFilters={handleClearAllFilters}
             callLogs={callLogs}
+            attenderId={attenderId}
+            attenderName={attenderName}
           />
 
           <Pagination
@@ -2126,6 +2116,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
           onClose={handleCloseModal}
           onRefreshLead={handleRefreshSingleLead}
           isFetchingShared={isFetchingShared}
+          freshSharedLead={freshSharedLead}
         />
       ) : (
         <EditModal
@@ -2155,6 +2146,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
           onClose={handleCloseModal}
           onRefreshLead={handleRefreshSingleLead}
           isFetchingShared={isFetchingShared}
+          freshSharedLead={freshSharedLead}
         />
       )
     )}
@@ -2166,8 +2158,19 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
         contacts={callLogs}
         onSelectContact={(c) => setEditingRow(c)}
         onOpenCallEntry={openCallEntryDialog}
-        onRebuildCache={handleRebuildCache}
-        onGetNumbers={handleGetNumbers}
+        onOpenStageInfo={() => setIsQuickGuideOpen(true)}
+      />
+
+      {/* Stage Definitions Info Modal */}
+      <StageInfoModal
+        isOpen={showStageInfoModal}
+        onClose={() => setShowStageInfoModal(false)}
+      />
+
+      {/* Attender Quick Reference Guide Modal (English / Hindi / Marathi) */}
+      <QuickGuideModal
+        isOpen={isQuickGuideOpen}
+        onClose={() => setIsQuickGuideOpen(false)}
       />
     </>
   );

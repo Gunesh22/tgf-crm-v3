@@ -53,13 +53,23 @@ export default function LoginScreen() {
     setIsSubmitting(true);
 
     try {
-      // 1. Admin Authentication Check
+      // 1. Database-backed Admin Authentication Check
       if (inputId.toLowerCase().includes('admin')) {
-        if (['admin', 'tgfadmin', '123456', '629001', '198219'].includes(inputPass)) {
-          login('admin_01', 'Super Admin', 'admin');
-          return;
-        } else {
-          setError('Invalid Admin password');
+        try {
+          const authRes = await fetchAPI('/api/admin/admin-auth', 'POST', {
+            action: 'login',
+            password: inputPass
+          });
+          if (authRes && authRes.success) {
+            login('admin_01', 'Super Admin', 'admin');
+            return;
+          } else {
+            setError(authRes?.error || 'Invalid Admin password');
+            setIsSubmitting(false);
+            return;
+          }
+        } catch (authErr) {
+          setError(authErr.message || 'Invalid Admin password');
           setIsSubmitting(false);
           return;
         }
@@ -90,8 +100,8 @@ export default function LoginScreen() {
         return;
       }
 
-      // Verify Password (matches registered attender password, or emergency master pin 123456)
-      if (matched.password && matched.password !== inputPass && inputPass !== '123456') {
+      // Verify Attender Password strictly against registered password (NO universal bypass)
+      if (matched.password && matched.password !== inputPass) {
         setError('Incorrect password. Please try again.');
         setIsSubmitting(false);
         return;

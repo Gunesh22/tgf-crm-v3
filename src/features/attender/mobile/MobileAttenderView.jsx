@@ -1,7 +1,7 @@
 import React from "react";
 import {
   ArrowLeft, Search, Plus, MapPin, PhoneOutgoing, Flame, Clock, CheckCircle2, AlertCircle,
-  Bell, Sparkles, UserCheck, Download, Users, RefreshCw
+  Bell, Sparkles, UserCheck, Download, Users, RefreshCw, Loader
 } from "lucide-react";
 import { formatContactName, getSharedAttenders } from "../utils";
 import { AttenderFilters } from "../components/AttenderFilters";
@@ -290,9 +290,17 @@ export default function MobileAttenderView({
 
       {/* 3. Mobile Contact Cards List */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 pb-8">
-        {filteredLogs.length === 0 ? (
+        {isLoadingProgram && allLogsCount === 0 ? (
+          <div className="py-16 text-center flex flex-col items-center justify-center p-6 gap-2">
+            <Loader size={24} className="text-emerald-600 animate-spin" />
+            <p className="text-sm font-bold text-slate-700">Loading contacts…</p>
+            <p className="text-xs text-slate-500">Please wait while your call sheet is syncing.</p>
+          </div>
+        ) : filteredLogs.length === 0 ? (
           <div className="py-16 text-center">
-            <p className="text-sm font-semibold text-slate-400">No contacts found matching active filters</p>
+            <p className="text-sm font-semibold text-slate-400">
+              {allLogsCount === 0 ? "No contacts assigned yet" : "No contacts found matching active filters"}
+            </p>
           </div>
         ) : (
           visibleLogs.map((row, index) => {

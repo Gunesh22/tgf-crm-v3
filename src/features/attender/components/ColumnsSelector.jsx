@@ -10,27 +10,10 @@ export function ColumnsSelector({
   colSearchQuery,
   setColSearchQuery
 }) {
-  const standardFields = [
-    "Name",
-    "Phone",
-    "Mobile",
-    "Email",
-    "City",
-    "State",
-    "Khoji",
-    "Tags",
-    "Source",
-    "Called For"
-  ];
-  const otherFields = allPossibleCols.filter(c => !standardFields.includes(c));
-
-  const filterBySearch = (list) => {
-    if (!colSearchQuery) return list;
-    return list.filter(item => item.toLowerCase().includes(colSearchQuery.toLowerCase()));
-  };
-
-  const filteredStandards = filterBySearch(standardFields);
-  const filteredOthers = filterBySearch(otherFields);
+  const filteredCols = allPossibleCols.filter(col => {
+    if (!colSearchQuery) return true;
+    return col.toLowerCase().includes(colSearchQuery.toLowerCase());
+  });
 
   const renderColumnCheckbox = (col) => {
     const isChecked = !hiddenColumns.includes(col);
@@ -77,7 +60,7 @@ export function ColumnsSelector({
             </div>
             <div>
               <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">Configure Sheet Columns</h3>
-              <p className="text-[11px] text-slate-500 font-medium mt-0.5">Choose which fields are visible in the spreadsheet view.</p>
+              <p className="text-[11px] text-slate-500 font-medium mt-0.5 font-sans">Choose which columns are visible in your workspace view.</p>
             </div>
           </div>
           <button 
@@ -94,7 +77,7 @@ export function ColumnsSelector({
             <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search fields/columns..."
+              placeholder="Search columns..."
               value={colSearchQuery}
               onChange={e => setColSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl text-xs font-semibold focus:outline-none focus:bg-white focus:ring-4 focus:ring-teal-500/10 transition"
@@ -108,7 +91,7 @@ export function ColumnsSelector({
               Show All
             </button>
             <button
-              onClick={() => setHiddenColumns(allPossibleCols)}
+              onClick={() => setHiddenColumns([...allPossibleCols])}
               className="px-3 py-1.5 hover:bg-rose-50 text-rose-600 rounded-lg text-xs font-bold transition border border-transparent hover:border-rose-100"
             >
               Hide All
@@ -118,33 +101,13 @@ export function ColumnsSelector({
 
         {/* Columns List (Scrollable) */}
         <div className="p-6 overflow-y-auto flex-1 bg-slate-50/30">
-          {filteredStandards.length === 0 && filteredOthers.length === 0 ? (
+          {filteredCols.length === 0 ? (
             <div className="text-center py-12 text-slate-400">
               <p className="text-sm font-medium">No columns match "{colSearchQuery}"</p>
             </div>
           ) : (
-            <div className="space-y-6">
-              {filteredStandards.length > 0 && (
-                <div className="space-y-2.5">
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">
-                    Standard Fields
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {filteredStandards.map(renderColumnCheckbox)}
-                  </div>
-                </div>
-              )}
-
-              {filteredOthers.length > 0 && (
-                <div className="space-y-2.5">
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">
-                    Custom & System Fields
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {filteredOthers.map(renderColumnCheckbox)}
-                  </div>
-                </div>
-              )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {filteredCols.map(renderColumnCheckbox)}
             </div>
           )}
         </div>

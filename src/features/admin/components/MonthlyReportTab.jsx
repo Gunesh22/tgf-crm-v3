@@ -656,10 +656,13 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
 
 
   const attenderOptions = React.useMemo(() => {
-    return attenders.map(a => ({
-      value: a.id,
-      label: a.name
-    }));
+    const EXCLUDED_ATTENDER_NAMES = ["admin", "super admin", "administrator", "admin test", "test 2", "test2", "test"];
+    return attenders
+      .filter(a => a.role !== 'admin' && !EXCLUDED_ATTENDER_NAMES.includes((a.name || "").toLowerCase().trim()))
+      .map(a => ({
+        value: a.id,
+        label: a.name
+      }));
   }, [attenders]);
 
   const allAttempts = React.useMemo(() => {
@@ -818,7 +821,11 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
 
   const attenderPerformance = React.useMemo(() => {
     const map = {};
+    const EXCLUDED_ATTENDER_NAMES = ["admin", "super admin", "administrator", "admin test", "test 2", "test2", "test"];
     allAttempts.forEach(c => {
+      const rawName = (c.attenderName || "").toLowerCase().trim();
+      if (EXCLUDED_ATTENDER_NAMES.includes(rawName) || c.attenderId === "admin") return;
+
       if (!map[c.attenderId]) {
         map[c.attenderId] = { name: c.attenderName, total: 0, connected: 0, notConnected: 0, incoming: 0, outgoing: 0, conversions: 0, incomingConversions: 0, outgoingConversions: 0, denominator: 0 };
       }
