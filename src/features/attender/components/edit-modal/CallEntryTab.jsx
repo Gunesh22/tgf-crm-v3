@@ -1,7 +1,7 @@
 import React, { useRef, useMemo, useState } from "react";
 import {
   Phone, Tag, CheckCircle2, AlertCircle, MessageSquare,
-  CalendarDays, Flame, HelpCircle, Bell, ArrowRightLeft, Shield, Info
+  CalendarDays, Flame, HelpCircle, Bell, ArrowRightLeft, Shield, Info, History
 } from "lucide-react";
 import SearchableDropdown from "./SearchableDropdown";
 import HistoryTimeline from "./HistoryTimeline";
@@ -36,7 +36,8 @@ export const CallEntryTab = ({
   setPendingSave,
   setShowUndoStatusPrompt,
   setEdited,
-  getCallbackDateStr
+  getCallbackDateStr,
+  onShowEditHistory
 }) => {
   const newNoteRef = useRef(null);
 
@@ -521,14 +522,25 @@ export const CallEntryTab = ({
 
       {/* 6. CALL NOTES */}
       <div className="space-y-2">
-        <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-          <MessageSquare size={13} className="text-slate-400" /> Call Notes
-          {mergedHistory && mergedHistory.length > 0 && (
-            <span className="ml-1 px-1.5 py-0.2 bg-slate-100 text-slate-600 border border-slate-200 rounded text-[10px] font-semibold">
-              {mergedHistory.length} past
-            </span>
+        <div className="flex items-center justify-between">
+          <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+            <MessageSquare size={13} className="text-slate-400" /> Call Notes
+            {mergedHistory && mergedHistory.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 bg-slate-100 text-slate-600 border border-slate-200 rounded text-[10px] font-semibold">
+                {mergedHistory.length} past
+              </span>
+            )}
+          </label>
+          {onShowEditHistory && (
+            <button
+              type="button"
+              onClick={onShowEditHistory}
+              className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <History size={12} /> Edit Call Logs
+            </button>
           )}
-        </label>
+        </div>
 
         <HistoryTimeline
           mergedHistory={mergedHistory}

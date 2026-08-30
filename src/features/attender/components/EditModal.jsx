@@ -4,7 +4,7 @@ import {
   Phone, Plus, X, Save, Tag, User, MapPin, MessageSquare,
   Hash, Clock, CheckCircle2, AlertCircle, Trash2,
   PhoneIncoming, PhoneOutgoing, CalendarDays, Loader, Flame,
-  ChevronDown, Check, Search, Users, RotateCw
+  ChevronDown, Check, Search, Users, RotateCw, History, Edit3
 } from "lucide-react";
 import {
   addIncomingCallLog, updateCallLog, createProgram, checkGlobalDuplicate, findMatchingAttenderState, combineContactHistories
@@ -1803,42 +1803,54 @@ export const EditModal = ({
         )}
 
         {/* Tab Switcher (Fixed below header) */}
-        <div className="px-6 pt-3 bg-white border-b border-gray-150 flex gap-6 shrink-0 z-10">
+        <div className="px-6 pt-3 bg-white border-b border-gray-150 flex items-center justify-between shrink-0 z-10">
+          <div className="flex gap-6">
+            <button
+              type="button"
+              onClick={() => setActiveTab("call")}
+              className={`pb-2.5 text-xs font-black tracking-wider uppercase flex items-center gap-2 border-b-2 transition-all relative ${
+                activeTab === "call"
+                  ? callTheme.tabClass
+                  : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200"
+              }`}
+            >
+              <Phone size={13} className={activeTab === "call" ? callTheme.iconClass : "text-gray-400"} />
+              Record Call Entry
+              {activeTab === "call" && (
+                <span className={`absolute bottom-[-2px] left-0 right-0 h-0.5 rounded-full ${callTheme.tabLine} animate-pulse`} />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("profile")}
+              className={`pb-2.5 text-xs font-black tracking-wider uppercase flex items-center gap-2 border-b-2 transition-all relative ${
+                activeTab === "profile"
+                  ? callTheme.tabClass
+                  : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200"
+              }`}
+            >
+              <User size={13} className={activeTab === "profile" ? callTheme.iconClass : "text-gray-400"} />
+              Edit Profile Details
+              {(isCheckingDuplicate || isSearchingCRM) && (
+                <Loader size={12} className="animate-spin text-indigo-500 shrink-0" />
+              )}
+              {globalDup && globalDup.showWarning && (
+                <AlertCircle size={14} className="text-amber-500 shrink-0 animate-bounce" title={dupWarningMessage} />
+              )}
+              {activeTab === "profile" && (
+                <span className={`absolute bottom-[-2px] left-0 right-0 h-0.5 rounded-full ${callTheme.tabLine} animate-pulse`} />
+              )}
+            </button>
+          </div>
+
           <button
             type="button"
-            onClick={() => setActiveTab("call")}
-            className={`pb-2.5 text-xs font-black tracking-wider uppercase flex items-center gap-2 border-b-2 transition-all relative ${
-              activeTab === "call"
-                ? callTheme.tabClass
-                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200"
-            }`}
+            onClick={() => setShowEditHistory(true)}
+            className="pb-2.5 text-xs font-black tracking-wider uppercase flex items-center gap-1.5 border-b-2 border-transparent text-indigo-600 hover:text-indigo-800 transition-all cursor-pointer"
+            title="Edit past call logs history"
           >
-            <Phone size={13} className={activeTab === "call" ? callTheme.iconClass : "text-gray-400"} />
-            Record Call Entry
-            {activeTab === "call" && (
-              <span className={`absolute bottom-[-2px] left-0 right-0 h-0.5 rounded-full ${callTheme.tabLine} animate-pulse`} />
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("profile")}
-            className={`pb-2.5 text-xs font-black tracking-wider uppercase flex items-center gap-2 border-b-2 transition-all relative ${
-              activeTab === "profile"
-                ? callTheme.tabClass
-                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200"
-            }`}
-          >
-            <User size={13} className={activeTab === "profile" ? callTheme.iconClass : "text-gray-400"} />
-            Edit Profile Details
-            {(isCheckingDuplicate || isSearchingCRM) && (
-              <Loader size={12} className="animate-spin text-indigo-500 shrink-0" />
-            )}
-            {globalDup && globalDup.showWarning && (
-              <AlertCircle size={14} className="text-amber-500 shrink-0 animate-bounce" title={dupWarningMessage} />
-            )}
-            {activeTab === "profile" && (
-              <span className={`absolute bottom-[-2px] left-0 right-0 h-0.5 rounded-full ${callTheme.tabLine} animate-pulse`} />
-            )}
+            <History size={13} className="text-indigo-600" />
+            Edit Call Log
           </button>
         </div>
 
@@ -1881,6 +1893,7 @@ export const EditModal = ({
               setShowUndoStatusPrompt={setShowUndoStatusPrompt}
               setEdited={setEdited}
               getCallbackDateStr={getCallbackDateStr}
+              onShowEditHistory={() => setShowEditHistory(true)}
             />
           ) : (
             <ProfileDetailsTab
