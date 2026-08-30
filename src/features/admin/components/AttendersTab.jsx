@@ -55,7 +55,7 @@ export default function AttendersTab({ programs, attenders, onReloadAttenders })
       setViewLogs([]);
       return;
     }
-    unsubRef.current = subscribeToCallLogs(viewingProgramId, viewingAttender.id, viewingAttender.name, setViewLogs);
+    unsubRef.current = subscribeToCallLogs(viewingAttender.id, viewingAttender.name, setViewLogs);
     return () => { if (unsubRef.current) unsubRef.current(); };
   }, [viewingAttender, viewingProgramId]);
 

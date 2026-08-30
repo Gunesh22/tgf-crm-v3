@@ -8,26 +8,7 @@ export const DEFAULT_WHATSAPP_TEMPLATES = [];
 export const DEFAULT_NOT_CONNECTED_STATUSES = ["NA", "Busy", "Call Cut", "switched off", "Invalid No", "Called by mistake", "No Network", "wrong no.", "no answer"];
 export const DEFAULT_CONNECTED_STATUSES = ["Info given", "Interested", "Reg.Done", "reminder", "Query", "Already Reg.d", "Next time", "Shivir done", "Not possible", "Pending", "Not interested", "Not Attended", "Call Log Added"];
 
-const safeSetLocalStorage = (key, value) => {
-  try {
-    localStorage.setItem(key, value);
-  } catch (err) {
-    if (err && (err.name === 'QuotaExceededError' || err.code === 22 || err.code === 1014)) {
-      try {
-        // Evict old large cache entries if storage quota is exceeded
-        for (let i = localStorage.length - 1; i >= 0; i--) {
-          const k = localStorage.key(i);
-          if (k && (k.startsWith('all_call_logs_') || k.startsWith('attender_call_logs_') || k.startsWith('registrations_cache_'))) {
-            localStorage.removeItem(k);
-          }
-        }
-        localStorage.setItem(key, value);
-      } catch (e) {
-        // Safe fallback — API response is passed directly to callback
-      }
-    }
-  }
-};
+
 
 // API FETCH HELPERS
 export const fetchAPI = async (endpoint, method = "GET", body = null) => {
@@ -284,24 +265,85 @@ export const getActiveCacheMonths = async () => [];
 export const getLockedMonthlyReports = async () => [];
 export const exportCallCenterCacheToJson = async () => {};
 
-export const subscribeToCallLogs = (attenderId, attenderName, callback, onError) => {
-  let isSubscribed = true;
-  const cacheKey = `attender_call_logs_${attenderId}`;
+const memoryCache = new Map();
+const activeSubscriptionTimers = new Map();
 
-  // 1. INSTANT 0ms RENDERING FROM LOCAL CACHE
-  let cacheLoaded = false;
+function createLightweightCache(contacts) {
+  if (!Array.isArray(contacts)) return [];
+  return contacts.map(c => {
+    if (!c) return c;
+    const history = Array.isArray(c.history) ? c.history.slice(-5) : [];
+    return {
+      ...c,
+      history
+    };
+  });
+}
+
+export function safeSetLocalStorage(key, data) {
   try {
-    const cachedData = localStorage.getItem(cacheKey);
-    if (cachedData) {
-      const parsed = JSON.parse(cachedData);
-      if (Array.isArray(parsed)) {
-        console.log(`%c[0ms INSTANT CACHE] Loaded ${parsed.length} contacts from local cache`, "color: #10b981; font-weight: bold");
-        callback(parsed);
-        cacheLoaded = true;
+    const lightweight = createLightweightCache(data);
+    const serialized = JSON.stringify(lightweight);
+    localStorage.setItem(key, serialized);
+  } catch (err) {
+    if (err && (err.name === 'QuotaExceededError' || err.code === 22 || err.code === 1014 || String(err).includes('quota'))) {
+      try {
+        const keys = Object.keys(localStorage);
+        for (const k of keys) {
+          if ((k.startsWith('attender_call_logs_') || k.startsWith('all_call_logs_') || k.startsWith('registrations_cache_')) && k !== key) {
+            localStorage.removeItem(k);
+          }
+        }
+        const lightweight = createLightweightCache(data);
+        localStorage.setItem(key, JSON.stringify(lightweight));
+      } catch (retryErr) {
+        // Silently handle if storage is full or disabled
       }
     }
-  } catch (e) {
-    console.warn("[Local Cache Read Error]", e);
+  }
+}
+
+export const subscribeToCallLogs = (attenderId, attenderName, callback, onError) => {
+  if (!attenderId) return () => {};
+
+  let isSubscribed = true;
+  let lastDataJson = null;
+  const cacheKey = `attender_call_logs_${attenderId}`;
+
+  // 1. INSTANT 0ms RENDERING FROM IN-MEMORY CACHE OR LOCAL STORAGE
+  let cacheLoaded = false;
+  
+  if (memoryCache.has(attenderId)) {
+    const cachedMemory = memoryCache.get(attenderId);
+    if (Array.isArray(cachedMemory) && cachedMemory.length > 0) {
+      console.log(`%c[0ms MEMORY CACHE] Loaded ${cachedMemory.length} contacts for ${attenderName || attenderId}`, "color: #10b981; font-weight: bold");
+      lastDataJson = JSON.stringify(cachedMemory);
+      callback(cachedMemory);
+      cacheLoaded = true;
+    }
+  }
+
+  if (!cacheLoaded) {
+    try {
+      const cachedData = localStorage.getItem(cacheKey);
+      if (cachedData) {
+        const parsed = JSON.parse(cachedData);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          console.log(`%c[0ms LOCAL CACHE] Loaded ${parsed.length} contacts from local storage`, "color: #10b981; font-weight: bold");
+          lastDataJson = JSON.stringify(parsed);
+          callback(parsed);
+          cacheLoaded = true;
+        }
+      }
+    } catch (e) {
+      console.warn("[Local Cache Read Error]", e);
+    }
+  }
+
+  // Clear existing active interval for this attender if present
+  if (activeSubscriptionTimers.has(attenderId)) {
+    clearInterval(activeSubscriptionTimers.get(attenderId));
+    activeSubscriptionTimers.delete(attenderId);
   }
 
   // 2. BACKGROUND FETCH & SYNC FROM MONGODB API
@@ -311,18 +353,21 @@ export const subscribeToCallLogs = (attenderId, attenderName, callback, onError)
       const res = await getAssignedContacts(attenderId);
       if (isSubscribed) {
         const data = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify(data));
-        } catch (err) {
-          console.warn("[Local Cache Write Error]", err);
+        memoryCache.set(attenderId, data);
+
+        const newJson = JSON.stringify(data);
+        if (newJson !== lastDataJson) {
+          lastDataJson = newJson;
+          safeSetLocalStorage(cacheKey, data);
+          callback(data);
         }
-        callback(data);
       }
     } catch (e) {
       console.error("[subscribeToCallLogs polling error]", e);
       if (isSubscribed) {
         if (!cacheLoaded) {
-          callback([]);
+          const mem = memoryCache.get(attenderId) || [];
+          callback(mem);
         }
         if (onError && !cacheLoaded) {
           onError(e);
@@ -332,11 +377,15 @@ export const subscribeToCallLogs = (attenderId, attenderName, callback, onError)
   };
   
   fetchLogs(); // initial background fetch
-  const interval = setInterval(fetchLogs, 10000);
+  const interval = setInterval(fetchLogs, 30000);
+  activeSubscriptionTimers.set(attenderId, interval);
   
   return () => {
     isSubscribed = false;
-    clearInterval(interval);
+    if (activeSubscriptionTimers.get(attenderId) === interval) {
+      clearInterval(interval);
+      activeSubscriptionTimers.delete(attenderId);
+    }
   };
 };
 
@@ -363,7 +412,7 @@ export const subscribeToAllCallLogs = (programId, month, callback) => {
       const monthParam = (!month || month === 'ALL') ? '' : month;
       const res = await fetchAPI(`/api/contacts/search?includeHistory=true&${monthParam ? `month=${monthParam}&` : ''}limit=15000`);
       if (isSubscribed && res.data) {
-        safeSetLocalStorage(cacheKey, JSON.stringify(res.data));
+        safeSetLocalStorage(cacheKey, res.data);
         callback(res.data);
       }
     } catch (e) {
@@ -397,9 +446,7 @@ export const subscribeToRegistrations = (programId, callback) => {
     try {
       const res = await fetchAPI(`/api/registrations`);
       if (isSubscribed && res.data) {
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify(res.data));
-        } catch (err) {}
+        safeSetLocalStorage(cacheKey, res.data);
         callback(res.data);
       }
     } catch (e) {
