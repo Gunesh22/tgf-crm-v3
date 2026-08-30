@@ -1599,15 +1599,6 @@ export const EditModal = ({
         }
       }
 
-      // Update Local Cache (IndexedDB) with authoritative document
-      if (finalAuthoritativePayload && db.saveContactToCache) {
-        try {
-          await db.saveContactToCache(finalAuthoritativePayload);
-        } catch (cacheErr) {
-          console.warn("[CACHE UPDATE WARN]", cacheErr);
-        }
-      }
-
       // 1. UPDATE PARENT STATE AUTHORITATIVELY
       if (onSave) onSave(finalAuthoritativePayload, false);
 

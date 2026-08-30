@@ -72,7 +72,11 @@ export const CallEntryTab = ({
   const setCallPurpose = (purpose) => {
     setEdited(prev => {
       const next = { ...prev, callPurpose: purpose };
-      if (purpose === "QUERY") {
+      const isUnconnected = ["Not Connected", "Not Picked Up", "NA", "Busy", "Call Cut", "switched off", "no answer", "Not Attended", "No Network", "Invalid Number", "Invalid No"].includes(prev.status) || (prev.callStatus && prev.callStatus !== "Connected");
+
+      if (isUnconnected) {
+        if (!next.status) next.status = "Not Connected";
+      } else if (purpose === "QUERY") {
         if (!["Query", "Pending", "Solved"].includes(prev.status)) {
           next.status = "";
         }
@@ -94,10 +98,10 @@ export const CallEntryTab = ({
       const next = { ...prev, callStatus: cStatus };
       if (cStatus !== "Connected") {
         if (cStatus === "Invalid Number") {
-          next.status = "Invalid No";
+          next.status = "Invalid Number";
         } else if (cStatus === "Not Picked Up" || cStatus === "Not Connected") {
-          if (!["Not Picked Up", "NA", "Busy", "Call Cut", "switched off", "no answer", "Not Attended", "No Network"].includes(prev.status)) {
-            next.status = "Not Picked Up";
+          if (!["Not Connected", "Not Picked Up", "NA", "Busy", "Call Cut", "switched off", "no answer", "Not Attended", "No Network"].includes(prev.status)) {
+            next.status = "Not Connected";
           }
         }
       } else if (prev.callStatus !== "Connected") {
@@ -108,8 +112,8 @@ export const CallEntryTab = ({
   };
 
   // Determine primary Call Result (Connected, Not Connected, Invalid Number, or Blank)
-  const isInvalid = edited.callStatus === "Invalid Number" || edited.status === "Invalid No";
-  const isUnconnectedReason = ["Not Picked Up", "NA", "Busy", "Call Cut", "switched off", "no answer", "Not Attended", "No Network"].includes(edited.status);
+  const isInvalid = edited.callStatus === "Invalid Number" || edited.status === "Invalid Number" || edited.status === "Invalid No";
+  const isUnconnectedReason = ["Not Connected", "Not Picked Up", "NA", "Busy", "Call Cut", "switched off", "no answer", "Not Attended", "No Network"].includes(edited.status);
   
   const activePrimaryResult = edited.callStatus === "Connected"
     ? "Connected"
@@ -123,13 +127,13 @@ export const CallEntryTab = ({
     setEdited(prev => {
       const next = { ...prev, callStatus: res };
       if (res === "Connected") {
-        if (isUnconnectedReason || prev.status === "Invalid No") {
+        if (isUnconnectedReason || prev.status === "Invalid Number" || prev.status === "Invalid No") {
           next.status = "";
         }
       } else if (res === "Not Connected") {
-        next.status = isUnconnectedReason ? prev.status : "Not Picked Up";
+        next.status = isUnconnectedReason ? prev.status : "Not Connected";
       } else if (res === "Invalid Number") {
-        next.status = "Invalid No";
+        next.status = "Invalid Number";
       }
       return next;
     });
@@ -191,26 +195,38 @@ export const CallEntryTab = ({
           </button>
         </div>
 
-        {lastCall ? (
-          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-            <span>Last Call:</span>
-            <span className={`font-bold px-2 py-0.5 rounded-md text-[11px] uppercase border ${
-              primaryCallStatus === "Connected" || lastCall.status === "Info Given"
-                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                : "bg-rose-50 text-rose-800 border-rose-200"
-            }`}>
-              {primaryCallStatus}
-            </span>
-            {secondaryCallStatus && (
-              <span className="text-slate-700 font-semibold">• {secondaryCallStatus}</span>
-            )}
-            {lastCallTime && (
-              <span className="text-slate-400 font-normal">({lastCallTime})</span>
-            )}
-          </div>
-        ) : (
-          <span className="text-[11px] text-slate-400 italic">No previous call history</span>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {activePrimaryResult ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs animate-fade-in">
+              <CheckCircle2 size={13} className="text-emerald-600" />
+              <span>Call Attempted ✓ ({activePrimaryResult} • {activePurpose})</span>
+            </div>
+          ) : lastCall ? (
+            <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+              <span>Last Call:</span>
+              <span className={`font-bold px-2 py-0.5 rounded-md text-[11px] uppercase border ${
+                primaryCallStatus === "Connected" || lastCall.status === "Info Given"
+                  ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                  : "bg-rose-50 text-rose-800 border-rose-200"
+              }`}>
+                {primaryCallStatus}
+              </span>
+              {secondaryCallStatus && (
+                <span className="text-slate-700 font-semibold">• {secondaryCallStatus}</span>
+              )}
+              {lastCallTime && (
+                <span className="text-slate-400 font-normal">({lastCallTime})</span>
+              )}
+              {mergedHistory && mergedHistory.length > 0 && (
+                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded text-[10px] font-bold">
+                  {mergedHistory.length} calls total
+                </span>
+              )}
+            </div>
+          ) : (
+            <span className="text-[11px] text-slate-400 italic">No previous call history</span>
+          )}
+        </div>
       </div>
 
 
@@ -458,30 +474,7 @@ export const CallEntryTab = ({
             </div>
           )}
 
-          {/* UNCONNECTED REASON SELECTOR */}
-          {activePrimaryResult === "Not Connected" && (
-            <div className="space-y-1.5 animate-fade-in">
-              <label className="text-[11px] font-extrabold text-rose-900 uppercase tracking-wider flex items-center gap-1">
-                Unanswered Reason <span className="text-rose-500 font-bold">*</span>
-              </label>
-              <div className="flex flex-wrap gap-1.5">
-                {["Not Picked Up", "Busy", "Call Cut", "switched off", "No Network", "no answer", "NA"].map(reason => (
-                  <button
-                    key={reason}
-                    type="button"
-                    onClick={() => handleChange("status", reason)}
-                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                      (edited.status || "Not Picked Up").toLowerCase() === reason.toLowerCase()
-                        ? "bg-rose-600 text-white border-rose-600 shadow-2xs font-bold"
-                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
-                    }`}
-                  >
-                    {reason === "switched off" ? "Switched Off" : reason === "no answer" ? "No Answer" : reason}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+
 
 
         </div>

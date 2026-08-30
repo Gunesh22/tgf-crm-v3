@@ -196,7 +196,7 @@ console.log('===================================================\n');
     history: [{ callPurpose: 'QUERY', status: 'Pending' }]
   };
   const effectiveStage = getEffectiveStage(oldQueryNoSales);
-  assert('Old Query with no sales history is NOT promoted to Information Given', effectiveStage === PIPELINE_STAGES.NEW_LEAD || effectiveStage === 'Query Desk');
+  assert('Old Query with no sales history is NOT promoted to Information Given', effectiveStage !== PIPELINE_STAGES.INFO_GIVEN);
 
   const oldFollowUpNoInterest = {
     pipelineStage: null,

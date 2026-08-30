@@ -226,7 +226,7 @@ function makeCall(purpose = 'SALES', callStatus = 'Connected', status = 'Info Gi
 {
   const legacyContact = makeContact('Query Desk');
   const effectiveStage = getEffectiveStage(legacyContact);
-  assert('24a. Legacy Query Desk → getEffectiveStage = New Lead', effectiveStage === PIPELINE_STAGES.NEW_LEAD, `got: ${effectiveStage}`);
+  assert('24a. Legacy Query Desk → getEffectiveStage is null (no Sales stage)', effectiveStage === null, `got: ${effectiveStage}`);
   const r = evaluatePipeline(legacyContact, makeCall('SALES', 'Connected', 'Info Given'));
   assert('24b. Legacy Query Desk + Sales Info Given → Information Given', r.pipelineStage === PIPELINE_STAGES.INFO_GIVEN, `got: ${r.pipelineStage}`);
 }
@@ -235,7 +235,7 @@ function makeCall(purpose = 'SALES', callStatus = 'Connected', status = 'Info Gi
 {
   const legacyContact = makeContact('Existing Alumni');
   const effectiveStage = getEffectiveStage(legacyContact);
-  assert('25a. Legacy Existing Alumni → getEffectiveStage = New Lead', effectiveStage === PIPELINE_STAGES.NEW_LEAD, `got: ${effectiveStage}`);
+  assert('25a. Legacy Existing Alumni → getEffectiveStage is null (no Sales stage)', effectiveStage === null, `got: ${effectiveStage}`);
   const r = evaluatePipeline(legacyContact, makeCall('SALES', 'Connected', 'Interested'));
   assert('25b. Legacy Existing Alumni + Sales Interested → Nurture', r.pipelineStage === PIPELINE_STAGES.NURTURE_INTERESTED, `got: ${r.pipelineStage}`);
 }
@@ -309,7 +309,7 @@ function makeCall(purpose = 'SALES', callStatus = 'Connected', status = 'Info Gi
     history: []
   };
   const stageFresh = getEffectiveStage(freshContact, "CBT Basic");
-  assert('33. Fresh contact with blank status returns 1. New Lead', stageFresh === PIPELINE_STAGES.NEW_LEAD, `got: ${stageFresh}`);
+  assert('33. Fresh contact with blank status returns null', stageFresh === null, `got: ${stageFresh}`);
 }
 
 // ── Test 34: Canonical Current Stage Badge Preservation (Exact 6 User Cases) ──
@@ -360,6 +360,83 @@ function makeCall(purpose = 'SALES', callStatus = 'Connected', status = 'Info Gi
 
   const stageOffMA = getEffectiveStage(bhanwarLal, "Off MA");
   assert('35b. Bhanwar Lal selecting Off MA shows 4. Nurture / Interested', stageOffMA === PIPELINE_STAGES.NURTURE_INTERESTED, `got: ${stageOffMA}`);
+}
+
+// ── Test 36: Explicit 10 Requirement Test Matrix (Fresh vs Existing / Query vs Sales) ──
+{
+  // 1. Fresh contact → Query → Connected
+  {
+    const fresh = makeContact(null);
+    const res = evaluatePipeline(fresh, makeCall('QUERY', 'Connected', 'Pending', { queryStatus: 'Pending' }));
+    assert('36-1. Fresh contact → Query → Connected (pipelineStage is null)', res.pipelineStage === null, `got: ${res.pipelineStage}`);
+  }
+
+  // 2. Fresh contact → Query → Not Connected
+  {
+    const fresh = makeContact(null);
+    const res = evaluatePipeline(fresh, makeCall('QUERY', 'Not Picked Up', 'Not Picked Up'));
+    assert('36-2. Fresh contact → Query → Not Connected (pipelineStage is null)', res.pipelineStage === null, `got: ${res.pipelineStage}`);
+  }
+
+  // 3. Fresh contact → Reminder → Connected
+  {
+    const fresh = makeContact(null);
+    const res = evaluatePipeline(fresh, makeCall('REMINDER', 'Connected', 'Reminder Given'));
+    assert('36-3. Fresh contact → Reminder → Connected (pipelineStage is null)', res.pipelineStage === null, `got: ${res.pipelineStage}`);
+  }
+
+  // 4. Fresh contact → Reminder → Not Connected
+  {
+    const fresh = makeContact(null);
+    const res = evaluatePipeline(fresh, makeCall('REMINDER', 'Not Picked Up', 'Not Picked Up'));
+    assert('36-4. Fresh contact → Reminder → Not Connected (pipelineStage is null)', res.pipelineStage === null, `got: ${res.pipelineStage}`);
+  }
+
+  // 5. Fresh contact → Sales → Not Connected
+  {
+    const fresh = makeContact(null);
+    const res = evaluatePipeline(fresh, makeCall('SALES', 'Not Picked Up', 'Not Picked Up'));
+    assert('36-5. Fresh contact → Sales → Not Connected (advances to 2. Attempting Contact)', res.pipelineStage === PIPELINE_STAGES.ATTEMPTING, `got: ${res.pipelineStage}`);
+  }
+
+  // 6. Fresh contact → Sales → Interested
+  {
+    const fresh = makeContact(null);
+    const res = evaluatePipeline(fresh, makeCall('SALES', 'Connected', 'Interested'));
+    assert('36-6. Fresh contact → Sales → Interested (advances to 4. Nurture / Interested)', res.pipelineStage === PIPELINE_STAGES.NURTURE_INTERESTED, `got: ${res.pipelineStage}`);
+  }
+
+  // 7. Stage 3 → Query
+  {
+    const stage3 = makeContact('3. Information Given');
+    const res = evaluatePipeline(stage3, makeCall('QUERY', 'Connected', 'Solved', { queryStatus: 'Solved' }));
+    assert('36-7. Stage 3 → Query (preserves 3. Information Given)', res.pipelineStage === PIPELINE_STAGES.INFO_GIVEN, `got: ${res.pipelineStage}`);
+  }
+
+  // 8. Stage 4 → Reminder
+  {
+    const stage4 = makeContact('4. Nurture / Interested');
+    const res = evaluatePipeline(stage4, makeCall('REMINDER', 'Connected', 'Reminder Confirmed'));
+    assert('36-8. Stage 4 → Reminder (preserves 4. Nurture / Interested)', res.pipelineStage === PIPELINE_STAGES.NURTURE_INTERESTED, `got: ${res.pipelineStage}`);
+  }
+
+  // 9. Shared contact → Query
+  {
+    const sharedContact = makeContact('4. Nurture / Interested', [], {
+      attenderStates: { "att1": { status: "Interested" } }
+    });
+    const res = evaluatePipeline(sharedContact, makeCall('QUERY', 'Connected', 'Query'));
+    assert('36-9. Shared contact → Query (preserves 4. Nurture / Interested)', res.pipelineStage === PIPELINE_STAGES.NURTURE_INTERESTED, `got: ${res.pipelineStage}`);
+  }
+
+  // 10. Shared contact → Sales
+  {
+    const sharedContact = makeContact('2. Attempting Contact', [], {
+      attenderStates: { "att1": { status: "Not Picked Up" } }
+    });
+    const res = evaluatePipeline(sharedContact, makeCall('SALES', 'Connected', 'Info Given'));
+    assert('36-10. Shared contact → Sales (advances to 3. Information Given)', res.pipelineStage === PIPELINE_STAGES.INFO_GIVEN, `got: ${res.pipelineStage}`);
+  }
 }
 
 // ── Summary ───────────────────────────────────────────────────────────────────

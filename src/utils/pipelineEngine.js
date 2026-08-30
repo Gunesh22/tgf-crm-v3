@@ -29,7 +29,7 @@ export const LEGACY_DISPLAY_STAGES = {
 };
 
 export const UNCONNECTED_CALL_STATUSES = [
-  "Not Picked Up", "Busy", "Call Cut", "Switched Off",
+  "Not Connected", "Not Picked Up", "Busy", "Call Cut", "Switched Off",
   "No Network", "NA", "no answer", "Not Attended",
 ];
 
@@ -61,8 +61,10 @@ const LEGACY_NON_PIPELINE_STAGES = new Set([
  * Validates whether a pipeline transition from `fromStage` → `toStage` is permitted.
  */
 export function canTransition(fromStage, toStage, event = {}) {
-  const fromRank = STAGE_RANKS[fromStage] || 1;
-  const toRank   = STAGE_RANKS[toStage]   || 1;
+  if (!fromStage && toStage) return true;
+  if (!fromStage && !toStage) return true;
+  const fromRank = fromStage ? (STAGE_RANKS[fromStage] || 0) : 0;
+  const toRank   = toStage   ? (STAGE_RANKS[toStage]   || 0) : 0;
 
   // Same stage is always valid
   if (fromStage === toStage || fromRank === toRank) return true;
@@ -93,7 +95,8 @@ export function canTransition(fromStage, toStage, event = {}) {
  * - Only SALES call events affect the pipeline (callPurpose === "SALES" or absent for legacy).
  * - "Already Reg.d" / "Shivir done" are NOT pipeline promotions; they go to programRelationships[].
  * - Legacy pipelineStage values of "Query Desk" / "Existing Alumni" are treated as New Lead
- *   for rank purposes so a new Sales call can move the contact forward.
+ *   only when evaluating sales pipeline progression.
+ * - If no Sales pipeline activity exists, returns null (not "1. New Lead").
  */
 export function getEffectiveStage(contact = {}, targetCalledFor = null) {
   const normalizeStageStr = (s) => {
@@ -118,7 +121,7 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null) {
     if (Array.isArray(contact.programRelationships)) {
       contact.programRelationships.forEach(r => {
         const st = normalizeStageStr(r.pipelineStage || r.status);
-        if (st && (!contactStage || (STAGE_RANKS[st] || 1) > (STAGE_RANKS[contactStage] || 1))) {
+        if (st && (!contactStage || (STAGE_RANKS[st] || 0) > (STAGE_RANKS[contactStage] || 0))) {
           contactStage = st;
         }
       });
@@ -126,8 +129,10 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null) {
     if (contact.attenderStates && typeof contact.attenderStates === "object") {
       Object.values(contact.attenderStates).forEach(st => {
         if (!st) return;
+        const stPurpose = String(st.callPurpose || "").toUpperCase();
+        if (stPurpose && stPurpose !== "SALES") return;
         const stStage = normalizeStageStr(st.status || st.pipelineStage);
-        if (stStage && (!contactStage || (STAGE_RANKS[stStage] || 1) > (STAGE_RANKS[contactStage] || 1))) {
+        if (stStage && (!contactStage || (STAGE_RANKS[stStage] || 0) > (STAGE_RANKS[contactStage] || 0))) {
           contactStage = stStage;
         }
       });
@@ -137,6 +142,9 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null) {
       let hRank = 0;
       let hStage = null;
       for (const h of history) {
+        const callPurpose = (h.callPurpose || "").toUpperCase();
+        if (callPurpose && callPurpose !== "SALES") continue; // Only SALES events affect pipeline
+
         const stat = (h.status || h.purposeOutcome || "").trim().toLowerCase();
         const rem = (h.remark || "").toLowerCase().trim();
         const combined = `${stat} ${rem}`;
@@ -149,20 +157,20 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null) {
         else if (INVALID_NUMBER_STATUSES.some(inv => combined.includes(inv.toLowerCase()))) st = PIPELINE_STAGES.CLOSED_INVALID;
 
         if (st) {
-          const r = STAGE_RANKS[st] || 1;
+          const r = STAGE_RANKS[st] || 0;
           if (r > hRank) {
             hRank = r;
             hStage = st;
           }
         }
       }
-      if (hStage && (!contactStage || (STAGE_RANKS[hStage] || 1) > (STAGE_RANKS[contactStage] || 1))) {
+      if (hStage && (!contactStage || (STAGE_RANKS[hStage] || 0) > (STAGE_RANKS[contactStage] || 0))) {
         contactStage = hStage;
       }
     }
   }
 
-  const finalContactStage = contactStage || PIPELINE_STAGES.NEW_LEAD;
+  const finalContactStage = contactStage || null;
 
   // 2. Program-specific evaluation ONLY if targetCalledFor is passed and non-empty
   const targetKey = targetCalledFor ? String(targetCalledFor).trim().toLowerCase() : "";
@@ -185,11 +193,13 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null) {
       let highestAttenderRank = 0;
       Object.values(contact.attenderStates).forEach(st => {
         if (!st) return;
+        const stPurpose = String(st.callPurpose || "").toUpperCase();
+        if (stPurpose && stPurpose !== "SALES") return;
         const stCf = String(st["Called For"] || st.calledFor || "").trim().toLowerCase();
         if (stCf === targetKey) {
           const stStage = normalizeStageStr(st.pipelineStage || st.status);
           if (stStage) {
-            const r = STAGE_RANKS[stStage] || 1;
+            const r = STAGE_RANKS[stStage] || 0;
             if (r > highestAttenderRank) {
               highestAttenderRank = r;
               highestAttenderStage = stStage;
@@ -203,6 +213,8 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null) {
     // Check history for explicit targetKey match
     const history = Array.isArray(contact.history) ? contact.history : [];
     const progHistory = history.filter(h => {
+      const hPurpose = (h.callPurpose || "").toUpperCase();
+      if (hPurpose && hPurpose !== "SALES") return false;
       const hCf = String(h.calledFor || h.called_for || h["Called For"] || "").trim().toLowerCase();
       return hCf === targetKey;
     });
@@ -222,7 +234,7 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null) {
         else if (INVALID_NUMBER_STATUSES.some(inv => combined.includes(inv.toLowerCase()))) hStage = PIPELINE_STAGES.CLOSED_INVALID;
 
         if (hStage) {
-          const hRank = STAGE_RANKS[hStage] || 1;
+          const hRank = STAGE_RANKS[hStage] || 0;
           if (hRank > highestRank) {
             highestRank = hRank;
             stage = hStage;
@@ -241,7 +253,7 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null) {
  * Evaluates which pipeline stage a contact should be at AFTER a new call event.
  *
  * Returns:
- *   pipelineStage          — new stage (or unchanged)
+ *   pipelineStage          — new stage (or unchanged, null if no Sales stage)
  *   attemptCount           — updated unconnected attempt count
  *   closedReason           — reason string if closed
  *   isAttenderCreditEligible — true only for Reg.Done
@@ -250,7 +262,7 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null) {
  */
 export function evaluatePipeline(contact = {}, callEvent = {}) {
   const currentStage = getEffectiveStage(contact);
-  const currentRank  = STAGE_RANKS[currentStage] || 1;
+  const currentRank  = currentStage ? (STAGE_RANKS[currentStage] || 0) : 0;
 
   const purpose    = (callEvent.callPurpose || "SALES").toUpperCase();
   const callStatus = (callEvent.callStatus || callEvent.status || "").trim();
@@ -265,9 +277,9 @@ export function evaluatePipeline(contact = {}, callEvent = {}) {
     s => s.toLowerCase() === callStatus.toLowerCase() || s.toLowerCase() === sLower
   );
 
-  if (isUnconnected) attemptCount += 1;
+  if (isUnconnected && purpose === "SALES") attemptCount += 1;
 
-  let targetStage             = currentStage;
+  let targetStage             = currentStage || null;
   let closedReason            = null;
   let isAttenderCreditEligible = false;
   let wasConnected             = contact.wasConnected || false;
@@ -282,13 +294,13 @@ export function evaluatePipeline(contact = {}, callEvent = {}) {
 
   // ── QUERY — NEVER changes pipelineStage ───────────────────────────────────
   else if (purpose === "QUERY") {
-    targetStage = currentStage;                  // Preserve exactly
+    targetStage = currentStage || null;                  // Preserve exactly
     if (callStatus === "Connected") wasConnected = true;
   }
 
   // ── REMINDER — NEVER changes pipelineStage ────────────────────────────────
   else if (purpose === "REMINDER") {
-    targetStage = currentStage;                  // Preserve exactly
+    targetStage = currentStage || null;                  // Preserve exactly
     if (callStatus === "Connected") wasConnected = true;
   }
 
@@ -300,7 +312,7 @@ export function evaluatePipeline(contact = {}, callEvent = {}) {
   }
   else if (["already reg.d", "already registered", "shivir done", "shivir already done"].includes(sLower)) {
     // Alumni evidence → programRelationships[] ONLY, pipelineStage unchanged
-    targetStage               = currentStage;
+    targetStage               = currentStage || null;
     wasConnected              = true;
     programRelationshipUpdate = { status: "Existing Alumni" };
   }
@@ -326,7 +338,7 @@ export function evaluatePipeline(contact = {}, callEvent = {}) {
   }
   else if (isUnconnected) {
     // 5-attempt auto-close only for uncontacted leads (rank ≤ 2)
-    if (attemptCount >= 5 && currentRank <= 2) {
+    if (attemptCount >= 5 && currentRank <= 2 && currentRank > 0) {
       targetStage  = PIPELINE_STAGES.CLOSED_INVALID;
       closedReason = "Automated: 5 Unanswered Dial Attempts";
       wasConnected = false;
@@ -334,6 +346,9 @@ export function evaluatePipeline(contact = {}, callEvent = {}) {
       // NEVER demote — keep current stage (or promote New Lead → Attempting)
       targetStage = currentRank >= 2 ? currentStage : PIPELINE_STAGES.ATTEMPTING;
     }
+  }
+  else if (purpose === "SALES" && !targetStage) {
+    targetStage = PIPELINE_STAGES.NEW_LEAD;
   }
 
   const allowed    = canTransition(currentStage, targetStage, { ...callEvent, closedReason, purposeOutcome: outcome });
@@ -355,7 +370,8 @@ export function evaluatePipeline(contact = {}, callEvent = {}) {
  */
 export function shouldShowConvertToSales(contact = {}) {
   const stage = getEffectiveStage(contact);
-  const rank  = STAGE_RANKS[stage] || 1;
+  if (!stage) return true;
+  const rank  = STAGE_RANKS[stage] || 0;
   return rank < 3;
 }
 
@@ -363,6 +379,9 @@ export function shouldShowConvertToSales(contact = {}) {
  * UI color tokens for all pipeline stages (includes legacy display stages).
  */
 export function getPipelineStageConfig(stage) {
+  if (!stage) {
+    return { label: "No Sales Stage", bg: "bg-slate-50", border: "border-slate-200", text: "text-slate-500", badge: "bg-slate-50 text-slate-500 border-slate-200 font-medium" };
+  }
   switch (stage) {
     case "1. New Lead":
     case "New Lead":

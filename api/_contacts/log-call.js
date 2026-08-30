@@ -8,7 +8,7 @@ import { normalizeCalledForKey } from '../lib/calledForNormalizer.js';
 // ── Constants ───────────────────────────────────────────────────────────────
 
 const UNCONNECTED_CALL_STATUSES = [
-  "Not Picked Up", "Busy", "Call Cut", "Switched Off",
+  "Not Connected", "Not Picked Up", "Busy", "Call Cut", "Switched Off",
   "No Network", "NA", "no answer", "Not Attended",
 ];
 
@@ -35,8 +35,10 @@ const STAGE_RANKS = {
 // ── Pipeline helpers ─────────────────────────────────────────────────────────
 
 function canTransitionServer(fromStage, toStage, event = {}) {
-  const fromRank = STAGE_RANKS[fromStage] || 1;
-  const toRank   = STAGE_RANKS[toStage]   || 1;
+  if (!fromStage && toStage) return true;
+  if (!fromStage && !toStage) return true;
+  const fromRank = fromStage ? (STAGE_RANKS[fromStage] || 0) : 0;
+  const toRank   = toStage   ? (STAGE_RANKS[toStage]   || 0) : 0;
   if (fromStage === toStage || fromRank === toRank) return true;
   if (LEGACY_NON_PIPELINE_STAGES.has(fromStage)) return true;
   const isConnected = event.callStatus === "Connected" ||
@@ -48,10 +50,10 @@ function canTransitionServer(fromStage, toStage, event = {}) {
 }
 
 function getEffectiveStageServer(lead) {
-  const current  = lead.pipelineStage || "1. New Lead";
+  const current  = lead.pipelineStage || null;
   const isLegacy = LEGACY_NON_PIPELINE_STAGES.has(current);
-  let highestRank = isLegacy ? 1 : (STAGE_RANKS[current] || 1);
-  let stage       = isLegacy ? "1. New Lead" : current;
+  let highestRank = isLegacy ? 0 : (current ? (STAGE_RANKS[current] || 0) : 0);
+  let stage       = isLegacy ? null : (current || null);
 
   const history = Array.isArray(lead.history) ? lead.history : [];
   for (const h of history) {
@@ -68,7 +70,7 @@ function getEffectiveStageServer(lead) {
     // "already reg.d" / "shivir done" → programRelationships[] only, NOT pipeline
 
     if (hStage) {
-      const hRank = STAGE_RANKS[hStage] || 1;
+      const hRank = STAGE_RANKS[hStage] || 0;
       if (hRank > highestRank) { highestRank = hRank; stage = hStage; }
     }
   }
@@ -77,7 +79,7 @@ function getEffectiveStageServer(lead) {
 
 function evaluateStageServer(lead, callEvent) {
   const currentStage = getEffectiveStageServer(lead);
-  const currentRank  = STAGE_RANKS[currentStage] || 1;
+  const currentRank  = currentStage ? (STAGE_RANKS[currentStage] || 0) : 0;
 
   const purpose    = (callEvent.callPurpose || "SALES").toUpperCase();
   const callStatus = (callEvent.callStatus || callEvent.status || "").trim();
@@ -91,9 +93,9 @@ function evaluateStageServer(lead, callEvent) {
   const isInvalidNum = INVALID_NUMBER_STATUSES.some(
     s => s.toLowerCase() === callStatus.toLowerCase() || s.toLowerCase() === sLower
   );
-  if (isUnconnected) attemptCount += 1;
+  if (isUnconnected && purpose === "SALES") attemptCount += 1;
 
-  let targetStage              = currentStage;
+  let targetStage              = currentStage || null;
   let closedReason             = null;
   let isAttenderCreditEligible = false;
   let wasConnected             = lead.wasConnected || false;
@@ -107,12 +109,12 @@ function evaluateStageServer(lead, callEvent) {
   }
   // QUERY — NEVER changes pipelineStage
   else if (purpose === "QUERY") {
-    targetStage = currentStage;
+    targetStage = currentStage || null;
     if (callStatus === "Connected") wasConnected = true;
   }
   // REMINDER — NEVER changes pipelineStage
   else if (purpose === "REMINDER") {
-    targetStage = currentStage;
+    targetStage = currentStage || null;
     if (callStatus === "Connected") wasConnected = true;
   }
   // SALES outcomes
@@ -123,7 +125,7 @@ function evaluateStageServer(lead, callEvent) {
   }
   else if (["already reg.d", "already registered", "shivir done", "shivir already done"].includes(sLower)) {
     // Alumni evidence: write to programRelationships[] only; pipelineStage unchanged
-    targetStage               = currentStage;
+    targetStage               = currentStage || null;
     wasConnected              = true;
     programRelationshipUpdate = { status: "Existing Alumni" };
   }
@@ -148,13 +150,16 @@ function evaluateStageServer(lead, callEvent) {
     wasConnected = true;
   }
   else if (isUnconnected) {
-    if (attemptCount >= 5 && currentRank <= 2) {
+    if (attemptCount >= 5 && currentRank <= 2 && currentRank > 0) {
       targetStage  = "Closed / Invalid";
       closedReason = "Automated: 5 Unanswered Dial Attempts";
       wasConnected = false;
     } else {
       targetStage = currentRank >= 2 ? currentStage : "2. Attempting Contact";
     }
+  }
+  else if (purpose === "SALES" && !targetStage) {
+    targetStage = "1. New Lead";
   }
 
   const allowed    = canTransitionServer(currentStage, targetStage, { ...callEvent, closedReason, purposeOutcome: outcome });
@@ -214,8 +219,10 @@ export default async function handler(req, res) {
     ).toUpperCase();
 
     const callStatusClean = callStatus || (
-      ["NA", "Busy", "Call Cut", "switched off", "Invalid No", "no answer"].includes(status)
-        ? "Not Picked Up"
+      ["Invalid Number", "Invalid No", "Wrong No", "wrong no.", "Called by mistake"].includes(status)
+        ? "Invalid Number"
+        : ["NA", "Busy", "Call Cut", "switched off", "no answer", "Not Connected", "Not Picked Up"].includes(status)
+        ? "Not Connected"
         : "Connected"
     );
 

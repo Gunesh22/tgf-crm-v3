@@ -279,14 +279,25 @@ export default function MobileEditModal({
       const newStatus = String(targetEdited.status || "").trim();
       const statusChanged = oldStatus !== newStatus;
 
+      const oldPurpose = String(savedRow.callPurpose || "").trim();
+      const newPurpose = String(targetEdited.callPurpose || "").trim();
+      const purposeChanged = oldPurpose !== newPurpose;
+
+      const oldCallStatus = String(savedRow.callStatus || "").trim();
+      const newCallStatus = String(targetEdited.callStatus || "").trim();
+      const callStatusChanged = oldCallStatus !== newCallStatus;
+
       const oldRemark = String(savedRow.remark || "").trim();
       const newRemark = String(targetEdited.remark || "").trim();
       const remarkChanged = oldRemark !== newRemark;
 
-      const isCallAttemptUpdated = statusChanged || remarkChanged;
+      const isCallAttemptUpdated = statusChanged || remarkChanged || purposeChanged || callStatusChanged;
       if (isCallAttemptUpdated) {
         const newHist = {
+          callPurpose: targetEdited.callPurpose || "SALES",
+          callStatus: targetEdited.callStatus || "",
           status: targetEdited.status || "Call Log Added",
+          queryStatus: targetEdited.queryStatus || null,
           remark: targetEdited.remark || "",
           attenderName: attenderName || "Unknown",
           timestamp: new Date().toISOString(),
