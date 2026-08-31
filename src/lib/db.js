@@ -398,8 +398,8 @@ export const subscribeToAllCallLogs = (programId, month, callback) => {
     if (cachedData) {
       const parsed = JSON.parse(cachedData);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        console.log(`%c[0ms INSTANT CACHE] Loaded ${parsed.length} admin call logs`, "color: #10b981; font-weight: bold");
-        callback(parsed);
+        console.log(`%c[PREVIEW CACHE] Loaded ${parsed.length} admin call logs (preview)`, "color: #10b981; font-weight: bold");
+        callback(parsed, false);
       }
     }
   } catch (e) {
@@ -413,7 +413,7 @@ export const subscribeToAllCallLogs = (programId, month, callback) => {
       const res = await fetchAPI(`/api/contacts/search?includeHistory=true&${monthParam ? `month=${monthParam}&` : ''}limit=15000`);
       if (isSubscribed && res.data) {
         safeSetLocalStorage(cacheKey, res.data);
-        callback(res.data);
+        callback(res.data, true);
       }
     } catch (e) {
       console.error("[subscribeToAllCallLogs polling error]", e);
@@ -475,6 +475,19 @@ export const addIncomingCallLog = async (attenderId, attenderName, updates = {},
   }
   return res;
 };
+
+export const overridePipelineStage = async (contactId, newStage, attenderId, attenderName, role = "attender", reason = "") => {
+  const payload = {
+    contactId,
+    newStage,
+    changedByAttenderId: attenderId,
+    changedBy: attenderName,
+    role,
+    reason
+  };
+  return fetchAPI(`/api/contacts/override-stage`, "POST", payload);
+};
+
 export const ensureIncomingProgram = async () => {};
 export const ensureOutgoingProgram = async () => {};
 export const getActiveTags = async () => [];

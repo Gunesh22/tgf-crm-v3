@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { toast } from "react-hot-toast";
 import * as XLSX from "xlsx";
-import { BarChart3, Download, Search, X, ChevronDown, Check, Database } from "lucide-react";
+import { BarChart3, Download, Search, X, ChevronDown, Check, Eye } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
-import { COLORS, cleanExportRow, CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, parseTimestamp, getCanonicalStatus, renderVal } from "../utils.jsx";
+import { COLORS, cleanExportRow, CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, parseTimestamp, getCanonicalStatus, renderVal, isStageNurtureInterested, isStageRegisteredWon, getLocalDateStr, getCanonicalRegistrations, getCanonicalRegisteredPeople, getCanonicalStage6People } from "../utils.jsx";
 import { isKhojiAffirmative, isKhojiNegative } from "../../attender/utils.js";
 
 // ── Multi-select dropdown ──────────────────────────────────────────────────
@@ -106,16 +106,8 @@ function MultiSelect({ options, selected, onChange, placeholder, allLabel = "All
   );
 }
 
-// ── Helper to format local YYYY-MM-DD date ──────────────────────────────────
-const getLocalDateStr = (d = new Date()) => {
-  const yr = d.getFullYear();
-  const mn = String(d.getMonth() + 1).padStart(2, "0");
-  const dy = String(d.getDate()).padStart(2, "0");
-  return `${yr}-${mn}-${dy}`;
-};
-
 // ── Main Dashboard ─────────────────────────────────────────────────────────
-export default function DashboardTab({ programs, attenders, settingsOptions = { statusOptions: [], sourceOptions: [], calledForOptions: [] }, callLogs = [], registrations = [], secondsAgo = 0, nextFetchIn = 45, lastSyncedAt }) {
+export default function DashboardTab({ programs, attenders, settingsOptions = { statusOptions: [], sourceOptions: [], calledForOptions: [] }, callLogs = [], registrations = [], callLogsLoading = false, secondsAgo = 0, nextFetchIn = 45, lastSyncedAt }) {
   const todayStr = getLocalDateStr();
 
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -132,12 +124,14 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
     const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     return `${todayStr.slice(0, 7)}-${String(lastDay).padStart(2, "0")}`;
   })();
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [dateFrom, setDateFrom] = useState(currentMonthFirstDay);
+  const [dateTo, setDateTo] = useState(currentMonthLastDay);
   const [conversionSearch, setConversionSearch] = useState("");
   const [convPage, setConvPage] = useState(1);
   const [selectedAttenderDetails, setSelectedAttenderDetails] = useState(null);
   const [attenderModalSearch, setAttenderModalSearch] = useState("");
+  const [inspectModal, setInspectModal] = useState(null); // { title: string, subtitle: string, items: Array, type: string }
+  const [inspectSearch, setInspectSearch] = useState("");
 
   const callTypeOptions = useMemo(() => [
     { value: "incoming", label: "Incoming" },
@@ -150,7 +144,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
     { value: "Dew drop khoji", label: "Dew drop khoji" }
   ], []);
 
-  const EXCLUDED_ATTENDER_NAMES = ["admin", "super admin", "administrator", "admin test", "test 2", "test2", "test"];
+  const EXCLUDED_ATTENDER_NAMES = ["admin", "super admin", "administrator", "agent"];
 
   const programOptions = programs.map(p => ({ value: p.id, label: p.name }));
   const attenderOptions = attenders
@@ -263,7 +257,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
               status: canonicalStatus,
               pipelineStage: log.pipelineStage || "",
               remark: h.remark || "",
-              callType: h.callType || log.callType || "outgoing",
+              callType: h.callType || h.callDirection || log.callType || log.callDirection || "outgoing",
               history: log.history || [],
               callbackDate: log.callbackDate || null,
               createdAt: parseTimestamp(log.createdAt) || attemptDate,
@@ -279,15 +273,26 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
         });
       }
 
-      // 2. Extract fallback attender state status/remarks when no history array entry was created
+      // 2. Extract fallback attender state status/remarks ONLY when no corresponding call exists in log.history
       if (hasAttenderStates) {
         Object.entries(log.attenderStates).forEach(([attId, state]) => {
           if (!state) return;
           const stateAttName = state.attenderName || "Unknown";
           const stateHasHistory = Array.isArray(state.history) && state.history.length > 0;
-          if (!stateHasHistory && (state.lastCalledAt || (state.status && state.status !== "Pending") || state.remark)) {
+
+          // Check if this attender already has physical call(s) in log.history
+          const attenderHasHistoryInLog = hasTopHistory && log.history.some(h => {
+            const hAttId = h.attenderId || h.callAttenderId;
+            if (hAttId && attId && String(hAttId) === String(attId)) return true;
+            if (h.attenderName && stateAttName && h.attenderName.toLowerCase().trim() === stateAttName.toLowerCase().trim()) return true;
+            return false;
+          });
+
+          if (!attenderHasHistoryInLog && !stateHasHistory && (state.lastCalledAt || (state.status && state.status !== "Pending") || state.remark)) {
             const canonicalStatus = getCanonicalStatus(state.status || "Pending");
             const attemptDate = getAttemptDate(state.lastCalledAt) || parseTimestamp(log.createdAt);
+            const callDir = state.callType || state.callDirection || log.callType || log.callDirection || "outgoing";
+
             list.push({
               ...log,
               id: `${log.id}_${attId}_latest`,
@@ -302,7 +307,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
               status: canonicalStatus,
               pipelineStage: log.pipelineStage || "",
               remark: state.remark || "",
-              callType: state.callType || "outgoing",
+              callType: callDir,
               history: [],
               callbackDate: state.callbackDate || null,
               createdAt: parseTimestamp(log.createdAt) || attemptDate,
@@ -435,7 +440,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
     const map = {};
     const seenRegsPerAttender = new Set();
 
-    const EXCLUDED_ATTENDER_NAMES = ["admin", "super admin", "administrator", "admin test", "test 2", "test2", "test"];
+    const EXCLUDED_ATTENDER_NAMES = ["admin", "super admin", "administrator", "agent"];
 
     filteredLogs.forEach(log => {
       const rawName = (log.attenderName || "").trim() || "Unknown Attender";
@@ -467,8 +472,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
       if (normStatus === "Reg.Done") {
         const leadId = log.contactId || log.Phone || log.Name;
         const cf = (log.calledFor || log.programName || "").toLowerCase().trim();
-        const timeKey = log.timestamp ? log.timestamp.getTime() : "";
-        const regKey = `${key}_${leadId}_${cf}_${timeKey}`;
+        const regKey = `${key}_${leadId}_${cf}`;
         if (!seenRegsPerAttender.has(regKey)) {
           seenRegsPerAttender.add(regKey);
           s.regDone++;
@@ -516,8 +520,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
       if (getCanonicalStatus(l.status) === "Reg.Done") {
         const leadId = l.contactId || l.Phone || l.Name;
         const cf = (l.calledFor || l.programName || "").toLowerCase().trim();
-        const timeKey = l.timestamp ? l.timestamp.getTime() : "";
-        const regKey = `${leadId}_${cf}_${timeKey}`;
+        const regKey = `${leadId}_${cf}`;
         if (seenRegs.has(regKey)) return false;
         seenRegs.add(regKey);
       }
@@ -534,81 +537,85 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
     );
   }, [filteredLogs, selectedAttenderDetails, attenderModalSearch]);
 
+  // CANONICAL REGISTRATION DERIVATIONS (SINGLE SOURCE OF TRUTH)
+  const programRegistrationsList = useMemo(() => {
+    return getCanonicalRegistrations(registrations, callLogs, {
+      startDate: dateFrom,
+      endDate: dateTo,
+      selectedAttenderIds,
+      selectedProgramIds,
+      selectedSources,
+      selectedCalledFors
+    });
+  }, [registrations, callLogs, dateFrom, dateTo, selectedAttenderIds, selectedProgramIds, selectedSources, selectedCalledFors]);
+
   const outcomeData = useMemo(() => {
     const map = {};
-    const seenRegs = new Set();
     filteredLogs.forEach(l => {
-      const canonical = getCanonicalStatus(l.status);
-      if (canonical === "Reg.Done") {
-        const leadId = l.contactId || l.Phone || l.Name;
-        const cf = (l.calledFor || l.programName || "").toLowerCase().trim();
-        const timeKey = l.timestamp ? l.timestamp.getTime() : "";
-        const regKey = `${leadId}_${cf}_${timeKey}`;
-        if (!seenRegs.has(regKey)) {
-          seenRegs.add(regKey);
-          map["Reg.Done"] = (map["Reg.Done"] || 0) + 1;
-        }
-      } else {
-        const s = !l.status || l.status === "Pending" ? "Pending" : l.status;
-        map[s] = (map[s] || 0) + 1;
-      }
+      if (!l.isHistory) return;
+      const canonical = getCanonicalStatus(l.status) || "Pending";
+      if (canonical === "Reg.Done") return;
+      map[canonical] = (map[canonical] || 0) + 1;
     });
-    return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-  }, [filteredLogs]);
 
-  const conversionsList = useMemo(() => {
-    const seen = new Set();
-    const result = [];
-    filteredLogs.forEach(l => {
-      if (getCanonicalStatus(l.status) === "Reg.Done") {
-        const leadId = l.contactId || l.Phone || l.Name;
-        const cf = (l.calledFor || l.programName || "").toLowerCase().trim();
-        const timeKey = l.timestamp ? l.timestamp.getTime() : "";
-        const regKey = `${leadId}_${cf}_${timeKey}`;
-        if (!seen.has(regKey)) {
-          seen.add(regKey);
-          result.push(l);
-        }
-      }
+    if (programRegistrationsList.length > 0) {
+      map["Reg.Done"] = programRegistrationsList.length;
+    }
+
+    return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+  }, [filteredLogs, programRegistrationsList]);
+
+  const registeredPeopleList = useMemo(() => {
+    return getCanonicalRegisteredPeople(registrations, callLogs, {
+      startDate: dateFrom,
+      endDate: dateTo,
+      selectedAttenderIds,
+      selectedProgramIds,
+      selectedSources,
+      selectedCalledFors
     });
-    return result;
-  }, [filteredLogs]);
+  }, [registrations, callLogs, dateFrom, dateTo, selectedAttenderIds, selectedProgramIds, selectedSources, selectedCalledFors]);
+
+  const stage6PeopleList = useMemo(() => {
+    return getCanonicalStage6People(callLogs, {
+      startDate: dateFrom,
+      endDate: dateTo
+    });
+  }, [callLogs, dateFrom, dateTo]);
+
+  const conversionsList = programRegistrationsList;
 
   const totalPhysicalCalls = useMemo(() => {
     return filteredLogs.filter(l => l.isHistory).length;
   }, [filteredLogs]);
 
-  const totalRegisteredPeople = useMemo(() => {
-    const uniqueContactIds = new Set();
-    filteredLogs.forEach(l => {
-      const cId = l.contactId || l.id || l.Phone || l.Name;
-      if (!cId) return;
-      const contactDoc = (callLogs || []).find(c => String(c.id || c._id) === String(cId));
-      const stage = (contactDoc?.pipelineStage || l.pipelineStage || "").trim();
-      if (stage === "6. Registered / Won" || stage === "Registered / Won" || stage.includes("Registered")) {
-        uniqueContactIds.add(String(cId));
-      }
-    });
-    return uniqueContactIds.size;
-  }, [filteredLogs, callLogs]);
-
   const totalInterestedCalls = useMemo(() => {
     return filteredLogs.filter(l => l.isHistory && getCanonicalStatus(l.status) === "Interested").length;
   }, [filteredLogs]);
 
-  const totalInterestedPeople = useMemo(() => {
-    const uniqueContactIds = new Set();
+  const interestedPeopleList = useMemo(() => {
+    const map = new Map();
     filteredLogs.forEach(l => {
-      const cId = l.contactId || l.id || l.Phone || l.Name;
-      if (!cId) return;
-      const contactDoc = (callLogs || []).find(c => String(c.id || c._id) === String(cId));
-      const stage = (contactDoc?.pipelineStage || l.pipelineStage || "").trim();
-      const isNurtureInterested = stage === "4. Nurture / Interested" || stage === "Nurture / Interested" || (stage.includes("Interested") && !stage.includes("Reg"));
-      if (isNurtureInterested) {
-        uniqueContactIds.add(String(cId));
+      const cId = String(l.contactId || l.id || l.Phone || l.Name || "");
+      if (!cId || map.has(cId)) return;
+      const contactDoc = (callLogs || []).find(c => String(c.id || c._id) === cId);
+      const targetObj = contactDoc || l;
+      if (isStageNurtureInterested(targetObj)) {
+        map.set(cId, {
+          id: cId,
+          name: renderVal(targetObj.Name || targetObj.contactName || targetObj.name || l.Name, "Unknown"),
+          phone: renderVal(targetObj.Phone || targetObj.contactPhone || targetObj.phone || targetObj.mobile || l.Phone, "—"),
+          city: renderVal(targetObj.city || targetObj.City || l.city, "—"),
+          khoji: renderVal(targetObj.Khoji || targetObj.khoji || l.Khoji, "—"),
+          calledFor: renderVal(targetObj.calledFor || targetObj.called_for || l.calledFor || l.programName, "—"),
+          attender: renderVal(targetObj.attenderName || l.attenderName || targetObj.assignedTo, "Unassigned"),
+          status: renderVal(targetObj.status || l.status, "Interested"),
+          stage: targetObj.stage || "3. Interested",
+          updatedAt: targetObj.updatedAt || targetObj.lastCalledAt || l.timestamp
+        });
       }
     });
-    return uniqueContactIds.size;
+    return Array.from(map.values());
   }, [filteredLogs, callLogs]);
 
   const searchedConversions = useMemo(() => {
@@ -810,7 +817,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 font-medium">{filteredLogs.length} entries</span>
+            <span className="text-xs text-slate-500 font-medium">{filteredLogs.length} total activities ({totalPhysicalCalls} physical calls)</span>
 
             {activeFilters > 0 && (
               <button
@@ -839,14 +846,77 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: "Total Calls", value: totalPhysicalCalls, sub: "Physical call events (contact.history)" },
-          { label: "Interested Calls", value: totalInterestedCalls, color: "text-amber-600", sub: "Event count (call history)" },
-          { label: "Interested People", value: totalInterestedPeople, color: "text-indigo-600", sub: "Unique contacts currently Interested" },
-          { label: "Registered People", value: totalRegisteredPeople, color: "text-emerald-600", sub: "Unique contacts (6. Registered / Won)" },
+          { 
+            label: "Program Registrations", 
+            value: programRegistrationsList.length, 
+            color: "text-purple-600", 
+            sub: "Unique enrolments (contactId + calledForKey)", 
+            inspectable: true,
+            onClickInspect: () => {
+              setInspectSearch("");
+              setInspectModal({
+                title: "Program Registrations — Unique Enrolments",
+                subtitle: "Unique program enrolments identified by (Contact ID + Program)",
+                type: "program_registrations",
+                items: programRegistrationsList
+              });
+            }
+          },
+          { 
+            label: "Registered People", 
+            value: registeredPeopleList.length, 
+            color: "text-emerald-600", 
+            sub: "Unique contacts with a program registration", 
+            inspectable: true,
+            onClickInspect: () => {
+              setInspectSearch("");
+              setInspectModal({
+                title: "Registered People — Unique Contacts",
+                subtitle: "Unique contacts having at least one active program registration",
+                type: "registered_people",
+                items: registeredPeopleList
+              });
+            }
+          },
+          { 
+            label: "Stage 6 People", 
+            value: stage6PeopleList.length, 
+            color: "text-indigo-600", 
+            sub: "Unique contacts currently in Stage 6 (6. Registered / Won)", 
+            inspectable: true,
+            onClickInspect: () => {
+              setInspectSearch("");
+              setInspectModal({
+                title: "Stage 6 People — Unique Contacts",
+                subtitle: "Unique contacts currently in Stage 6 pipeline stage",
+                type: "stage6_people",
+                items: stage6PeopleList
+              });
+            }
+          },
         ].map(s => (
-          <div key={s.label} className="bg-white p-3.5 rounded-lg border border-slate-200 shadow-2xs">
-            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{s.label}</p>
-            <p className={`text-2xl font-bold ${s.color || "text-slate-900"} mt-1`}>{s.value}</p>
-            <p className="text-xs text-slate-400 mt-0.5">{s.sub}</p>
+          <div key={s.label} className="bg-white p-3.5 rounded-lg border border-slate-200 shadow-2xs flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{s.label}</p>
+                {s.inspectable && (
+                  <button
+                    type="button"
+                    onClick={s.onClickInspect}
+                    className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                    title={`Inspect ${s.label}`}
+                  >
+                    <Eye size={12} /> Inspect
+                  </button>
+                )}
+              </div>
+              {callLogsLoading ? (
+                <div className="h-8 w-24 bg-slate-200 animate-pulse rounded-md mt-1" />
+              ) : (
+                <p className={`text-2xl font-bold ${s.color || "text-slate-900"} mt-1`}>{s.value}</p>
+              )}
+            </div>
+            <p className="text-xs text-slate-400 mt-1">{s.sub}</p>
           </div>
         ))}
       </div>
@@ -1005,30 +1075,37 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
               {paginatedConversions.map((c, idx) => {
-                const dateVal = parseTimestamp(c.timestamp || c.lastCalledAt || c.createdAt);
+                const dateVal = parseTimestamp(c.timestamp || c.registeredAt || c.lastCalledAt || c.createdAt);
                 const dateStr = dateVal ? dateVal.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—";
-                const cName = renderVal(c.contactName || c.Name || c.name, "Unknown");
-                const cPhone = renderVal(c.contactPhone || c.Phone || c.phone || c.Mobile || c.mobile, "—");
-                const cCity = renderVal(c.contactCity, "");
+                const cName = renderVal(c.contactName || c.name || c.Name, "Unknown");
+                const cPhone = renderVal(c.contactPhone || c.phone || c.Phone || c.Mobile || c.mobile, "—");
+                const cCity = renderVal(c.contactCity || c.city, "");
+                const attenderName = renderVal(c.attenderName || c.attender, "Unassigned");
+                const programName = renderVal(c.programName || c.calledFor, "—");
+                const sourceVal = renderVal(c.source || c.Source, "—");
+                const calledForVal = renderVal(c.calledFor || c.programName, "—");
+                const feedbackVal = renderVal(c.feedback || c.userFeedback, "—");
+                const remarkVal = renderVal(c.remark || c.Remark, "—");
+
                 return (
                   <tr key={idx} className="hover:bg-slate-50 transition-colors">
                     {/* Name & Contact */}
                     <td className="px-3.5 py-2.5">
                       <div className="font-semibold text-slate-900">{cName}</div>
                       <div className="text-indigo-600 font-mono text-[11px]">{cPhone}</div>
-                      {cCity && <div className="text-[10px] text-slate-400">{cCity}</div>}
+                      {cCity && cCity !== "—" && <div className="text-[10px] text-slate-400">{cCity}</div>}
                     </td>
                     {/* Attender */}
                     <td className="px-3.5 py-2.5 font-medium text-slate-700">
-                      {renderVal(c.attenderName)}
+                      {attenderName}
                     </td>
                     {/* Tag / Program */}
                     <td className="px-3.5 py-2.5">
-                      <div className="text-slate-700 font-medium truncate max-w-[140px]">{renderVal(c.programName)}</div>
+                      <div className="text-slate-700 font-medium truncate max-w-[140px]">{programName}</div>
                       {c.tags && c.tags.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-0.5">
-                          {c.tags.slice(0, 2).map((t, idx) => (
-                            <span key={idx} className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-semibold">
+                          {c.tags.slice(0, 2).map((t, tIdx) => (
+                            <span key={tIdx} className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-semibold">
                               {renderVal(t)}
                             </span>
                           ))}
@@ -1040,8 +1117,8 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
                     </td>
                     {/* Source / Called For */}
                     <td className="px-3.5 py-2.5">
-                      <div className="font-medium text-slate-700">{renderVal(c.source)}</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">Called for: {renderVal(c.calledFor)}</div>
+                      <div className="font-medium text-slate-700">{sourceVal}</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">Called for: {calledForVal}</div>
                     </td>
                     {/* Date & Time */}
                     <td className="px-3.5 py-2.5 text-slate-500 whitespace-nowrap">
@@ -1049,14 +1126,14 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
                     </td>
                     {/* User Feedback */}
                     <td className="px-3.5 py-2.5">
-                      <p className="max-w-[180px] truncate text-slate-600" title={renderVal(c.feedback)}>
-                        {renderVal(c.feedback, "—")}
+                      <p className="max-w-[180px] truncate text-slate-600" title={feedbackVal}>
+                        {feedbackVal}
                       </p>
                     </td>
                     {/* Remarks */}
                     <td className="px-3.5 py-2.5">
-                      <p className="max-w-[180px] truncate text-slate-600" title={renderVal(c.remark)}>
-                        {renderVal(c.remark, "—")}
+                      <p className="max-w-[180px] truncate text-slate-600" title={remarkVal}>
+                        {remarkVal}
                       </p>
                     </td>
                   </tr>
@@ -1242,6 +1319,161 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
                 className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-md transition-colors"
               >
                 Close Breakdown
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* INSPECT REGISTRATIONS / PEOPLE MODAL */}
+      {inspectModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+                  <Eye size={18} className="text-emerald-600" /> {inspectModal.title}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">{inspectModal.subtitle}</p>
+              </div>
+              <button
+                onClick={() => setInspectModal(null)}
+                className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Search and Action Bar */}
+            <div className="p-3 border-b border-slate-100 bg-white flex items-center justify-between gap-3">
+              <div className="relative flex-1">
+                <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search by contact name, phone, program, or attender..."
+                  value={inspectSearch}
+                  onChange={(e) => setInspectSearch(e.target.value)}
+                  className="w-full h-9 pl-9 pr-3 bg-slate-50 border border-slate-200 rounded-md text-xs font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
+              <button
+                onClick={() => {
+                  const filteredItems = inspectModal.items.filter(item => {
+                    if (!inspectSearch.trim()) return true;
+                    const q = inspectSearch.toLowerCase();
+                    return (
+                      (item.name || "").toLowerCase().includes(q) ||
+                      (item.phone || "").toLowerCase().includes(q) ||
+                      (item.calledFor || "").toLowerCase().includes(q) ||
+                      (item.attender || "").toLowerCase().includes(q) ||
+                      (item.city || "").toLowerCase().includes(q)
+                    );
+                  });
+                  const ws = XLSX.utils.json_to_sheet(filteredItems.map((item, idx) => ({
+                    "#": idx + 1,
+                    "Name": item.name,
+                    "Phone": item.phone,
+                    "City": item.city,
+                    "Khoji": item.khoji,
+                    "Called For / Program": item.calledFor,
+                    "Attender": item.attender,
+                    "Stage / Status": item.status,
+                  })));
+                  const wb = XLSX.utils.book_new();
+                  XLSX.utils.book_append_sheet(wb, ws, "Inspected List");
+                  XLSX.writeFile(wb, `${inspectModal.type}_contacts_export.xlsx`);
+                  toast.success("Inspected list exported to Excel!");
+                }}
+                className="flex items-center gap-1.5 h-9 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-bold transition-colors cursor-pointer shrink-0"
+              >
+                <Download size={14} /> Export List
+              </button>
+            </div>
+
+            {/* Table View */}
+            <div className="p-4 overflow-y-auto flex-1 text-xs">
+              {(() => {
+                const filtered = inspectModal.items.filter(item => {
+                  if (!inspectSearch.trim()) return true;
+                  const q = inspectSearch.toLowerCase();
+                  return (
+                    (item.name || "").toLowerCase().includes(q) ||
+                    (item.phone || "").toLowerCase().includes(q) ||
+                    (item.calledFor || "").toLowerCase().includes(q) ||
+                    (item.attender || "").toLowerCase().includes(q) ||
+                    (item.city || "").toLowerCase().includes(q)
+                  );
+                });
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="py-12 text-center text-slate-400">
+                      No matching records found.
+                    </div>
+                  );
+                }
+
+                return (
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-50 text-slate-600 font-bold uppercase text-[10px] border-b border-slate-200 sticky top-0">
+                      <tr>
+                        <th className="p-2.5">#</th>
+                        <th className="p-2.5">Name & Phone</th>
+                        <th className="p-2.5">City / Khoji</th>
+                        <th className="p-2.5">Program / Called For</th>
+                        <th className="p-2.5">Attender</th>
+                        <th className="p-2.5 text-right">Stage Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                      {filtered.map((item, idx) => (
+                        <tr key={item.id + "_" + idx} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-2.5 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
+                          <td className="p-2.5 font-bold text-slate-900">
+                            <div>{item.name}</div>
+                            <div className="text-[11px] font-normal text-slate-500 font-mono">{item.phone}</div>
+                          </td>
+                          <td className="p-2.5 text-slate-600">
+                            <div>{item.city}</div>
+                            {item.khoji !== "—" && <span className="text-[10px] text-slate-400">{item.khoji}</span>}
+                          </td>
+                          <td className="p-2.5 text-indigo-700 font-semibold">{item.calledFor}</td>
+                          <td className="p-2.5 text-slate-700 font-medium">{item.attender}</td>
+                          <td className="p-2.5 text-right">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
+                              inspectModal.type === "stage6"
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                : "bg-amber-50 text-amber-700 border border-amber-200"
+                            }`}>
+                              {item.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                );
+              })()}
+            </div>
+
+            {/* Footer */}
+            <div className="p-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
+              <span>Showing {inspectModal.items.filter(item => {
+                if (!inspectSearch.trim()) return true;
+                const q = inspectSearch.toLowerCase();
+                return (
+                  (item.name || "").toLowerCase().includes(q) ||
+                  (item.phone || "").toLowerCase().includes(q) ||
+                  (item.calledFor || "").toLowerCase().includes(q) ||
+                  (item.attender || "").toLowerCase().includes(q)
+                );
+              }).length} of {inspectModal.items.length} unique contacts</span>
+              <button
+                onClick={() => setInspectModal(null)}
+                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold text-xs transition-colors cursor-pointer"
+              >
+                Close
               </button>
             </div>
           </div>

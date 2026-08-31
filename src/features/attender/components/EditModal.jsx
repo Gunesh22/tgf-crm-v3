@@ -137,7 +137,7 @@ export const EditModal = ({
     const combinedHistory = combineContactHistories(normalized.history, attState?.history);
     normalized.history = combinedHistory;
 
-    // Fresh call event properties: STRICT BLANK STATE (No default pre-selected outcome/result)
+    // Fresh call event properties: STRICT BLANK STATE for call outcomes, BUT preserve existing follow-up
     normalized.callType = normalized.callType || "outgoing";
     normalized.callPurpose = "SALES";
     normalized.callStatus = "";
@@ -146,8 +146,15 @@ export const EditModal = ({
     normalized.queryDetails = "";
     normalized.objectionReason = "";
     normalized.remark = ""; // Clean empty note for new call
-    normalized.callbackDate = null; // Fresh follow-up schedule
-    normalized.callbackStatus = null;
+
+    // Preserve existing follow-up schedule if present on record/attenderStates
+    const existingCallbackDate = getFieldWithFallback(row, "callbackDate", activeAttenderId || attenderId || activeAttenderName || attenderName) || attState?.callbackDate || row.callbackDate || null;
+    const existingCallbackStatus = getFieldWithFallback(row, "callbackStatus", activeAttenderId || attenderId || activeAttenderName || attenderName) || attState?.callbackStatus || row.callbackStatus || (existingCallbackDate ? "pending" : null);
+    const existingCallbackTime = getFieldWithFallback(row, "callbackTime", activeAttenderId || attenderId || activeAttenderName || attenderName) || attState?.callbackTime || row.callbackTime || "";
+
+    normalized.callbackDate = existingCallbackDate;
+    normalized.callbackStatus = existingCallbackStatus;
+    normalized.callbackTime = existingCallbackTime;
 
     // Preserve MongoDB pipelineStage as Source of Truth directly from record
     normalized.pipelineStage = normalized.pipelineStage || row.pipelineStage;
@@ -1178,12 +1185,16 @@ export const EditModal = ({
     const newCallbackTime = getTimestampOrNull(targetEdited.callbackDate);
     const callbackDateChanged = oldCallbackTime !== newCallbackTime;
 
+    const oldCallbackStatus = String(savedRow.callbackStatus || "").trim();
+    const newCallbackStatus = String(targetEdited.callbackStatus || "").trim();
+    const callbackStatusChanged = oldCallbackStatus !== newCallbackStatus;
+
     const oldObjection = String(savedRow.objectionReason || "").trim();
     const newObjection = String(targetEdited.objectionReason || "").trim();
     const objectionReasonChanged = oldObjection !== newObjection;
 
     const isCallTab = activeTab === "call";
-    const isCallAttemptUpdated = isCallTab || statusChanged || purposeChanged || callStatusChanged || remarkChanged || callTypeChanged || callbackDateChanged || objectionReasonChanged;
+    const isCallAttemptUpdated = isCallTab || statusChanged || purposeChanged || callStatusChanged || remarkChanged || callTypeChanged || callbackDateChanged || callbackStatusChanged || objectionReasonChanged;
 
     console.log(`[EDIT MODAL SAVE DIAGNOSTIC] Lead: "${getLogName() || row.id}"`, {
       savedRowRemark: savedRow.remark,
@@ -1904,6 +1915,10 @@ export const EditModal = ({
               setEdited={setEdited}
               getCallbackDateStr={getCallbackDateStr}
               onShowEditHistory={() => setShowEditHistory(true)}
+              activeAttenderId={selectedAttenderId || attenderId}
+              activeAttenderName={selectedAttenderName || attenderName}
+              isAdmin={allowAttenderSelection}
+              onRefreshLead={onRefreshLead}
             />
           ) : (
             <ProfileDetailsTab

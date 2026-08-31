@@ -1,56 +1,117 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { 
   BarChart3, Users, PhoneCall, TrendingUp, Award, Filter, X, Download, 
   ArrowRight, CheckCircle2, AlertTriangle, Clock, RefreshCw, Layers, ShieldCheck, HelpCircle,
-  ChevronDown, ChevronUp, Info, UserCheck, Eye
+  ChevronDown, ChevronUp, Info, UserCheck, Eye, Search, Check
 } from "lucide-react";
 import { 
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, 
   PieChart, Pie, Cell 
 } from "recharts";
 import { 
-  parseTimestamp, renderVal, getCanonicalStatus, COLORS, getContactName, getContactPhone, getContactCity 
+  parseTimestamp, renderVal, getCanonicalStatus, classifyCallStatus, COLORS, getContactName, getContactPhone, getContactCity, getCanonicalStage, getLocalDateStr, getCanonicalPhysicalCalls, getCanonicalRegistrations 
 } from "../utils.jsx";
 import { PIPELINE_STAGES, getEffectiveStage } from "../../../utils/pipelineEngine";
 
-// Utility to convert JS date to YYYY-MM-DD local format
-const getLocalDateStr = (d) => {
-  if (!d || isNaN(d.getTime())) return "";
-  const yr = d.getFullYear();
-  const mn = String(d.getMonth() + 1).padStart(2, "0");
-  const dy = String(d.getDate()).padStart(2, "0");
-  return `${yr}-${mn}-${dy}`;
-};
+// Multi-select dropdown component
+function MultiSelect({ options, selected, onChange, placeholder, allLabel = "All" }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef(null);
 
-// Standardized stage normalization helper
-export const getCanonicalStage = (stageOrContact) => {
-  let contact = {};
-  let rawStage = "";
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
-  if (typeof stageOrContact === "string") {
-    rawStage = stageOrContact;
-  } else if (stageOrContact && typeof stageOrContact === "object") {
-    contact = stageOrContact;
-    rawStage = contact.pipelineStage || "";
-  }
+  const filtered = options.filter(o => String(o.label || "").toLowerCase().includes(search.toLowerCase()));
+  const allSelected = selected.length === 0 || selected.length === options.length;
 
-  if (rawStage && String(rawStage).trim() !== "" && rawStage !== "null" && rawStage !== "undefined") {
-    const s = String(rawStage).trim();
-    if (s === PIPELINE_STAGES.NEW_LEAD || s === "New Lead" || s === "1. New Lead") return PIPELINE_STAGES.NEW_LEAD;
-    if (s === PIPELINE_STAGES.ATTEMPTING || s === "Attempting Contact" || s === "Attempting" || s === "2. Attempting Contact") return PIPELINE_STAGES.ATTEMPTING;
-    if (s === PIPELINE_STAGES.INFO_GIVEN || s === "Information Given" || s === "Info Given" || s === "3. Information Given") return PIPELINE_STAGES.INFO_GIVEN;
-    if (s === PIPELINE_STAGES.NURTURE_INTERESTED || s === "Nurture / Interested" || s === "Interested" || s === "4. Nurture / Interested") return PIPELINE_STAGES.NURTURE_INTERESTED;
-    if (s === PIPELINE_STAGES.FUTURE_POOL || s === "Future Pool" || s === "Next Time" || s === "5. Future Pool") return PIPELINE_STAGES.FUTURE_POOL;
-    if (s === PIPELINE_STAGES.REGISTERED_WON || s === "Registered / Won" || s === "Reg.Done" || s === "6. Registered / Won" || s === "Registered") return PIPELINE_STAGES.REGISTERED_WON;
-    if (s === PIPELINE_STAGES.CLOSED_LOST || s === "Closed / Lost" || s === "Closed Lost" || s === "7. Closed / Lost" || s === "Not Interested") return PIPELINE_STAGES.CLOSED_LOST;
-    if (s === PIPELINE_STAGES.CLOSED_INVALID || s === "Closed / Invalid" || s === "Invalid") return PIPELINE_STAGES.CLOSED_INVALID;
-    if (s === "Query Desk" || s === "Query") return "Query Desk";
-    if (s === "Existing Alumni" || s === "Alumni") return "Existing Alumni";
-  }
+  const toggle = (val) => {
+    if (selected.includes(val)) {
+      onChange(selected.filter(v => v !== val));
+    } else {
+      onChange([...selected, val]);
+    }
+  };
 
-  // Fallback to getEffectiveStage for contacts lacking explicit pipelineStage
-  return getEffectiveStage(contact);
-};
+  const toggleAll = () => {
+    if (allSelected) onChange([]);
+    else onChange(options.map(o => o.value));
+  };
+
+  const label = allSelected
+    ? allLabel
+    : selected.length === 1
+      ? (options.find(o => o.value === selected[0])?.label || "1 selected")
+      : `${selected.length} selected`;
+
+  const hasFilterApplied = selected.length > 0 && selected.length < options.length;
+
+  return (
+    <div className="relative flex-1 min-w-[140px] sm:min-w-[155px] max-w-[220px]" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(p => !p)}
+        className={`flex items-center justify-between gap-2 h-9 px-3 border rounded-md text-xs font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 w-full whitespace-nowrap overflow-hidden transition-colors cursor-pointer ${
+          hasFilterApplied
+            ? "bg-indigo-50 border-indigo-200 text-indigo-700 font-semibold"
+            : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
+        }`}
+      >
+        <span className="truncate flex-1 text-left">{label}</span>
+        {hasFilterApplied && (
+          <span className="w-4 h-4 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+            {selected.length}
+          </span>
+        )}
+        <ChevronDown size={14} className={`shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""} ${hasFilterApplied ? "text-indigo-600" : "text-slate-400"}`} />
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 bg-white border border-slate-200 rounded-md shadow-lg w-full min-w-[210px] overflow-hidden right-0">
+          <div className="p-2 border-b border-slate-100 flex items-center gap-1.5">
+            <Search size={13} className="text-slate-400 shrink-0" />
+            <input
+              autoFocus
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search..."
+              className="w-full text-xs focus:outline-none bg-transparent"
+            />
+            {search && <button onClick={() => setSearch("")}><X size={12} className="text-slate-400" /></button>}
+          </div>
+          <div className="max-h-56 overflow-y-auto py-1">
+            <button
+              onClick={toggleAll}
+              className="w-full px-3 py-1.5 text-left text-xs font-semibold text-indigo-600 hover:bg-indigo-50 flex items-center gap-2"
+            >
+              <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${allSelected ? "bg-indigo-600 border-indigo-600" : "border-slate-300"}`}>
+                {allSelected && <Check size={9} className="text-white stroke-[3]" />}
+              </span>
+              {allLabel}
+            </button>
+            {filtered.map(o => {
+              const active = selected.includes(o.value);
+              return (
+                <button
+                  key={o.value}
+                  onClick={() => toggle(o.value)}
+                  className="w-full px-3 py-1.5 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                >
+                  <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${active ? "bg-indigo-600 border-indigo-600" : "border-slate-300"}`}>
+                    {active && <Check size={9} className="text-white stroke-[3]" />}
+                  </span>
+                  <span className="truncate">{o.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Approved 2-Stage Evidence-based Call Purpose Classifier
 export const getCallPurpose = (h = {}, contact = {}) => {
@@ -135,14 +196,26 @@ export const getCallPurpose = (h = {}, contact = {}) => {
 };
 
 export default function PipelineCallsTab({ callLogs = [], registrations = [], programs = [], attenders = [], settingsOptions = {} }) {
+  const todayObj = new Date();
+  const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, "0")}-${String(todayObj.getDate()).padStart(2, "0")}`;
+  const currentMonthFirstDay = `${todayStr.slice(0, 7)}-01`;
+  const currentMonthLastDay = (() => {
+    const lastDay = new Date(todayObj.getFullYear(), todayObj.getMonth() + 1, 0).getDate();
+    return `${todayStr.slice(0, 7)}-${String(lastDay).padStart(2, "0")}`;
+  })();
+
   // Top Filter States
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [dateFrom, setDateFrom] = useState(currentMonthFirstDay);
+  const [dateTo, setDateTo] = useState(currentMonthLastDay);
   const [dateMode, setDateMode] = useState("call"); // "call" or "contact"
-  const [selectedAttenderIds, setSelectedAttenderIds] = useState([]);
   const [selectedProgramIds, setSelectedProgramIds] = useState([]);
+  const [selectedAttenderIds, setSelectedAttenderIds] = useState([]);
+  const [selectedSources, setSelectedSources] = useState([]);
+  const [selectedCalledFors, setSelectedCalledFors] = useState([]);
+  const [selectedStatuses, setSelectedStatuses] = useState([]);
+  const [selectedCallTypes, setSelectedCallTypes] = useState([]);
+  const [selectedKhojiStatuses, setSelectedKhojiStatuses] = useState([]);
   const [selectedPurposes, setSelectedPurposes] = useState([]);
-  const [selectedDirections, setSelectedDirections] = useState([]);
   const [selectedPipelineStages, setSelectedPipelineStages] = useState([]);
   const [selectedOutcomes, setSelectedOutcomes] = useState([]);
 
@@ -250,14 +323,22 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
         if (!match) return false;
       }
 
-      if (selectedPurposes.length > 0) {
-        if (!selectedPurposes.includes(ev.purpose)) return false;
+      if (selectedSources.length > 0) {
+        if (!selectedSources.includes(ev.source)) return false;
       }
 
-      if (selectedDirections.length > 0) {
-        const isInc = ev.callType.startsWith("in");
-        if (selectedDirections.includes("incoming") && !isInc) return false;
-        if (selectedDirections.includes("outgoing") && isInc) return false;
+      if (selectedCalledFors.length > 0) {
+        if (!selectedCalledFors.includes(ev.calledFor)) return false;
+      }
+
+      if (selectedStatuses.length > 0) {
+        if (!selectedStatuses.includes(ev.status)) return false;
+      }
+
+      if (selectedCallTypes.length > 0) {
+        const isInc = (ev.callType || "").startsWith("in");
+        if (selectedCallTypes.includes("incoming") && !isInc) return false;
+        if (selectedCallTypes.includes("outgoing") && isInc) return false;
       }
 
       if (selectedPipelineStages.length > 0) {
@@ -271,7 +352,7 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
 
       return true;
     });
-  }, [allCallEvents, dateFrom, dateTo, dateMode, selectedAttenderIds, selectedProgramIds, selectedPurposes, selectedDirections, selectedPipelineStages, selectedOutcomes, programs]);
+  }, [allCallEvents, dateFrom, dateTo, dateMode, selectedAttenderIds, selectedProgramIds, selectedSources, selectedCalledFors, selectedStatuses, selectedCallTypes, selectedPipelineStages, selectedOutcomes, programs]);
 
   // 3. FILTERED CONTACTS
   const filteredContacts = useMemo(() => {
@@ -288,6 +369,34 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
           return c.programId === pId || (c.calledFor || "").toLowerCase().includes(pName);
         });
         if (!match) return false;
+      }
+
+      if (selectedSources.length > 0) {
+        const srcKey = Object.keys(c).find(k => ["source", "sourse", "source of information", "source of informiton"].includes(k.toLowerCase()));
+        const srcVal = srcKey ? String(c[srcKey] || "").trim() : "";
+        if (!selectedSources.includes(srcVal)) return false;
+      }
+
+      if (selectedCalledFors.length > 0) {
+        const cfKey = Object.keys(c).find(k => ["calledfor", "called for", "programname"].includes(k.toLowerCase()));
+        const cfVal = cfKey ? String(c[cfKey] || "").trim() : "";
+        if (!selectedCalledFors.includes(cfVal)) return false;
+      }
+
+      if (selectedStatuses.length > 0) {
+        if (!selectedStatuses.includes(String(c.status || "").trim())) return false;
+      }
+
+      if (selectedCallTypes.length > 0) {
+        const cType = (c.callType || "outgoing").toLowerCase();
+        const isInc = cType.startsWith("in");
+        if (selectedCallTypes.includes("incoming") && !isInc) return false;
+        if (selectedCallTypes.includes("outgoing") && isInc) return false;
+      }
+
+      if (selectedKhojiStatuses.length > 0) {
+        const khojiVal = String(c.Khoji || c.khoji || c["Khoji Type"] || "No").trim();
+        if (!selectedKhojiStatuses.includes(khojiVal)) return false;
       }
 
       if (selectedPipelineStages.length > 0) {
@@ -308,44 +417,24 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
 
       return true;
     });
-  }, [callLogs, selectedAttenderIds, selectedProgramIds, selectedPipelineStages, dateFrom, dateTo, dateMode, programs]);
+  }, [callLogs, selectedAttenderIds, selectedProgramIds, selectedSources, selectedCalledFors, selectedStatuses, selectedCallTypes, selectedKhojiStatuses, selectedPipelineStages, dateFrom, dateTo, dateMode, programs]);
 
-  // 4. FILTERED REGISTRATIONS
+  // 4. FILTERED REGISTRATIONS (CANONICAL SOURCE OF TRUTH)
   const filteredRegistrations = useMemo(() => {
-    return (registrations || []).filter(r => {
-      if (dateFrom || dateTo) {
-        const rDate = parseTimestamp(r.registeredAt || r.createdAt || r.date);
-        if (rDate) {
-          const dStr = getLocalDateStr(rDate);
-          if (dateFrom && dStr < dateFrom) return false;
-          if (dateTo && dStr > dateTo) return false;
-        }
-      }
-
-      if (selectedAttenderIds.length > 0) {
-        if (!selectedAttenderIds.includes(r.attenderId || r.assignedTo)) return false;
-      }
-
-      if (selectedProgramIds.length > 0) {
-        const match = selectedProgramIds.some(pId => {
-          const progObj = programs.find(p => p.id === pId);
-          const pName = progObj ? progObj.name.toLowerCase() : pId.toLowerCase();
-          return r.programId === pId || (r.calledForKey || r.programName || "").toLowerCase().includes(pName);
-        });
-        if (!match) return false;
-      }
-
-      return true;
+    return getCanonicalRegistrations(registrations, callLogs, {
+      startDate: dateFrom,
+      endDate: dateTo,
+      selectedAttenderIds,
+      selectedProgramIds,
+      selectedSources,
+      selectedCalledFors
     });
-  }, [registrations, dateFrom, dateTo, selectedAttenderIds, selectedProgramIds, programs]);
+  }, [registrations, callLogs, dateFrom, dateTo, selectedAttenderIds, selectedProgramIds, selectedSources, selectedCalledFors]);
 
   // METRICS
   const totalCallsCount = filteredEvents.length;
   const connectedCallsCount = useMemo(() => {
-    return filteredEvents.filter(ev => {
-      const s = getCanonicalStatus(ev.status);
-      return s !== "NA" && s !== "Busy" && s !== "Call Cut" && s !== "switched off" && s !== "Invalid No" && s !== "No Network" && s !== "wrong no.";
-    }).length;
+    return filteredEvents.filter(ev => classifyCallStatus(ev.status) === "CONNECTED").length;
   }, [filteredEvents]);
 
   const connectedRate = totalCallsCount > 0 ? ((connectedCallsCount / totalCallsCount) * 100).toFixed(1) : "0.0";
@@ -457,7 +546,7 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
   // Attender Performance Table
   const attenderPerformance = useMemo(() => {
     const map = {};
-    const EXCLUDED_ATTENDER_NAMES = ["admin", "super admin", "administrator", "admin test", "test 2", "test2", "test"];
+    const EXCLUDED_ATTENDER_NAMES = ["admin", "super admin", "administrator", "agent"];
 
     // First initialize map for ALL known non-admin attenders
     (attenders || []).forEach(a => {
@@ -497,10 +586,10 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
       item.totalCalls++;
       item.contactIds.add(ev.contactId);
 
-      const s = getCanonicalStatus(ev.status);
-      if (s !== "NA" && s !== "Busy" && s !== "Call Cut" && s !== "switched off" && s !== "Invalid No" && s !== "No Network" && s !== "wrong no.") {
+      if (classifyCallStatus(ev.status) === "CONNECTED") {
         item.connectedCalls++;
       }
+      const s = getCanonicalStatus(ev.status);
       if (s === "Interested") item.interestedCalls++;
       if (s === "Reg.Done") item.regDoneCalls++;
     });
@@ -547,8 +636,7 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
       item.calls++;
       item.contacts.add(ev.contactId);
 
-      const s = getCanonicalStatus(ev.status);
-      if (s !== "NA" && s !== "Busy" && s !== "Call Cut" && s !== "switched off" && s !== "Invalid No" && s !== "No Network" && s !== "wrong no.") {
+      if (classifyCallStatus(ev.status) === "CONNECTED") {
         item.connected++;
       }
     });
@@ -628,15 +716,87 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
     document.body.removeChild(link);
   };
 
-  const activeFilterCount = [dateFrom, dateTo, selectedAttenderIds.length, selectedProgramIds.length, selectedPurposes.length, selectedDirections.length, selectedPipelineStages.length, selectedOutcomes.length].filter(Boolean).length;
+  // Filter Options Memos
+  const programOptions = useMemo(() => {
+    return (programs || []).map(p => ({ value: p.id, label: p.name }));
+  }, [programs]);
+
+  const attenderOptions = useMemo(() => {
+    return (attenders || [])
+      .filter(a => a.role !== 'admin' && !["admin", "super admin", "administrator", "admin test", "test 2", "test2", "test"].includes((a.name || "").toLowerCase().trim()))
+      .map(a => ({ value: a.id || a._id, label: a.name }));
+  }, [attenders]);
+
+  const sourceOptions = useMemo(() => {
+    const sources = new Set(settingsOptions?.sourceOptions || []);
+    (callLogs || []).forEach(log => {
+      const sourceKey = Object.keys(log).find(k => ["source", "sourse", "source of information", "source of informiton"].includes(k.toLowerCase()));
+      const val = sourceKey ? String(log[sourceKey] || "").trim() : "";
+      if (val) sources.add(val);
+    });
+    return Array.from(sources).sort().map(s => ({ value: s, label: s }));
+  }, [callLogs, settingsOptions]);
+
+  const calledForOptions = useMemo(() => {
+    const values = new Set();
+    (settingsOptions?.calledForOptions || []).forEach(opt => {
+      if (opt && typeof opt === "object" && opt.name) values.add(opt.name);
+      else if (typeof opt === "string") values.add(opt);
+    });
+    (callLogs || []).forEach(log => {
+      const cfKey = Object.keys(log).find(k => ["calledfor", "called for", "programname"].includes(k.toLowerCase()));
+      const val = cfKey ? String(log[cfKey] || "").trim() : "";
+      if (val) values.add(val);
+    });
+    return Array.from(values).sort().map(v => ({ value: v, label: v }));
+  }, [callLogs, settingsOptions]);
+
+  const statusOptions = useMemo(() => {
+    const statuses = new Set(settingsOptions?.statusOptions || []);
+    (callLogs || []).forEach(log => {
+      if (log.status) statuses.add(String(log.status).trim());
+      if (Array.isArray(log.history)) {
+        log.history.forEach(h => {
+          if (h.status) statuses.add(String(h.status).trim());
+        });
+      }
+    });
+    return Array.from(statuses).sort().map(s => ({ value: s, label: s }));
+  }, [callLogs, settingsOptions]);
+
+  const callTypeOptions = useMemo(() => [
+    { value: "incoming", label: "Incoming" },
+    { value: "outgoing", label: "Outgoing" }
+  ], []);
+
+  const khojiStatusOptions = useMemo(() => [
+    { value: "Yes", label: "Yes (Khoji)" },
+    { value: "No", label: "No (New)" },
+    { value: "Dew drop khoji", label: "Dew drop khoji" }
+  ], []);
+
+  const activeFilters = [
+    selectedProgramIds.length > 0 && selectedProgramIds.length < programOptions.length,
+    selectedAttenderIds.length > 0 && selectedAttenderIds.length < attenderOptions.length,
+    selectedSources.length > 0 && selectedSources.length < sourceOptions.length,
+    selectedCalledFors.length > 0 && selectedCalledFors.length < calledForOptions.length,
+    selectedStatuses.length > 0 && selectedStatuses.length < statusOptions.length,
+    selectedCallTypes.length > 0 && selectedCallTypes.length < callTypeOptions.length,
+    selectedKhojiStatuses.length > 0 && selectedKhojiStatuses.length < khojiStatusOptions.length,
+    (dateFrom && dateFrom !== currentMonthFirstDay) || (dateTo && dateTo !== currentMonthLastDay)
+  ].filter(Boolean).length;
 
   const resetFilters = () => {
-    setDateFrom("");
-    setDateTo("");
-    setSelectedAttenderIds([]);
+    setDateFrom(currentMonthFirstDay);
+    setDateTo(currentMonthLastDay);
     setSelectedProgramIds([]);
+    setSelectedAttenderIds([]);
+    setSelectedSources([]);
+    setSelectedCalledFors([]);
+    setSelectedStatuses([]);
+    setSelectedCallTypes([]);
+    setSelectedKhojiStatuses([]);
     setSelectedPurposes([]);
-    setSelectedDirections([]);
     setSelectedPipelineStages([]);
     setSelectedOutcomes([]);
   };
@@ -671,83 +831,148 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
         </div>
       </div>
 
-      {/* FILTER BAR */}
-      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex flex-wrap items-center gap-2 text-xs">
-        <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-md px-2 h-8">
-          <span className="text-[11px] font-semibold text-slate-500">Date:</span>
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="bg-transparent text-xs font-medium text-slate-700 focus:outline-none w-24"
+      {/* FILTER TOOLBAR */}
+      <div className="bg-white border border-slate-200 rounded-lg p-3.5 shadow-2xs space-y-3">
+        {/* Dropdowns grid */}
+        <div className="flex flex-wrap items-center gap-2">
+          <MultiSelect
+            options={programOptions}
+            selected={selectedProgramIds}
+            onChange={setSelectedProgramIds}
+            placeholder="Tags"
+            allLabel="All Tags"
           />
-          <span className="text-slate-400 text-[10px]">→</span>
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="bg-transparent text-xs font-medium text-slate-700 focus:outline-none w-24"
+
+          <MultiSelect
+            options={attenderOptions}
+            selected={selectedAttenderIds}
+            onChange={setSelectedAttenderIds}
+            placeholder="Attenders"
+            allLabel="All Attenders"
+          />
+
+          <MultiSelect
+            options={sourceOptions}
+            selected={selectedSources}
+            onChange={setSelectedSources}
+            placeholder="Source"
+            allLabel="All Sources"
+          />
+
+          <MultiSelect
+            options={calledForOptions}
+            selected={selectedCalledFors}
+            onChange={setSelectedCalledFors}
+            placeholder="Called For"
+            allLabel="All Called For"
+          />
+
+          <MultiSelect
+            options={statusOptions}
+            selected={selectedStatuses}
+            onChange={setSelectedStatuses}
+            placeholder="Status"
+            allLabel="All Statuses"
+          />
+
+          <MultiSelect
+            options={callTypeOptions}
+            selected={selectedCallTypes}
+            onChange={setSelectedCallTypes}
+            placeholder="Call Type"
+            allLabel="All Call Types"
+          />
+
+          <MultiSelect
+            options={khojiStatusOptions}
+            selected={selectedKhojiStatuses}
+            onChange={setSelectedKhojiStatuses}
+            placeholder="Khoji Status"
+            allLabel="All Khoji Statuses"
           />
         </div>
 
-        {/* Attender Filter */}
-        <select
-          value={selectedAttenderIds[0] || ""}
-          onChange={(e) => setSelectedAttenderIds(e.target.value ? [e.target.value] : [])}
-          className="h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
-        >
-          <option value="">Attender: All</option>
-          {attenders
-            .filter(a => a.role !== 'admin' && !["admin", "super admin", "administrator", "admin test", "test 2", "test2", "test"].includes((a.name || "").toLowerCase().trim()))
-            .map(a => (
-              <option key={a.id || a._id} value={a.id || a._id}>{a.name}</option>
-            ))}
-        </select>
+        {/* Date range toolbar & Actions */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mr-1">Date Range:</span>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={e => setDateFrom(e.target.value)}
+              className="h-8 px-2.5 bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+            <span className="text-slate-400 text-xs font-medium">→</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={e => setDateTo(e.target.value)}
+              className="h-8 px-2.5 bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
 
-        {/* Purpose Filter */}
-        <select
-          value={selectedPurposes[0] || ""}
-          onChange={(e) => setSelectedPurposes(e.target.value ? [e.target.value] : [])}
-          className="h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
-        >
-          <option value="">Purpose: All</option>
-          <option value="sales">Sales</option>
-          <option value="query">Query</option>
-          <option value="reminder">Reminder</option>
-          <option value="unknown_legacy">Unknown / Legacy</option>
-        </select>
+            {(() => {
+              const isTodaySelected = dateFrom === todayStr && dateTo === todayStr;
 
-        {/* Direction Filter */}
-        <select
-          value={selectedDirections[0] || ""}
-          onChange={(e) => setSelectedDirections(e.target.value ? [e.target.value] : [])}
-          className="h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
-        >
-          <option value="">Direction: All</option>
-          <option value="outgoing">Outgoing</option>
-          <option value="incoming">Incoming</option>
-        </select>
+              const yr = todayObj.getFullYear();
+              const mn = todayObj.getMonth();
+              const firstDayStr = `${yr}-${String(mn + 1).padStart(2, "0")}-01`;
+              const lastDay = new Date(yr, mn + 1, 0).getDate();
+              const lastDayStr = `${yr}-${String(mn + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+              const isThisMonthSelected = dateFrom === firstDayStr && dateTo === lastDayStr;
 
-        {/* Stage Filter */}
-        <select
-          value={selectedPipelineStages[0] || ""}
-          onChange={(e) => setSelectedPipelineStages(e.target.value ? [e.target.value] : [])}
-          className="h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer max-w-[150px] truncate"
-        >
-          <option value="">Stage: All</option>
-          {Object.values(PIPELINE_STAGES).map(st => (
-            <option key={st} value={st}>{st}</option>
-          ))}
-        </select>
+              const isAllTimeSelected = !dateFrom && !dateTo;
 
-        {activeFilterCount > 0 && (
-          <button
-            onClick={resetFilters}
-            className="h-8 px-2.5 flex items-center gap-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-md text-xs font-semibold transition-colors cursor-pointer ml-auto"
-          >
-            <X size={12} /> Reset ({activeFilterCount})
-          </button>
-        )}
+              return (
+                <div className="flex items-center gap-1 ml-1">
+                  <button
+                    onClick={() => { setDateFrom(todayStr); setDateTo(todayStr); }}
+                    className={`h-8 px-2.5 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
+                      isTodaySelected
+                        ? "bg-indigo-600 border-indigo-600 text-white"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                    }`}
+                  >
+                    Today
+                  </button>
+                  <button
+                    onClick={() => { setDateFrom(firstDayStr); setDateTo(lastDayStr); }}
+                    className={`h-8 px-2.5 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
+                      isThisMonthSelected
+                        ? "bg-indigo-600 border-indigo-600 text-white"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                    }`}
+                  >
+                    This Month
+                  </button>
+                  <button
+                    onClick={() => { setDateFrom(""); setDateTo(""); }}
+                    className={`h-8 px-2.5 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
+                      isAllTimeSelected
+                        ? "bg-indigo-600 border-indigo-600 text-white"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                    }`}
+                  >
+                    All Time
+                  </button>
+                </div>
+              );
+            })()}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500 font-medium">{filteredEvents.length} activities ({activeFunnelPeopleCount} contacts)</span>
+
+            {activeFilters > 0 && (
+              <button
+                onClick={resetFilters}
+                className="flex items-center gap-1 h-8 px-2.5 bg-rose-50 text-rose-600 border border-rose-200 rounded-md text-xs font-medium hover:bg-rose-100 transition-colors cursor-pointer"
+              >
+                <X size={12} /> Clear filters
+                <span className="bg-rose-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold">{activeFilters}</span>
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* 1. EXECUTIVE SUMMARY — 4 KPI CARDS */}
@@ -771,7 +996,7 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs hover:border-purple-200 transition-colors">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">REGISTRATIONS</span>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">CONFIRMED PROGRAM REGISTRATIONS</span>
           <p className="text-2xl font-black text-purple-600 mt-0.5">{registrationsCount.toLocaleString()}</p>
           <span className="text-[11px] font-medium text-slate-500 block mt-0.5">Registration records</span>
         </div>
@@ -784,7 +1009,7 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
             <span>🎯</span> PIPELINE OVERVIEW
           </h3>
           <span className="text-xs font-semibold text-slate-500">
-            Total Active Pipeline: <strong className="text-slate-900">{activeFunnelPeopleCount - (pipelineStageCounts["Unknown / Legacy"] || 0)}</strong>
+            Total Pipeline Contacts: <strong className="text-slate-900">{activeFunnelPeopleCount}</strong>
           </span>
         </div>
 
@@ -817,8 +1042,8 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
           })}
         </div>
 
-        {/* Auxiliary & Unknown Stages Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-1">
+        {/* Auxiliary & Legacy Stages Row */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 pt-1">
           <div
             onClick={() => handleStageClick("Closed / Lost", PIPELINE_STAGES.CLOSED_LOST)}
             className="p-2.5 bg-rose-50/50 border border-rose-200 rounded-lg flex items-center justify-between cursor-pointer hover:bg-rose-100/50 transition-colors"
@@ -836,11 +1061,27 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
           </div>
 
           <div
+            onClick={() => handleStageClick("Query Desk (Legacy)", "Query Desk")}
+            className="p-2.5 bg-cyan-50/50 border border-cyan-200 rounded-lg flex items-center justify-between cursor-pointer hover:bg-cyan-100/50 transition-colors"
+          >
+            <span className="text-xs font-bold text-cyan-900">Query Desk</span>
+            <span className="text-lg font-black text-cyan-900">{pipelineStageCounts["Query Desk"] || 0}</span>
+          </div>
+
+          <div
+            onClick={() => handleStageClick("Existing Alumni (Legacy)", "Existing Alumni")}
+            className="p-2.5 bg-teal-50/50 border border-teal-200 rounded-lg flex items-center justify-between cursor-pointer hover:bg-teal-100/50 transition-colors"
+          >
+            <span className="text-xs font-bold text-teal-900">Existing Alumni</span>
+            <span className="text-lg font-black text-teal-900">{pipelineStageCounts["Existing Alumni"] || 0}</span>
+          </div>
+
+          <div
             onClick={() => handleStageClick("Unknown / Legacy", "Unknown / Legacy")}
             className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between cursor-pointer hover:bg-slate-100 transition-colors"
           >
             <span className="text-xs font-bold text-slate-800 flex items-center gap-1">
-              <Info size={13} className="text-slate-400" /> Unknown / Legacy
+              <Info size={13} className="text-slate-400" /> Legacy / Unmapped
             </span>
             <span className="text-lg font-black text-indigo-600">{pipelineStageCounts["Unknown / Legacy"] || 0}</span>
           </div>

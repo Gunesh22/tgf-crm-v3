@@ -3,6 +3,7 @@ import {
   BarChart3, FolderOpen, Upload, Users, ClipboardCheck, FileText, Settings, FileSpreadsheet, TrendingUp
 } from "lucide-react";
 import { isKhojiField } from "../../lib/khojiHelper";
+import { PIPELINE_STAGES, getEffectiveStage } from "../../utils/pipelineEngine";
 
 export function parseTimestamp(t) {
   if (!t) return null;
@@ -149,6 +150,369 @@ export const getContactKhoji = (log, attempt) => {
   return (khojiKey && log[khojiKey]) ? String(log[khojiKey]).trim() : "";
 };
 
+export const getCanonicalStage = (stageOrContact) => {
+  let contact = {};
+  let rawStage = "";
+
+  if (typeof stageOrContact === "string") {
+    rawStage = stageOrContact;
+  } else if (stageOrContact && typeof stageOrContact === "object") {
+    contact = stageOrContact;
+    rawStage = contact.pipelineStage || "";
+  }
+
+  if (rawStage && String(rawStage).trim() !== "" && rawStage !== "null" && rawStage !== "undefined") {
+    const s = String(rawStage).trim();
+    if (s === PIPELINE_STAGES.NEW_LEAD || s === "New Lead" || s === "1. New Lead") return PIPELINE_STAGES.NEW_LEAD;
+    if (s === PIPELINE_STAGES.ATTEMPTING || s === "Attempting Contact" || s === "Attempting" || s === "2. Attempting Contact") return PIPELINE_STAGES.ATTEMPTING;
+    if (s === PIPELINE_STAGES.INFO_GIVEN || s === "Information Given" || s === "Info Given" || s === "3. Information Given") return PIPELINE_STAGES.INFO_GIVEN;
+    if (s === PIPELINE_STAGES.NURTURE_INTERESTED || s === "Nurture / Interested" || s === "Interested" || s === "4. Nurture / Interested") return PIPELINE_STAGES.NURTURE_INTERESTED;
+    if (s === PIPELINE_STAGES.FUTURE_POOL || s === "Future Pool" || s === "Next Time" || s === "5. Future Pool") return PIPELINE_STAGES.FUTURE_POOL;
+    if (s === PIPELINE_STAGES.REGISTERED_WON || s === "Registered / Won" || s === "Reg.Done" || s === "6. Registered / Won" || s === "Registered") return PIPELINE_STAGES.REGISTERED_WON;
+    if (s === PIPELINE_STAGES.CLOSED_LOST || s === "Closed / Lost" || s === "Closed Lost" || s === "7. Closed / Lost" || s === "Not Interested") return PIPELINE_STAGES.CLOSED_LOST;
+    if (s === PIPELINE_STAGES.CLOSED_INVALID || s === "Closed / Invalid" || s === "Invalid") return PIPELINE_STAGES.CLOSED_INVALID;
+    if (s === "Query Desk" || s === "Query") return "Query Desk";
+    if (s === "Existing Alumni" || s === "Alumni") return "Existing Alumni";
+  }
+
+  return getEffectiveStage(contact);
+};
+
+export function isStageNurtureInterested(stageOrContact) {
+  const stage = getCanonicalStage(stageOrContact);
+  return stage === PIPELINE_STAGES.NURTURE_INTERESTED;
+}
+
+export function isStageRegisteredWon(stageOrContact) {
+  const stage = getCanonicalStage(stageOrContact);
+  return stage === PIPELINE_STAGES.REGISTERED_WON;
+}
+
+export function countUniqueContacts(contacts = [], filterFn = null) {
+  const uniqueIds = new Set();
+  (contacts || []).forEach(c => {
+    const id = c.id || c._id;
+    if (!id) return;
+    if (!filterFn || filterFn(c)) {
+      uniqueIds.add(String(id));
+    }
+  });
+  return uniqueIds.size;
+}
+
+/**
+ * Canonical function for Program Registrations.
+ * The ONLY source of truth for Program Registrations is the `registrations` collection
+ * (or fallback deduplicated contact + calledForKey entries).
+ * Identity: (contactId + calledForKey).
+ */
+export function getCanonicalRegistrations(registrations = [], contacts = [], filters = {}) {
+  const {
+    startDate,
+    endDate,
+    selectedAttenderIds = [],
+    selectedProgramIds = [],
+    selectedSources = [],
+    selectedCalledFors = [],
+  } = filters;
+
+  let startMs = null;
+  let endMs = null;
+  if (startDate) {
+    const s = parseLocalDateBoundaries(startDate, false);
+    if (s && !isNaN(s.getTime())) startMs = s.getTime();
+  }
+  if (endDate) {
+    const e = parseLocalDateBoundaries(endDate, true);
+    if (e && !isNaN(e.getTime())) endMs = e.getTime();
+  }
+
+  const seenRegKeys = new Set();
+  const result = [];
+
+  const inDateRange = (ts) => {
+    if (!ts) return true;
+    const parsed = parseTimestamp(ts);
+    if (!parsed || isNaN(parsed.getTime())) return true;
+    const ms = parsed.getTime();
+    if (startMs !== null && ms < startMs) return false;
+    if (endMs !== null && ms > endMs) return false;
+    return true;
+  };
+
+  // 1. Process explicit registrations collection records first
+  (registrations || []).forEach(reg => {
+    if (!reg || reg._deleted) return;
+    const contactId = String(reg.contactId || reg.leadId || reg.contact_id || "").trim();
+    const calledForKey = String(reg.calledForKey || reg.programKey || reg.calledFor || "").trim().toLowerCase();
+    if (!contactId || !calledForKey) return;
+
+    const regKey = `${contactId}_${calledForKey}`;
+    if (seenRegKeys.has(regKey)) return;
+
+    const regDate = reg.registeredAt || reg.createdAt || reg.timestamp || reg.date;
+    if (!inDateRange(regDate)) return;
+
+    seenRegKeys.add(regKey);
+    result.push({
+      id: reg.id || reg._id || regKey,
+      contactId,
+      calledForKey,
+      contactName: renderVal(reg.contactName || reg.name || reg.Name, "Unknown"),
+      name: renderVal(reg.contactName || reg.name || reg.Name, "Unknown"),
+      contactPhone: renderVal(reg.contactPhone || reg.phone || reg.Phone, "—"),
+      phone: renderVal(reg.contactPhone || reg.phone || reg.Phone, "—"),
+      contactCity: renderVal(reg.city || reg.City, "—"),
+      city: renderVal(reg.city || reg.City, "—"),
+      khoji: renderVal(reg.khoji || reg.Khoji, "—"),
+      calledFor: renderVal(reg.calledFor || reg.programName, calledForKey),
+      programName: renderVal(reg.calledFor || reg.programName, calledForKey),
+      attenderName: renderVal(reg.attenderName || reg.assignedTo, "Unassigned"),
+      attender: renderVal(reg.attenderName || reg.assignedTo, "Unassigned"),
+      source: renderVal(reg.source || reg.Source, "—"),
+      status: "Reg.Done",
+      stage: "6. Registered / Won",
+      registeredAt: regDate,
+      timestamp: regDate,
+      createdAt: regDate,
+      lastCalledAt: regDate,
+      feedback: renderVal(reg.feedback || reg.userFeedback, "—"),
+      remark: renderVal(reg.remark || reg.Remark, "—"),
+      tags: reg.tags || []
+    });
+  });
+
+  return result;
+}
+
+/**
+ * Canonical Registered People (Unique contactId with at least 1 registration).
+ */
+export function getCanonicalRegisteredPeople(registrations = [], contacts = [], filters = {}) {
+  const regList = getCanonicalRegistrations(registrations, contacts, filters);
+  const seenContacts = new Set();
+  const people = [];
+
+  regList.forEach(reg => {
+    if (!seenContacts.has(reg.contactId)) {
+      seenContacts.add(reg.contactId);
+      people.push(reg);
+    }
+  });
+
+  return people;
+}
+
+/**
+ * Canonical Stage 6 People (Unique contacts currently in Stage 6).
+ */
+export function getCanonicalStage6People(contacts = [], filters = {}) {
+  const {
+    startDate,
+    endDate
+  } = filters;
+
+  let startMs = null;
+  let endMs = null;
+  if (startDate) {
+    const s = parseLocalDateBoundaries(startDate, false);
+    if (s && !isNaN(s.getTime())) startMs = s.getTime();
+  }
+  if (endDate) {
+    const e = parseLocalDateBoundaries(endDate, true);
+    if (e && !isNaN(e.getTime())) endMs = e.getTime();
+  }
+
+  const seen = new Set();
+  const people = [];
+
+  (contacts || []).forEach(c => {
+    if (!c || c._deleted) return;
+    if (!isStageRegisteredWon(c)) return;
+
+    const contactId = String(c.id || c._id || c.Phone || c.Name || "").trim();
+    if (!contactId || seen.has(contactId)) return;
+
+    const cDate = c.updatedAt || c.lastCalledAt || c.createdAt;
+    if (cDate) {
+      const parsed = parseTimestamp(cDate);
+      if (parsed && !isNaN(parsed.getTime())) {
+        const ms = parsed.getTime();
+        if (startMs !== null && ms < startMs) return;
+        if (endMs !== null && ms > endMs) return;
+      }
+    }
+
+    seen.add(contactId);
+    people.push({
+      id: contactId,
+      contactId,
+      name: getContactName(c),
+      phone: getContactPhone(c),
+      city: getContactCity(c),
+      khoji: getContactKhoji(c),
+      calledFor: renderVal(c.calledFor || c.programName, "—"),
+      attender: renderVal(c.attenderName || c.assignedTo, "Unassigned"),
+      status: renderVal(c.status, "Reg.Done"),
+      stage: c.pipelineStage || "6. Registered / Won",
+      updatedAt: cDate
+    });
+  });
+
+  return people;
+}
+
+function getContactValue(c, keysList) {
+  if (!c || typeof c !== "object") return "";
+  const matchingKeys = Object.keys(c).filter(k => keysList.includes(k.toLowerCase()));
+  for (const k of matchingKeys) {
+    const val = String(c[k] || "").trim();
+    if (val) return val;
+  }
+  return "";
+}
+
+export function getLocalDateStr(d = new Date()) {
+  if (!d) return "";
+  const dateObj = d instanceof Date ? d : parseTimestamp(d) || new Date(d);
+  if (!dateObj || isNaN(dateObj.getTime())) return "";
+  const yr = dateObj.getFullYear();
+  const mn = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const dy = String(dateObj.getDate()).padStart(2, "0");
+  return `${yr}-${mn}-${dy}`;
+}
+
+export function parseLocalDateBoundaries(dateStr, isEnd = false) {
+  if (!dateStr || typeof dateStr !== "string") return null;
+  const parts = dateStr.split("-").map(p => parseInt(p, 10));
+  if (parts.length !== 3 || parts.some(isNaN)) return null;
+  let yr, mn, dy;
+  if (parts[0] > 1000) {
+    [yr, mn, dy] = parts;
+  } else {
+    [dy, mn, yr] = parts;
+  }
+  if (isEnd) {
+    return new Date(yr, mn - 1, dy, 23, 59, 59, 999);
+  } else {
+    return new Date(yr, mn - 1, dy, 0, 0, 0, 0);
+  }
+}
+
+export function getCanonicalPhysicalCalls(contacts = [], filters = {}) {
+  const {
+    startDate,
+    endDate,
+    selectedAttenderIds = [],
+    selectedProgramIds = [],
+    selectedSources = [],
+    selectedCalledFors = [],
+    selectedStatuses = [],
+    selectedCallTypes = [],
+    selectedKhojiStatuses = []
+  } = filters;
+
+  let startMs = null;
+  let endMs = null;
+  if (startDate) {
+    const s = parseLocalDateBoundaries(startDate, false);
+    if (s && !isNaN(s.getTime())) {
+      startMs = s.getTime();
+    }
+  }
+  if (endDate) {
+    const e = parseLocalDateBoundaries(endDate, true);
+    if (e && !isNaN(e.getTime())) {
+      endMs = e.getTime();
+    }
+  }
+
+  const physicalCalls = [];
+  const seenCallIds = new Set();
+
+  (contacts || []).forEach(c => {
+    if (!c || c._deleted) return;
+
+    if (selectedProgramIds.length > 0) {
+      const contactTags = Array.isArray(c.tags) ? c.tags : [];
+      const matchesProgram = selectedProgramIds.includes(c.programId) || contactTags.some(t => selectedProgramIds.includes(t));
+      if (!matchesProgram) return;
+    }
+
+    const sourceVal = c.source || getContactValue(c, ["source", "sourse", "source of information", "source of informiton"]);
+    if (selectedSources.length > 0 && !selectedSources.includes(sourceVal)) return;
+
+    const calledForVal = c.calledFor || getContactValue(c, ["called for", "called_for", "calledfor"]);
+    const logCalledFors = String(calledForVal).split(",").map(x => x.trim()).filter(Boolean);
+    if (selectedCalledFors.length > 0 && !logCalledFors.some(cf => selectedCalledFors.includes(cf))) return;
+
+    const khojiVal = getContactKhoji(c);
+    if (selectedKhojiStatuses.length > 0 && !selectedKhojiStatuses.includes(khojiVal)) return;
+
+    if (Array.isArray(c.history)) {
+      c.history.forEach((h, idx) => {
+        const callId = h.callId || h.id || `legacy_${c._id}_${idx}`;
+        if (seenCallIds.has(callId)) return;
+
+        const attId = h.attenderId || c.attenderId || "legacy";
+        if (selectedAttenderIds.length > 0 && !selectedAttenderIds.includes(attId)) return;
+
+        const ts = parseTimestamp(h.timestamp || h.createdAt || h.date);
+        if (!ts) return;
+        const timeMs = ts.getTime();
+        if (startMs !== null && timeMs < startMs) return;
+        if (endMs !== null && timeMs > endMs) return;
+
+        const status = getCanonicalStatus(h.status || "Pending");
+        if (selectedStatuses.length > 0 && !selectedStatuses.includes(status)) return;
+
+        const callType = (h.callType || h.callDirection || "outgoing").toLowerCase();
+        if (selectedCallTypes.length > 0) {
+          const matchesType = selectedCallTypes.some(t => callType.startsWith(t.toLowerCase()));
+          if (!matchesType) return;
+        }
+
+        seenCallIds.add(callId);
+
+        physicalCalls.push({
+          callId,
+          contactId: String(c._id || c.id),
+          contactName: getContactName(c),
+          contactPhone: getContactPhone(c),
+          attenderId: attId,
+          attenderName: h.attenderName || c.attenderName || "Unknown",
+          status,
+          remark: h.remark || "",
+          timestamp: ts,
+          timeMs,
+          callType,
+          calledFor: h.calledFor || calledForVal,
+          source: h.source || sourceVal,
+          isHistory: true
+        });
+      });
+    }
+  });
+
+  return physicalCalls;
+}
+
+export function getConnectedCalls(calls = []) {
+  return (calls || []).filter(c => classifyCallStatus(c.status) === "CONNECTED");
+}
+
+export function getNotConnectedCalls(calls = []) {
+  return (calls || []).filter(c => classifyCallStatus(c.status) === "NOT_CONNECTED");
+}
+
+export function getIncomingCalls(calls = []) {
+  return (calls || []).filter(c => String(c.callType || "").toLowerCase().startsWith("incoming"));
+}
+
+export function getOutgoingCalls(calls = []) {
+  return (calls || []).filter(c => String(c.callType || "").toLowerCase().startsWith("outgoing"));
+}
+
 export const COLORS = ["#3b82f6", "#10b981", "#ef4444", "#f59e0b", "#8b5cf6", "#ec4899", "#14b8a6"];
 
 export const TAB_ITEMS = [
@@ -165,6 +529,50 @@ export const TAB_ITEMS = [
 
 export const CONNECTED_STATUSES = ["Info given", "Interested", "Reg.Done", "reminder", "Query", "Already Reg.d", "Next time", "Shivir done", "Not possible", "Pending", "Not interested", "Not Attended", "Call Log Added"];
 export const NOT_CONNECTED_STATUSES = ["NA", "Busy", "Call Cut", "switched off", "Invalid No", "Called by mistake", "No Network", "wrong no.", "no answer"];
+
+export function classifyCallStatus(rawStatus) {
+  if (!rawStatus) return "NOT_CONNECTED";
+  const canonical = getCanonicalStatus(rawStatus);
+  const sLower = String(rawStatus).trim().toLowerCase();
+
+  // Explicit Not Connected matches
+  if (
+    NOT_CONNECTED_STATUSES.includes(canonical) ||
+    NOT_CONNECTED_STATUSES.some(ns => ns.toLowerCase() === sLower) ||
+    sLower.includes("busy") ||
+    sLower.includes("call cut") ||
+    sLower.includes("switched off") ||
+    sLower.includes("invalid") ||
+    sLower.includes("no answer") ||
+    sLower.includes("no network") ||
+    sLower.includes("wrong no") ||
+    sLower.includes("not picked") ||
+    sLower.includes("no response") ||
+    sLower.includes("not reachable") ||
+    sLower.includes("unreachable")
+  ) {
+    return "NOT_CONNECTED";
+  }
+
+  // Explicit Connected matches
+  if (
+    CONNECTED_STATUSES.includes(canonical) ||
+    CONNECTED_STATUSES.some(cs => cs.toLowerCase() === sLower) ||
+    sLower.includes("info given") ||
+    sLower.includes("interested") ||
+    sLower.includes("reg.done") ||
+    sLower.includes("registered") ||
+    sLower.includes("reminder") ||
+    sLower.includes("query") ||
+    sLower.includes("shivir") ||
+    sLower.includes("alumni") ||
+    sLower.includes("attended")
+  ) {
+    return "CONNECTED";
+  }
+
+  return "NOT_CONNECTED";
+}
 
 export const STANDARD_TARGETS = ["Name", "Phone", "Mobile", "Email", "City", "State", "Khoji", "Source", "Tags", "Ignore"];
 

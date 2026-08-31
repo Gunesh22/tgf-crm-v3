@@ -1,26 +1,21 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import * as XLSX from "xlsx";
 import { toast } from "react-hot-toast";
 import {
   Phone, ArrowLeft, Plus, Download, Search, ChevronLeft, ChevronRight, ChevronDown,
   Edit3, X, Save, FileText, Calendar, Tag, User, MapPin, MessageSquare,
   Hash, Clock, PhoneOff, CheckCircle2, AlertCircle, Trash2,
-  PhoneIncoming, PhoneOutgoing, CalendarDays, Loader, Flame, SlidersHorizontal, FileSpreadsheet, CheckSquare,
-  Bell, Sparkles, UserCheck, RefreshCw, Info, Eye
+  PhoneIncoming, PhoneOutgoing, Loader, Flame, SlidersHorizontal,
+  UserCheck, RefreshCw, Info, Eye
 } from "lucide-react";
 import {
   subscribeToCallLogs, updateCallLog, addIncomingCallLog,
   assignContactsToAttender, normalizePhone, getActiveTags,
-  INCOMING_PROGRAM_ID, INCOMING_PROGRAM_NAME, ensureIncomingProgram,
-  OUTGOING_PROGRAM_ID, OUTGOING_PROGRAM_NAME, ensureOutgoingProgram,
-  globalSearchContacts, searchAttenderContacts, claimContact, removeAttenderFromContact, claimCRMContact,
+  INCOMING_PROGRAM_ID, INCOMING_PROGRAM_NAME,
+  OUTGOING_PROGRAM_ID, OUTGOING_PROGRAM_NAME,
+  globalSearchContacts, searchAttenderContacts,
   fetchFreshSharedLead
 } from "../../lib/db";
-import { searchCRM } from "../../lib/ghl";
 import {
-  STATUS_OPTIONS,
-  SOURCE_OPTIONS,
-  CALLED_FOR_OPTIONS,
   CONNECTED_STATUSES,
   NOT_CONNECTED_STATUSES,
   getFieldWithFallback,
@@ -31,7 +26,6 @@ import {
   getSharedAttenders,
   isKhojiAffirmative,
   isKhojiNegative,
-  isIgnoredField,
   getCanonicalStatus,
   isUnansweredCallback
 } from "./utils";
@@ -41,6 +35,11 @@ import { ColumnsSelector } from "./components/ColumnsSelector";
 import StageInfoModal from "./components/edit-modal/StageInfoModal";
 import QuickGuideModal from "./components/QuickGuideModal";
 import CommandPalette from "../../components/ui/CommandPalette";
+import { Pagination } from "./components/Pagination";
+import { AttenderFilters } from "./components/AttenderFilters";
+import { ContactTable } from "./components/ContactTable";
+import MobileAttenderView from "./mobile/MobileAttenderView";
+import MobileEditModal from "./mobile/MobileEditModal";
 
 function parseTimestamp(t) {
   if (!t) return null;
@@ -85,11 +84,6 @@ function enrichLogsWithCallbackFlags(logs) {
     return { ...log, _callbackDue: shouldBeDue };
   });
 }
-import { Pagination } from "./components/Pagination";
-import { AttenderFilters } from "./components/AttenderFilters";
-import { ContactTable } from "./components/ContactTable";
-import MobileAttenderView from "./mobile/MobileAttenderView";
-import MobileEditModal from "./mobile/MobileEditModal";
 
 // ─── Main Attender View ───────────────────────
 export default function AttenderView({ attenderId, attenderName, optionsVersion, onExit }) {
@@ -105,15 +99,12 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   const [programs, setPrograms] = useState([]);
   const [selectedProgramId, setSelectedProgramId] = useState("");
   const [selectedProgramName, setSelectedProgramName] = useState("");
-  const [selectedSubProgram, setSelectedSubProgram] = useState("");
   const [callLogs, setCallLogs] = useState([]);
   const [editingRow, setEditingRow] = useState(null);
   const [isFetchingShared, setIsFetchingShared] = useState(false);
   const [freshSharedLead, setFreshSharedLead] = useState(null);
   const [isLoadingProgram, setIsLoadingProgram] = useState(true); // skeleton state
   const [loadError, setLoadError] = useState(null); // error state
-  const [requestCount, setRequestCount] = useState(10);
-  const [isRequesting, setIsRequesting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [page, setPage] = useState(1);
@@ -126,9 +117,6 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   const [filterObjectionReason, setFilterObjectionReason] = useState([]);
   const [filterCallbackStatus, setFilterCallbackStatus] = useState([]);
   const [filterCallCount, setFilterCallCount] = useState([]);
-  const [filterGeneralStatus, setFilterGeneralStatus] = useState([]);
-  const [filterQueryStatus, setFilterQueryStatus] = useState([]);
-  const [filterAbhivyakti, setFilterAbhivyakti] = useState([]);
   const [filterKhoji, setFilterKhoji] = useState([]);
   const [filterDateType, setFilterDateType] = useState("All");
   const [filterDateRange, setFilterDateRange] = useState("All");
@@ -139,8 +127,6 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   const [activeView, setActiveView] = useState("sheet"); // "sheet" | "performance"
   const [sortBy, setSortBy] = useState("activityDesc"); // "activityDesc" | "nameAsc" | "createdDesc"
   const [selectedTags, setSelectedTags] = useState([]);
-  const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
-  const [tagSearchQuery, setTagSearchQuery] = useState("");
   const ALLOWED_ATTENDER_COLS = useMemo(() => [
     "Name", "Phone", "Mobile", "City", "Khoji", "Tags", "Called For", "Type", "Status", "Remark", "Callback"
   ], []);
@@ -158,9 +144,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     }
   });
   const [isColumnModalOpen, setIsColumnModalOpen] = useState(false);
-  const [colSearchQuery, setColSearchQuery] = useState("");
   const [programDropOpen, setProgramDropOpen] = useState(false);
-  const [programSearch, setProgramSearch] = useState("");
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [showStageInfoModal, setShowStageInfoModal] = useState(false);
   const [isQuickGuideOpen, setIsQuickGuideOpen] = useState(false);
@@ -1354,7 +1338,21 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
       return st || rm || l.callbackDate;
     }).length;
     const interested = active.filter(l => getAttenderStatus(l, attenderId || attenderName) === "Interested").length;
-    const regDone = active.filter(l => getAttenderStatus(l, attenderId || attenderName) === "Reg.Done").length;
+    const regDoneSet = new Set();
+    active.forEach(l => {
+      const cId = String(l.id || l._id || l.Phone || l.Name || "").trim();
+      if (!cId) return;
+      if (Array.isArray(l.registrations) && l.registrations.length > 0) {
+        l.registrations.forEach(r => {
+          const prog = String(r.calledForKey || r.calledFor || r.programName || l.calledFor || "general").trim().toLowerCase();
+          regDoneSet.add(`${cId}_${prog}`);
+        });
+      } else if (getAttenderStatus(l, attenderId || attenderName) === "Reg.Done") {
+        const prog = String(l.calledFor || l.programName || "general").trim().toLowerCase();
+        regDoneSet.add(`${cId}_${prog}`);
+      }
+    });
+    const regDone = regDoneSet.size;
     const callbacks = active.filter(l => l._callbackDue).length;
     const incoming = active.filter(l => getContactView(l, attenderId || attenderName).callType === "incoming").length;
     const outgoing = active.filter(l => getContactView(l, attenderId || attenderName).callType !== "incoming").length;
@@ -1370,13 +1368,13 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     let totalAttempts = 0;
     let connectedContacts = 0;
     let notConnectedContacts = 0;
-    let registrations = 0;
     let infoGiven = 0;
     let interested = 0;
     
     const statusCounts = {};
     const objectionCounts = {};
     const dailyActivity = {}; // date string -> attempts count
+    const uniqueRegSet = new Set();
 
     tagFilteredLogs.forEach(log => {
       const activeStatus = getAttenderStatus(log, attenderId || attenderName);
@@ -1410,7 +1408,11 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
         statusCounts[status] = (statusCounts[status] || 0) + 1;
         if (CONNECTED_STATUSES.includes(status)) {
           connectedContacts++;
-          if (status === "Reg.Done") registrations++;
+          if (status === "Reg.Done") {
+            const cId = String(log.id || log._id || log.Phone || log.Name || "").trim();
+            const prog = String(log.calledFor || log.programName || "general").trim().toLowerCase();
+            if (cId) uniqueRegSet.add(`${cId}_${prog}`);
+          }
           else if (status === "Info given") infoGiven++;
           else if (status === "Interested") interested++;
         } else if (NOT_CONNECTED_STATUSES.includes(status)) {
@@ -1423,6 +1425,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
       }
     });
 
+    const registrations = uniqueRegSet.size;
     const statusChartData = Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
     const objectionChartData = Object.entries(objectionCounts).map(([name, value]) => ({ name, value }));
     const dailyChartData = Object.entries(dailyActivity)

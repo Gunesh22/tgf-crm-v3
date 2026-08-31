@@ -172,7 +172,9 @@ export function ContactTable({
 
               const isDue = log._callbackDue;
               const isHot = log.isHotLead;
-              const hasFollowup = view.callbackDate || view.status === "reminder" || view.status === "Next time" || log.callbackDate;
+              const cbStatus = view.callbackStatus || log.callbackStatus || "";
+              const isDoneOrCancelled = cbStatus === "done" || cbStatus === "completed" || cbStatus === "cancelled";
+              const hasFollowup = !isDoneOrCancelled && (view.callbackDate || view.status === "reminder" || view.status === "Next time" || log.callbackDate);
               const isUnanswered = isUnansweredCallback(log);
               const isCalled = !!(view.status || view.callbackDate || view.remark);
 

@@ -5,15 +5,8 @@ import {
   Download, ChevronRight, ChevronDown, Calendar, TrendingUp, UserCheck, Smile, Info, Search, X, Check
 } from "lucide-react";
 import { subscribeToAllCallLogs } from "../../../lib/db";
-import { CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, parseTimestamp, getCanonicalStatus, getContactPhone, getContactName, getContactCity, getContactKhoji, renderVal } from "../utils.jsx";
+import { CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, parseTimestamp, getCanonicalStatus, getContactPhone, getContactName, getContactCity, getContactKhoji, renderVal, classifyCallStatus, getCanonicalPhysicalCalls, getLocalDateStr } from "../utils.jsx";
 import { isKhojiAffirmative, isKhojiNegative } from "../../attender/utils.js";
-
-const getLocalDateStr = (d = new Date()) => {
-  const yr = d.getFullYear();
-  const mn = String(d.getMonth() + 1).padStart(2, "0");
-  const dy = String(d.getDate()).padStart(2, "0");
-  return `${yr}-${mn}-${dy}`;
-};
 
 function MonthlySection({ title, subtitle, action, children, defaultOpen = true }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -146,9 +139,9 @@ function FormulaInfoPopover({ title = "Formula Info", formulas = [], iconOnly = 
   );
 }
 
-function MonthlyTable({ headers, rows, totals, formatValue }) {
+function MonthlyTable({ headers, rows, totals, formatValue, noScroll = false }) {
   return (
-    <div className="overflow-x-auto overflow-y-auto max-h-[550px] rounded-xl border border-slate-200 shadow-2xs bg-white">
+    <div className={`overflow-x-auto ${noScroll ? "" : "overflow-y-auto max-h-[550px]"} rounded-xl border border-slate-200 shadow-2xs bg-white`}>
       <table className="w-full text-xs text-left border-collapse">
         <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200 sticky top-0 z-20 shadow-2xs">
           <tr>
@@ -386,11 +379,19 @@ const shouldGoToEnd = (sourceName) => {
   );
 };
 
-export default function MonthlyReportTab({ programs, attenders = [], settingsOptions = { statusOptions: [], sourceOptions: [], calledForOptions: [] }, callLogs = [] }) {
+export default function MonthlyReportTab({ callLogs = [], registrations = [], programs = [], attenders = [], settingsOptions = {} }) {
+  const todayObj = new Date();
+  const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, "0")}-${String(todayObj.getDate()).padStart(2, "0")}`;
+  const currentMonthFirstDay = `${todayStr.slice(0, 7)}-01`;
+  const currentMonthLastDay = (() => {
+    const lastDay = new Date(todayObj.getFullYear(), todayObj.getMonth() + 1, 0).getDate();
+    return `${todayStr.slice(0, 7)}-${String(lastDay).padStart(2, "0")}`;
+  })();
+
   const [selectedProgramIds, setSelectedProgramIds] = useState([]); // empty = ALL
   const [selectedAttenderIds, setSelectedAttenderIds] = useState([]); // empty = ALL
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [startDate, setStartDate] = useState(currentMonthFirstDay);
+  const [endDate, setEndDate] = useState(currentMonthLastDay);
   const [selectedSources, setSelectedSources] = useState([]);
   const [selectedCalledFors, setSelectedCalledFors] = useState([]);
   const [selectedStatuses, setSelectedStatuses] = useState([]);
@@ -470,193 +471,23 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
   }, [callLogs, settingsOptions]);
 
   const allHistoricalAttempts = React.useMemo(() => {
-    const attempts = [];
-    callLogs.forEach(log => {
-      if (log._deleted) return;
-
-      // Multi-tag filter
-      if (selectedProgramIds.length > 0) {
-        const selectedNames = selectedProgramIds.map(id => {
-          const p = programs.find(x => x.id === id);
-          return p ? p.name : id;
-        });
-        const contactTags = Array.isArray(log.tags) ? log.tags : [];
-        const matchesId = selectedProgramIds.includes(log.programId);
-        const matchesName = selectedNames.includes(log.programId) || 
-                            selectedNames.includes(log.programName) ||
-                            contactTags.some(t => selectedNames.includes(t) || selectedProgramIds.includes(t));
-
-        if (!matchesId && !matchesName) return;
-      }
-
-      // Source filter
-      const sourceKey = Object.keys(log).find(k => ["source", "sourse", "source of information", "source of informiton"].includes(k.toLowerCase()));
-      const sourceVal = sourceKey ? String(log[sourceKey] || "").trim() : "";
-      if (selectedSources.length > 0 && !selectedSources.includes(sourceVal)) {
-        return;
-      }
-
-      // Called For filter
-      const calledForKey = Object.keys(log).find(k => ["called for", "called_for", "calledfor"].includes(k.toLowerCase()));
-      const calledForVal = calledForKey ? String(log[calledForKey] || "").trim() : "";
-      const logCalledFors = calledForVal.split(",").map(x => x.trim()).filter(Boolean);
-      if (selectedCalledFors.length > 0 && !logCalledFors.some(cf => selectedCalledFors.includes(cf))) {
-        return;
-      }
-
-      const feedbackKey = Object.keys(log).find(k => ["prog. feedback", "feedback", "user feedback", "program feedback"].includes(k.toLowerCase()));
-      const feedbackVal = feedbackKey ? String(log[feedbackKey] || "").trim() : "";
-
-      const contactName = getContactName(log);
-      const contactPhone = getContactPhone(log);
-      const contactCity = getContactCity(log);
-      const khojiVal = getContactKhoji(log);
-      const contactTags = Array.isArray(log.tags) ? log.tags : [];
-      const programName = log.programName || "Unknown";
-
-      const rawAttempts = [];
-      const seenEventKeys = new Set();
-
-      const addAttemptIfNew = (attId, attName, status, remark, dateVal, callType, calledFor, source, isHistory = false, index = 0) => {
-        const canonicalStatus = getCanonicalStatus(status || "Pending");
-        const ts = parseTimestamp(dateVal) || parseTimestamp(log.createdAt);
-        if (!ts) return;
-
-        const eventKey = isHistory
-          ? `${log.id}_${attId}_h${index}_${canonicalStatus}`
-          : `${log.id}_${attId}_latest_${canonicalStatus}`;
-        if (seenEventKeys.has(eventKey)) return;
-        seenEventKeys.add(eventKey);
-
-        rawAttempts.push({
-          timestamp: ts,
-          attenderId: attId,
-          attenderName: attName || "Unknown",
-          status: canonicalStatus,
-          remark: remark || "",
-          callType: callType || "outgoing",
-          calledFor: calledFor || "",
-          source: source || ""
-        });
-      };
-
-      // A. Collect from attenderStates
-      if (log.attenderStates && typeof log.attenderStates === "object") {
-        Object.entries(log.attenderStates).forEach(([attId, state]) => {
-          if (!state) return;
-          const stateAttName = state.attenderName || "Unknown";
-          if (state.history && Array.isArray(state.history) && state.history.length > 0) {
-            state.history.forEach((h, index) => {
-              addAttemptIfNew(
-                attId,
-                h.attenderName || stateAttName,
-                h.status || state.status,
-                h.remark,
-                h.timestamp || h.date || state.lastCalledAt,
-                h.callType || state.callType,
-                h.calledFor || state["Called For"] || state.calledFor,
-                h.source || state.Source || state.source,
-                true,
-                index
-              );
-            });
-          }
-          if (state.lastCalledAt || (state.status && state.status !== "Pending") || state.remark) {
-            addAttemptIfNew(
-              attId,
-              stateAttName,
-              state.status,
-              state.remark,
-              state.lastCalledAt || log.createdAt,
-              state.callType,
-              state["Called For"] || state.calledFor,
-              state.Source || state.source,
-              false,
-              0
-            );
-          }
-        });
-      }
-
-      // B. Collect from top-level log.history
-      if (log.history && Array.isArray(log.history) && log.history.length > 0) {
-        log.history.forEach((h, index) => {
-          addAttemptIfNew(
-            h.attenderId || log.attenderId || "legacy",
-            h.attenderName || log.attenderName || "Unknown",
-            h.status,
-            h.remark,
-            h.timestamp || h.date || log.lastCalledAt || log.createdAt,
-            h.callType || log.callType,
-            h.calledFor || log["Called For"] || log.calledFor,
-            h.source || log.Source || log.source,
-            true,
-            index
-          );
-        });
-      }
-
-      // C. Collect top-level log standalone call if no attempts were found in attenderStates/history
-      if (rawAttempts.length === 0 && (log.lastCalledAt || (log.status && log.status !== "Pending") || log.remark)) {
-        addAttemptIfNew(
-          log.attenderId || "legacy",
-          log.attenderName || "Legacy Attender",
-          log.status,
-          log.remark,
-          log.lastCalledAt || log.createdAt,
-          log.callType,
-          log["Called For"] || log.calledFor,
-          log.Source || log.source
-        );
-      }
-
-      const totalContactCalls = rawAttempts.length;
-
-      const processAttempt = (att) => {
-        const status = getCanonicalStatus(att.status || "Pending");
-        if (selectedStatuses.length > 0 && !selectedStatuses.includes(status)) {
-          return null;
-        }
-        const finalCalledFor = att.calledFor || calledForVal;
-        const attemptCalledFors = finalCalledFor.split(",").map(x => x.trim()).filter(Boolean);
-        if (selectedCalledFors.length > 0 && !attemptCalledFors.some(cf => selectedCalledFors.includes(cf))) {
-          return null;
-        }
-
-        const finalPhone = getContactPhone(log, att);
-        const finalName = getContactName(log, att);
-        const finalCity = getContactCity(log, att);
-        const finalKhoji = getContactKhoji(log, att);
-
-        return {
-          ...att,
-          status,
-          contactName: finalName,
-          contactPhone: finalPhone,
-          contactCity: finalCity,
-          contactTags,
-          programName,
-          contactId: log.id,
-          source: att.source || sourceVal,
-          calledFor: finalCalledFor,
-          feedback: feedbackVal,
-          Khoji: finalKhoji,
-          totalContactCalls: totalContactCalls || 1
-        };
-      };
-
-      rawAttempts.forEach(item => {
-        const att = processAttempt(item);
-        if (att) attempts.push(att);
-      });
+    return getCanonicalPhysicalCalls(callLogs, {
+      startDate,
+      endDate,
+      selectedAttenderIds,
+      selectedProgramIds,
+      selectedSources,
+      selectedCalledFors,
+      selectedStatuses,
+      selectedCallTypes,
+      selectedKhojiStatuses
     });
-    return attempts;
-  }, [callLogs, selectedProgramIds, selectedSources, selectedCalledFors, selectedStatuses, programs]);
+  }, [callLogs, startDate, endDate, selectedAttenderIds, selectedProgramIds, selectedSources, selectedCalledFors, selectedStatuses, selectedCallTypes, selectedKhojiStatuses]);
 
 
 
   const attenderOptions = React.useMemo(() => {
-    const EXCLUDED_ATTENDER_NAMES = ["admin", "super admin", "administrator", "admin test", "test 2", "test2", "test"];
+    const EXCLUDED_ATTENDER_NAMES = ["admin", "super admin", "administrator", "agent"];
     return attenders
       .filter(a => a.role !== 'admin' && !EXCLUDED_ATTENDER_NAMES.includes((a.name || "").toLowerCase().trim()))
       .map(a => ({
@@ -665,59 +496,11 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
       }));
   }, [attenders]);
 
-  const allAttempts = React.useMemo(() => {
-    console.log(`[MonthlyReportTab DEBUG] total allHistoricalAttempts before date/attender filter:`, allHistoricalAttempts.length);
-    const filtered = allHistoricalAttempts.filter(att => {
-      if (!att.timestamp || isNaN(att.timestamp.getTime())) return false;
-      const attDateStr = getLocalDateStr(att.timestamp);
-      if (startDate && attDateStr < startDate) return false;
-      if (endDate && attDateStr > endDate) return false;
-
-      if (selectedAttenderIds.length > 0) {
-        const matchesId = selectedAttenderIds.includes(att.attenderId);
-        const selectedAttenderNames = selectedAttenderIds.map(id => {
-          const a = attenders.find(x => x.id === id);
-          return a ? a.name.toLowerCase().trim() : "";
-        });
-        const matchesName = selectedAttenderNames.includes((att.attenderName || "").toLowerCase().trim());
-        if (!matchesId && !matchesName) return false;
-      }
-
-      // Call Type filter
-      if (selectedCallTypes.length > 0) {
-        const cType = (att.callType || "outgoing").toLowerCase();
-        const matches = selectedCallTypes.some(t => {
-          if (t === "incoming") return cType.startsWith("incoming");
-          if (t === "outgoing") return cType.startsWith("outgoing");
-          return false;
-        });
-        if (!matches) return false;
-      }
-
-      // Khoji Status filter
-      if (selectedKhojiStatuses.length > 0) {
-        const val = att.Khoji;
-        const affirmative = isKhojiAffirmative(val);
-        const isDew = String(val || "").toLowerCase().includes("dew d") || String(val || "").toLowerCase().includes("dewdrop");
-        const isNo = isKhojiNegative(val) || !val;
-
-        let match = false;
-        if (selectedKhojiStatuses.includes("Yes") && affirmative && !isDew) match = true;
-        if (selectedKhojiStatuses.includes("No") && isNo) match = true;
-        if (selectedKhojiStatuses.includes("Dew drop khoji") && isDew) match = true;
-
-        if (!match) return false;
-      }
-
-      return true;
-    });
-
-    return filtered;
-  }, [allHistoricalAttempts, startDate, endDate, selectedAttenderIds, selectedCallTypes, selectedKhojiStatuses, attenders]);
+  const allAttempts = allHistoricalAttempts;
 
   const monthFiltered = React.useMemo(() => {
-    const contactIds = new Set(allAttempts.map(a => a.contactId));
-    return callLogs.filter(log => contactIds.has(log.id));
+    const contactIds = new Set(allAttempts.map(a => String(a.contactId)));
+    return callLogs.filter(log => contactIds.has(String(log._id || log.id)));
   }, [callLogs, allAttempts]);
 
   const metrics = React.useMemo(() => {
@@ -739,10 +522,12 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
       queryCalls: 0,
     };
 
+    const seenConversions = new Set();
     allAttempts.forEach(c => {
       stats.totalCalls++;
-      const isConnected = CONNECTED_STATUSES.includes(c.status);
-      const isNotConnected = NOT_CONNECTED_STATUSES.includes(c.status);
+      const category = classifyCallStatus(c.status);
+      const isConnected = category === "CONNECTED";
+      const isNotConnected = category === "NOT_CONNECTED";
       const type = (c.callType || "").toLowerCase();
       const isIncoming = type.startsWith("incoming");
 
@@ -753,7 +538,7 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
         } else {
           stats.outgoingConnectedCalls++;
         }
-      } else if (isNotConnected) {
+      } else {
         stats.notConnectedCalls++;
         if (isIncoming) {
           stats.incomingNotConnectedCalls++;
@@ -763,11 +548,17 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
       }
 
       if (c.status === "Reg.Done") {
-        stats.totalConversions++;
-        if (isIncoming) {
-          stats.incomingConversions++;
-        } else {
-          stats.outgoingConversions++;
+        const leadId = String(c.contactId || c.id || c.contactPhone || c.contactName || "").trim();
+        const cf = String(c.calledFor || c.programId || "general").toLowerCase().trim();
+        const regKey = `${leadId}_${cf}`;
+        if (!seenConversions.has(regKey)) {
+          seenConversions.add(regKey);
+          stats.totalConversions++;
+          if (isIncoming) {
+            stats.incomingConversions++;
+          } else {
+            stats.outgoingConversions++;
+          }
         }
       }
       if (c.status === "Query") {
@@ -821,7 +612,8 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
 
   const attenderPerformance = React.useMemo(() => {
     const map = {};
-    const EXCLUDED_ATTENDER_NAMES = ["admin", "super admin", "administrator", "admin test", "test 2", "test2", "test"];
+    const seenRegs = new Set();
+    const EXCLUDED_ATTENDER_NAMES = ["admin", "super admin", "administrator", "agent"];
     allAttempts.forEach(c => {
       const rawName = (c.attenderName || "").toLowerCase().trim();
       if (EXCLUDED_ATTENDER_NAMES.includes(rawName) || c.attenderId === "admin") return;
@@ -831,8 +623,9 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
       }
       const item = map[c.attenderId];
       item.total++;
-      if (CONNECTED_STATUSES.includes(c.status)) item.connected++;
-      else if (NOT_CONNECTED_STATUSES.includes(c.status)) item.notConnected++;
+      const classification = classifyCallStatus(c.status);
+      if (classification === "CONNECTED") item.connected++;
+      else if (classification === "NOT_CONNECTED") item.notConnected++;
       
       const type = (c.callType || "").toLowerCase();
       const isIncoming = type.startsWith("incoming");
@@ -843,11 +636,17 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
       }
 
       if (c.status === "Reg.Done") {
-        item.conversions++;
-        if (isIncoming) {
-          item.incomingConversions++;
-        } else {
-          item.outgoingConversions++;
+        const leadId = String(c.contactId || c.id || c.contactPhone || c.phone || c.contactName || c.name || "").trim();
+        const cf = (c.calledFor || "").toLowerCase().trim();
+        const regKey = `${c.attenderId}_${leadId}_${cf}`;
+        if (!seenRegs.has(regKey)) {
+          seenRegs.add(regKey);
+          item.conversions++;
+          if (isIncoming) {
+            item.incomingConversions++;
+          } else {
+            item.outgoingConversions++;
+          }
         }
       }
       
@@ -905,6 +704,7 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
 
   const calledForVsSourceBreakdown = React.useMemo(() => {
     const map = {};
+    const seenRegs = new Set();
     allAttempts.forEach(c => {
       const src = String(c.source || "").trim() || "Unknown";
       const calledFors = String(c.calledFor || "").trim()
@@ -950,11 +750,16 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
         }
 
         if (c.status === "Reg.Done") {
-          item.conversions++;
-          if (isIncoming) {
-            item.incomingConversions++;
-          } else {
-            item.outgoingConversions++;
+          const leadId = String(c.contactId || c.id || c.contactPhone || c.phone || c.contactName || c.name || "").trim();
+          const regKey = `${key}_${leadId}_${prog.toLowerCase().trim()}`;
+          if (!seenRegs.has(regKey)) {
+            seenRegs.add(regKey);
+            item.conversions++;
+            if (isIncoming) {
+              item.incomingConversions++;
+            } else {
+              item.outgoingConversions++;
+            }
           }
         }
       });
@@ -1035,7 +840,20 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
   }, [calledForVsSourceBreakdown]);
 
   const conversionsList = React.useMemo(() => {
-    return allAttempts.filter(c => c.status === "Reg.Done");
+    const seen = new Set();
+    const result = [];
+    allAttempts.forEach(c => {
+      if (c.status === "Reg.Done") {
+        const leadId = String(c.contactId || c.id || c.contactPhone || c.phone || c.contactName || c.name || "").trim();
+        const cf = String(c.calledFor || c.programId || "general").toLowerCase().trim();
+        const regKey = `${leadId}_${cf}`;
+        if (!seen.has(regKey)) {
+          seen.add(regKey);
+          result.push(c);
+        }
+      }
+    });
+    return result;
   }, [allAttempts]);
 
   const searchedConversions = React.useMemo(() => {
@@ -1067,7 +885,7 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
   }, [conversionSearch]);
 
   const handleExport = () => {
-    if (!monthFiltered.length) {
+    if (!allAttempts.length) {
       toast.error("No data to export.");
       return;
     }
@@ -1148,7 +966,7 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={handleExport}
-            disabled={!monthFiltered.length}
+            disabled={!allAttempts.length}
             className="flex items-center gap-1.5 h-8 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs rounded-md transition-colors disabled:opacity-50 cursor-pointer shadow-2xs"
           >
             <Download size={14} /> Export Excel Workbook
@@ -1246,6 +1064,8 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
               const lastDayStr = `${yr}-${String(mn + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
               const isThisMonthSelected = startDate === firstDayStr && endDate === lastDayStr;
 
+              const isAllTimeSelected = !startDate && !endDate;
+
               return (
                 <div className="flex items-center gap-1 ml-1">
                   <button
@@ -1274,13 +1094,26 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
                   >
                     This Month
                   </button>
+                  <button
+                    onClick={() => {
+                      setStartDate("");
+                      setEndDate("");
+                    }}
+                    className={`h-8 px-2.5 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
+                      isAllTimeSelected
+                        ? "bg-indigo-600 border-indigo-600 text-white"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                    }`}
+                  >
+                    All Time
+                  </button>
                 </div>
               );
             })()}
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 font-medium">{monthFiltered.length} entries</span>
+            <span className="text-xs text-slate-500 font-medium">{allAttempts.length} entries</span>
 
             {activeFilters > 0 && (
               <button
@@ -1305,7 +1138,7 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
 
       {loading ? (
         <div className="py-16 text-center text-slate-400 text-xs font-medium">Loading report datasets...</div>
-      ) : (!startDate || !endDate || monthFiltered.length === 0) ? (
+      ) : (!startDate || !endDate || allAttempts.length === 0) ? (
         <div className="py-16 text-center text-slate-400 text-xs font-medium">No call history logs found for this period.</div>
       ) : (
         <div className="space-y-5">
@@ -1337,10 +1170,10 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
 
             <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-2xs flex flex-col justify-between">
               <div>
-                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Direct Registrations</p>
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Reg.Done Call Events</p>
                 <p className="text-2xl font-bold text-blue-600 tracking-tight mt-1">{metrics.totalConversions}</p>
               </div>
-              <p className="text-[11px] text-blue-600 font-medium mt-2">Period conversions</p>
+              <p className="text-[11px] text-blue-600 font-medium mt-2">Physical calls marked Reg.Done</p>
             </div>
           </div>
 
@@ -1366,6 +1199,7 @@ export default function MonthlyReportTab({ programs, attenders = [], settingsOpt
             <MonthlyTable
               headers={["metric", "value"]}
               rows={section1}
+              noScroll={true}
             />
           </MonthlySection>
 

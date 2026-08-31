@@ -3,7 +3,7 @@ import { toast } from "react-hot-toast";
 import {
   Phone, Plus, X, Tag, User, MapPin, MessageSquare,
   Hash, Clock, CheckCircle2, AlertCircle, Trash2,
-  CalendarDays, Loader, Flame, Edit3, ArrowLeft, Users, RotateCw
+  CalendarDays, Loader, Flame, Edit3, ArrowLeft, Users, RotateCw, Undo2, Info
 } from "lucide-react";
 import {
   addIncomingCallLog, updateCallLog, checkGlobalDuplicate, findMatchingAttenderState
@@ -90,6 +90,13 @@ export default function MobileEditModal({
     normalized.queryStatus = "";
     normalized.remark = "";
 
+    const attState = findMatchingAttenderState(normalized.attenderStates, attenderId, attenderName);
+    const existingCallbackDate = getFieldWithFallback(row, "callbackDate", attenderId || attenderName) || attState?.callbackDate || row.callbackDate || null;
+    const existingCallbackStatus = getFieldWithFallback(row, "callbackStatus", attenderId || attenderName) || attState?.callbackStatus || row.callbackStatus || (existingCallbackDate ? "pending" : null);
+
+    normalized.callbackDate = existingCallbackDate;
+    normalized.callbackStatus = existingCallbackStatus;
+
     normalized.pipelineStage = normalized.pipelineStage || row.pipelineStage;
 
     return normalized;
@@ -97,11 +104,58 @@ export default function MobileEditModal({
 
   const [savedRow, setSavedRow] = useState(() => getNormalizedRow());
   const [edited, setEdited] = useState(() => getNormalizedRow());
+  const [isRescheduling, setIsRescheduling] = useState(false);
+  const [isAddingNext, setIsAddingNext] = useState(false);
+  const [tempDate, setTempDate] = useState("");
+  const [tempTime, setTempTime] = useState("");
+  const [prevFollowupState, setPrevFollowupState] = useState(null);
+
+  const saveFollowupSnapshot = () => {
+    setPrevFollowupState({
+      callbackDate: edited.callbackDate || "",
+      callbackTime: edited.callbackTime || "",
+      callbackStatus: edited.callbackStatus || "pending"
+    });
+  };
+
+  const handleUndoFollowup = () => {
+    if (prevFollowupState) {
+      handleChange("callbackDate", prevFollowupState.callbackDate);
+      handleChange("callbackTime", prevFollowupState.callbackTime);
+      handleChange("callbackStatus", prevFollowupState.callbackStatus);
+      setPrevFollowupState(null);
+      setIsRescheduling(false);
+      setIsAddingNext(false);
+      toast.success("Follow-up action undone");
+    } else {
+      handleChange("callbackStatus", "pending");
+      setIsRescheduling(false);
+      setIsAddingNext(false);
+      toast.success("Restored follow-up to Pending");
+    }
+  };
+
+  const formatFollowupDateStr = (dateVal) => {
+    if (!dateVal) return "";
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return String(dateVal);
+    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  };
+
+  const currentCbStatus = edited.callbackStatus || "pending";
+  const hasActivePendingFollowup = !!edited.callbackDate && (currentCbStatus === "pending" || currentCbStatus === "rescheduled");
+  const isFollowupCompleted = currentCbStatus === "done" || currentCbStatus === "completed";
+  const isFollowupCancelled = currentCbStatus === "cancelled";
 
   useEffect(() => {
     const norm = getNormalizedRow();
     setSavedRow(norm);
     setEdited(norm);
+    setIsRescheduling(false);
+    setIsAddingNext(false);
+    setTempDate("");
+    setTempTime("");
+    setPrevFollowupState(null);
   }, [row]);
 
   const calledForField = useMemo(() => {
@@ -114,6 +168,43 @@ export default function MobileEditModal({
     if (edited.Sourse !== undefined) return "Sourse";
     return "source";
   }, [edited]);
+
+  const programRegInfo = useMemo(() => {
+    const rawProgram = String(edited[calledForField] || "").trim();
+    if (!rawProgram) return { exists: false, program: "" };
+    const progArr = rawProgram.split(",").map(p => p.trim()).filter(Boolean);
+    const targetProg = progArr[0] || rawProgram;
+    const targetKey = targetProg.toLowerCase().replace(/[^a-z0-9]/g, "-");
+    
+    // Check programRelationships
+    const rels = Array.isArray(edited.programRelationships) ? edited.programRelationships : Array.isArray(row.programRelationships) ? row.programRelationships : [];
+    const foundRel = rels.find(p => {
+      const pKey = (p.calledForKey || p.calledFor || p.program || "").toLowerCase().replace(/[^a-z0-9]/g, "-");
+      return pKey === targetKey && (p.status === "Registered / Won" || p.status === "Registered" || p.status === "reg_done");
+    });
+    if (foundRel) {
+      return { exists: true, registrationId: foundRel.registrationId || null, program: targetProg };
+    }
+
+    // Check registrations
+    const regs = Array.isArray(edited.registrations) ? edited.registrations : Array.isArray(row.registrations) ? row.registrations : [];
+    const foundReg = regs.find(r => {
+      const rKey = (r.calledForKey || r.calledFor || r.program || "").toLowerCase().replace(/[^a-z0-9]/g, "-");
+      return rKey === targetKey;
+    });
+    if (foundReg) {
+      return { exists: true, registrationId: foundReg.registrationId || null, program: targetProg };
+    }
+
+    // Check pipeline stage
+    const canCalledFor = (edited["Called For"] || edited.calledFor || row["Called For"] || row.calledFor || "").toLowerCase().replace(/[^a-z0-9]/g, "-");
+    const canStage = edited.pipelineStage || row.pipelineStage || "";
+    if (canCalledFor === targetKey && (canStage === "6. Registered / Won" || canStage === "Registered / Won")) {
+      return { exists: true, registrationId: null, program: targetProg };
+    }
+
+    return { exists: false, program: targetProg };
+  }, [edited, row, calledForField]);
 
   const [activeTab, setActiveTab] = useState(() => (row && row._isNew ? "profile" : "call"));
   const [saving, setSaving] = useState(false);
@@ -714,6 +805,42 @@ export default function MobileEditModal({
                   placeholder="Search & select status..."
                   colorClass="indigo"
                 />
+
+                {/* Registration Status Indicator Banner */}
+                {programRegInfo.program && (programRegInfo.exists || edited.status === "Reg.Done") && (
+                  <div className={`mt-2 p-2.5 rounded-xl border flex items-start gap-2 animate-fade-in shadow-2xs ${
+                    programRegInfo.exists 
+                      ? "bg-sky-50/90 border-sky-300/80 text-sky-950" 
+                      : "bg-emerald-50/90 border-emerald-300/80 text-emerald-950"
+                  }`}>
+                    {programRegInfo.exists ? (
+                      <Info size={16} className="text-sky-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <div className="text-xs font-extrabold flex items-center gap-1.5">
+                        <span>{programRegInfo.exists ? "🔵 Existing Registration" : "🟢 New Registration"}</span>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${
+                          programRegInfo.exists 
+                            ? "bg-sky-200/80 text-sky-900 border-sky-300" 
+                            : "bg-emerald-200/80 text-emerald-900 border-emerald-300"
+                        }`}>
+                          {programRegInfo.program}
+                        </span>
+                      </div>
+                      <div className={`text-[11px] font-medium mt-0.5 leading-tight ${
+                        programRegInfo.exists ? "text-sky-800" : "text-emerald-800"
+                      }`}>
+                        {programRegInfo.exists ? (
+                          <>Already registered for <strong>{programRegInfo.program}</strong>. This call will be logged as a call/update against the existing registration. <strong>No new registration record will be created.</strong></>
+                        ) : (
+                          <>No existing registration for <strong>{programRegInfo.program}</strong>. Saving will create 1 new registration record.</>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Objection tracker if not interested */}
@@ -770,30 +897,394 @@ export default function MobileEditModal({
               </div>
 
               {/* Follow-up / Callback scheduling */}
-              <div className="space-y-1.5 pt-1">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-                  <CalendarDays size={13} /> {edited.callbackDate ? "Follow-up Scheduled" : "Schedule Follow-up"}
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="date"
-                    value={getCallbackDateStr()}
-                    onChange={e => {
-                      handleChange("callbackDate", e.target.value);
-                      if (e.target.value && !edited.callbackStatus) handleChange("callbackStatus", "pending");
-                    }}
-                    className="flex-1 px-3 py-2 border rounded-xl text-xs font-bold bg-[#f8fafc] border-slate-200 text-slate-700"
-                  />
-                  {edited.callbackDate && (
+              <div className="space-y-2 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                    <CalendarDays size={13} className={hasActivePendingFollowup ? "text-amber-600" : isFollowupCompleted ? "text-emerald-600" : "text-slate-400"} />
+                    <span>Follow-up</span>
+                  </label>
+
+                  {edited.callbackDate && !isRescheduling && !isAddingNext && (
                     <button
                       type="button"
-                      onClick={() => { handleChange("callbackDate", null); handleChange("callbackStatus", null); }}
-                      className="px-3 py-2 bg-red-50 text-red-500 font-bold rounded-xl text-xs"
+                      onClick={() => {
+                        handleChange("callbackDate", null);
+                        handleChange("callbackStatus", null);
+                        setIsRescheduling(false);
+                        setIsAddingNext(false);
+                      }}
+                      className="px-2 py-0.5 bg-rose-50 text-rose-600 font-bold rounded text-[10px]"
                     >
                       Remove
                     </button>
                   )}
                 </div>
+
+                {/* CASE A: Active Pending Follow-up */}
+                {hasActivePendingFollowup && (
+                  <>
+                    {/* Mode 1: Rescheduling Mode */}
+                    {isRescheduling ? (
+                      <div className="space-y-3 p-3 bg-sky-50/90 border border-sky-200 rounded-xl">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-sky-100 border border-sky-300 text-sky-800 flex items-center justify-center shrink-0">
+                            <RotateCw size={14} />
+                          </div>
+                          <div>
+                            <div className="text-xs font-extrabold text-sky-950">
+                              Rescheduling Follow-up
+                            </div>
+                            <div className="text-[10px] text-sky-700 font-medium">
+                              Current: {formatFollowupDateStr(edited.callbackDate)} {edited.callbackTime ? `· ${edited.callbackTime}` : ""}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-sky-200/80 space-y-1.5">
+                          <label className="text-[10px] font-bold text-sky-900 block">Choose new date & time:</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="date"
+                              value={tempDate}
+                              onChange={e => setTempDate(e.target.value)}
+                              className="flex-1 px-3 py-1.5 bg-white border border-sky-300 text-sky-950 font-bold rounded-lg text-xs"
+                            />
+                            <input
+                              type="time"
+                              value={tempTime}
+                              onChange={e => setTempTime(e.target.value)}
+                              className="w-24 px-2 py-1.5 bg-white border border-sky-300 text-sky-950 font-bold rounded-lg text-xs"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-sky-200/80 flex justify-end items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!tempDate) {
+                                toast.error("Please pick a valid date");
+                                return;
+                              }
+                              saveFollowupSnapshot();
+                              handleChange("callbackDate", tempDate);
+                              handleChange("callbackTime", tempTime);
+                              handleChange("callbackStatus", "rescheduled");
+                              setIsRescheduling(false);
+                              toast.success(`Rescheduled to ${formatFollowupDateStr(tempDate)}`);
+                            }}
+                            className="px-3.5 py-1.5 bg-sky-600 active:scale-95 text-white font-extrabold text-xs rounded-lg flex items-center gap-1"
+                          >
+                            <CheckCircle2 size={13} /> Confirm Reschedule
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsRescheduling(false)}
+                            className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 font-bold text-xs rounded-lg"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Mode 2: Normal Pending Mode */
+                      <div className="space-y-3 p-3 bg-amber-50/80 border border-amber-200 rounded-xl">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-amber-100 border border-amber-300 text-amber-800 flex items-center justify-center shrink-0">
+                            <CalendarDays size={14} />
+                          </div>
+                          <div>
+                            <div className="text-xs font-extrabold text-amber-950 flex items-center gap-1.5">
+                              <span>📅 {formatFollowupDateStr(edited.callbackDate)}</span>
+                              {edited.callbackTime && <span className="text-amber-800">· 🕒 {edited.callbackTime}</span>}
+                            </div>
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded border border-amber-300/60">
+                              ⏳ {edited.callbackStatus === "rescheduled" ? "Rescheduled" : "Pending"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-amber-200/80 flex justify-end items-center gap-1.5 flex-wrap">
+                          {(prevFollowupState || edited.callbackStatus === "rescheduled") && (
+                            <button
+                              type="button"
+                              onClick={handleUndoFollowup}
+                              className="py-1.5 px-2 bg-white border border-slate-300 text-slate-700 font-bold text-xs rounded-lg flex items-center gap-1"
+                              title="Undo previous follow-up action"
+                            >
+                              <Undo2 size={12} /> Undo
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              saveFollowupSnapshot();
+                              handleChange("callbackStatus", "done");
+                              setIsRescheduling(false);
+                              toast.success("Follow-up completed ✓");
+                            }}
+                            className="py-1.5 px-3 bg-emerald-600 active:scale-95 text-white font-extrabold text-xs rounded-lg flex items-center gap-1"
+                          >
+                            <CheckCircle2 size={13} /> Complete
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTempDate(getCallbackDateStr());
+                              setTempTime(edited.callbackTime || "");
+                              setIsRescheduling(true);
+                            }}
+                            className="py-1.5 px-2.5 bg-sky-50 text-sky-800 border border-sky-200 font-bold text-xs rounded-lg flex items-center gap-1"
+                          >
+                            <RotateCw size={12} /> Reschedule
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              saveFollowupSnapshot();
+                              handleChange("callbackStatus", "cancelled");
+                              setIsRescheduling(false);
+                              toast("Follow-up cancelled");
+                            }}
+                            className="py-1.5 px-2 bg-rose-50 text-rose-700 border border-rose-200 font-bold text-xs rounded-lg flex items-center gap-1"
+                          >
+                            <X size={12} /> Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* CASE B: Completed Follow-up */}
+                {isFollowupCompleted && (
+                  <div className="space-y-2.5 p-3 bg-emerald-50/80 border border-emerald-200 rounded-xl">
+                    <div className="flex items-center gap-2 text-emerald-950 font-extrabold text-xs">
+                      <CheckCircle2 size={15} className="text-emerald-600" />
+                      <span>✓ Completed — {formatFollowupDateStr(edited.callbackDate) || "Follow-up"}</span>
+                    </div>
+
+                    {isAddingNext ? (
+                      <div className="pt-2 border-t border-emerald-200/80 space-y-2">
+                        <div className="text-[10px] font-bold text-emerald-900">Choose date & time for next follow-up:</div>
+                        <div className="flex gap-2">
+                          <input
+                            type="date"
+                            value={tempDate}
+                            onChange={e => setTempDate(e.target.value)}
+                            className="flex-1 px-3 py-1.5 bg-white border border-emerald-300 text-emerald-950 font-bold rounded-lg text-xs"
+                          />
+                          <input
+                            type="time"
+                            value={tempTime}
+                            onChange={e => setTempTime(e.target.value)}
+                            className="w-24 px-2 py-1.5 bg-white border border-emerald-300 text-emerald-950 font-bold rounded-lg text-xs"
+                          />
+                        </div>
+                        <div className="flex justify-end items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!tempDate) {
+                                toast.error("Please pick a valid date");
+                                return;
+                              }
+                              saveFollowupSnapshot();
+                              handleChange("callbackDate", tempDate);
+                              handleChange("callbackTime", tempTime);
+                              handleChange("callbackStatus", "pending");
+                              setIsAddingNext(false);
+                              toast.success(`Next follow-up scheduled for ${formatFollowupDateStr(tempDate)}`);
+                            }}
+                            className="px-3.5 py-1.5 bg-indigo-600 text-white font-extrabold text-xs rounded-lg flex items-center gap-1"
+                          >
+                            <Plus size={13} /> Confirm New Follow-up
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsAddingNext(false)}
+                            className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 font-bold text-xs rounded-lg"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="pt-2 border-t border-emerald-200/80 flex justify-end items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleUndoFollowup}
+                          className="py-1.5 px-2.5 bg-white border border-slate-300 text-slate-700 font-bold text-xs rounded-lg flex items-center gap-1"
+                          title="Undo completion and restore follow-up"
+                        >
+                          <Undo2 size={12} /> Undo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const today = new Date().toISOString().split('T')[0];
+                            setTempDate(today);
+                            setTempTime("");
+                            setIsAddingNext(true);
+                          }}
+                          className="py-1.5 px-3 bg-indigo-600 text-white font-extrabold text-xs rounded-lg flex items-center gap-1.5"
+                        >
+                          <Plus size={14} /> ＋ Add Next Follow-up
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* CASE C: Cancelled Follow-up */}
+                {isFollowupCancelled && (
+                  <div className="space-y-2.5 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div className="flex items-center gap-2 text-slate-700 font-extrabold text-xs">
+                      <X size={15} className="text-slate-400" />
+                      <span>✕ Cancelled — {formatFollowupDateStr(edited.callbackDate) || "Follow-up"}</span>
+                    </div>
+
+                    {isAddingNext ? (
+                      <div className="pt-2 border-t border-slate-200 space-y-2">
+                        <div className="text-[10px] font-bold text-slate-700">Choose date & time for new follow-up:</div>
+                        <div className="flex gap-2">
+                          <input
+                            type="date"
+                            value={tempDate}
+                            onChange={e => setTempDate(e.target.value)}
+                            className="flex-1 px-3 py-1.5 bg-white border border-slate-300 text-slate-900 font-bold rounded-lg text-xs"
+                          />
+                          <input
+                            type="time"
+                            value={tempTime}
+                            onChange={e => setTempTime(e.target.value)}
+                            className="w-24 px-2 py-1.5 bg-white border border-slate-300 text-slate-900 font-bold rounded-lg text-xs"
+                          />
+                        </div>
+                        <div className="flex justify-end items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!tempDate) {
+                                toast.error("Please pick a valid date");
+                                return;
+                              }
+                              saveFollowupSnapshot();
+                              handleChange("callbackDate", tempDate);
+                              handleChange("callbackTime", tempTime);
+                              handleChange("callbackStatus", "pending");
+                              setIsAddingNext(false);
+                              toast.success(`New follow-up set for ${formatFollowupDateStr(tempDate)}`);
+                            }}
+                            className="px-3.5 py-1.5 bg-indigo-600 text-white font-extrabold text-xs rounded-lg flex items-center gap-1"
+                          >
+                            <Plus size={13} /> Confirm New Follow-up
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsAddingNext(false)}
+                            className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 font-bold text-xs rounded-lg"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="pt-2 border-t border-slate-200 flex justify-end items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleUndoFollowup}
+                          className="py-1.5 px-2.5 bg-white border border-slate-300 text-slate-700 font-bold text-xs rounded-lg flex items-center gap-1"
+                          title="Undo cancellation and restore follow-up"
+                        >
+                          <Undo2 size={12} /> Undo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const today = new Date().toISOString().split('T')[0];
+                            setTempDate(today);
+                            setTempTime("");
+                            setIsAddingNext(true);
+                          }}
+                          className="py-1.5 px-3 bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold text-xs rounded-lg flex items-center gap-1.5"
+                        >
+                          <Plus size={14} /> ＋ Add Next Follow-up
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* CASE D: No Follow-up set */}
+                {!edited.callbackDate && !edited.callbackStatus && (
+                  <>
+                    {isAddingNext ? (
+                      <div className="space-y-2.5 p-3 bg-indigo-50/80 border border-indigo-200 rounded-xl">
+                        <div className="text-xs font-extrabold text-indigo-950">Schedule Follow-up</div>
+                        <div className="flex gap-2">
+                          <input
+                            type="date"
+                            value={tempDate}
+                            onChange={e => setTempDate(e.target.value)}
+                            className="flex-1 px-3 py-1.5 bg-white border border-indigo-300 text-indigo-950 font-bold rounded-lg text-xs"
+                          />
+                          <input
+                            type="time"
+                            value={tempTime}
+                            onChange={e => setTempTime(e.target.value)}
+                            className="w-24 px-2 py-1.5 bg-white border border-indigo-300 text-indigo-950 font-bold rounded-lg text-xs"
+                          />
+                        </div>
+                        <div className="flex justify-end items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!tempDate) {
+                                toast.error("Please pick a valid date");
+                                return;
+                              }
+                              handleChange("callbackDate", tempDate);
+                              handleChange("callbackTime", tempTime);
+                              handleChange("callbackStatus", "pending");
+                              setIsAddingNext(false);
+                              toast.success(`Follow-up set for ${formatFollowupDateStr(tempDate)}`);
+                            }}
+                            className="px-3.5 py-1.5 bg-indigo-600 text-white font-extrabold text-xs rounded-lg flex items-center gap-1"
+                          >
+                            <Plus size={13} /> Confirm Follow-up
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsAddingNext(false)}
+                            className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 font-bold text-xs rounded-lg"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const today = new Date().toISOString().split('T')[0];
+                            setTempDate(today);
+                            setTempTime("");
+                            setIsAddingNext(true);
+                          }}
+                          className="py-2 px-3.5 bg-indigo-50 border border-indigo-200 text-indigo-700 font-extrabold rounded-lg text-xs flex items-center gap-1.5"
+                        >
+                          <CalendarDays size={14} className="text-indigo-600" />
+                          <span>＋ Schedule Follow-up</span>
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           ) : (

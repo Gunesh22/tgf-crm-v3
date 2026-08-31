@@ -381,8 +381,18 @@ export function MyPerformanceDashboard({
     const todayAttempts = allAttempts.filter(a => a.timestamp >= todayStart && a.timestamp <= todayEnd);
     const monthAttempts = allAttempts.filter(a => a.timestamp >= monthStart && a.timestamp <= todayEnd);
 
-    const todayRegs = todayAttempts.filter(a => a.status === "Reg.Done").length;
-    const monthRegs = monthAttempts.filter(a => a.status === "Reg.Done").length;
+    const getUniqueRegs = (attempts) => {
+      const s = new Set();
+      attempts.forEach(a => {
+        if (a.status === "Reg.Done") {
+          const prog = a.programId || a.calledFor || a["Called For"] || "default";
+          s.add(`${a.contactId || a.id}_${String(prog).toLowerCase().trim()}`);
+        }
+      });
+      return s.size;
+    };
+    const todayRegs = getUniqueRegs(todayAttempts);
+    const monthRegs = getUniqueRegs(monthAttempts);
 
     console.log(
       `%c📊 [PERFORMANCE AUDIT] ${attenderName} (${attenderId}) | Active: "${dateRange}" (${filteredAttempts.length} calls) | Today: ${todayAttempts.length} calls (${todayRegs} Reg) | This Month: ${monthAttempts.length} calls (${monthRegs} Reg) | All-Time: ${allAttempts.length} calls`,

@@ -7,6 +7,7 @@ import undoCallHandler from '../_contacts/undo-call.js';
 import checkDuplicateHandler from '../_contacts/check-duplicate.js';
 import createIncomingHandler from '../_contacts/create-incoming.js';
 import importBulkHandler from '../_contacts/import-bulk.js';
+import overrideStageHandler from '../_contacts/override-stage.js';
 
 const handlers = {
   'search': searchHandler,
@@ -16,7 +17,8 @@ const handlers = {
   'undo-call': undoCallHandler,
   'check-duplicate': checkDuplicateHandler,
   'create-incoming': createIncomingHandler,
-  'import-bulk': importBulkHandler
+  'import-bulk': importBulkHandler,
+  'override-stage': overrideStageHandler
 };
 
 export default async function handler(req, res) {

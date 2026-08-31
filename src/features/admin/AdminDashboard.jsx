@@ -48,9 +48,11 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
   useEffect(() => {
     if (!selectedMonth) return;
     setCallLogsLoading(true);
-    const unsubLogs = subscribeToAllCallLogs("ALL", selectedMonth, (logs) => {
+    const unsubLogs = subscribeToAllCallLogs("ALL", selectedMonth, (logs, isServerFresh) => {
       setCallLogs(logs);
-      setCallLogsLoading(false);
+      if (isServerFresh) {
+        setCallLogsLoading(false);
+      }
     }, refreshTrigger > 0);
     return () => {
       if (unsubLogs) unsubLogs();
@@ -121,6 +123,7 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
 
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
+    setCallLogsLoading(true);
     const toastId = toast.loading("Clearing cache & fetching fresh data from server...");
     try {
       // Admin IDB cache is removed
@@ -258,36 +261,24 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
           ) : (
             <>
               {activeTab === "dashboard" && (
-                (callLogsLoading && callLogs.length === 0) ? (
-                  <div className="h-full flex flex-col items-center justify-center gap-3 py-20">
-                    <Loader size={28} className="text-indigo-600 animate-spin" />
-                    <p className="text-slate-500 font-semibold text-xs">Loading call database...</p>
-                  </div>
-                ) : (
-                  <DashboardTab
-                    programs={programs}
-                    attenders={attenders}
-                    settingsOptions={settingsOptions}
-                    callLogs={callLogs}
-                    registrations={registrations}
-                  />
-                )
+                <DashboardTab
+                  programs={programs}
+                  attenders={attenders}
+                  settingsOptions={settingsOptions}
+                  callLogs={callLogs}
+                  registrations={registrations}
+                  callLogsLoading={callLogsLoading}
+                />
               )}
               {activeTab === "pipeline-calls" && (
-                (callLogsLoading && callLogs.length === 0) ? (
-                  <div className="h-full flex flex-col items-center justify-center gap-3 py-20">
-                    <Loader size={28} className="text-indigo-600 animate-spin" />
-                    <p className="text-slate-500 font-semibold text-xs">Loading analytics database...</p>
-                  </div>
-                ) : (
-                  <PipelineCallsTab
-                    callLogs={callLogs}
-                    registrations={registrations}
-                    programs={programs}
-                    attenders={attenders}
-                    settingsOptions={settingsOptions}
-                  />
-                )
+                <PipelineCallsTab
+                  callLogs={callLogs}
+                  registrations={registrations}
+                  programs={programs}
+                  attenders={attenders}
+                  settingsOptions={settingsOptions}
+                  callLogsLoading={callLogsLoading}
+                />
               )}
               {activeTab === "all-attenders" && (
                 <AllAttendersSheetTab
