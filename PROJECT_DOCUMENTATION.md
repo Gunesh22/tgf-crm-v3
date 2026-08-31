@@ -26,9 +26,9 @@ Never calculate one metric from the other unless explicitly required by the docu
 ---
 
 ## Document Metadata
-- **Documentation Version**: 3.1.0 (Master CRM Architecture V2)
-- **Last Updated**: August 29, 2026
-- **Project Version**: 3.1.0 (`tgf-crm-v3`)
+- **Documentation Version**: 3.2.0 (Master CRM Architecture V3 — Strict Attender Isolation & Shared Call History)
+- **Last Updated**: September 1, 2026
+- **Project Version**: 3.2.0 (`tgf-crm-v3`)
 - **Primary Repository**: [https://github.com/Gunesh22/tgf-crm-v3.git](https://github.com/Gunesh22/tgf-crm-v3.git)
 
 ---
@@ -441,6 +441,31 @@ To guarantee data consistency without multi-document transaction overhead in ser
 - When an outcome generates a `programRelationships` update, `api/_contacts/log-call.js` embeds a `pendingProgramRelationship` sentinel object inside the primary `$set` update.
 - A secondary two-op array swap (`$pull` then `$push`) completes the update and clears `pendingProgramRelationship`.
 - If the secondary operation fails, `pendingProgramRelationship` remains persisted alongside the logged call history, allowing an automated background reconciliation sweep to detect and retry the missing relationship idempotently.
+
+---
+
+### Strict Attender Context Isolation & Call History Synchronization Architecture
+
+The CRM enforces absolute per-attender working state isolation while maintaining full transparency for past call comments across attenders:
+
+1. **Working Form State Isolation (`attenderStates[attenderId]`)**:
+   - Call-entry fields (`Called For`, `status`, `remark`, `callPurpose`, `queryStatus`, `callbackDate`, `callbackTime`) are strictly bound to the active attender's own saved working state (`attenderStates[attenderId]`).
+   - When Attender B opens a lead previously worked by Attender A, Attender B's call entry form fields (`Called For`, `status`, `remark`) initialize completely fresh (`""`), preventing ghost autofill or state borrowing across attenders.
+   - Root contact profile fields (`Name`, `Phone`, `Mobile`, `Email`, `City`, `State`, `Khoji`, `Tags`, `Source`) normalize from the root lead object while allowing attender-specific source overrides.
+
+2. **Fresh & Empty Call Note Input Field (`remark: ""`)**:
+   - The Call Note / Remark textarea field is strictly initialized to empty (`""`) every time the edit modal opens.
+   - Attenders can immediately type a fresh call note for today's call without having to manually erase or clear previous comments.
+
+3. **Multi-Attender Synchronized Call History Timeline (`HistoryTimeline`)**:
+   - Past call attempts and remarks logged by ALL attenders are preserved in `contacts.history[]`.
+   - `mergedHistory` aggregates historical entries from `edited.history`, `savedRow.history`, `savedRow.attenderStates`, and duplicate contact matches (`globalDup.matches`).
+   - Every attender can view all past comments logged by other attenders in the **History Timeline** and **Edit Call Logs Modal**, complete with timestamps, attender names, call purposes, and remark details.
+   - Save handlers in `EditModal.jsx` and `MobileEditModal.jsx` preserve the complete history array (`baseHistory`) across attenders rather than filtering out other attenders' logs.
+
+4. **Read-Only Shared Lead Banner (`SharedBanner.jsx`)**:
+   - Transformed into a 100% read-only informational display indicating other attenders' activity (e.g., `"This contact is also being handled by Attender A (Manisha)"`).
+   - Purely informational: **NEVER** mutates or auto-fills form inputs.
 
 ---
 

@@ -422,132 +422,148 @@ export function parseTimestamp(t) {
   return d && !isNaN(d.getTime()) ? d : null;
 }
 
-export const getFieldWithFallback = (log, fieldName, currentAttenderIdOrName) => {
+/**
+ * Resolves an attender field context deterministically following strict business priority:
+ * 1. attenderStates[currentAttenderId] (exact ID lookup)
+ * 2. attenderStates[currentAttenderName] (exact Name lookup fallback)
+ * 3. current attender's latest history entry
+ * 4. For shared non-owner attender: NEVER use Lead Owner A's root values -> return ""
+ * 5. Lead Owner or non-shared contact: fall back to root contact property
+ */
+export function resolveCurrentAttenderContext(log, fieldName, currentAttenderId, currentAttenderName) {
   if (!log) return "";
-  const name = fieldName.toLowerCase().trim();
-  const keys = Object.keys(log);
-  
-  const isDateField = name.includes("date") || name.includes("callback");
 
-  const formatOrPreserveVal = (raw) => {
+  const cleanField = fieldName.toLowerCase().trim();
+  const attId = String(currentAttenderId || "").trim();
+  const attName = String(currentAttenderName || "").trim();
+  const attIdLower = attId.toLowerCase();
+  const attNameLower = attName.toLowerCase();
+
+  const formatVal = (raw) => {
     if (raw === undefined || raw === null) return "";
-    if (raw instanceof Date) return raw;
     if (typeof raw === "object") {
-      if (typeof raw.toDate === "function" || raw.seconds !== undefined || raw._seconds !== undefined) {
-        return raw;
-      }
-      if (isDateField) return raw;
+      if (raw instanceof Date) return raw.toISOString();
+      if (typeof raw.toDate === "function") return raw.toDate().toISOString();
+      if (raw.seconds !== undefined) return new Date(raw.seconds * 1000).toISOString();
+      return "";
     }
     const s = String(raw).trim();
-    if (s === "[object Object]") return "";
-    return s;
+    return s === "[object Object]" ? "" : s;
   };
 
-  let candidates = [];
-
-  const directKey = keys.find(k => k.toLowerCase() === name);
-  if (directKey) {
-    candidates.push(directKey);
+  const candidateKeys = [];
+  if (cleanField === "called for") {
+    candidateKeys.push("calledFor", "Called For", "called_for", "calledfor");
+  } else if (cleanField === "source") {
+    candidateKeys.push("source", "Source", "sourse", "currentCallSource");
+  } else if (cleanField === "status") {
+    candidateKeys.push("status", "Status", "callStatus");
+  } else {
+    candidateKeys.push(cleanField, fieldName);
   }
 
-  let aliases = [];
-  if (name === "name") {
-    aliases = ["caller", "caller name", "lead name", "lead", "name of caller"];
-  } else if (name === "phone") {
-    aliases = ["whatsapp", "phone number", "whatsapp number", "whatsappno", "contact", "contact number", "contact no", "contact_no"];
-  } else if (name === "mobile") {
-    aliases = ["mobile no", "mobile number"];
-  } else if (name === "email") {
-    aliases = ["mail", "e-mail", "email id", "emailaddress"];
-  } else if (name === "city") {
-    aliases = ["location", "khoji city", "place", "city name"];
-  } else if (name === "state") {
-    aliases = ["state name", "province", "region"];
-  } else if (name === "source") {
-    aliases = ["sourse", "source of informiton", "source of information"];
-  } else if (name === "tags") {
-    aliases = ["tag"];
-  } else if (name === "called for") {
-    aliases = ["called_for", "calledfor"];
-  } else if (name === "callbackdate" || name === "callback date" || name === "callback") {
-    aliases = ["callbackdate", "callback_date", "callback date", "callback", "nextcall", "next_call"];
-  }
-
-  if (aliases.length > 0) {
-    keys.forEach(k => {
-      if (aliases.includes(k.toLowerCase()) && !candidates.includes(k)) {
-        candidates.push(k);
+  const extractFromObject = (obj) => {
+    if (!obj || typeof obj !== "object") return "";
+    for (const key of candidateKeys) {
+      if (obj[key] !== undefined && obj[key] !== null) {
+        const v = formatVal(obj[key]);
+        if (v !== "") return v;
       }
-    });
+    }
+    const cleanTarget = cleanField.replace(/[\s_-]/g, "");
+    const foundKey = Object.keys(obj).find(k => k.toLowerCase().replace(/[\s_-]/g, "") === cleanTarget);
+    if (foundKey) {
+      const v = formatVal(obj[foundKey]);
+      if (v !== "") return v;
+    }
+    return "";
+  };
+
+  // 1 & 2. Check attenderStates by exact ID or exact Name
+  if (log.attenderStates && typeof log.attenderStates === "object") {
+    let stateObj = null;
+    if (attId && log.attenderStates[attId]) {
+      stateObj = log.attenderStates[attId];
+    } else if (attName && log.attenderStates[attName]) {
+      stateObj = log.attenderStates[attName];
+    } else {
+      const matchedKey = Object.keys(log.attenderStates).find(k => {
+        const st = log.attenderStates[k];
+        if (!st) return false;
+        const stId = String(st.attenderId || k || "").trim().toLowerCase();
+        const stName = String(st.attenderName || st.name || "").trim().toLowerCase();
+        if (attIdLower && stId === attIdLower) return true;
+        if (attNameLower && stName === attNameLower) return true;
+        return false;
+      });
+      if (matchedKey) stateObj = log.attenderStates[matchedKey];
+    }
+
+    if (stateObj) {
+      const val = extractFromObject(stateObj);
+      if (val !== "") return val;
+    }
   }
 
-  if (name === "khoji") {
-    keys.forEach(k => {
-      if (isKhojiField(k) && !candidates.includes(k)) {
-        candidates.push(k);
-      }
+  // 3. Check current attender's latest entry in history
+  if (Array.isArray(log.history) && log.history.length > 0) {
+    const latestHist = [...log.history].reverse().find(h => {
+      if (!h || typeof h !== "object") return false;
+      const hId = String(h.attenderId || "").trim().toLowerCase();
+      const hName = String(h.attenderName || h.name || "").trim().toLowerCase();
+      if (attIdLower && hId && hId === attIdLower) return true;
+      if (attNameLower && hName && hName === attNameLower) return true;
+      return false;
     });
+
+    if (latestHist) {
+      const val = extractFromObject(latestHist);
+      if (val !== "") return val;
+    }
   }
 
-  // Special handling for Tags — tags array is the single source of truth
+  // Call-entry fields (must NOT fall back to root record or another attender)
+  const isCallField = [
+    "called for", "calledfor", "called_for",
+    "status", "callstatus", "call_status",
+    "remark", "remarks", "comment", "notes",
+    "callpurpose", "call_purpose",
+    "querystatus", "query_status"
+  ].includes(cleanField);
+
+  if (isCallField) {
+    return "";
+  }
+
+  // Profile & Contact Origin fields (Name, Phone, Email, City, State, Khoji, Tags, Source) fall back to root contact object
+  return extractFromObject(log);
+}
+
+export const getFieldWithFallback = (log, fieldName, currentAttenderId, currentAttenderName) => {
+  if (!log) return "";
+
+  let attId = currentAttenderId;
+  let attName = currentAttenderName;
+  if (typeof currentAttenderId === "object" && currentAttenderId !== null) {
+    attId = currentAttenderId.id || currentAttenderId.attenderId || "";
+    attName = currentAttenderId.name || currentAttenderId.attenderName || "";
+  }
+
+  const name = fieldName.toLowerCase().trim();
+
+  // Special handling for Tags
   if (name === "tags") {
     const tagsArr = Array.isArray(log.tags) ? log.tags : [];
     const tagsStr = log.Tags ? String(log.Tags) : "";
-    // Merge both in case of legacy data
     const merged = new Set();
     tagsArr.forEach(t => String(t).split(",").map(x => x.trim()).filter(Boolean).forEach(x => merged.add(x)));
     tagsStr.split(",").map(x => x.trim()).filter(Boolean).forEach(x => merged.add(x));
-    // Also check alias 'tag'
     const tagAlias = log.tag ? String(log.tag) : "";
     tagAlias.split(",").map(x => x.trim()).filter(Boolean).forEach(x => merged.add(x));
-
     return Array.from(merged).sort().join(", ");
   }
 
-  // 1. Primary: Check active attender's own state FIRST (if currentAttenderIdOrName is provided)
-  if (currentAttenderIdOrName && log.attenderStates && typeof log.attenderStates === "object") {
-    const searchTarget = String(currentAttenderIdOrName).toLowerCase().trim();
-    const matchingKey = Object.keys(log.attenderStates).find(k => {
-      if (k.toLowerCase().trim() === searchTarget) return true;
-      const st = log.attenderStates[k];
-      return st && (
-        String(st.attenderId || "").toLowerCase().trim() === searchTarget ||
-        String(st.attenderName || "").toLowerCase().trim() === searchTarget
-      );
-    });
-
-    if (matchingKey && log.attenderStates[matchingKey]) {
-      const stateObj = log.attenderStates[matchingKey];
-      for (const c of candidates) {
-        const valInState = formatOrPreserveVal(stateObj[c]);
-        if (valInState !== "") return valInState;
-      }
-      const keysInState = Object.keys(stateObj);
-      const directKeyInState = keysInState.find(k => k.toLowerCase() === name);
-      if (directKeyInState) {
-        const valInState = formatOrPreserveVal(stateObj[directKeyInState]);
-        if (valInState !== "") return valInState;
-      }
-      if (aliases.length > 0) {
-        const aliasKeyInState = keysInState.find(k => aliases.includes(k.toLowerCase()));
-        if (aliasKeyInState) {
-          const valInState = formatOrPreserveVal(stateObj[aliasKeyInState]);
-          if (valInState !== "") return valInState;
-        }
-      }
-    }
-  }
-
-  // 2. Secondary: Fall back to top-level root contact properties (for non-shared contacts or initial assignment)
-  for (const c of candidates) {
-    const val = formatOrPreserveVal(log[c]);
-    if (val !== "") return val;
-  }
-
-  if (candidates.length > 0) {
-    return formatOrPreserveVal(log[candidates[0]]);
-  }
-  return "";
+  return resolveCurrentAttenderContext(log, fieldName, attId, attName);
 };
 
 export const getKhojiValue = (log, currentAttenderIdOrName) => {

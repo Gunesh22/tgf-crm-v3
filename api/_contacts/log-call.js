@@ -266,9 +266,10 @@ export async function executeLogCall(db, payload) {
     callPurpose: callPurposeClean,
     callStatus:  callStatusClean,
     status:      status || 'Pending',
+    pipelineStage: evalResult.pipelineStage,
     queryStatus: queryStatus || null,
     queryDetails: queryDetails || null,
-    remark:       remark || '',
+    remark:       remark || queryDetails || '',
     callbackDate: callbackDate || null,
     callbackTime: callbackTime || null,
     calledFor:    calledFor || rootUpdates['Called For'] || existingContact['Called For'] || '',
@@ -288,13 +289,19 @@ export async function executeLogCall(db, payload) {
   delete rootUpdates.leadOwnerName;
   delete rootUpdates.ownerHistory;
 
-  // If this is a call logged by a non-owner on a shared contact, do not pollute root Called For or Source
+  const targetCalledFor = calledFor || rootUpdates['Called For'] || '';
+  const ownerCalledFor = existingContact.attenderStates?.[existingContact.leadOwner]?.calledFor ||
+                         existingContact['Called For'] || existingContact.calledFor || '';
+
   const isNonOwnerSharedCall = !!(
     existingContact.leadOwner &&
     existingContact.leadOwner !== attenderId &&
     Array.isArray(existingContact.assignedTo) &&
     existingContact.assignedTo.length > 1
   );
+
+  const isSameCalledFor = !targetCalledFor || !ownerCalledFor ||
+    normalizeCalledForKey(targetCalledFor) === normalizeCalledForKey(ownerCalledFor);
 
   if (isNonOwnerSharedCall) {
     delete rootUpdates['Called For'];
@@ -317,9 +324,6 @@ export async function executeLogCall(db, payload) {
   const setPayload = {
     ...rootUpdates,
     callType:    callDirection,
-    callPurpose: callPurposeClean,
-    callStatus:  callStatusClean,
-    status:      status || existingContact.status || 'Pending',
     attemptCount: evalResult.attemptCount,
     isAttenderCreditEligible: evalResult.isAttenderCreditEligible,
     closedReason: evalResult.closedReason,
@@ -335,23 +339,36 @@ export async function executeLogCall(db, payload) {
       callPurpose:  callPurposeClean,
       callStatus:   callStatusClean,
       status:       status || 'Pending',
-      remark:       remark || '',
+      pipelineStage: evalResult.pipelineStage,
+      queryStatus:  queryStatus || null,
+      queryDetails: queryDetails || null,
+      remark:       remark || queryDetails || '',
       callbackDate: callbackDate || null,
       callbackTime: callbackTime || null,
       lastCalledAt: nowIso,
-      calledFor:    calledFor || rootUpdates['Called For'] || existingContact['Called For'] || '',
+      calledFor:    targetCalledFor || existingContact['Called For'] || '',
       source:       currentCallSource,
       original_source: originalSource,
     },
   };
 
   if (!isNonOwnerSharedCall) {
+    setPayload.callPurpose = callPurposeClean;
+    setPayload.callStatus = callStatusClean;
+    setPayload.status = status || existingContact.status || 'Pending';
+    setPayload.queryStatus = queryStatus || existingContact.queryStatus || null;
+    setPayload.queryDetails = queryDetails || existingContact.queryDetails || null;
     setPayload.Source = currentCallSource;
     setPayload.source = currentCallSource;
     if (calledFor || rootUpdates['Called For']) {
       setPayload['Called For'] = calledFor || rootUpdates['Called For'];
       setPayload.calledFor = calledFor || rootUpdates['Called For'];
     }
+  } else if (isSameCalledFor) {
+    // If working on the SAME program, update status/callPurpose on root for visibility
+    setPayload.callPurpose = callPurposeClean;
+    setPayload.callStatus = callStatusClean;
+    setPayload.status = status || existingContact.status || 'Pending';
   }
 
   // Set leadOwner only on FIRST assignment (additive — never overwrites)
@@ -360,9 +377,10 @@ export async function executeLogCall(db, payload) {
     setPayload.leadOwnerName = attenderName || '';
   }
 
-  // Conditionally update pipelineStage (only if a valid forward transition occurred)
+  // Conditionally update pipelineStage (only if same program OR lead owner call)
   const stageChanged = evalResult.pipelineStage !== currentStageInDb;
-  if (stageChanged && canTransitionServer(currentStageInDb, evalResult.pipelineStage, {
+  const shouldUpdateRootStage = !isNonOwnerSharedCall || isSameCalledFor;
+  if (shouldUpdateRootStage && stageChanged && canTransitionServer(currentStageInDb, evalResult.pipelineStage, {
     callStatus: callStatusClean,
     status,
     closedReason: evalResult.closedReason,
@@ -371,7 +389,6 @@ export async function executeLogCall(db, payload) {
   }
 
   // ── programRelationships[] — ATOMIC merge strategy ────────────────────
-  const targetCalledFor = calledFor || rootUpdates['Called For'] || existingContact['Called For'] || '';
   const calledForKey    = normalizeCalledForKey(targetCalledFor);
   const contactStrId    = String(existingContact._id || contactId);
 

@@ -163,7 +163,7 @@ export const CallEntryTab = ({
   };
 
   // Compute active Call Purpose (SALES, QUERY, REMINDER)
-  const activePurpose = (edited.callPurpose || "SALES").toUpperCase();
+  const activePurpose = String(edited.callPurpose || "SALES").toUpperCase();
   
   // Compute active Call Status (Connected vs Unconnected vs blank)
   const activeCallStatus = edited.callStatus || "";
@@ -179,7 +179,8 @@ export const CallEntryTab = ({
       callPurpose: activePurpose,
       callStatus: activeCallStatus,
       purposeOutcome: edited.status,
-      queryStatus: edited.queryStatus
+      queryStatus: edited.queryStatus,
+      calledFor: selectedProgram
     }
   );
 
@@ -201,8 +202,11 @@ export const CallEntryTab = ({
     // Check programRelationships
     const rels = Array.isArray(edited.programRelationships) ? edited.programRelationships : Array.isArray(row.programRelationships) ? row.programRelationships : [];
     const foundRel = rels.find(p => {
-      const pKey = (p.calledForKey || p.calledFor || p.program || "").toLowerCase().replace(/[^a-z0-9]/g, "-");
-      return pKey === targetKey && (p.status === "Registered / Won" || p.status === "Registered" || p.status === "reg_done");
+      if (!p) return false;
+      const pStr = typeof p === "string" ? p : (p.calledForKey || p.calledFor || p.program || p["Called For"] || "");
+      const pKey = String(pStr).toLowerCase().replace(/[^a-z0-9]/g, "-");
+      const pStat = typeof p === "string" ? "" : String(p.status || "").toLowerCase();
+      return pKey === targetKey && (pStat.includes("registered") || pStat.includes("reg_done") || pStat.includes("alumni"));
     });
     if (foundRel) {
       return { exists: true, registrationId: foundRel.registrationId || null, program: targetProg };
@@ -211,22 +215,30 @@ export const CallEntryTab = ({
     // Check registrations
     const regs = Array.isArray(edited.registrations) ? edited.registrations : Array.isArray(row.registrations) ? row.registrations : [];
     const foundReg = regs.find(r => {
-      const rKey = (r.calledForKey || r.calledFor || r.program || "").toLowerCase().replace(/[^a-z0-9]/g, "-");
+      if (!r) return false;
+      const rStr = typeof r === "string" ? r : (r.calledForKey || r.calledFor || r.program || r["Called For"] || "");
+      const rKey = String(rStr).toLowerCase().replace(/[^a-z0-9]/g, "-");
       return rKey === targetKey;
     });
     if (foundReg) {
       return { exists: true, registrationId: foundReg.registrationId || null, program: targetProg };
     }
 
-    // Check pipeline stage
-    const canCalledFor = (edited["Called For"] || edited.calledFor || row["Called For"] || row.calledFor || "").toLowerCase().replace(/[^a-z0-9]/g, "-");
-    const canStage = edited.pipelineStage || row.pipelineStage || "";
-    if (canCalledFor === targetKey && (canStage === "6. Registered / Won" || canStage === "Registered / Won")) {
+    // Check call history for past Reg.Done calls for THIS EXACT program
+    const hist = Array.isArray(mergedHistory) ? mergedHistory : Array.isArray(edited.history) ? edited.history : Array.isArray(row.history) ? row.history : [];
+    const foundHistReg = hist.find(h => {
+      if (!h) return false;
+      const hStatus = String(h?.status || h?.Status || "").trim().toLowerCase();
+      if (hStatus !== "reg.done" && hStatus !== "registered") return false;
+      const hProg = String(h?.calledFor || h?.calledForKey || h?.program || h?.["Called For"] || "").toLowerCase().replace(/[^a-z0-9]/g, "-");
+      return hProg === targetKey;
+    });
+    if (foundHistReg) {
       return { exists: true, registrationId: null, program: targetProg };
     }
 
     return { exists: false, program: targetProg };
-  }, [selectedProgram, edited, row, calledForField]);
+  }, [selectedProgram, edited, row, calledForField, mergedHistory]);
 
   const setCallPurpose = (purpose) => {
     setEdited(prev => {
@@ -236,9 +248,8 @@ export const CallEntryTab = ({
       if (isUnconnected) {
         if (!next.status) next.status = "Not Connected";
       } else if (purpose === "QUERY") {
-        if (!["Query", "Pending", "Solved"].includes(prev.status)) {
-          next.status = "";
-        }
+        next.status = "Query";
+        if (!next.queryStatus) next.queryStatus = "Pending";
       } else if (purpose === "REMINDER") {
         if (!REMINDER_OUTCOME_OPTIONS.includes(prev.status)) {
           next.status = "";
@@ -549,9 +560,9 @@ export const CallEntryTab = ({
           </label>
           <SearchableDropdown
             options={["Sales", "Query", "Reminder"]}
-            selected={activePurpose === "QUERY" ? "Query" : activePurpose === "REMINDER" ? "Reminder" : "Sales"}
+            selected={activePurpose === "QUERY" ? "Query" : activePurpose === "REMINDER" ? "Reminder" : activePurpose === "SALES" ? "Sales" : ""}
             onChange={val => {
-              if (val) setCallPurpose(val.toUpperCase());
+              setCallPurpose(val ? val.toUpperCase() : "");
             }}
             placeholder="Select Call Purpose..."
             colorClass="indigo"
@@ -559,8 +570,8 @@ export const CallEntryTab = ({
         </div>
       </div>
 
-      {/* 2. PROGRAM & ORIGINAL SOURCE (SALES MODE) */}
-      {activePurpose === "SALES" && (
+      {/* 2. PROGRAM & ORIGINAL SOURCE (SALES MODE / UNSELECTED) */}
+      {(activePurpose === "SALES" || activePurpose === "") && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-30 animate-fade-in">
           {/* Program (Called For) */}
           <div className="space-y-1.5">
@@ -592,7 +603,7 @@ export const CallEntryTab = ({
             </div>
             <SearchableDropdown
               options={CALL_SOURCE_OPTIONS}
-              selected={String(edited[sourceField] || edited.Source || edited.source || edited.original_source || row.original_source || edited.originalSource || "")}
+              selected={String(edited[sourceField] || edited.Source || edited.source || "")}
               onChange={val => handleChange(sourceField, val)}
               placeholder="Select call source..."
               colorClass="amber"
@@ -640,20 +651,45 @@ export const CallEntryTab = ({
         </div>
       )}
 
-      {/* QUERY: Program selector (which program is this query about?) */}
+      {/* QUERY: Program & Call Source grid (2-column) */}
       {activePurpose === "QUERY" && (
-        <div className="space-y-1.5 relative z-30 animate-fade-in">
-          <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
-            Query About (Program / Context)
-          </label>
-          <SearchableDropdown
-            options={salesCalledForOptions}
-            selected={String(edited[calledForField] || "")}
-            onChange={val => handleChange(calledForField, val)}
-            placeholder="Which program is this query about?"
-            colorClass="orange"
-            disabled={!getEditable(calledForField)}
-          />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-30 animate-fade-in">
+          {/* Query About (Program / Context) */}
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+              Query About (Program / Context)
+            </label>
+            <SearchableDropdown
+              options={salesCalledForOptions}
+              selected={String(edited[calledForField] || "")}
+              onChange={val => handleChange(calledForField, val)}
+              placeholder="Which program is this query about?"
+              colorClass="orange"
+              disabled={!getEditable(calledForField)}
+            />
+          </div>
+
+          {/* Call Source (Current Call) */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-1">
+              <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+                Call Source (Current Call) <span className="text-rose-500 font-bold">*</span>
+              </label>
+              {(edited.original_source || row.original_source || edited.originalSource) && (
+                <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200" title="Permanent Original Acquisition Source">
+                  Orig: <strong className="text-slate-700 font-bold">{edited.original_source || row.original_source || edited.originalSource}</strong>
+                </span>
+              )}
+            </div>
+            <SearchableDropdown
+              options={CALL_SOURCE_OPTIONS}
+              selected={String(edited[sourceField] || edited.Source || edited.source || edited.original_source || row.original_source || edited.originalSource || "")}
+              onChange={val => handleChange(sourceField, val)}
+              placeholder="Select call source..."
+              colorClass="amber"
+              disabled={!getEditable(sourceField)}
+            />
+          </div>
         </div>
       )}
 
@@ -749,22 +785,25 @@ export const CallEntryTab = ({
                 Query Status <span className="text-rose-500 font-bold">*</span>
               </label>
               <div className="flex gap-2">
-                {QUERY_STATUS_OPTIONS.map(qs => (
-                  <button
-                    key={qs}
-                    type="button"
-                    onClick={() => handleChange("queryStatus", qs)}
-                    className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                      edited.queryStatus === qs
-                        ? qs === "Pending"
-                          ? "bg-amber-500 text-white border-amber-500 shadow-2xs"
-                          : "bg-emerald-600 text-white border-emerald-600 shadow-2xs"
-                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
-                    }`}
-                  >
-                    {qs === "Pending" ? "⏳ Pending" : "✓ Solved"}
-                  </button>
-                ))}
+                {QUERY_STATUS_OPTIONS.map(qs => {
+                  const currentQueryStatus = edited.queryStatus || "Pending";
+                  return (
+                    <button
+                      key={qs}
+                      type="button"
+                      onClick={() => handleChange("queryStatus", qs)}
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                        currentQueryStatus === qs
+                          ? qs === "Pending"
+                            ? "bg-amber-500 text-white border-amber-500 shadow-2xs"
+                            : "bg-emerald-600 text-white border-emerald-600 shadow-2xs"
+                          : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      {qs === "Pending" ? "⏳ Pending" : "✓ Solved"}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -799,20 +838,6 @@ export const CallEntryTab = ({
 
         </div>
       </div>
-
-      {/* Query Details (What was asked) - full width below if Query mode */}
-      {activePrimaryResult === "Connected" && activePurpose === "QUERY" && (
-        <div className="space-y-1.5 animate-fade-in pt-1">
-          <label className="text-[11px] font-bold text-slate-700">Query Details (What was asked)</label>
-          <textarea
-            value={edited.queryDetails || ""}
-            onChange={e => handleChange("queryDetails", e.target.value)}
-            rows={2}
-            className="w-full px-3.5 py-2.5 bg-white border border-amber-200 rounded-xl text-xs resize-none focus:outline-none focus:ring-2 focus:ring-amber-400/20 focus:border-amber-400 transition text-slate-800"
-            placeholder="Summarise the question or inquiry..."
-          />
-        </div>
-      )}
 
       {/* Objection Reason for Not Interested - full width below */}
       {activePrimaryResult === "Connected" && (edited.status?.toLowerCase() === "not interested") && (

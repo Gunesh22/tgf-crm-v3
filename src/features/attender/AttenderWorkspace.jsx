@@ -1,21 +1,26 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import * as XLSX from "xlsx";
 import { toast } from "react-hot-toast";
 import {
   Phone, ArrowLeft, Plus, Download, Search, ChevronLeft, ChevronRight, ChevronDown,
   Edit3, X, Save, FileText, Calendar, Tag, User, MapPin, MessageSquare,
   Hash, Clock, PhoneOff, CheckCircle2, AlertCircle, Trash2,
-  PhoneIncoming, PhoneOutgoing, Loader, Flame, SlidersHorizontal,
-  UserCheck, RefreshCw, Info, Eye
+  PhoneIncoming, PhoneOutgoing, CalendarDays, Loader, Flame, SlidersHorizontal, FileSpreadsheet, CheckSquare,
+  Bell, Sparkles, UserCheck, RefreshCw, Info, Eye
 } from "lucide-react";
 import {
   subscribeToCallLogs, updateCallLog, addIncomingCallLog,
   assignContactsToAttender, normalizePhone, getActiveTags,
-  INCOMING_PROGRAM_ID, INCOMING_PROGRAM_NAME,
-  OUTGOING_PROGRAM_ID, OUTGOING_PROGRAM_NAME,
-  globalSearchContacts, searchAttenderContacts,
+  INCOMING_PROGRAM_ID, INCOMING_PROGRAM_NAME, ensureIncomingProgram,
+  OUTGOING_PROGRAM_ID, OUTGOING_PROGRAM_NAME, ensureOutgoingProgram,
+  globalSearchContacts, searchAttenderContacts, claimContact, removeAttenderFromContact, claimCRMContact,
   fetchFreshSharedLead
 } from "../../lib/db";
+import { searchCRM } from "../../lib/ghl";
 import {
+  STATUS_OPTIONS,
+  SOURCE_OPTIONS,
+  CALLED_FOR_OPTIONS,
   CONNECTED_STATUSES,
   NOT_CONNECTED_STATUSES,
   getFieldWithFallback,
@@ -26,6 +31,7 @@ import {
   getSharedAttenders,
   isKhojiAffirmative,
   isKhojiNegative,
+  isIgnoredField,
   getCanonicalStatus,
   isUnansweredCallback
 } from "./utils";
@@ -99,12 +105,15 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   const [programs, setPrograms] = useState([]);
   const [selectedProgramId, setSelectedProgramId] = useState("");
   const [selectedProgramName, setSelectedProgramName] = useState("");
+  const [selectedSubProgram, setSelectedSubProgram] = useState("");
   const [callLogs, setCallLogs] = useState([]);
   const [editingRow, setEditingRow] = useState(null);
   const [isFetchingShared, setIsFetchingShared] = useState(false);
   const [freshSharedLead, setFreshSharedLead] = useState(null);
   const [isLoadingProgram, setIsLoadingProgram] = useState(true); // skeleton state
   const [loadError, setLoadError] = useState(null); // error state
+  const [requestCount, setRequestCount] = useState(10);
+  const [isRequesting, setIsRequesting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [page, setPage] = useState(1);
@@ -117,6 +126,9 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   const [filterObjectionReason, setFilterObjectionReason] = useState([]);
   const [filterCallbackStatus, setFilterCallbackStatus] = useState([]);
   const [filterCallCount, setFilterCallCount] = useState([]);
+  const [filterGeneralStatus, setFilterGeneralStatus] = useState([]);
+  const [filterQueryStatus, setFilterQueryStatus] = useState([]);
+  const [filterAbhivyakti, setFilterAbhivyakti] = useState([]);
   const [filterKhoji, setFilterKhoji] = useState([]);
   const [filterDateType, setFilterDateType] = useState("All");
   const [filterDateRange, setFilterDateRange] = useState("All");
@@ -127,6 +139,8 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   const [activeView, setActiveView] = useState("sheet"); // "sheet" | "performance"
   const [sortBy, setSortBy] = useState("activityDesc"); // "activityDesc" | "nameAsc" | "createdDesc"
   const [selectedTags, setSelectedTags] = useState([]);
+  const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
+  const [tagSearchQuery, setTagSearchQuery] = useState("");
   const ALLOWED_ATTENDER_COLS = useMemo(() => [
     "Name", "Phone", "Mobile", "City", "Khoji", "Tags", "Called For", "Type", "Status", "Remark", "Callback"
   ], []);
@@ -144,7 +158,9 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     }
   });
   const [isColumnModalOpen, setIsColumnModalOpen] = useState(false);
+  const [colSearchQuery, setColSearchQuery] = useState("");
   const [programDropOpen, setProgramDropOpen] = useState(false);
+  const [programSearch, setProgramSearch] = useState("");
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [showStageInfoModal, setShowStageInfoModal] = useState(false);
   const [isQuickGuideOpen, setIsQuickGuideOpen] = useState(false);
@@ -988,7 +1004,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   }, [
     searchQuery, filterStatus, filterSource, filterCity, filterCalledFor,
     filterCallType, filterSubProgram, filterObjectionReason,
-    filterCallbackStatus, filterCallCount, filterGeneralStatus, filterAbhivyakti,
+    filterCallbackStatus, filterCallCount, filterGeneralStatus, filterQueryStatus, filterAbhivyakti,
     filterKhoji,
     filterDateType, filterDateRange, customTimeFrom, customTimeTo
   ]);
@@ -1085,9 +1101,24 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
         filterStatus !== "Follow up" && 
         filterStatus !== "Unanswered Callback" && 
         filterStatus !== "Today Activity" && 
-        filterStatus !== "Shared" && 
-        activeAttenderStatus !== filterStatus
-      ) return false;
+        filterStatus !== "Shared"
+      ) {
+        const canonicalFilter = getCanonicalStatus(filterStatus) || filterStatus;
+        const canonicalActive = getCanonicalStatus(activeAttenderStatus) || activeAttenderStatus;
+
+        let statusMatches = canonicalActive === canonicalFilter || activeAttenderStatus === filterStatus;
+
+        if (!statusMatches && (canonicalFilter === "Reg.Done" || filterStatus === "Reg.Done")) {
+          const isRegStage = log.pipelineStage === "6. Registered / Won" || log.pipelineStage === "Registered / Won";
+          const hasRegs = Array.isArray(log.registrations) && log.registrations.length > 0;
+          const hasRegHist = Array.isArray(log.history) && log.history.some(h => getCanonicalStatus(h?.status) === "Reg.Done");
+          if (isRegStage || hasRegs || hasRegHist) {
+            statusMatches = true;
+          }
+        }
+
+        if (!statusMatches) return false;
+      }
 
       // 3. Source Filter
       if (filterSource.length > 0) {

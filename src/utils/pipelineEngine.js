@@ -113,67 +113,9 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null) {
     return null;
   };
 
-  // 1. Direct Source of Truth: MongoDB contact.pipelineStage
-  let contactStage = normalizeStageStr(contact.pipelineStage);
-
-  // If pipelineStage is missing on contact object, derive from programRelationships, attenderStates, or history
-  if (!contactStage) {
-    if (Array.isArray(contact.programRelationships)) {
-      contact.programRelationships.forEach(r => {
-        const st = normalizeStageStr(r.pipelineStage || r.status);
-        if (st && (!contactStage || (STAGE_RANKS[st] || 0) > (STAGE_RANKS[contactStage] || 0))) {
-          contactStage = st;
-        }
-      });
-    }
-    if (contact.attenderStates && typeof contact.attenderStates === "object") {
-      Object.values(contact.attenderStates).forEach(st => {
-        if (!st) return;
-        const stPurpose = String(st.callPurpose || "").toUpperCase();
-        if (stPurpose && stPurpose !== "SALES") return;
-        const stStage = normalizeStageStr(st.status || st.pipelineStage);
-        if (stStage && (!contactStage || (STAGE_RANKS[stStage] || 0) > (STAGE_RANKS[contactStage] || 0))) {
-          contactStage = stStage;
-        }
-      });
-    }
-    const history = Array.isArray(contact.history) ? contact.history : [];
-    if (history.length > 0) {
-      let hRank = 0;
-      let hStage = null;
-      for (const h of history) {
-        const callPurpose = (h.callPurpose || "").toUpperCase();
-        if (callPurpose && callPurpose !== "SALES") continue; // Only SALES events affect pipeline
-
-        const stat = (h.status || h.purposeOutcome || "").trim().toLowerCase();
-        const rem = (h.remark || "").toLowerCase().trim();
-        const combined = `${stat} ${rem}`;
-        let st = null;
-        if (combined.includes("already reg") || combined.includes("reg.done") || combined.includes("registered")) st = PIPELINE_STAGES.REGISTERED_WON;
-        else if (combined.includes("info given") || combined.includes("information given") || combined.includes("details send")) st = PIPELINE_STAGES.INFO_GIVEN;
-        else if (combined.includes("interested") && !combined.includes("not interested")) st = PIPELINE_STAGES.NURTURE_INTERESTED;
-        else if (combined.includes("next time")) st = PIPELINE_STAGES.FUTURE_POOL;
-        else if (combined.includes("not interested")) st = PIPELINE_STAGES.CLOSED_LOST;
-        else if (INVALID_NUMBER_STATUSES.some(inv => combined.includes(inv.toLowerCase()))) st = PIPELINE_STAGES.CLOSED_INVALID;
-
-        if (st) {
-          const r = STAGE_RANKS[st] || 0;
-          if (r > hRank) {
-            hRank = r;
-            hStage = st;
-          }
-        }
-      }
-      if (hStage && (!contactStage || (STAGE_RANKS[hStage] || 0) > (STAGE_RANKS[contactStage] || 0))) {
-        contactStage = hStage;
-      }
-    }
-  }
-
-  const finalContactStage = contactStage || null;
-
-  // 2. Program-specific evaluation ONLY if targetCalledFor is passed and non-empty
   const targetKey = targetCalledFor ? String(targetCalledFor).trim().toLowerCase() : "";
+
+  // 1. If targetCalledFor is provided, evaluate program-specific journey FIRST
   if (targetKey) {
     // Check programRelationships for explicit targetKey match
     if (Array.isArray(contact.programRelationships) && contact.programRelationships.length > 0) {
@@ -245,7 +187,69 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null) {
     }
   }
 
-  // 3. If no matching program journey exists for targetKey, return finalContactStage
+  // 2. Direct Source of Truth: MongoDB contact.pipelineStage
+  let contactStage = normalizeStageStr(contact.pipelineStage);
+
+  // If pipelineStage is missing on contact object, derive from programRelationships, attenderStates, or history
+  if (!contactStage) {
+    if (Array.isArray(contact.programRelationships)) {
+      contact.programRelationships.forEach(r => {
+        const st = normalizeStageStr(r.pipelineStage || r.status);
+        if (st && (!contactStage || (STAGE_RANKS[st] || 0) > (STAGE_RANKS[contactStage] || 0))) {
+          contactStage = st;
+        }
+      });
+    }
+    if (contact.attenderStates && typeof contact.attenderStates === "object") {
+      Object.values(contact.attenderStates).forEach(st => {
+        if (!st) return;
+        const stPurpose = String(st.callPurpose || "").toUpperCase();
+        if (stPurpose && stPurpose !== "SALES") return;
+        const stStage = normalizeStageStr(st.status || st.pipelineStage);
+        if (stStage && (!contactStage || (STAGE_RANKS[stStage] || 0) > (STAGE_RANKS[contactStage] || 0))) {
+          contactStage = stStage;
+        }
+      });
+    }
+    const history = Array.isArray(contact.history) ? contact.history : [];
+    if (history.length > 0) {
+      let hRank = 0;
+      let hStage = null;
+      for (const h of history) {
+        const callPurpose = (h.callPurpose || "").toUpperCase();
+        if (callPurpose && callPurpose !== "SALES") continue; // Only SALES events affect pipeline
+
+        const stat = (h.status || h.purposeOutcome || "").trim().toLowerCase();
+        const rem = (h.remark || "").toLowerCase().trim();
+        const combined = `${stat} ${rem}`;
+        let st = null;
+        if (combined.includes("already reg") || combined.includes("reg.done") || combined.includes("registered")) st = PIPELINE_STAGES.REGISTERED_WON;
+        else if (combined.includes("info given") || combined.includes("information given") || combined.includes("details send")) st = PIPELINE_STAGES.INFO_GIVEN;
+        else if (combined.includes("interested") && !combined.includes("not interested")) st = PIPELINE_STAGES.NURTURE_INTERESTED;
+        else if (combined.includes("next time")) st = PIPELINE_STAGES.FUTURE_POOL;
+        else if (combined.includes("not interested")) st = PIPELINE_STAGES.CLOSED_LOST;
+        else if (INVALID_NUMBER_STATUSES.some(inv => combined.includes(inv.toLowerCase()))) st = PIPELINE_STAGES.CLOSED_INVALID;
+
+        if (st) {
+          const r = STAGE_RANKS[st] || 0;
+          if (r > hRank) {
+            hRank = r;
+            hStage = st;
+          }
+        }
+      }
+      if (hStage && (!contactStage || (STAGE_RANKS[hStage] || 0) > (STAGE_RANKS[contactStage] || 0))) {
+        contactStage = hStage;
+      }
+    }
+  }
+
+  const finalContactStage = contactStage || null;
+
+  if (targetKey) {
+    return PIPELINE_STAGES.NEW_LEAD;
+  }
+
   return finalContactStage;
 }
 
@@ -261,7 +265,8 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null) {
  *   programRelationshipUpdate — { status, program } if alumni evidence found (API layer writes this)
  */
 export function evaluatePipeline(contact = {}, callEvent = {}) {
-  const currentStage = getEffectiveStage(contact);
+  const calledFor = callEvent.calledFor || callEvent["Called For"] || contact["Called For"] || contact.calledFor || null;
+  const currentStage = getEffectiveStage(contact, calledFor);
   const currentRank  = currentStage ? (STAGE_RANKS[currentStage] || 0) : 0;
 
   const purpose    = (callEvent.callPurpose || "SALES").toUpperCase();

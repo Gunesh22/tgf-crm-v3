@@ -56,46 +56,43 @@ export default function MobileEditModal({
       normalized.callType = String(normalized.callType).toLowerCase();
     }
     
-    const standardFields = ["Name", "Phone", "Mobile", "Email", "City", "State", "Khoji", "Tags", "Source", "Called For"];
-    const standardVals = {};
-    standardFields.forEach(col => {
-      standardVals[col] = getFieldWithFallback(row, col, attenderId || attenderName);
+    const profileFields = ["Name", "Phone", "Mobile", "Email", "City", "State", "Khoji", "Tags", "Source"];
+    profileFields.forEach(col => {
+      normalized[col] = getFieldWithFallback(row, col, attenderId, attenderName);
     });
 
-    const keysToDelete = new Set();
-    const keys = Object.keys(row);
-    keys.forEach(k => {
-      const kLower = k.toLowerCase();
-      if (["name", "caller", "caller name", "lead name", "lead", "name of caller"].includes(kLower)) keysToDelete.add(k);
-      if (["phone", "whatsapp", "phone number", "whatsapp number", "whatsappno", "contact", "contact number", "contact no", "contact_no"].includes(kLower)) keysToDelete.add(k);
-      if (["mobile", "mobile no", "mobile number"].includes(kLower)) keysToDelete.add(k);
-      if (["email", "mail", "e-mail", "email id", "emailaddress"].includes(kLower)) keysToDelete.add(k);
-      if (["city", "location", "khoji city", "place", "city name"].includes(kLower)) keysToDelete.add(k);
-      if (["state", "state name", "province", "region"].includes(kLower)) keysToDelete.add(k);
-      if (isKhojiField(kLower)) keysToDelete.add(k);
-      if (["source", "sourse", "source of informiton", "source of information"].includes(kLower)) keysToDelete.add(k);
-      if (["tags", "tag"].includes(kLower)) keysToDelete.add(k);
-      if (["called for", "called_for", "calledfor"].includes(kLower)) keysToDelete.add(k);
-    });
-
-    keysToDelete.forEach(k => delete normalized[k]);
-    standardFields.forEach(col => { normalized[col] = standardVals[col]; });
+    const rootSource = normalized.Source || getFieldWithFallback(row, "Source", attenderId, attenderName) || "";
+    normalized.Source = rootSource;
+    normalized.source = rootSource;
 
     if (row._isNew && !normalized.Khoji) {
       normalized.Khoji = "No";
     }
 
-    normalized.callStatus = "";
-    normalized.status = "";
-    normalized.queryStatus = "";
-    normalized.remark = "";
-
     const attState = findMatchingAttenderState(normalized.attenderStates, attenderId, attenderName);
-    const existingCallbackDate = getFieldWithFallback(row, "callbackDate", attenderId || attenderName) || attState?.callbackDate || row.callbackDate || null;
-    const existingCallbackStatus = getFieldWithFallback(row, "callbackStatus", attenderId || attenderName) || attState?.callbackStatus || row.callbackStatus || (existingCallbackDate ? "pending" : null);
+    
+    if (attState) {
+      normalized["Called For"] = attState.calledFor || attState["Called For"] || "";
+      normalized.calledFor = normalized["Called For"];
+      normalized.Source = attState.source || attState.Source || rootSource;
+      normalized.source = normalized.Source;
+      normalized.status = attState.status || "";
+      normalized.remark = "";
+      normalized.callbackDate = attState.callbackDate || null;
+      normalized.callbackStatus = attState.callbackStatus || (attState.callbackDate ? "pending" : null);
+    } else {
+      normalized["Called For"] = "";
+      normalized.calledFor = "";
+      normalized.Source = rootSource;
+      normalized.source = rootSource;
+      normalized.status = "";
+      normalized.remark = "";
+      normalized.callbackDate = null;
+      normalized.callbackStatus = null;
+    }
 
-    normalized.callbackDate = existingCallbackDate;
-    normalized.callbackStatus = existingCallbackStatus;
+    normalized.callStatus = "";
+    normalized.queryStatus = "";
 
     normalized.pipelineStage = normalized.pipelineStage || row.pipelineStage;
 
@@ -271,13 +268,9 @@ export default function MobileEditModal({
               Email: prev.Email || dup.email || dup.Email || "",
               City: prev.City || dup.city || dup.City || "",
               State: prev.State || dup.state || dup.State || "",
-              Tags: prev.Tags || (Array.isArray(dup.tags) ? dup.tags.join(", ") : dup.Tags || ""),
-              pipelineStage: prev.pipelineStage || dup.pipelineStage,
-              programRelationships: prev.programRelationships || dup.programRelationships,
-              attenderStates: { ...(dup.attenderStates || {}), ...(prev.attenderStates || {}) },
-              history: combineContactHistories(dup.history, prev.history)
+              Tags: prev.Tags || (Array.isArray(dup.tags) ? dup.tags.join(", ") : dup.Tags || "")
             }));
-            toast.success("Duplicate lead found! Info auto-filled.");
+            toast.success("Duplicate lead found! Profile info auto-filled.");
           }
         } else {
           setGlobalDup(null);
@@ -349,22 +342,10 @@ export default function MobileEditModal({
 
       updates.lastEditedBy = attenderName || "Unknown";
 
-      // Isolate history to this attender only
-      const attState = findMatchingAttenderState(row.attenderStates, attenderId, attenderName);
+      // Preserve history entries across all attenders so past comments are synced and visible
       let baseHistory = Array.isArray(targetEdited.history) 
-        ? targetEdited.history 
-        : (Array.isArray(attState?.history) ? attState.history : []);
-      
-      baseHistory = baseHistory.filter(h => {
-        if (!h) return false;
-        const hName = String(h.attenderName || "").toLowerCase().trim();
-        const hId = String(h.attenderId || "").toLowerCase().trim();
-        const myName = String(attenderName || "").toLowerCase().trim();
-        const myId = String(attenderId || "").toLowerCase().trim();
-        if (myId && hId && hId === myId) return true;
-        if (myName && hName && hName === myName) return true;
-        return !hId && !hName;
-      });
+        ? [...targetEdited.history] 
+        : (Array.isArray(savedRow.history) ? [...savedRow.history] : []);
 
       const oldStatus = String(savedRow.status || "").trim();
       const newStatus = String(targetEdited.status || "").trim();
@@ -401,6 +382,9 @@ export default function MobileEditModal({
         updates.history = baseHistory;
       }
 
+      const targetDocId = targetEdited.contactId || targetEdited.id || row.id;
+      const isNewWithoutDoc = row._isNew && !targetEdited.contactId && !targetEdited.id;
+
       console.log(`[MOBILE ATTENDER ISOLATED SAVE] Attender: "${attenderName}" (${attenderId})`, {
         contactId: targetDocId,
         leadName: targetEdited.Name || savedRow.Name,
@@ -409,9 +393,6 @@ export default function MobileEditModal({
         finalHistoryCount: updates.history ? updates.history.length : baseHistory.length,
         savedHistoryEntries: updates.history || baseHistory
       });
-
-      const targetDocId = targetEdited.contactId || targetEdited.id || row.id;
-      const isNewWithoutDoc = row._isNew && !targetEdited.contactId && !targetEdited.id;
 
       let savedDocId = targetDocId;
       if (isNewWithoutDoc) {

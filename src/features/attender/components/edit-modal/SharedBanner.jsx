@@ -10,6 +10,7 @@ export const SharedBanner = ({
   row,
   globalDup,
   freshSharedLead,
+  currentAttenderId,
   currentAttenderName,
   isFetchingShared = false
 }) => {
@@ -26,64 +27,112 @@ export const SharedBanner = ({
     );
   }
 
-  const baseLead = freshSharedLead || globalDup?.first || row || edited;
+  // CRITICAL RULE: NEVER use `edited` (unsaved modal state) to determine the Shared Banner.
+  // The current form is what the VIEWER is editing. The banner shows the OTHER PERSON'S previous activity.
+  const baseLead = freshSharedLead || globalDup?.first || row;
   if (!baseLead) return null;
 
+  const cId = String(currentAttenderId || "").trim().toLowerCase();
+  const cName = String(currentAttenderName || "").trim().toLowerCase();
+
+  const isCurrentAttender = (val) => {
+    if (!val) return false;
+    const v = String(val).trim().toLowerCase();
+    if (cId && v === cId) return true;
+    if (cName && v === cName) return true;
+    return false;
+  };
+
   const sharedList = getSharedAttenders(baseLead);
-  const otherAttenders = currentAttenderName
-    ? sharedList.filter(name => name && name.toLowerCase().trim() !== currentAttenderName.toLowerCase().trim())
-    : sharedList;
+  const otherAttenders = sharedList.filter(name => !isCurrentAttender(name));
 
   const isDuplicateMatch = !!globalDup?.first;
   const isShared = (sharedList.length > 1 && otherAttenders.length > 0) || isDuplicateMatch || (isLeadShared(baseLead, currentAttenderName) && otherAttenders.length > 0);
 
   if (!isShared || otherAttenders.length === 0) return null;
 
-  const otherName = otherAttenders[0] || "Another attender";
+  // Identify Lead Owner vs Shared Attender target
+  const leadOwnerId = String(baseLead.leadOwner || baseLead.leadOwnerId || "").trim();
+  const leadOwnerName = String(baseLead.leadOwnerName || "").trim();
+  const isViewerOwner = isCurrentAttender(leadOwnerId) || isCurrentAttender(leadOwnerName);
 
-  // Resolve program/Called For worked on by the OTHER attender (otherName)
-  const getOtherAttenderProgram = () => {
-    const oNameLower = (otherName || "").toLowerCase().trim();
+  let otherName = "";
+  let otherProgram = "";
 
-    // Check attenderStates for otherName
+  if (!isViewerOwner) {
+    // Current viewer is Shared Attender B -> Target MUST be Lead Owner A (Test)
+    otherName = leadOwnerName || "Lead Owner";
+    let ownerState = null;
+
     if (baseLead.attenderStates && typeof baseLead.attenderStates === "object") {
-      const stateObj = Object.values(baseLead.attenderStates).find(st => {
-        const name = String(st?.attenderName || st?.name || "").toLowerCase().trim();
-        return name && name === oNameLower;
-      });
-      if (stateObj) {
-        const prog = stateObj["Called For"] || stateObj.calledFor || stateObj.program;
-        if (prog && String(prog).trim()) return String(prog).trim();
+      if (leadOwnerId && baseLead.attenderStates[leadOwnerId]) {
+        ownerState = baseLead.attenderStates[leadOwnerId];
+      } else if (leadOwnerName && baseLead.attenderStates[leadOwnerName]) {
+        ownerState = baseLead.attenderStates[leadOwnerName];
+      } else {
+        ownerState = Object.values(baseLead.attenderStates).find(st => {
+          if (!st) return false;
+          const stId = String(st.attenderId || "").trim().toLowerCase();
+          const stName = String(st.attenderName || st.name || "").trim().toLowerCase();
+          return (leadOwnerId && stId === leadOwnerId.toLowerCase()) || (leadOwnerName && stName === leadOwnerName.toLowerCase());
+        });
       }
     }
 
-    // Check history for entries by otherName
-    if (Array.isArray(baseLead.history)) {
-      const histItem = [...baseLead.history].reverse().find(h => {
-        const name = String(h?.attenderName || h?.name || "").toLowerCase().trim();
-        return name && name === oNameLower && (h?.calledFor || h?.called_for || h?.["Called For"] || h?.program);
+    if (ownerState) {
+      otherName = ownerState.attenderName || ownerState.name || otherName;
+      otherProgram = ownerState.calledFor || ownerState["Called For"] || ownerState.program || "";
+    } else {
+      otherProgram = baseLead["Called For"] || baseLead.calledFor || "";
+    }
+
+    if (!otherProgram && Array.isArray(baseLead.history)) {
+      const ownerHist = [...baseLead.history].reverse().find(h => {
+        if (!h) return false;
+        const hId = String(h.attenderId || "").trim().toLowerCase();
+        const hName = String(h.attenderName || h.name || "").trim().toLowerCase();
+        return (leadOwnerId && hId === leadOwnerId.toLowerCase()) || (leadOwnerName && hName === leadOwnerName.toLowerCase());
       });
-      if (histItem) {
-        const prog = histItem.calledFor || histItem.called_for || histItem["Called For"] || histItem.program;
-        if (prog && String(prog).trim()) return String(prog).trim();
+      if (ownerHist) {
+        otherProgram = ownerHist.calledFor || ownerHist["Called For"] || ownerHist.program || "";
+      }
+    }
+  } else {
+    // Current viewer is Lead Owner A -> Target MUST be Shared Attender B (Manisha)
+    let sharedState = null;
+    if (baseLead.attenderStates && typeof baseLead.attenderStates === "object") {
+      sharedState = Object.values(baseLead.attenderStates).find(st => {
+        if (!st) return false;
+        const stId = String(st.attenderId || "").trim().toLowerCase();
+        const stName = String(st.attenderName || st.name || "").trim().toLowerCase();
+        return !isCurrentAttender(stId) && !isCurrentAttender(stName);
+      });
+    }
+
+    if (sharedState) {
+      otherName = sharedState.attenderName || sharedState.name || "";
+      otherProgram = sharedState.calledFor || sharedState["Called For"] || sharedState.program || "";
+    }
+
+    if (!otherName && Array.isArray(baseLead.history)) {
+      const sharedHist = [...baseLead.history].reverse().find(h => {
+        if (!h) return false;
+        const hId = String(h.attenderId || "").trim().toLowerCase();
+        const hName = String(h.attenderName || h.name || "").trim().toLowerCase();
+        return !isCurrentAttender(hId) && !isCurrentAttender(hName);
+      });
+      if (sharedHist) {
+        otherName = sharedHist.attenderName || sharedHist.name || "";
+        otherProgram = sharedHist.calledFor || sharedHist["Called For"] || sharedHist.program || "";
       }
     }
 
-    // Fallback to baseLead's calledFor
-    const fallbackProg = baseLead["Called For"] || baseLead.calledFor;
-    if (fallbackProg && String(fallbackProg).trim()) return String(fallbackProg).trim();
+    if (!otherName) {
+      otherName = otherAttenders[0] || "Team member";
+    }
+  }
 
-    return "";
-  };
-
-  const otherProgram = getOtherAttenderProgram();
-  const displayProgram = otherProgram || String(
-    edited?.["Called For"] ||
-    edited?.calledFor ||
-    row?.["Called For"] ||
-    row?.calledFor ||
-    ""
-  ).trim();
+  const displayProgram = String(otherProgram || (isViewerOwner ? "" : (baseLead?.["Called For"] || baseLead?.calledFor || ""))).trim();
 
   // Derive stage using canonical pipeline engine for displayProgram
   const rawStage = getEffectiveStage(baseLead, displayProgram);
@@ -109,11 +158,14 @@ export const SharedBanner = ({
               </span>
             )}
             <span className="text-amber-400 font-normal">·</span>
-            <span>
-              {otherName} has previous activity{displayProgram ? ` for ${displayProgram}` : ""}
+            <span key="activity-summary-wrapper" className="inline-flex items-center gap-1">
+              <span>{otherName}</span>
+              <span>has previous activity</span>
+              {displayProgram && <span>for {displayProgram}</span>}
             </span>
-            <span className="text-[11px] font-semibold text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-200 flex items-center gap-1">
-              Current stage: {prevStageDisplay}
+            <span key="stage-badge-wrapper" className="text-[11px] font-semibold text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-200 inline-flex items-center gap-1">
+              <span>Current stage:</span>
+              <span>{prevStageDisplay}</span>
               <button
                 type="button"
                 onClick={() => setShowStageInfo(true)}

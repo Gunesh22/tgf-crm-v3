@@ -7,7 +7,7 @@ import {
   ChevronDown, Check, Search, Users, RotateCw, History, Edit3
 } from "lucide-react";
 import {
-  addIncomingCallLog, updateCallLog, createProgram, checkGlobalDuplicate, findMatchingAttenderState, combineContactHistories
+  addIncomingCallLog, updateCallLog, createProgram, checkGlobalDuplicate, findMatchingAttenderState, combineContactHistories, isLeadShared
 } from "../../../lib/db";
 import { searchCRMByPhone } from "../../../lib/ghl";
 import {
@@ -77,97 +77,65 @@ export const EditModal = ({
       normalized.callType = String(normalized.callType).toLowerCase();
     }
     
-    // Whitelist fields to normalize
-    const standardFields = ["Name", "Phone", "Mobile", "Email", "City", "State", "Khoji", "Tags", "Source", "Called For"];
-    
-    // 1. Get fallback values for all standard fields
-    const standardVals = {};
-    standardFields.forEach(col => {
-      standardVals[col] = getFieldWithFallback(row, col, activeAttenderId || activeAttenderName || attenderId || attenderName);
+    // Profile & Origin fields: whitelist and normalize from root record
+    const profileFields = ["Name", "Phone", "Mobile", "Email", "City", "State", "Khoji", "Tags", "Source"];
+    profileFields.forEach(col => {
+      normalized[col] = getFieldWithFallback(row, col, activeAttenderId, activeAttenderName);
     });
 
-    // 2. Delete all aliases of standard fields from the normalized object to avoid duplicate keys
-    const keysToDelete = new Set();
-    const keys = Object.keys(row);
-    
-    keys.forEach(k => {
-      const kLower = k.toLowerCase();
-      // Name aliases
-      if (["name", "caller", "caller name", "lead name", "lead", "name of caller"].includes(kLower)) keysToDelete.add(k);
-      // Phone aliases
-      if (["phone", "whatsapp", "phone number", "whatsapp number", "whatsappno", "contact", "contact number", "contact no", "contact_no"].includes(kLower)) keysToDelete.add(k);
-      // Mobile aliases
-      if (["mobile", "mobile no", "mobile number"].includes(kLower)) keysToDelete.add(k);
-      // Email aliases
-      if (["email", "mail", "e-mail", "email id", "emailaddress"].includes(kLower)) keysToDelete.add(k);
-      // City aliases
-      if (["city", "location", "khoji city", "place", "city name"].includes(kLower)) keysToDelete.add(k);
-      // State aliases
-      if (["state", "state name", "province", "region"].includes(kLower)) keysToDelete.add(k);
-      // Khoji aliases
-      if (isKhojiField(kLower)) keysToDelete.add(k);
-      // Source aliases
-      if (["source", "sourse", "source of informiton", "source of information"].includes(kLower)) keysToDelete.add(k);
-      // Tags aliases
-      if (["tags", "tag"].includes(kLower)) keysToDelete.add(k);
-      // Called For aliases
-      if (["called for", "called_for", "calledfor"].includes(kLower)) keysToDelete.add(k);
-    });
+    const rootSource = normalized.Source || getFieldWithFallback(row, "Source", activeAttenderId, activeAttenderName) || "";
+    normalized.Source = rootSource;
+    normalized.source = rootSource;
 
-    // Delete keys
-    keysToDelete.forEach(k => {
-      delete normalized[k];
-    });
-
-    // 3. Set standard fields with normalized values
-    standardFields.forEach(col => {
-      normalized[col] = standardVals[col];
-    });
     if (row._isNew && !normalized.Khoji) {
       normalized.Khoji = "No";
     }
     if (row._isNew && !normalized.callType) {
       normalized.callType = "incoming";
     }
-    // Normalize Tags: if only a `tags` array exists (no `Tags` string), convert to comma string for display
     if (!normalized.Tags && Array.isArray(row.tags) && row.tags.length > 0) {
       normalized.Tags = row.tags.join(", ");
     }
+
+    // Lookup ACTIVE attender's own saved working state
     const attState = findMatchingAttenderState(normalized.attenderStates, activeAttenderId || attenderId, activeAttenderName || attenderName);
     const combinedHistory = combineContactHistories(normalized.history, attState?.history);
     normalized.history = combinedHistory;
 
-    // Fresh call event properties: STRICT BLANK STATE for call outcomes, BUT preserve existing follow-up
     normalized.callType = normalized.callType || "outgoing";
-    normalized.callPurpose = "SALES";
+
+    // Call-entry fields: restore ACTIVE attender's own saved state if present, else START COMPLETELY EMPTY
+    if (attState) {
+      normalized["Called For"] = attState.calledFor || attState["Called For"] || "";
+      normalized.calledFor = normalized["Called For"];
+      normalized.Source = attState.source || attState.Source || rootSource;
+      normalized.source = normalized.Source;
+      normalized.callPurpose = attState.callPurpose || "SALES";
+      normalized.status = attState.status || "";
+      normalized.remark = "";
+      normalized.callbackDate = attState.callbackDate || null;
+      normalized.callbackStatus = attState.callbackStatus || (attState.callbackDate ? "pending" : null);
+      normalized.callbackTime = attState.callbackTime || "";
+    } else {
+      normalized["Called For"] = "";
+      normalized.calledFor = "";
+      normalized.Source = rootSource;
+      normalized.source = rootSource;
+      normalized.callPurpose = "SALES";
+      normalized.status = "";
+      normalized.remark = "";
+      normalized.callbackDate = null;
+      normalized.callbackStatus = null;
+      normalized.callbackTime = "";
+    }
+
     normalized.callStatus = "";
-    normalized.status = "";
-    normalized.queryStatus = "";
+    normalized.queryStatus = row.queryStatus || "Pending";
     normalized.queryDetails = "";
     normalized.objectionReason = "";
-    normalized.remark = ""; // Clean empty note for new call
 
-    // Preserve existing follow-up schedule if present on record/attenderStates
-    const existingCallbackDate = getFieldWithFallback(row, "callbackDate", activeAttenderId || attenderId || activeAttenderName || attenderName) || attState?.callbackDate || row.callbackDate || null;
-    const existingCallbackStatus = getFieldWithFallback(row, "callbackStatus", activeAttenderId || attenderId || activeAttenderName || attenderName) || attState?.callbackStatus || row.callbackStatus || (existingCallbackDate ? "pending" : null);
-    const existingCallbackTime = getFieldWithFallback(row, "callbackTime", activeAttenderId || attenderId || activeAttenderName || attenderName) || attState?.callbackTime || row.callbackTime || "";
-
-    normalized.callbackDate = existingCallbackDate;
-    normalized.callbackStatus = existingCallbackStatus;
-    normalized.callbackTime = existingCallbackTime;
-
-    // Preserve MongoDB pipelineStage as Source of Truth directly from record
+    // Preserve MongoDB pipelineStage from record
     normalized.pipelineStage = normalized.pipelineStage || row.pipelineStage;
-
-    console.log(`[EDIT MODAL INIT TRACE] Lead: "${normalized.Name || row.id}"`, {
-      contactId: row.id || row.contactId,
-      rootRemark: row.remark,
-      attenderId: activeAttenderId || attenderId,
-      attenderName: activeAttenderName || attenderName,
-      effectiveStage: normalized.pipelineStage,
-      attStateHistoryLength: combinedHistory.length,
-      attenderStatesKeys: Object.keys(normalized.attenderStates || {})
-    });
 
     return normalized;
   };
@@ -986,9 +954,9 @@ export const EditModal = ({
 
         const timeDiff = (itemMs > 0 && exMs > 0) ? Math.abs(itemMs - exMs) : 0;
 
-        // Rule 1: Identical non-empty remarks logged within 15 seconds of each other (including 0ms exact match)
+        // Rule 1: Identical non-empty remarks are strictly deduplicated
         if (itemRemark && exRemark && itemRemark === exRemark) {
-          if (timeDiff < 15000) return true;
+          return true;
         }
 
         // Rule 2: Same status logged within 15 seconds of each other (only if remarks are also identical)
@@ -1193,8 +1161,12 @@ export const EditModal = ({
     const newObjection = String(targetEdited.objectionReason || "").trim();
     const objectionReasonChanged = oldObjection !== newObjection;
 
+    const oldQueryStatus = String(savedRow.queryStatus || "").trim();
+    const newQueryStatus = String(targetEdited.queryStatus || "").trim();
+    const queryStatusChanged = oldQueryStatus !== newQueryStatus;
+
     const isCallTab = activeTab === "call";
-    const isCallAttemptUpdated = isCallTab || statusChanged || purposeChanged || callStatusChanged || remarkChanged || callTypeChanged || callbackDateChanged || callbackStatusChanged || objectionReasonChanged;
+    const isCallAttemptUpdated = isCallTab || statusChanged || purposeChanged || callStatusChanged || remarkChanged || callTypeChanged || callbackDateChanged || callbackStatusChanged || objectionReasonChanged || queryStatusChanged;
 
     console.log(`[EDIT MODAL SAVE DIAGNOSTIC] Lead: "${getLogName() || row.id}"`, {
       savedRowRemark: savedRow.remark,
@@ -1267,8 +1239,15 @@ export const EditModal = ({
 
       const missingFields = [];
 
+      const isQueryMode = String(targetEdited.callPurpose || "").toUpperCase() === "QUERY";
+      if (isQueryMode) {
+        if (!targetEdited.status) targetEdited.status = "Query";
+        if (!targetEdited.queryStatus) targetEdited.queryStatus = "Pending";
+      }
+
       if (!phoneVal) missingFields.push("Phone Number");
-      if (!statusVal) missingFields.push("Call Status / Outcome");
+      if (!isQueryMode && !statusVal) missingFields.push("Call Status / Outcome");
+      if (isQueryMode && !targetEdited.queryStatus) missingFields.push("Query Status (Pending or Solved)");
       if (allowAttenderSelection && !activeAttenderId) missingFields.push("Attender Selection");
 
       if (!isUnconnected) {
@@ -1543,6 +1522,8 @@ export const EditModal = ({
           ...prevAttState,
           attenderId: activeAttenderId,
           attenderName: activeAttenderName || prevAttState.attenderName || "Unknown",
+          calledFor: targetEdited[calledForField] || targetEdited["Called For"] || targetEdited.calledFor || prevAttState.calledFor || "",
+          source: targetEdited[sourceField] || targetEdited.Source || targetEdited.source || prevAttState.source || "",
           status: updates.status || prevAttState.status,
           remark: updates.remark !== undefined ? updates.remark : prevAttState.remark,
           history: updates.history || prevAttState.history || [],
@@ -1883,6 +1864,7 @@ export const EditModal = ({
             row={row}
             globalDup={globalDup}
             freshSharedLead={freshSharedLead}
+            currentAttenderId={activeAttenderId}
             currentAttenderName={activeAttenderName}
             onRefreshLead={onRefreshLead}
             isFetchingShared={isFetchingShared}
@@ -1898,7 +1880,7 @@ export const EditModal = ({
 
           {activeTab === "call" ? (
             <CallEntryTab
-              edited={effectiveEdited}
+              edited={edited}
               row={row}
               callTheme={callTheme}
               calledForField={calledForField}
