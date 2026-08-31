@@ -1,6 +1,7 @@
 // api/_contacts/check-duplicate.js
 import clientPromise, { ensureIndexes } from '../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
+import { buildPhoneDuplicateFilter } from '../lib/phoneNormalizer.js';
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -19,55 +20,14 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, error: 'phone query parameter is required' });
     }
 
-    const cleanPhone = String(phone).replace(/\D/g, "");
-    if (cleanPhone.length < 10) {
+    const queryFilter = buildPhoneDuplicateFilter(phone, null, excludeId);
+    if (!queryFilter) {
       return res.status(200).json({ success: true, count: 0, matches: [] });
     }
-
-    const last10 = cleanPhone.slice(-10);
 
     const client = await clientPromise;
     const db = client.db('tgf_crm');
     ensureIndexes(db);
-
-    const phoneVariations = Array.from(new Set([
-      last10,
-      cleanPhone,
-      `91${last10}`,
-      `+91${last10}`,
-      `0${last10}`
-    ]));
-
-    const phoneRegex = new RegExp(last10, 'i');
-
-    const queryFilter = {
-      $or: [
-        { normalizedPhone: { $in: phoneVariations } },
-        { phone: { $in: phoneVariations } },
-        { Phone: { $in: phoneVariations } },
-        { mobile: { $in: phoneVariations } },
-        { Mobile: { $in: phoneVariations } },
-        { normalizedMobile: { $in: phoneVariations } },
-        { Phone: phoneRegex },
-        { phone: phoneRegex },
-        { Mobile: phoneRegex },
-        { mobile: phoneRegex },
-        { normalizedPhone: phoneRegex }
-      ]
-    };
-
-    if (excludeId) {
-      const excludeObjectIds = [];
-      try {
-        if (ObjectId.isValid(excludeId)) {
-          excludeObjectIds.push(new ObjectId(excludeId));
-        }
-      } catch (e) {}
-      excludeObjectIds.push(excludeId);
-
-      queryFilter._id = { $nin: excludeObjectIds };
-      queryFilter.id = { $ne: excludeId };
-    }
 
     const matches = await db.collection('contacts')
       .find(queryFilter)

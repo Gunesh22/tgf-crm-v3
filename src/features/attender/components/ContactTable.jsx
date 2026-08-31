@@ -1,7 +1,7 @@
 import React from "react";
 import { Flame, Clock, RotateCw, Users, Loader } from "lucide-react";
 import { normalizePhone } from "../../../lib/db";
-import { getFieldWithFallback, isUnansweredCallback, getCanonicalStatus, getSharedAttenders, getAttenderStatus, getAttenderRemark, getContactView } from "../utils";
+import { getFieldWithFallback, isUnansweredCallback, getCanonicalStatus, getSharedAttenders, getAttenderStatus, getAttenderRemark, getContactView, parseTimestamp } from "../utils";
 import { getPipelineStageConfig } from "../../../utils/pipelineEngine";
 
 function CollapsedTags({ tags }) {
@@ -68,16 +68,6 @@ function CollapsedTags({ tags }) {
       </button>
     </div>
   );
-}
-
-function parseTimestamp(t) {
-  if (!t) return null;
-  if (t instanceof Date) return t;
-  if (typeof t.toDate === "function") return t.toDate();
-  if (typeof t === "object" && t.seconds !== undefined) {
-    return new Date(t.seconds * 1000 + Math.round((t.nanoseconds || 0) / 1000000));
-  }
-  return new Date(t);
 }
 
 export function ContactTable({
@@ -358,7 +348,8 @@ export function ContactTable({
                     <td className="py-2 px-3 align-top whitespace-nowrap">
                       {(() => {
                         const rawCb = view.callbackDate || log.callbackDate;
-                        const cbStr = rawCb ? (parseTimestamp(rawCb)?.toLocaleDateString("en-IN") || getCallbackStr(log)) : "";
+                        const parsedDate = parseTimestamp(rawCb) || parseTimestamp(log.callbackDate);
+                        const cbStr = parsedDate ? parsedDate.toLocaleDateString("en-IN") : "";
                         const cbStatus = view.callbackStatus || log.callbackStatus;
                         if (cbStr) {
                           return (

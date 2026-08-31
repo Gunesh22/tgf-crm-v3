@@ -1,7 +1,9 @@
 // api/_contacts/create-incoming.js
-// Creates a brand-new contact from an incoming call.
-// Sets leadOwner on creation. Pipeline starts at New Lead.
+// Creates or merges an incoming call entry.
+// Server-side canonical authority on duplicate detection and atomic profile merging.
 import clientPromise from '../lib/mongodb.js';
+import { buildPhoneDuplicateFilter } from '../lib/phoneNormalizer.js';
+import { executeLogCall } from './log-call.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -19,6 +21,47 @@ export default async function handler(req, res) {
     const db     = client.db('tgf_crm');
     const nowIso = new Date().toISOString();
 
+    const phoneVal  = String(updates.Phone  || updates.phone  || '').trim();
+    const mobileVal = String(updates.Mobile || updates.mobile || phoneVal).trim();
+    const nameVal   = String(updates.Name   || updates.name   || '').trim();
+
+    // 1. Server-side canonical duplicate lookup across MongoDB contacts collection
+    const queryFilter = buildPhoneDuplicateFilter(phoneVal, mobileVal);
+
+    if (queryFilter) {
+      const existingContact = await db.collection('contacts').findOne(queryFilter);
+
+      if (existingContact) {
+        console.log(`[CREATE-INCOMING DUP MATCH] Merging incoming call into existing contact ${existingContact._id.toString()} (${existingContact.Name || existingContact.phone})`);
+
+        const logRes = await executeLogCall(db, {
+          contactId: existingContact._id.toString(),
+          attenderId,
+          attenderName,
+          programId: programId || 'incoming',
+          programName: programName || 'Incoming Calls',
+          callType: updates.callType || 'incoming',
+          status: updates.status || 'Pending',
+          remark: updates.remark || '',
+          calledFor: updates.calledFor || updates['Called For'] || '',
+          callbackDate: updates.callbackDate || null,
+          callbackTime: updates.callbackTime || null,
+          callPurpose: updates.callPurpose || (updates.status === 'Query' ? 'QUERY' : 'SALES'),
+          ...updates
+        });
+
+        return res.status(200).json({
+          success: true,
+          contactId: existingContact._id.toString(),
+          id: existingContact._id.toString(),
+          isMerged: true,
+          updatedContact: logRes.updatedContact || null,
+          ...logRes
+        });
+      }
+    }
+
+    // 2. Genuinely new contact creation
     const callId = 'call_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
 
     const historyItem = {
@@ -30,7 +73,7 @@ export default async function handler(req, res) {
       leadOwnerAtTime:   attenderId,
       leadOwnerNameAtTime: attenderName || '',
       callDirection:     'incoming',
-      callPurpose:       (updates.callPurpose || 'QUERY').toUpperCase(),
+      callPurpose:       (updates.callPurpose || (updates.status === 'Query' ? 'QUERY' : 'SALES')).toUpperCase(),
       callStatus:        updates.callStatus || 'Connected',
       status:            updates.status || 'Pending',
       queryStatus:       updates.queryStatus || null,
@@ -40,10 +83,6 @@ export default async function handler(req, res) {
       calledFor:         updates.calledFor || updates['Called For'] || '',
       timestamp:         nowIso,
     };
-
-    const phoneVal  = String(updates.Phone  || updates.phone  || '').trim();
-    const mobileVal = String(updates.Mobile || updates.mobile || phoneVal).trim();
-    const nameVal   = String(updates.Name   || updates.name   || '').trim();
 
     const newContact = {
       ...updates,
@@ -61,9 +100,7 @@ export default async function handler(req, res) {
       original_source: updates.original_source || updates.Source || updates.source || 'Incoming',
       programId:   programId   || 'incoming',
       programName: programName || 'Incoming Calls',
-      // Pipeline starts at New Lead for a new contact
       pipelineStage: '1. New Lead',
-      // Lead Owner = the attender who received this call (first assignment)
       leadOwner:     attenderId,
       leadOwnerName: attenderName || '',
       ownerHistory:  [],
@@ -79,7 +116,7 @@ export default async function handler(req, res) {
           attenderId,
           attenderName:  attenderName || '',
           callDirection: 'incoming',
-          callPurpose:   (updates.callPurpose || 'QUERY').toUpperCase(),
+          callPurpose:   (updates.callPurpose || (updates.status === 'Query' ? 'QUERY' : 'SALES')).toUpperCase(),
           callStatus:    updates.callStatus || 'Connected',
           status:        updates.status || 'Pending',
           remark:        updates.remark || '',
@@ -95,9 +132,62 @@ export default async function handler(req, res) {
     };
 
     const insertResult = await db.collection('contacts').insertOne(newContact);
-    const newId = insertResult.insertedId.toString();
+    const insertedIdStr = insertResult.insertedId.toString();
 
-    return res.status(200).json({ success: true, contactId: newId, id: newId });
+    // 3. Concurrency self-healing check (race condition protection)
+    if (queryFilter) {
+      const matches = await db.collection('contacts')
+        .find(queryFilter)
+        .sort({ createdAt: 1 })
+        .toArray();
+
+      if (matches.length > 1) {
+        const earliestContact = matches[0];
+        if (earliestContact._id.toString() !== insertedIdStr) {
+          console.warn(`[CONCURRENCY RACE HANDLED] Duplicate detected post-insert for ${phoneVal || mobileVal}. Deleting ${insertedIdStr} and merging into ${earliestContact._id.toString()}`);
+          await db.collection('contacts').deleteOne({ _id: insertResult.insertedId });
+
+          const logRes = await executeLogCall(db, {
+            contactId: earliestContact._id.toString(),
+            attenderId,
+            attenderName,
+            programId: programId || 'incoming',
+            programName: programName || 'Incoming Calls',
+            callType: updates.callType || 'incoming',
+            status: updates.status || 'Pending',
+            remark: updates.remark || '',
+            calledFor: updates.calledFor || updates['Called For'] || '',
+            callbackDate: updates.callbackDate || null,
+            callbackTime: updates.callbackTime || null,
+            callPurpose: updates.callPurpose || (updates.status === 'Query' ? 'QUERY' : 'SALES'),
+            ...updates
+          });
+
+          return res.status(200).json({
+            success: true,
+            contactId: earliestContact._id.toString(),
+            id: earliestContact._id.toString(),
+            isMerged: true,
+            updatedContact: logRes.updatedContact || null,
+            ...logRes
+          });
+        }
+      }
+    }
+
+    const createdDoc = await db.collection('contacts').findOne({ _id: insertResult.insertedId });
+    const formattedCreatedDoc = createdDoc
+      ? { ...createdDoc, id: createdDoc._id.toString(), _id: createdDoc._id.toString() }
+      : null;
+
+    return res.status(200).json({
+      success: true,
+      contactId: insertedIdStr,
+      id: insertedIdStr,
+      isMerged: false,
+      updatedContact: formattedCreatedDoc
+    });
+
   } catch (error) {
     console.error('[CREATE-INCOMING ERROR]', error);
     return res.status(500).json({ success: false, error: error.message });

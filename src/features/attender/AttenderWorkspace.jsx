@@ -148,13 +148,13 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   const [hiddenColumns, setHiddenColumns] = useState(() => {
     try {
       const saved = localStorage.getItem(`hidden_cols_${attenderId}`);
-      if (!saved) return [];
+      if (!saved) return ["City", "Khoji"];
       const parsed = JSON.parse(saved);
-      if (!Array.isArray(parsed)) return [];
+      if (!Array.isArray(parsed)) return ["City", "Khoji"];
       // Filter out any legacy or unknown columns not in ALLOWED_ATTENDER_COLS
       return parsed.filter(c => ["Name", "Phone", "Mobile", "City", "Khoji", "Tags", "Called For", "Type", "Status", "Remark", "Callback"].includes(c));
     } catch {
-      return [];
+      return ["City", "Khoji"];
     }
   });
   const [isColumnModalOpen, setIsColumnModalOpen] = useState(false);

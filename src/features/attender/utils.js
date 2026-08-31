@@ -1,5 +1,5 @@
-import { isKhojiField } from "../../lib/khojiHelper";
-import { getEffectiveStage } from "../../utils/pipelineEngine";
+import { isKhojiField } from "../../lib/khojiHelper.js";
+import { getEffectiveStage } from "../../utils/pipelineEngine.js";
 export { isKhojiField };
 
 export const STATUS_OPTIONS = [
@@ -404,12 +404,44 @@ export const isIgnoredField = (key) => {
   });
 };
 
+export function parseTimestamp(t) {
+  if (!t) return null;
+  if (t === "[object Object]") return null;
+  let d = null;
+  if (t instanceof Date) {
+    d = t;
+  } else if (typeof t.toDate === "function") {
+    d = t.toDate();
+  } else if (typeof t === "object" && (t.seconds !== undefined || t._seconds !== undefined)) {
+    const sec = t.seconds !== undefined ? t.seconds : t._seconds;
+    const nano = t.nanoseconds !== undefined ? t.nanoseconds : (t._nanoseconds || 0);
+    d = new Date(sec * 1000 + Math.round(nano / 1000000));
+  } else {
+    d = new Date(t);
+  }
+  return d && !isNaN(d.getTime()) ? d : null;
+}
+
 export const getFieldWithFallback = (log, fieldName, currentAttenderIdOrName) => {
   if (!log) return "";
   const name = fieldName.toLowerCase().trim();
   const keys = Object.keys(log);
   
-  const getVal = (k) => String(log[k] || "").trim();
+  const isDateField = name.includes("date") || name.includes("callback");
+
+  const formatOrPreserveVal = (raw) => {
+    if (raw === undefined || raw === null) return "";
+    if (raw instanceof Date) return raw;
+    if (typeof raw === "object") {
+      if (typeof raw.toDate === "function" || raw.seconds !== undefined || raw._seconds !== undefined) {
+        return raw;
+      }
+      if (isDateField) return raw;
+    }
+    const s = String(raw).trim();
+    if (s === "[object Object]") return "";
+    return s;
+  };
 
   let candidates = [];
 
@@ -437,6 +469,8 @@ export const getFieldWithFallback = (log, fieldName, currentAttenderIdOrName) =>
     aliases = ["tag"];
   } else if (name === "called for") {
     aliases = ["called_for", "calledfor"];
+  } else if (name === "callbackdate" || name === "callback date" || name === "callback") {
+    aliases = ["callbackdate", "callback_date", "callback date", "callback", "nextcall", "next_call"];
   }
 
   if (aliases.length > 0) {
@@ -485,18 +519,20 @@ export const getFieldWithFallback = (log, fieldName, currentAttenderIdOrName) =>
     if (matchingKey && log.attenderStates[matchingKey]) {
       const stateObj = log.attenderStates[matchingKey];
       for (const c of candidates) {
-        const valInState = String(stateObj[c] || "").trim();
-        if (valInState) return valInState;
+        const valInState = formatOrPreserveVal(stateObj[c]);
+        if (valInState !== "") return valInState;
       }
       const keysInState = Object.keys(stateObj);
       const directKeyInState = keysInState.find(k => k.toLowerCase() === name);
-      if (directKeyInState && String(stateObj[directKeyInState] || "").trim()) {
-        return String(stateObj[directKeyInState]).trim();
+      if (directKeyInState) {
+        const valInState = formatOrPreserveVal(stateObj[directKeyInState]);
+        if (valInState !== "") return valInState;
       }
       if (aliases.length > 0) {
         const aliasKeyInState = keysInState.find(k => aliases.includes(k.toLowerCase()));
-        if (aliasKeyInState && String(stateObj[aliasKeyInState] || "").trim()) {
-          return String(stateObj[aliasKeyInState]).trim();
+        if (aliasKeyInState) {
+          const valInState = formatOrPreserveVal(stateObj[aliasKeyInState]);
+          if (valInState !== "") return valInState;
         }
       }
     }
@@ -504,12 +540,12 @@ export const getFieldWithFallback = (log, fieldName, currentAttenderIdOrName) =>
 
   // 2. Secondary: Fall back to top-level root contact properties (for non-shared contacts or initial assignment)
   for (const c of candidates) {
-    const val = getVal(c);
-    if (val) return val;
+    const val = formatOrPreserveVal(log[c]);
+    if (val !== "") return val;
   }
 
   if (candidates.length > 0) {
-    return getVal(candidates[0]);
+    return formatOrPreserveVal(log[candidates[0]]);
   }
   return "";
 };

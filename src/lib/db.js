@@ -470,7 +470,10 @@ export const addIncomingCallLog = async (attenderId, attenderName, updates = {},
     ...updates
   };
   const res = await fetchAPI(`/api/contacts/create-incoming`, "POST", payload);
-  return res.contactId || res.id;
+  if (res && typeof res === 'object') {
+    res.id = res.contactId || res.id;
+  }
+  return res;
 };
 export const ensureIncomingProgram = async () => {};
 export const ensureOutgoingProgram = async () => {};

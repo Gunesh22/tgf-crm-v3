@@ -1554,18 +1554,28 @@ export const EditModal = ({
 
       if (isNewWithoutDoc) {
         delete updates._isNew;
-        const resId = await addIncomingCallLog(
+        const res = await addIncomingCallLog(
           activeAttenderId, activeAttenderName, updates, targetEdited.programId, targetEdited.programName
         );
+        const resId = (res && typeof res === 'object') ? (res.contactId || res.id) : res;
         console.log("[SAVE SUCCESS] addIncomingCallLog docId:", resId);
         savedDocId = resId;
-        finalAuthoritativePayload = {
-          ...targetEdited,
-          ...updates,
-          id: resId,
-          _id: resId,
-          attenderStates: currentAttStates
-        };
+
+        if (res && res.updatedContact) {
+          finalAuthoritativePayload = {
+            ...res.updatedContact,
+            id: res.updatedContact.id || res.updatedContact._id || resId,
+            _id: res.updatedContact._id || res.updatedContact.id || resId
+          };
+        } else {
+          finalAuthoritativePayload = {
+            ...targetEdited,
+            ...updates,
+            id: resId,
+            _id: resId,
+            attenderStates: currentAttStates
+          };
+        }
       } else {
         const existingContext = globalDup?.first
           ? { ...globalDup.first, ...row, ...targetEdited }
