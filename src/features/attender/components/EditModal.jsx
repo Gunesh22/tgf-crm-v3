@@ -110,6 +110,7 @@ export const EditModal = ({
       normalized.calledFor = normalized["Called For"];
       normalized.Source = attState.source || attState.Source || rootSource;
       normalized.source = normalized.Source;
+      normalized.previousProgram = attState.previousProgram || row.previousProgram || rootSource;
       normalized.callPurpose = attState.callPurpose || "SALES";
       normalized.status = attState.status || "";
       normalized.remark = "";
@@ -121,6 +122,7 @@ export const EditModal = ({
       normalized.calledFor = "";
       normalized.Source = rootSource;
       normalized.source = rootSource;
+      normalized.previousProgram = row.previousProgram || rootSource;
       normalized.callPurpose = "SALES";
       normalized.status = "";
       normalized.remark = "";
@@ -1524,6 +1526,7 @@ export const EditModal = ({
           attenderName: activeAttenderName || prevAttState.attenderName || "Unknown",
           calledFor: targetEdited[calledForField] || targetEdited["Called For"] || targetEdited.calledFor || prevAttState.calledFor || "",
           source: targetEdited[sourceField] || targetEdited.Source || targetEdited.source || prevAttState.source || "",
+          previousProgram: targetEdited.previousProgram || prevAttState.previousProgram || "",
           status: updates.status || prevAttState.status,
           remark: updates.remark !== undefined ? updates.remark : prevAttState.remark,
           history: updates.history || prevAttState.history || [],

@@ -12,14 +12,15 @@
 
 // Core pipeline stages — the ONLY stages the system promotes contacts TO
 export const PIPELINE_STAGES = {
-  NEW_LEAD:          "1. New Lead",
-  ATTEMPTING:        "2. Attempting Contact",
-  INFO_GIVEN:        "3. Information Given",
-  NURTURE_INTERESTED:"4. Nurture / Interested",
-  FUTURE_POOL:       "5. Future Pool",
-  REGISTERED_WON:    "6. Registered / Won",
-  CLOSED_LOST:       "Closed / Lost",
-  CLOSED_INVALID:    "Closed / Invalid",
+  NEW_LEAD:                 "1. New Lead",
+  ATTEMPTING:               "2. Attempting Contact",
+  INFO_GIVEN:               "3. Information Given",
+  PREVIOUS_PROGRAM_PENDING: "Previous Program Pending",
+  NURTURE_INTERESTED:       "4. Nurture / Interested",
+  FUTURE_POOL:              "5. Future Pool",
+  REGISTERED_WON:           "6. Registered / Won",
+  CLOSED_LOST:              "Closed / Lost",
+  CLOSED_INVALID:           "Closed / Invalid",
 };
 
 // Legacy stages — recognized for DISPLAY / backward compat but NEVER promoted to
@@ -42,6 +43,7 @@ export const STAGE_RANKS = {
   "1. New Lead": 1, "New Lead": 1,
   "2. Attempting Contact": 2, "Attempting Contact": 2, "Attempting": 2,
   "3. Information Given": 3, "Information Given": 3, "Info Given": 3,
+  "Previous Program Pending": 3.2,
   "4. Nurture / Interested": 4, "Nurture / Interested": 4, "Interested": 4,
   "5. Future Pool": 5, "Future Pool": 5, "Next Time": 5,
   "6. Registered / Won": 6, "Registered / Won": 6, "Reg.Done": 6, "Registered": 6,
@@ -69,12 +71,15 @@ export function canTransition(fromStage, toStage, event = {}) {
   // Same stage is always valid
   if (fromStage === toStage || fromRank === toRank) return true;
 
+  // Previous Program Pending is a normal non-terminal pipeline stage and can transition to any stage
+  if (fromStage === PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING || fromStage === "Previous Program Pending") return true;
+
   // Legacy non-pipeline stages: allow any Sales forward movement
   if (LEGACY_NON_PIPELINE_STAGES.has(fromStage)) return true;
 
   // Reactivation: closed lead receives a connected / positive-outcome call
   const isConnected = event.callStatus === "Connected" ||
-    ["Info Given", "Interested", "Reg.Done", "Next Time"].includes(
+    ["Info Given", "Interested", "Reg.Done", "Next Time", "Previous Program Pending"].includes(
       event.purposeOutcome || event.status
     );
   if (fromRank === 7 && isConnected) return true;
@@ -105,6 +110,7 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null) {
     if (str === PIPELINE_STAGES.NEW_LEAD || str === "New Lead" || str === "1. New Lead") return PIPELINE_STAGES.NEW_LEAD;
     if (str === PIPELINE_STAGES.ATTEMPTING || str === "Attempting Contact" || str === "Attempting" || str === "2. Attempting Contact") return PIPELINE_STAGES.ATTEMPTING;
     if (str === PIPELINE_STAGES.INFO_GIVEN || str === "Information Given" || str === "Info Given" || str === "3. Information Given") return PIPELINE_STAGES.INFO_GIVEN;
+    if (str === PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING || str === "Previous Program Pending") return PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING;
     if (str === PIPELINE_STAGES.NURTURE_INTERESTED || str === "Nurture / Interested" || str === "Interested" || str === "4. Nurture / Interested") return PIPELINE_STAGES.NURTURE_INTERESTED;
     if (str === PIPELINE_STAGES.FUTURE_POOL || str === "Future Pool" || str === "Next Time" || str === "5. Future Pool") return PIPELINE_STAGES.FUTURE_POOL;
     if (str === PIPELINE_STAGES.REGISTERED_WON || str === "Registered / Won" || str === "Reg.Done" || str === "6. Registered / Won" || str === "Registered") return PIPELINE_STAGES.REGISTERED_WON;
@@ -169,6 +175,7 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null) {
         const combined = `${stat} ${rem}`;
         let hStage = null;
         if (combined.includes("already reg") || combined.includes("reg.done") || combined.includes("registered")) hStage = PIPELINE_STAGES.REGISTERED_WON;
+        else if (combined.includes("previous program pending")) hStage = PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING;
         else if (combined.includes("info given") || combined.includes("information given") || combined.includes("details send")) hStage = PIPELINE_STAGES.INFO_GIVEN;
         else if (combined.includes("interested") && !combined.includes("not interested")) hStage = PIPELINE_STAGES.NURTURE_INTERESTED;
         else if (combined.includes("next time")) hStage = PIPELINE_STAGES.FUTURE_POOL;
@@ -224,6 +231,7 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null) {
         const combined = `${stat} ${rem}`;
         let st = null;
         if (combined.includes("already reg") || combined.includes("reg.done") || combined.includes("registered")) st = PIPELINE_STAGES.REGISTERED_WON;
+        else if (combined.includes("previous program pending")) st = PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING;
         else if (combined.includes("info given") || combined.includes("information given") || combined.includes("details send")) st = PIPELINE_STAGES.INFO_GIVEN;
         else if (combined.includes("interested") && !combined.includes("not interested")) st = PIPELINE_STAGES.NURTURE_INTERESTED;
         else if (combined.includes("next time")) st = PIPELINE_STAGES.FUTURE_POOL;
@@ -315,6 +323,11 @@ export function evaluatePipeline(contact = {}, callEvent = {}) {
     wasConnected              = true;
     programRelationshipUpdate = { status: "Existing Alumni" };
   }
+  else if (sLower === "previous program pending") {
+    targetStage  = PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING;
+    attemptCount = 0;
+    wasConnected = true;
+  }
   else if (["not interested", "not possible"].includes(sLower)) {
     targetStage  = PIPELINE_STAGES.CLOSED_LOST;
     closedReason = "Not Interested / Opt-Out";
@@ -393,6 +406,8 @@ export function getPipelineStageConfig(stage) {
     case "Information Given":
     case "Info Given":
       return { label: "3. Information Given", bg: "bg-purple-50", border: "border-purple-300", text: "text-purple-800", badge: "bg-purple-100 text-purple-900 border-purple-300" };
+    case "Previous Program Pending":
+      return { label: "Previous Program Pending", bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-800", badge: "bg-amber-100 text-amber-900 border-amber-300 font-medium" };
     case "4. Nurture / Interested":
     case "Nurture / Interested":
     case "Interested":
@@ -421,3 +436,4 @@ export function getPipelineStageConfig(stage) {
       return { label: stage || "", bg: "bg-gray-100", border: "border-gray-200", text: "text-gray-700", badge: "bg-gray-100 text-gray-700 border-gray-200" };
   }
 }
+

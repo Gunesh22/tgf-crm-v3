@@ -5,6 +5,7 @@ export { isKhojiField };
 export const STATUS_OPTIONS = [
   "Interested",
   "Reg.Done",
+  "Previous Program Pending",
   "Not interested",
   "Not Attended",
   "NA",
@@ -111,6 +112,7 @@ export const CALL_STATUS_OPTIONS = [
 export const SALES_OUTCOME_OPTIONS = [
   "Info Given",
   "Interested",
+  "Previous Program Pending",
   "Next Time",
   "Not Interested",
   "Reg.Done",
@@ -133,6 +135,7 @@ export const CALL_TYPE_OPTIONS = ["outgoing", "incoming"];
 export const CONNECTED_STATUSES = [
   "Info given",
   "Interested",
+  "Previous Program Pending",
   "Reg.Done",
   "reminder",
   "Reminder Given",
@@ -800,6 +803,7 @@ export function getCanonicalStatus(status) {
   const sLower = status.trim().toLowerCase();
   if (sLower === "interested") return "Interested";
   if (sLower === "reg.done" || sLower === "registered") return "Reg.Done";
+  if (sLower === "previous program pending") return "Previous Program Pending";
   if (sLower === "not interested" || sLower === "not intrested") return "Not interested";
   if (sLower === "na") return "NA";
   if (sLower === "busy") return "Busy";

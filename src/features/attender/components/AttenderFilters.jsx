@@ -395,6 +395,7 @@ export function AttenderFilters({
         { value: "1. New Lead", label: "1. New Lead" },
         { value: "2. Attempting Contact", label: "2. Attempting Contact" },
         { value: "3. Information Given", label: "3. Information Given" },
+        { value: "Previous Program Pending", label: "Previous Program Pending" },
         { value: "4. Nurture / Interested", label: "4. Nurture / Interested" },
         { value: "5. Future Pool", label: "5. Future Pool" },
         { value: "6. Registered / Won", label: "6. Registered / Won" },

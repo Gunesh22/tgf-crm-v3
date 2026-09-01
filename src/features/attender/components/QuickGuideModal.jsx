@@ -27,6 +27,14 @@ const PIPELINE_STAGES = [
     mr: "संपर्क झाला आणि माहिती दिली।"
   },
   {
+    num: "3.2",
+    name: "Previous Program Pending",
+    badgeClass: "bg-purple-100 text-purple-900 border-purple-300",
+    en: "Working on current program, but a previous program associated with source has not yet been attended/completed.",
+    hi: "वर्तमान प्रोग्राम पर काम चल रहा है, लेकिन स्रोत से जुड़ा पिछला प्रोग्राम अभी पूरा नहीं हुआ है।",
+    mr: "सध्याच्या प्रोग्रामवर काम सुरू आहे, परंतु स्त्रोताशी संबंधित मागील प्रोग्राम अद्याप पूर्ण झालेला नाही।"
+  },
+  {
     num: "4",
     name: "Nurture / Interested",
     badgeClass: "bg-indigo-100 text-indigo-900 border-indigo-300",

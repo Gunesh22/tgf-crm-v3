@@ -24,6 +24,7 @@ const STAGE_RANKS = {
   "1. New Lead": 1, "New Lead": 1,
   "2. Attempting Contact": 2, "Attempting Contact": 2, "Attempting": 2,
   "3. Information Given": 3, "Information Given": 3, "Info Given": 3,
+  "Previous Program Pending": 3.2,
   "4. Nurture / Interested": 4, "Nurture / Interested": 4, "Interested": 4,
   "5. Future Pool": 5, "Future Pool": 5, "Next Time": 5,
   "6. Registered / Won": 6, "Registered / Won": 6, "Reg.Done": 6, "Registered": 6,
@@ -40,9 +41,10 @@ function canTransitionServer(fromStage, toStage, event = {}) {
   const fromRank = fromStage ? (STAGE_RANKS[fromStage] || 0) : 0;
   const toRank   = toStage   ? (STAGE_RANKS[toStage]   || 0) : 0;
   if (fromStage === toStage || fromRank === toRank) return true;
+  if (fromStage === "Previous Program Pending") return true;
   if (LEGACY_NON_PIPELINE_STAGES.has(fromStage)) return true;
   const isConnected = event.callStatus === "Connected" ||
-    ["Info Given", "Interested", "Reg.Done", "Next Time"].includes(event.purposeOutcome || event.status);
+    ["Info Given", "Interested", "Reg.Done", "Next Time", "Previous Program Pending"].includes(event.purposeOutcome || event.status);
   if (fromRank === 7 && isConnected) return true;
   if (event.closedReason?.includes("Automated")) return fromRank <= 2;
   if (fromRank > 1 && toRank < fromRank) return false;
@@ -63,6 +65,7 @@ function getEffectiveStageServer(lead) {
     const outcome = (h.status || h.purposeOutcome || "").trim().toLowerCase();
     let hStage = null;
     if (outcome === "info given" || outcome === "info")    hStage = "3. Information Given";
+    else if (outcome === "previous program pending")        hStage = "Previous Program Pending";
     else if (outcome === "interested")                      hStage = "4. Nurture / Interested";
     else if (outcome === "next time")                       hStage = "5. Future Pool";
     else if (outcome === "reg.done" || outcome === "registered") hStage = "6. Registered / Won";
@@ -129,6 +132,11 @@ function evaluateStageServer(lead, callEvent) {
     wasConnected              = true;
     programRelationshipUpdate = { status: "Existing Alumni" };
   }
+  else if (sLower === "previous program pending") {
+    targetStage  = "Previous Program Pending";
+    attemptCount = 0;
+    wasConnected = true;
+  }
   else if (["not interested", "not possible"].includes(sLower)) {
     targetStage  = "Closed / Lost";
     closedReason = "Not Interested / Opt-Out";
@@ -183,7 +191,7 @@ export async function executeLogCall(db, payload) {
     contactId, attenderId, attenderName,
     status, remark, callbackDate, callbackTime,
     calledFor, callPurpose, callStatus, queryStatus,
-    queryDetails,
+    queryDetails, previousProgram,
     ...rootUpdates
   } = payload;
 
@@ -247,7 +255,10 @@ export async function executeLogCall(db, payload) {
     rootUpdates.Source || rootUpdates.source ||
     existingContact.Source || existingContact.source || originalSource;
 
-  // ── Build callId ───────────────────────────────────────────────────────
+  const resolvedPreviousProgram = previousProgram !== undefined
+    ? previousProgram
+    : (rootUpdates.previousProgram !== undefined ? rootUpdates.previousProgram : null);
+
   const callId = 'call_' + Date.now() + '_' + process.hrtime.bigint().toString(36) + '_' + Math.random().toString(36).substring(2, 7);
 
   // ── Build history item ─────────────────────────────────────────────────
@@ -275,6 +286,7 @@ export async function executeLogCall(db, payload) {
     calledFor:    calledFor || rootUpdates['Called For'] || existingContact['Called For'] || '',
     callSource:   currentCallSource,
     original_source: originalSource,
+    previousProgram: resolvedPreviousProgram,
     timestamp: nowIso,
   };
 
@@ -349,8 +361,13 @@ export async function executeLogCall(db, payload) {
       calledFor:    targetCalledFor || existingContact['Called For'] || '',
       source:       currentCallSource,
       original_source: originalSource,
+      previousProgram: resolvedPreviousProgram,
     },
   };
+
+  if (resolvedPreviousProgram !== undefined) {
+    setPayload.previousProgram = resolvedPreviousProgram;
+  }
 
   if (!isNonOwnerSharedCall) {
     setPayload.callPurpose = callPurposeClean;

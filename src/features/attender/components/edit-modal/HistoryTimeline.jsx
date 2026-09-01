@@ -30,6 +30,7 @@ export const HistoryTimeline = ({
                   <span className={`px-1.5 py-0.2 rounded text-[10px] font-semibold ${
                     h.status === "Interested" ? "bg-indigo-50 text-indigo-700 border border-indigo-200" :
                     h.status === "Reg.Done" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
+                    h.status === "Previous Program Pending" ? "bg-purple-50 text-purple-700 border border-purple-200" :
                     (h.status === "Query" || h.callPurpose === "QUERY") ? "bg-amber-50 text-amber-800 border border-amber-200" :
                     "bg-slate-100 text-slate-600 border border-slate-200"
                   }`}>

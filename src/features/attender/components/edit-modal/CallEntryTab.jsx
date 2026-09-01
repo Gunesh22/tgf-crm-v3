@@ -2,7 +2,7 @@ import React, { useRef, useMemo, useState, useEffect } from "react";
 import { toast } from "react-hot-toast";
 import {
   Phone, Tag, CheckCircle2, AlertCircle, MessageSquare,
-  CalendarDays, Flame, HelpCircle, Bell, ArrowRightLeft, Shield, Info, History, RotateCw, Loader, X, Check, Plus, Undo2
+  CalendarDays, Flame, HelpCircle, Bell, ArrowRightLeft, Shield, Info, History, RotateCw, Loader, X, Check, Plus, Undo2, Clock
 } from "lucide-react";
 import SearchableDropdown from "./SearchableDropdown";
 import HistoryTimeline from "./HistoryTimeline";
@@ -13,7 +13,6 @@ import {
   CALL_STATUS_OPTIONS,
   SALES_OUTCOME_OPTIONS,
   QUERY_STATUS_OPTIONS,
-  REMINDER_OUTCOME_OPTIONS,
   CALLED_FOR_OPTIONS,
   SOURCE_OPTIONS,
   CALL_SOURCE_OPTIONS,
@@ -26,6 +25,7 @@ const CORE_OVERRIDE_STAGES = [
   PIPELINE_STAGES.NEW_LEAD,
   PIPELINE_STAGES.ATTEMPTING,
   PIPELINE_STAGES.INFO_GIVEN,
+  PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING,
   PIPELINE_STAGES.NURTURE_INTERESTED,
   PIPELINE_STAGES.FUTURE_POOL,
   PIPELINE_STAGES.REGISTERED_WON,
@@ -251,9 +251,7 @@ export const CallEntryTab = ({
         next.status = "Query";
         if (!next.queryStatus) next.queryStatus = "Pending";
       } else if (purpose === "REMINDER") {
-        if (!REMINDER_OUTCOME_OPTIONS.includes(prev.status)) {
-          next.status = "";
-        }
+        next.status = "Reminder Given";
       } else {
         if (["Reminder Given", "Reminder Pending", "Reminder Confirmed", "Asked Question", "Needs Assistance", "Query"].includes(next.status)) {
           next.status = "";
@@ -275,7 +273,14 @@ export const CallEntryTab = ({
           }
         }
       } else if (prev.callStatus !== "Connected") {
-        next.status = "";
+        const curPurpose = prev.callPurpose || "SALES";
+        if (curPurpose === "REMINDER") {
+          next.status = "Reminder Given";
+        } else if (curPurpose === "QUERY") {
+          next.status = "Query";
+        } else {
+          next.status = "";
+        }
       }
       return next;
     });
@@ -777,11 +782,59 @@ export const CallEntryTab = ({
                       return;
                     }
                   }
+                  if (val === "Previous Program Pending") {
+                    const defaultPrevProg = edited.previousProgram || edited[sourceField] || edited.Source || edited.source || edited.original_source || row?.original_source || "";
+                    setEdited(prev => ({
+                      ...prev,
+                      status: val,
+                      previousProgram: defaultPrevProg
+                    }));
+                    return;
+                  }
                   handleChange("status", val);
                 }}
                 placeholder="[ Select outcome... ]"
                 colorClass="indigo"
               />
+
+              {/* Previous Program Pending Selector & Indicator Banner */}
+              {edited.status === "Previous Program Pending" && (
+                <div className="mt-2.5 p-3 bg-purple-50/90 border border-purple-200 rounded-xl space-y-2 animate-fade-in shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 font-extrabold text-purple-950 text-xs">
+                      <Clock size={15} className="text-purple-600 shrink-0" />
+                      <span>Previous Program Pending</span>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-200">
+                      Stage: Previous Program Pending
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-purple-800 leading-tight">
+                    Person is being worked on for current program, but a previous program associated with source has not yet been attended/completed.
+                  </p>
+                  <div className="space-y-1 pt-1">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-purple-900">
+                      <span>Pending Previous Program:</span>
+                      {edited.previousProgram && (
+                        <button
+                          type="button"
+                          onClick={() => handleChange("previousProgram", "")}
+                          className="text-[10px] text-purple-600 hover:text-purple-800 underline font-semibold cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <SearchableDropdown
+                      options={CALL_SOURCE_OPTIONS}
+                      selected={edited.previousProgram || ""}
+                      onChange={val => handleChange("previousProgram", val || "")}
+                      placeholder="Select pending program / source..."
+                      colorClass="indigo"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Registration Status Indicator Banner */}
               {programRegInfo.program && (programRegInfo.exists || edited.status === "Reg.Done") && (
@@ -847,31 +900,6 @@ export const CallEntryTab = ({
                     </button>
                   );
                 })}
-              </div>
-            </div>
-          )}
-
-          {/* CONNECTED REMINDER OUTCOME */}
-          {activePrimaryResult === "Connected" && activePurpose === "REMINDER" && (
-            <div className="space-y-1.5 animate-fade-in">
-              <label className="text-[11px] font-extrabold text-sky-900 uppercase tracking-wider flex items-center gap-1">
-                Reminder Result <span className="text-rose-500 font-bold">*</span>
-              </label>
-              <div className="flex flex-wrap gap-1.5">
-                {REMINDER_OUTCOME_OPTIONS.map(ro => (
-                  <button
-                    key={ro}
-                    type="button"
-                    onClick={() => handleChange("status", ro)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                      edited.status === ro
-                        ? "bg-sky-600 text-white border-sky-600 shadow-2xs font-bold"
-                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
-                    }`}
-                  >
-                    {ro}
-                  </button>
-                ))}
               </div>
             </div>
           )}

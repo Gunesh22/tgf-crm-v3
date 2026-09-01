@@ -527,7 +527,7 @@ export const TAB_ITEMS = [
   { id: "settings", label: "Settings", icon: <Settings size={18} /> },
 ];
 
-export const CONNECTED_STATUSES = ["Info given", "Interested", "Reg.Done", "reminder", "Reminder Given", "Reminder Pending", "Query", "Already Reg.d", "Next time", "Shivir done", "Not possible", "Pending", "Not interested", "Not Attended", "Call Log Added"];
+export const CONNECTED_STATUSES = ["Info given", "Interested", "Previous Program Pending", "Reg.Done", "reminder", "Reminder Given", "Reminder Pending", "Query", "Already Reg.d", "Next time", "Shivir done", "Not possible", "Pending", "Not interested", "Not Attended", "Call Log Added"];
 export const NOT_CONNECTED_STATUSES = ["NA", "Busy", "Call Cut", "switched off", "Invalid No", "Called by mistake", "No Network", "wrong no.", "no answer"];
 
 export function classifyCallStatus(rawStatus) {
@@ -560,6 +560,7 @@ export function classifyCallStatus(rawStatus) {
     CONNECTED_STATUSES.some(cs => cs.toLowerCase() === sLower) ||
     sLower.includes("info given") ||
     sLower.includes("interested") ||
+    sLower.includes("previous program pending") ||
     sLower.includes("reg.done") ||
     sLower.includes("registered") ||
     sLower.includes("reminder") ||
@@ -686,6 +687,7 @@ export function getCanonicalStatus(status) {
   const sLower = status.trim().toLowerCase();
   if (sLower === "interested") return "Interested";
   if (sLower === "reg.done" || sLower === "registered") return "Reg.Done";
+  if (sLower === "previous program pending") return "Previous Program Pending";
   if (sLower === "not interested" || sLower === "not intrested") return "Not interested";
   if (sLower === "na") return "NA";
   if (sLower === "busy") return "Busy";

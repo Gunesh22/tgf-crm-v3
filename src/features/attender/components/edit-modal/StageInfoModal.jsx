@@ -24,6 +24,13 @@ export const PIPELINE_STAGE_INFO_LIST = [
     desc: "The call connected successfully and initial program/shivir details were communicated to the caller."
   },
   {
+    stage: "Previous Program Pending",
+    badge: "bg-purple-100 text-purple-900 border-purple-300",
+    icon: Clock,
+    iconColor: "text-purple-600",
+    desc: "The person is currently being worked on for one program, but a previous program associated with the current source has not yet been attended/completed."
+  },
+  {
     stage: "4. Nurture / Interested",
     badge: "bg-indigo-100 text-indigo-900 border-indigo-300",
     icon: UserCheck,

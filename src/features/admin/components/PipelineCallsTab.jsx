@@ -1014,11 +1014,12 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
         </div>
 
         {/* Funnel Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
           {[
             { key: "new_lead", stageName: "1. New Lead", stageValue: PIPELINE_STAGES.NEW_LEAD, bg: "bg-slate-50 border-slate-200 text-slate-700" },
             { key: "attempting", stageName: "2. Attempting Contact", stageValue: PIPELINE_STAGES.ATTEMPTING, bg: "bg-amber-50/50 border-amber-200 text-amber-900" },
             { key: "info_given", stageName: "3. Information Given", stageValue: PIPELINE_STAGES.INFO_GIVEN, bg: "bg-blue-50/50 border-blue-200 text-blue-900" },
+            { key: "prev_prog_pending", stageName: "Previous Program Pending", stageValue: PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING, bg: "bg-purple-50/50 border-purple-200 text-purple-900" },
             { key: "nurture", stageName: "4. Nurture / Interested", stageValue: PIPELINE_STAGES.NURTURE_INTERESTED, bg: "bg-indigo-50/50 border-indigo-200 text-indigo-900" },
             { key: "future_pool", stageName: "5. Future Pool", stageValue: PIPELINE_STAGES.FUTURE_POOL, bg: "bg-purple-50/50 border-purple-200 text-purple-900" },
             { key: "registered", stageName: "6. Registered / Won", stageValue: PIPELINE_STAGES.REGISTERED_WON, bg: "bg-emerald-50/50 border-emerald-200 text-emerald-900" }
