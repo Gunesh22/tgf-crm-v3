@@ -3,7 +3,7 @@ import { toast } from "react-hot-toast";
 import * as XLSX from "xlsx";
 import { BarChart3, Download, Search, X, ChevronDown, Check, Eye } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
-import { COLORS, cleanExportRow, CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, parseTimestamp, getCanonicalStatus, renderVal, isStageNurtureInterested, isStageRegisteredWon, getLocalDateStr, getCanonicalRegistrations, getCanonicalRegisteredPeople, getCanonicalStage6People } from "../utils.jsx";
+import { COLORS, cleanExportRow, CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, parseTimestamp, getCanonicalStatus, renderVal, isStageNurtureInterested, isStageRegisteredWon, getLocalDateStr, getCanonicalRegistrations, getCanonicalRegisteredPeople, getCanonicalStage6People, getContactPhone } from "../utils.jsx";
 import { isKhojiAffirmative, isKhojiNegative } from "../../attender/utils.js";
 
 // ── Multi-select dropdown ──────────────────────────────────────────────────
@@ -618,6 +618,72 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
     return Array.from(map.values());
   }, [filteredLogs, callLogs]);
 
+  const callPurposeData = useMemo(() => {
+    const counts = { SALES: 0, QUERY: 0, REMINDER: 0 };
+    filteredLogs.forEach(l => {
+      if (!l.isHistory) return;
+      const p = String(l.purpose || l.callPurpose || "SALES").toUpperCase();
+      if (counts[p] !== undefined) counts[p]++;
+      else counts.SALES++;
+    });
+    return [
+      { name: "Sales Calls", value: counts.SALES, fill: "#6366f1" },
+      { name: "Query Calls", value: counts.QUERY, fill: "#f59e0b" },
+      { name: "Reminder Calls", value: counts.REMINDER, fill: "#0284c7" }
+    ].filter(d => d.value > 0);
+  }, [filteredLogs]);
+
+  const callbackComplianceMetrics = useMemo(() => {
+    let totalScheduled = 0;
+    let completed = 0;
+    let overdue = 0;
+    let upcoming = 0;
+
+    const todayStr = getLocalDateStr(new Date());
+
+    filteredLogs.forEach(l => {
+      const cbDateRaw = l.callbackDate || l.callback_date;
+      if (!cbDateRaw) return;
+      totalScheduled++;
+
+      const cbStatus = String(l.callbackStatus || l.callback_status || "").toLowerCase();
+      const isCompleted = cbStatus === "completed" || cbStatus === "done" || cbStatus === "called";
+
+      const parsedCb = parseTimestamp(cbDateRaw);
+      const cbDateStr = parsedCb ? getLocalDateStr(parsedCb) : String(cbDateRaw).slice(0, 10);
+
+      if (isCompleted) {
+        completed++;
+      } else if (cbDateStr < todayStr) {
+        overdue++;
+      } else {
+        upcoming++;
+      }
+    });
+
+    const evaluated = completed + overdue;
+    const complianceRate = evaluated > 0 ? Math.round((completed / evaluated) * 100) : 100;
+
+    return {
+      totalScheduled,
+      completed,
+      overdue,
+      upcoming,
+      complianceRate
+    };
+  }, [filteredLogs]);
+
+  const objectionReasonData = useMemo(() => {
+    const map = {};
+    filteredLogs.forEach(l => {
+      if (getCanonicalStatus(l.status) === "Not Interested" || l.objectionReason) {
+        const reason = l.objectionReason || l["Reason for Not Interested"] || "Unspecified";
+        map[reason] = (map[reason] || 0) + 1;
+      }
+    });
+    return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+  }, [filteredLogs]);
+
   const searchedConversions = useMemo(() => {
     if (!conversionSearch.trim()) return conversionsList;
     const term = conversionSearch.toLowerCase();
@@ -720,14 +786,6 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
             onChange={setSelectedCalledFors}
             placeholder="Called For"
             allLabel="All Called For"
-          />
-
-          <MultiSelect
-            options={statusOptions}
-            selected={selectedStatuses}
-            onChange={setSelectedStatuses}
-            placeholder="Status"
-            allLabel="All Statuses"
           />
 
           <MultiSelect
@@ -843,25 +901,9 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
           { label: "Total Calls", value: totalPhysicalCalls, sub: "Physical call events (contact.history)" },
-          { 
-            label: "Program Registrations", 
-            value: programRegistrationsList.length, 
-            color: "text-purple-600", 
-            sub: "Unique enrolments (contactId + calledForKey)", 
-            inspectable: true,
-            onClickInspect: () => {
-              setInspectSearch("");
-              setInspectModal({
-                title: "Program Registrations — Unique Enrolments",
-                subtitle: "Unique program enrolments identified by (Contact ID + Program)",
-                type: "program_registrations",
-                items: programRegistrationsList
-              });
-            }
-          },
           { 
             label: "Registered People", 
             value: registeredPeopleList.length, 
@@ -879,18 +921,18 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
             }
           },
           { 
-            label: "Stage 6 People", 
-            value: stage6PeopleList.length, 
-            color: "text-indigo-600", 
-            sub: "Unique contacts currently in Stage 6 (6. Registered / Won)", 
+            label: "Interested Calls", 
+            value: totalInterestedCalls, 
+            color: "text-amber-600", 
+            sub: "Calls logged with Interested outcome", 
             inspectable: true,
             onClickInspect: () => {
               setInspectSearch("");
               setInspectModal({
-                title: "Stage 6 People — Unique Contacts",
-                subtitle: "Unique contacts currently in Stage 6 pipeline stage",
-                type: "stage6_people",
-                items: stage6PeopleList
+                title: "Interested People — Contact List",
+                subtitle: "Contacts in Nurture / Interested stage",
+                type: "interested_people",
+                items: interestedPeopleList
               });
             }
           },
@@ -982,6 +1024,140 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
                 <Bar dataKey="total" fill="#6366f1" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Row 2: Call Purpose & Objection Reasons Analytics */}
+      <div className="grid md:grid-cols-2 gap-4">
+        {/* Call Purpose Split */}
+        <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-2xs">
+          <h3 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-3 flex items-center justify-between">
+            <span>Call Purpose Breakdown</span>
+            <span className="text-[10px] text-slate-400 font-normal">Sales vs Query vs Reminder</span>
+          </h3>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 h-[200px]">
+            <div className="w-full sm:w-1/2 h-[180px]">
+              <ResponsiveContainer width="100%" height={180}>
+                <PieChart>
+                  <Pie
+                    data={callPurposeData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={65}
+                    innerRadius={35}
+                    paddingAngle={2}
+                  >
+                    {callPurposeData.map((entry, i) => (
+                      <Cell key={i} fill={entry.fill} className="focus:outline-none" />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ background: "#0f172a", border: "none", borderRadius: "6px", color: "#fff", fontSize: "12px" }}
+                    itemStyle={{ color: "#fff" }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="w-full sm:w-1/2 grid grid-cols-1 gap-y-2 text-xs font-medium text-slate-600 self-center">
+              {(() => {
+                const total = callPurposeData.reduce((sum, item) => sum + item.value, 0);
+                return callPurposeData.map((item) => (
+                  <div key={item.name} className="flex items-center justify-between py-1 border-b border-slate-100 last:border-0">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.fill }} />
+                      <span className="text-slate-700 font-medium">{item.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-slate-900 font-bold">{item.value}</span>
+                      <span className="text-slate-400 text-[10px]">({total ? ((item.value / total) * 100).toFixed(0) : 0}%)</span>
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+        </div>
+
+        {/* Callback Compliance & Overdue Follow-ups */}
+        <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-2xs flex flex-col justify-between">
+          <div>
+            <h3 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2 flex items-center justify-between">
+              <span>Callback Compliance & Follow-ups</span>
+              <span className="text-[10px] text-slate-400 font-normal">Attender Follow-up Rate</span>
+            </h3>
+
+            {/* Compliance KPI Banner */}
+            <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-md border border-slate-100 mb-3">
+              <div>
+                <p className="text-[10px] uppercase font-bold text-slate-400">On-Time Compliance</p>
+                <div className="flex items-baseline gap-1.5 mt-0.5">
+                  <span className={`text-2xl font-bold ${
+                    callbackComplianceMetrics.complianceRate >= 80 ? "text-emerald-600" :
+                    callbackComplianceMetrics.complianceRate >= 50 ? "text-amber-600" : "text-rose-600"
+                  }`}>
+                    {callbackComplianceMetrics.complianceRate}%
+                  </span>
+                  <span className="text-xs font-medium text-slate-500">Rate</span>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                  callbackComplianceMetrics.overdue > 0 ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"
+                }`}>
+                  {callbackComplianceMetrics.overdue > 0 ? `${callbackComplianceMetrics.overdue} Overdue` : "All Callbacks Up-to-Date"}
+                </span>
+              </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="space-y-1 mb-3">
+              <div className="flex items-center justify-between text-[11px] font-medium text-slate-500">
+                <span>Completed vs Overdue Progress</span>
+                <span>{callbackComplianceMetrics.completed} / {callbackComplianceMetrics.totalScheduled} Callbacks</span>
+              </div>
+              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden flex">
+                {callbackComplianceMetrics.totalScheduled > 0 ? (
+                  <>
+                    <div
+                      className="h-full bg-emerald-500 transition-all duration-300"
+                      style={{ width: `${(callbackComplianceMetrics.completed / callbackComplianceMetrics.totalScheduled) * 100}%` }}
+                      title={`Completed: ${callbackComplianceMetrics.completed}`}
+                    />
+                    <div
+                      className="h-full bg-rose-500 transition-all duration-300"
+                      style={{ width: `${(callbackComplianceMetrics.overdue / callbackComplianceMetrics.totalScheduled) * 100}%` }}
+                      title={`Overdue: ${callbackComplianceMetrics.overdue}`}
+                    />
+                    <div
+                      className="h-full bg-sky-400 transition-all duration-300"
+                      style={{ width: `${(callbackComplianceMetrics.upcoming / callbackComplianceMetrics.totalScheduled) * 100}%` }}
+                      title={`Scheduled/Upcoming: ${callbackComplianceMetrics.upcoming}`}
+                    />
+                  </>
+                ) : (
+                  <div className="h-full bg-slate-200 w-full" />
+                )}
+              </div>
+            </div>
+
+            {/* 3 Metric Pill Grid */}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-emerald-50/60 border border-emerald-100 p-2 rounded text-center">
+                <p className="text-[10px] text-emerald-700 font-medium">Completed</p>
+                <p className="text-base font-bold text-emerald-800 mt-0.5">{callbackComplianceMetrics.completed}</p>
+              </div>
+              <div className="bg-rose-50/60 border border-rose-100 p-2 rounded text-center">
+                <p className="text-[10px] text-rose-700 font-medium">Overdue</p>
+                <p className="text-base font-bold text-rose-800 mt-0.5">{callbackComplianceMetrics.overdue}</p>
+              </div>
+              <div className="bg-sky-50/60 border border-sky-100 p-2 rounded text-center">
+                <p className="text-[10px] text-sky-700 font-medium">Upcoming</p>
+                <p className="text-base font-bold text-sky-800 mt-0.5">{callbackComplianceMetrics.upcoming}</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1078,7 +1254,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
                 const dateVal = parseTimestamp(c.timestamp || c.registeredAt || c.lastCalledAt || c.createdAt);
                 const dateStr = dateVal ? dateVal.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—";
                 const cName = renderVal(c.contactName || c.name || c.Name, "Unknown");
-                const cPhone = renderVal(c.contactPhone || c.phone || c.Phone || c.Mobile || c.mobile, "—");
+                const cPhone = getContactPhone(c) || renderVal(c.contactPhone || c.phone || c.Phone || c.Mobile || c.mobile || c.normalizedMobile, "—");
                 const cCity = renderVal(c.contactCity || c.city, "");
                 const attenderName = renderVal(c.attenderName || c.attender, "Unassigned");
                 const programName = renderVal(c.programName || c.calledFor, "—");
@@ -1092,7 +1268,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
                     {/* Name & Contact */}
                     <td className="px-3.5 py-2.5">
                       <div className="font-semibold text-slate-900">{cName}</div>
-                      <div className="text-indigo-600 font-mono text-[11px]">{cPhone}</div>
+                      {cPhone && cPhone !== "—" && <div className="text-indigo-600 font-mono text-[11px]">{cPhone}</div>}
                       {cCity && cCity !== "—" && <div className="text-[10px] text-slate-400">{cCity}</div>}
                     </td>
                     {/* Attender */}

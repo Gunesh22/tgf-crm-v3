@@ -469,6 +469,18 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
     return counts;
   }, [filteredContacts]);
 
+  const prevProgPendingBreakdown = useMemo(() => {
+    const map = {};
+    filteredContacts.forEach(c => {
+      const stage = getCanonicalStage(c);
+      if (stage === PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING || stage === "Previous Program Pending") {
+        const prog = c.previousProgram || c.Source || c.source || "Unspecified";
+        map[prog] = (map[prog] || 0) + 1;
+      }
+    });
+    return Object.entries(map).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+  }, [filteredContacts]);
+
   // Stage Matrix for Calls vs People
   const pipelineVsCallsMatrix = useMemo(() => {
     const stageCalls = {};
@@ -1042,6 +1054,34 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
             );
           })}
         </div>
+
+        {/* Previous Program Pending Breakdown */}
+        {prevProgPendingBreakdown.length > 0 && (
+          <div className="p-3 bg-purple-50/60 border border-purple-200 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-extrabold text-purple-900 uppercase tracking-wider flex items-center gap-1">
+                <span>⏳</span> PREVIOUS PROGRAM PENDING BACKLOG BY PROGRAM
+              </span>
+              <span className="text-[11px] font-bold text-purple-700">
+                {prevProgPendingBreakdown.reduce((sum, item) => sum + item.count, 0)} Total Leads
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {prevProgPendingBreakdown.map((item) => (
+                <div 
+                  key={item.name}
+                  onClick={() => handleStageClick(`Previous Program Pending — ${item.name}`, PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING)}
+                  className="px-2.5 py-1 bg-white border border-purple-200 rounded-md text-xs font-semibold text-purple-900 flex items-center gap-2 shadow-2xs hover:bg-purple-100/50 cursor-pointer transition-colors"
+                >
+                  <span>{item.name}</span>
+                  <span className="px-1.5 py-0.2 bg-purple-600 text-white rounded-full text-[10px] font-extrabold">
+                    {item.count}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Auxiliary & Legacy Stages Row */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 pt-1">

@@ -944,6 +944,29 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
     const wsDetailedLogs = XLSX.utils.json_to_sheet(detailedLogs);
     XLSX.utils.book_append_sheet(wb, wsDetailedLogs, "Detailed Call Logs");
 
+    // 5. Previous Program Pending Leads
+    const prevPendingLogs = (callLogs || [])
+      .filter(log => {
+        const stage = getCanonicalStatus(log.pipelineStage || log.stage);
+        return stage === "Previous Program Pending" || log.pipelineStage === "Previous Program Pending";
+      })
+      .map(log => ({
+        "Name": getContactName(log),
+        "Phone": getContactPhone(log),
+        "City": getContactCity(log),
+        "Khoji": getContactKhoji(log),
+        "Target Program (Called For)": log["Called For"] || log.calledFor || log.called_for || log.programName || "—",
+        "Source": log.Source || log.source || "—",
+        "Pending Previous Program": log.previousProgram || log.Source || log.source || "Unspecified",
+        "Attender": log.attenderName || log.assignedTo || "Unassigned",
+        "Last Called": log.lastCalledAt ? new Date(log.lastCalledAt).toISOString().split("T")[0] : "—"
+      }));
+
+    if (prevPendingLogs.length > 0) {
+      const wsPrevPending = XLSX.utils.json_to_sheet(prevPendingLogs);
+      XLSX.utils.book_append_sheet(wb, wsPrevPending, "Previous Program Pending");
+    }
+
 
 
     // Write file
