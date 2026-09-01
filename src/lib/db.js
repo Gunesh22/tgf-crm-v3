@@ -6,7 +6,7 @@ export const OUTGOING_PROGRAM_ID = "outgoing";
 export const OUTGOING_PROGRAM_NAME = "Outgoing Calls";
 export const DEFAULT_WHATSAPP_TEMPLATES = [];
 export const DEFAULT_NOT_CONNECTED_STATUSES = ["NA", "Busy", "Call Cut", "switched off", "Invalid No", "Called by mistake", "No Network", "wrong no.", "no answer"];
-export const DEFAULT_CONNECTED_STATUSES = ["Info given", "Interested", "Reg.Done", "reminder", "Query", "Already Reg.d", "Next time", "Shivir done", "Not possible", "Pending", "Not interested", "Not Attended", "Call Log Added"];
+export const DEFAULT_CONNECTED_STATUSES = ["Info given", "Interested", "Reg.Done", "reminder", "Reminder Given", "Reminder Pending", "Query", "Already Reg.d", "Next time", "Shivir done", "Not possible", "Pending", "Not interested", "Not Attended", "Call Log Added"];
 
 
 

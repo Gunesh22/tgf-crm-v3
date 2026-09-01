@@ -16,6 +16,8 @@ export const STATUS_OPTIONS = [
   "Info given",
   "Next time",
   "reminder",
+  "Reminder Given",
+  "Reminder Pending",
   "Query",
   "Called by mistake",
   "Shivir done",
@@ -123,9 +125,7 @@ export const QUERY_STATUS_OPTIONS = [
 
 export const REMINDER_OUTCOME_OPTIONS = [
   "Reminder Given",
-  "Reminder Confirmed",
-  "Asked Question",
-  "Needs Assistance"
+  "Reminder Pending"
 ];
 
 export const CALL_TYPE_OPTIONS = ["outgoing", "incoming"];
@@ -135,6 +135,8 @@ export const CONNECTED_STATUSES = [
   "Interested",
   "Reg.Done",
   "reminder",
+  "Reminder Given",
+  "Reminder Pending",
   "Query",
   "Already Reg.d",
   "Next time",

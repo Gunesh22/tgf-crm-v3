@@ -244,13 +244,7 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null) {
     }
   }
 
-  const finalContactStage = contactStage || null;
-
-  if (targetKey) {
-    return PIPELINE_STAGES.NEW_LEAD;
-  }
-
-  return finalContactStage;
+  return contactStage || null;
 }
 
 /**

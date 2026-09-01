@@ -255,7 +255,7 @@ export const CallEntryTab = ({
           next.status = "";
         }
       } else {
-        if (["Reminder Given", "Reminder Confirmed", "Asked Question", "Needs Assistance", "Query"].includes(next.status)) {
+        if (["Reminder Given", "Reminder Pending", "Reminder Confirmed", "Asked Question", "Needs Assistance", "Query"].includes(next.status)) {
           next.status = "";
         }
       }
@@ -645,8 +645,51 @@ export const CallEntryTab = ({
           <div>
             <span className="font-bold text-sky-950 text-xs">Event / Shivir Reminder Mode</span>
             <p className="text-[11px] text-sky-800 leading-tight">
-              {edited[calledForField] ? `Program: ${edited[calledForField]}` : "Pipeline stage is preserved. No sales conversion from Reminder."}
+              {edited[calledForField] ? `Program: ${edited[calledForField]}` : "Pipeline stage is preserved. Select program, source, and outcome below."}
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* REMINDER: Program & Call Source grid (2-column) */}
+      {activePurpose === "REMINDER" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-30 animate-fade-in">
+          {/* Reminder For (Program / Shivir) */}
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+              Reminder For (Program / Shivir) <span className="text-rose-500 font-bold">*</span>
+            </label>
+            <SearchableDropdown
+              options={salesCalledForOptions}
+              selected={String(edited[calledForField] || "")}
+              onChange={val => handleChange(calledForField, val)}
+              placeholder="Which program is this reminder for?"
+              isMulti={true}
+              colorClass="sky"
+              disabled={!getEditable(calledForField)}
+            />
+          </div>
+
+          {/* Call Source (Current Call) */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-1">
+              <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+                Call Source (Current Call) <span className="text-rose-500 font-bold">*</span>
+              </label>
+              {(edited.original_source || row.original_source || edited.originalSource) && (
+                <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200" title="Permanent Original Acquisition Source">
+                  Orig: <strong className="text-slate-700 font-bold">{edited.original_source || row.original_source || edited.originalSource}</strong>
+                </span>
+              )}
+            </div>
+            <SearchableDropdown
+              options={CALL_SOURCE_OPTIONS}
+              selected={String(edited[sourceField] || edited.Source || edited.source || edited.original_source || row.original_source || edited.originalSource || "")}
+              onChange={val => handleChange(sourceField, val)}
+              placeholder="Select call source..."
+              colorClass="amber"
+              disabled={!getEditable(sourceField)}
+            />
           </div>
         </div>
       )}
