@@ -175,6 +175,7 @@ export const EditModal = ({
 
   useEffect(() => {
     const freshNorm = getNormalizedRow();
+    freshNorm.rawOriginalCalledFor = row?.["Called For"] || row?.calledFor || row?.called_for || "";
     setSavedRow(freshNorm);
     setEdited(freshNorm);
     setShowCalledForPrompt(false);
@@ -187,11 +188,12 @@ export const EditModal = ({
     const firstProg = rawFirstProg ? String(rawFirstProg).split(",")[0].trim() : "";
 
     if (firstProg) {
+      const attId = activeAttenderId || freshNorm.attenderId || row?.attenderId || null;
       freshNorm.calledFor = firstProg;
       freshNorm["Called For"] = firstProg;
       freshNorm.called_for = firstProg;
-      freshNorm.status = getProgramSpecificStatus(freshNorm, firstProg);
-      freshNorm.pipelineStage = getEffectiveStage(freshNorm, firstProg) || PIPELINE_STAGES.NEW_LEAD;
+      freshNorm.status = getProgramSpecificStatus(freshNorm, firstProg, attId);
+      freshNorm.pipelineStage = getEffectiveStage(freshNorm, firstProg, attId) || PIPELINE_STAGES.NEW_LEAD;
     }
 
     setSavedRow(freshNorm);
@@ -208,23 +210,14 @@ export const EditModal = ({
     const targetProg = String(programName).split(",")[0].trim();
     setActiveProgram(targetProg);
 
-    // Resolve stage and status for selected program context
-    const targetStatus = getProgramSpecificStatus(edited, targetProg);
-    const tempContact = {
-      ...edited,
-      calledFor: targetProg,
-      "Called For": targetProg,
-      called_for: targetProg,
-      status: targetStatus
-    };
-    const targetStage = getEffectiveStage(tempContact, targetProg) || PIPELINE_STAGES.NEW_LEAD;
+    const attId = activeAttenderId || edited.attenderId || row?.attenderId || null;
+    const targetStatus = getProgramSpecificStatus(row || edited, targetProg, attId);
 
     setEdited(prev => ({
       ...prev,
       calledFor: targetProg,
       "Called For": targetProg,
       called_for: targetProg,
-      pipelineStage: targetStage,
       status: targetStatus
     }));
   };
@@ -1097,7 +1090,8 @@ export const EditModal = ({
         next.called_for = singleProg;
         if (singleProg) {
           setActiveProgram(singleProg);
-          next.pipelineStage = getEffectiveStage(prev, singleProg) || PIPELINE_STAGES.NEW_LEAD;
+          const attId = activeAttenderId || prev.attenderId || row?.attenderId || null;
+          next.pipelineStage = getEffectiveStage(row || prev, singleProg, attId) || PIPELINE_STAGES.NEW_LEAD;
         }
       }
       if (key === "status" && val === "Reg.Done") {

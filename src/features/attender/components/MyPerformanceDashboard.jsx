@@ -1,26 +1,28 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
-  PhoneCall, CheckCircle2, TrendingUp, Clock, Calendar,
-  Search, Filter, Sparkles, User, Award, CheckCircle,
-  XCircle, AlertCircle, ArrowUpRight, Copy, Check, MessageSquare,
-  BarChart3, PieChart as PieIcon, RefreshCw, ChevronRight, Layers, FileText
+  PhoneCall, TrendingUp, Clock,
+  Search, Sparkles, Award,
+  XCircle, Copy, Check, BarChart3, PieChart as PieIcon, FileText,
+  Layers, CheckCircle2
 } from "lucide-react";
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, getCanonicalStatus } from "../utils";
 
-// ─── Status Color Token System ────────────────────────────────────────────────
+// ─── Status Color Token System (Restrained Semantic Palette) ─────────────────
 const STATUS_THEMES = {
-  "Reg.Done": { bg: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500", iconClass: "text-emerald-600" },
-  "Interested": { bg: "bg-blue-50 text-blue-700 border-blue-200", dot: "bg-blue-500", iconClass: "text-blue-600" },
-  "Info Given": { bg: "bg-indigo-50 text-indigo-700 border-indigo-200", dot: "bg-indigo-500", iconClass: "text-indigo-600" },
-  "Next Time": { bg: "bg-sky-50 text-sky-700 border-sky-200", dot: "bg-sky-500", iconClass: "text-sky-600" },
-  "Busy": { bg: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-500", iconClass: "text-amber-600" },
-  "No Answer": { bg: "bg-rose-50 text-rose-700 border-rose-200", dot: "bg-rose-500", iconClass: "text-rose-600" },
-  "Not Interested": { bg: "bg-slate-100 text-slate-700 border-slate-200", dot: "bg-slate-500", iconClass: "text-slate-600" },
-  "Pending": { bg: "bg-gray-100 text-gray-600 border-gray-200", dot: "bg-gray-400", iconClass: "text-gray-500" }
+  "Reg.Done": { bg: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500", bar: "bg-emerald-500", color: "#10b981" },
+  "Interested": { bg: "bg-blue-50 text-blue-700 border-blue-200", dot: "bg-blue-500", bar: "bg-blue-500", color: "#3b82f6" },
+  "Info Given": { bg: "bg-indigo-50 text-indigo-700 border-indigo-200", dot: "bg-indigo-500", bar: "bg-indigo-500", color: "#6366f1" },
+  "Next Time": { bg: "bg-sky-50 text-sky-700 border-sky-200", dot: "bg-sky-500", bar: "bg-sky-500", color: "#0284c7" },
+  "Busy": { bg: "bg-slate-100 text-slate-700 border-slate-200", dot: "bg-slate-400", bar: "bg-slate-400", color: "#94a3b8" },
+  "No Answer": { bg: "bg-slate-100 text-slate-700 border-slate-200", dot: "bg-slate-400", bar: "bg-slate-400", color: "#94a3b8" },
+  "Not Connected": { bg: "bg-slate-100 text-slate-700 border-slate-200", dot: "bg-slate-400", bar: "bg-slate-400", color: "#94a3b8" },
+  "Not Interested": { bg: "bg-rose-50 text-rose-700 border-rose-200", dot: "bg-rose-400", bar: "bg-rose-400", color: "#f43f5e" },
+  "Reminder Given": { bg: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-500", bar: "bg-amber-500", color: "#f59e0b" },
+  "Previous Program Pending": { bg: "bg-amber-50 text-amber-800 border-amber-200", dot: "bg-amber-600", bar: "bg-amber-600", color: "#d97706" },
+  "Query": { bg: "bg-slate-100 text-slate-700 border-slate-200", dot: "bg-slate-500", bar: "bg-slate-500", color: "#64748b" },
+  "Pending": { bg: "bg-slate-100 text-slate-600 border-slate-200", dot: "bg-slate-400", bar: "bg-slate-400", color: "#cbd5e1" }
 };
-
-const PIE_COLORS = ["#10b981", "#3b82f6", "#6366f1", "#0284c7", "#f59e0b", "#f43f5e", "#64748b", "#8b5cf6"];
 
 // ─── Date Filter Options ──────────────────────────────────────────────────────
 const DATE_FILTERS = [
@@ -343,12 +345,46 @@ function filterLogsByDate(logs, range, customStart, customEnd, attenderName, att
   });
 }
 
+// ─── Resolve Abhivyakti Context for Reg.Done Events ──────────────────────────
+function getAbhivyaktiInfo(att) {
+  const isRegEvent = att.status === "Reg.Done" || att.status === "Registered / Won" || att.status === "Registered";
+  if (!isRegEvent) return null;
+
+  const targetProg = String(att.calledFor || att.programName || att["Called For"] || "").trim();
+  const targetKey = targetProg.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  let regProgramName = targetProg;
+
+  if (Array.isArray(att.programRelationships)) {
+    const foundRel = att.programRelationships.find(p => {
+      if (!p) return false;
+      const pStr = typeof p === "string" ? p : (p.calledForKey || p.calledFor || p.program || p["Called For"] || "");
+      const pKey = String(pStr).toLowerCase().replace(/[^a-z0-9]/g, "");
+      return targetKey && pKey === targetKey;
+    });
+    if (foundRel) {
+      regProgramName = typeof foundRel === "string" ? foundRel : (foundRel.program || foundRel.calledFor || targetProg);
+    }
+  } else if (Array.isArray(att.registrations)) {
+    const foundReg = att.registrations.find(r => {
+      if (!r) return false;
+      const rStr = r.calledForKey || r.calledFor || r.program || "";
+      const rKey = String(rStr).toLowerCase().replace(/[^a-z0-9]/g, "");
+      return targetKey && rKey === targetKey;
+    });
+    if (foundReg) {
+      regProgramName = foundReg.program || foundReg.calledFor || targetProg;
+    }
+  }
+
+  return regProgramName || targetProg || "Registered";
+}
+
 // ─── Main MyPerformanceDashboard Component ─────────────────────────────────────
 export function MyPerformanceDashboard({
   logs = [],
   attenderName = "",
-  attenderId = "",
-  tag = "ALL"
+  attenderId = ""
 }) {
   const [dateRange, setDateRange] = useState("month");
   const [customStart, setCustomStart] = useState("");
@@ -484,6 +520,7 @@ export function MyPerformanceDashboard({
     const totalLeads = filteredLogs.length;
     const totalCalls = filteredAttempts.length;
     const registrations = uniqueRegKeys.size;
+    const totalRegCount = statusCounts["Reg.Done"] || 0;
     const connectionRate = totalCalls > 0 ? Math.round((connected / totalCalls) * 100) : 0;
     const conversionDenominator = registrations + infoGiven + interested + nextTime + notInterested;
     const conversionRate = conversionDenominator > 0 ? Math.round((registrations / conversionDenominator) * 100) : 0;
@@ -498,6 +535,7 @@ export function MyPerformanceDashboard({
       connected,
       notConnected,
       registrations,
+      totalRegCount,
       interested,
       infoGiven,
       nextTime,
@@ -539,16 +577,16 @@ export function MyPerformanceDashboard({
     <div className="min-h-full bg-slate-50/60 p-4 sm:p-6 lg:p-8 space-y-6 font-sans text-slate-800">
       
       {/* ─── Header & Date Filter Bar ────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white/80 backdrop-blur-md p-5 rounded-3xl border border-slate-200/80 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 text-white">
-            <Sparkles size={22} />
+          <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-xs">
+            <Sparkles size={20} />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">My Performance</h1>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-lg font-extrabold text-slate-900 tracking-tight">My Performance</h1>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-500 border border-slate-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                 0-Read IndexedDB Active
               </span>
             </div>
@@ -560,17 +598,17 @@ export function MyPerformanceDashboard({
 
         {/* Date Filter Pills */}
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center bg-slate-100/80 p-1 rounded-2xl border border-slate-200/80">
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/60">
             {DATE_FILTERS.map(filter => {
               const isActive = dateRange === filter.key;
               return (
                 <button
                   key={filter.key}
                   onClick={() => setDateRange(filter.key)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 ${
+                  className={`px-3 py-1.5 rounded-lg text-xs transition-all duration-150 ${
                     isActive
-                      ? "bg-white text-indigo-600 shadow-sm scale-[1.02]"
-                      : "text-slate-500 hover:text-slate-800 hover:bg-white/50"
+                      ? "bg-indigo-600 text-white font-bold shadow-xs"
+                      : "text-slate-600 font-medium hover:text-slate-900 hover:bg-slate-200/50"
                   }`}
                 >
                   {filter.label}
@@ -581,101 +619,97 @@ export function MyPerformanceDashboard({
 
           {/* Custom Date Range Pickers */}
           {dateRange === "custom" && (
-            <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm animate-fadeIn">
+            <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-slate-200 shadow-xs animate-fadeIn">
               <input
                 type="date"
                 value={customStart}
                 onChange={e => setCustomStart(e.target.value)}
-                className="px-2.5 py-1 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700"
+                className="px-2.5 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700"
               />
               <span className="text-slate-400 text-xs font-bold">to</span>
               <input
                 type="date"
                 value={customEnd}
                 onChange={e => setCustomEnd(e.target.value)}
-                className="px-2.5 py-1 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700"
+                className="px-2.5 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700"
               />
             </div>
           )}
         </div>
       </div>
 
-      {/* ─── Top 4 KPI Gradient Cards Grid ─────────────────────────────────── */}
+      {/* ─── Top 4 KPI Unified White Cards Grid ──────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
-        {/* Card 1: Total Calls / Pulses */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-3xl p-5 text-white shadow-xl shadow-indigo-600/15 group hover:scale-[1.01] transition-all">
-          <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white/10 rounded-full blur-xl pointer-events-none"></div>
+        {/* Card 1: Total Call Pulses */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold tracking-wider uppercase text-indigo-100/80">Total Call Pulses</span>
-            <div className="w-9 h-9 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center text-white">
-              <PhoneCall size={18} />
+            <span className="text-[11px] font-bold tracking-wider uppercase text-slate-400">Total Call Pulses</span>
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <PhoneCall size={16} />
             </div>
           </div>
-          <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-3xl font-black tracking-tight">{stats.totalCalls}</span>
-            <span className="text-xs font-medium text-indigo-200">attempts</span>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{stats.totalCalls}</span>
+            <span className="text-xs font-semibold text-slate-500">attempts</span>
           </div>
-          <div className="mt-3 pt-3 border-t border-white/15 flex items-center justify-between text-xs text-indigo-100">
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
             <span>Today's Calls:</span>
-            <span className="font-bold text-white bg-white/20 px-2 py-0.5 rounded-full">{todayCallsCount}</span>
+            <span className="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md text-[11px]">{todayCallsCount}</span>
           </div>
         </div>
 
         {/* Card 2: Registrations */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-emerald-600 to-teal-700 rounded-3xl p-5 text-white shadow-xl shadow-emerald-600/15 group hover:scale-[1.01] transition-all">
-          <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white/10 rounded-full blur-xl pointer-events-none"></div>
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold tracking-wider uppercase text-emerald-100/80">Registrations (Reg.Done)</span>
-            <div className="w-9 h-9 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center text-white">
-              <Award size={18} />
+            <span className="text-[11px] font-bold tracking-wider uppercase text-slate-400">Registrations</span>
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <Award size={16} />
             </div>
           </div>
-          <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-3xl font-black tracking-tight">{stats.registrations}</span>
-            <span className="text-xs font-medium text-emerald-200">unique leads</span>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{stats.totalRegCount}</span>
+            <span className="text-xs font-semibold text-slate-500">registrations</span>
           </div>
-          <div className="mt-3 pt-3 border-t border-white/15 flex items-center justify-between text-xs text-emerald-100">
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
             <span>Conversion Rate:</span>
-            <span className="font-bold text-white bg-white/20 px-2 py-0.5 rounded-full">{stats.conversionRate}%</span>
+            <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md text-[11px] border border-emerald-100">{stats.conversionRate}%</span>
           </div>
         </div>
 
-        {/* Card 3: Connection Rate */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 to-cyan-700 rounded-3xl p-5 text-white shadow-xl shadow-blue-600/15 group hover:scale-[1.01] transition-all">
-          <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white/10 rounded-full blur-xl pointer-events-none"></div>
+        {/* Card 3: Connected Calls */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold tracking-wider uppercase text-blue-100/80">Connected Calls</span>
-            <div className="w-9 h-9 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center text-white">
-              <TrendingUp size={18} />
+            <span className="text-[11px] font-bold tracking-wider uppercase text-slate-400">Connected Calls</span>
+            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <TrendingUp size={16} />
             </div>
           </div>
-          <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-3xl font-black tracking-tight">{stats.connected}</span>
-            <span className="text-xs font-medium text-blue-200">/ {stats.totalCalls} calls</span>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{stats.connected}</span>
+            <span className="text-xs font-semibold text-slate-500">/ {stats.totalCalls} calls</span>
           </div>
-          <div className="mt-3 pt-3 border-t border-white/15 flex items-center justify-between text-xs text-blue-100">
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
             <span>Connection Rate:</span>
-            <span className="font-bold text-white bg-white/20 px-2 py-0.5 rounded-full">{stats.connectionRate}%</span>
+            <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md text-[11px] border border-blue-100">{stats.connectionRate}%</span>
           </div>
         </div>
 
         {/* Card 4: Callbacks Due */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-amber-500 to-orange-600 rounded-3xl p-5 text-white shadow-xl shadow-amber-500/15 group hover:scale-[1.01] transition-all">
-          <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white/10 rounded-full blur-xl pointer-events-none"></div>
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold tracking-wider uppercase text-amber-100/80">Callbacks Due</span>
-            <div className="w-9 h-9 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center text-white">
-              <Clock size={18} />
+            <span className="text-[11px] font-bold tracking-wider uppercase text-slate-400">Callbacks Due</span>
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${callbacksDueCount > 0 ? "bg-rose-50 text-rose-600" : "bg-slate-100 text-slate-500"}`}>
+              <Clock size={16} />
             </div>
           </div>
-          <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-3xl font-black tracking-tight">{callbacksDueCount}</span>
-            <span className="text-xs font-medium text-amber-100">pending</span>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{callbacksDueCount}</span>
+            <span className="text-xs font-semibold text-slate-500">pending</span>
           </div>
-          <div className="mt-3 pt-3 border-t border-white/15 flex items-center justify-between text-xs text-amber-100">
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
             <span>Assigned Leads:</span>
-            <span className="font-bold text-white bg-white/20 px-2 py-0.5 rounded-full">{stats.totalLeads}</span>
+            <span className="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md text-[11px]">{stats.totalLeads}</span>
           </div>
         </div>
 
@@ -685,50 +719,50 @@ export function MyPerformanceDashboard({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Call Result Breakdown Progress List (2 Columns Wide) */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+        <div className="lg:col-span-2 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
-                <BarChart3 size={18} />
+              <div className="p-2 rounded-lg bg-slate-100 text-slate-600">
+                <BarChart3 size={16} />
               </div>
               <div>
-                <h3 className="text-sm font-extrabold text-slate-900">Call Outcome Analytics</h3>
-                <p className="text-[11px] text-slate-400 font-medium">Distribution of call attempt results for this attender</p>
+                <h3 className="text-sm font-bold text-slate-900">Call Outcome Analytics</h3>
+                <p className="text-[11px] text-slate-500 font-medium">Distribution of call attempt results for this attender</p>
               </div>
             </div>
-            <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+            <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200/60">
               {stats.totalCalls} Total Events
             </span>
           </div>
 
           {stats.statusChartData.length === 0 ? (
-            <div className="py-12 flex flex-col items-center justify-center text-slate-400 text-xs">
-              <FileText size={32} className="stroke-[1.5] mb-2 opacity-50" />
+            <div className="py-10 flex flex-col items-center justify-center text-slate-400 text-xs">
+              <FileText size={28} className="stroke-[1.5] mb-2 opacity-40" />
               <span>No call attempts found for the selected date range.</span>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-              {stats.statusChartData.map((item, index) => {
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              {stats.statusChartData.map((item) => {
                 const theme = STATUS_THEMES[item.name] || STATUS_THEMES["Pending"];
                 const percentage = stats.totalCalls > 0 ? Math.round((item.value / stats.totalCalls) * 100) : 0;
                 
                 return (
-                  <div key={item.name} className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100 hover:border-slate-200 transition-all">
-                    <div className="flex items-center justify-between text-xs mb-2">
-                      <div className="flex items-center gap-2 font-bold text-slate-800">
-                        <span className={`w-2.5 h-2.5 rounded-full ${theme.dot}`}></span>
+                  <div key={item.name} className="p-3 rounded-xl bg-slate-50 border border-slate-100 hover:border-slate-200 transition-all">
+                    <div className="flex items-center justify-between text-xs mb-1.5">
+                      <div className="flex items-center gap-2 font-semibold text-slate-700">
+                        <span className={`w-2 h-2 rounded-full ${theme.dot}`}></span>
                         <span>{item.name}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <span className="font-extrabold text-slate-900">{item.value}</span>
+                        <span className="font-bold text-slate-900">{item.value}</span>
                         <span className="text-[10px] text-slate-400 font-medium">({percentage}%)</span>
                       </div>
                     </div>
 
                     {/* Progress Bar */}
-                    <div className="w-full h-2 rounded-full bg-slate-200/80 overflow-hidden">
+                    <div className="w-full h-1.5 rounded-full bg-slate-200/70 overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-500 ${theme.dot}`}
+                        className={`h-full rounded-full transition-all duration-500 ${theme.bar}`}
                         style={{ width: `${percentage}%` }}
                       ></div>
                     </div>
@@ -740,38 +774,41 @@ export function MyPerformanceDashboard({
         </div>
 
         {/* Status Distribution Donut Chart */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col justify-between space-y-4">
-          <div className="flex items-center gap-2.5 border-b border-slate-100 pb-4">
-            <div className="p-2 rounded-xl bg-violet-50 text-violet-600">
-              <PieIcon size={18} />
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-4">
+          <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3.5">
+            <div className="p-2 rounded-lg bg-slate-100 text-slate-600">
+              <PieIcon size={16} />
             </div>
             <div>
-              <h3 className="text-sm font-extrabold text-slate-900">Outcome Share</h3>
-              <p className="text-[11px] text-slate-400 font-medium">Visual proportion of call statuses</p>
+              <h3 className="text-sm font-bold text-slate-900">Outcome Share</h3>
+              <p className="text-[11px] text-slate-500 font-medium">Visual proportion of call statuses</p>
             </div>
           </div>
 
-          <div className="w-full h-[220px] flex items-center justify-center">
+          <div className="w-full h-[200px] flex items-center justify-center">
             {stats.statusChartData.length === 0 ? (
               <span className="text-xs text-slate-400 font-medium">No data to display</span>
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
                   <Pie
                     data={stats.statusChartData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={55}
-                    outerRadius={80}
-                    paddingAngle={4}
+                    innerRadius={50}
+                    outerRadius={75}
+                    paddingAngle={3}
                     dataKey="value"
                   >
-                    {stats.statusChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                    ))}
+                    {stats.statusChartData.map((entry) => {
+                      const theme = STATUS_THEMES[entry.name] || STATUS_THEMES["Pending"];
+                      return (
+                        <Cell key={`cell-${entry.name}`} fill={theme.color} />
+                      );
+                    })}
                   </Pie>
                   <Tooltip
-                    contentStyle={{ borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)", fontSize: "12px" }}
+                    contentStyle={{ borderRadius: "10px", border: "1px solid #e2e8f0", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05)", fontSize: "12px" }}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -787,30 +824,30 @@ export function MyPerformanceDashboard({
       </div>
 
       {/* ─── Bottom Section: Searchable Call History Log Table ───────────────── */}
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden space-y-4">
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden space-y-4">
         
         {/* Table Filter & Search Header */}
-        <div className="p-5 border-b border-slate-100 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-indigo-50 text-indigo-600">
-              <Layers size={20} />
+            <div className="p-2 rounded-xl bg-slate-100 text-slate-600">
+              <Layers size={18} />
             </div>
             <div>
-              <h3 className="text-base font-extrabold text-slate-900">Call History & Activity Log</h3>
-              <p className="text-xs text-slate-400 font-medium">Showing personal call attempts logged for {attenderName || "this attender"}</p>
+              <h3 className="text-base font-bold text-slate-900">Call History & Activity Log</h3>
+              <p className="text-xs text-slate-500 font-medium">Showing personal call attempts logged for {attenderName || "this attender"}</p>
             </div>
           </div>
 
           <div className="flex flex-col sm:flex-row items-center gap-3">
             {/* Search Input */}
             <div className="relative w-full sm:w-64">
-              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
                 placeholder="Search lead, phone, note..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
+                className="w-full pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
               />
               {searchTerm && (
                 <button onClick={() => setSearchTerm("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
@@ -823,7 +860,7 @@ export function MyPerformanceDashboard({
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
-              className="w-full sm:w-40 px-3 py-2 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
+              className="w-full sm:w-40 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
             >
               <option value="ALL">All Statuses</option>
               <option value="Reg.Done">Reg.Done</option>
@@ -837,25 +874,26 @@ export function MyPerformanceDashboard({
           </div>
         </div>
 
-        {/* Call Logs Table */}
+        {/* Call Logs Table with ABHIVYAKTI Column */}
         <div className="overflow-x-auto">
           {displayedAttempts.length === 0 ? (
-            <div className="py-16 text-center text-slate-400 text-xs flex flex-col items-center justify-center space-y-2">
-              <FileText size={36} className="stroke-[1.5] text-slate-300" />
+            <div className="py-14 text-center text-slate-400 text-xs flex flex-col items-center justify-center space-y-2">
+              <FileText size={32} className="stroke-[1.5] text-slate-300" />
               <span className="font-semibold text-slate-600">No call records found matching criteria</span>
               <span className="text-[11px] text-slate-400">Try adjusting your date range, search query, or status filter.</span>
             </div>
           ) : (
-            <table className="w-full text-left text-xs border-collapse">
+            <table className="w-full text-left text-xs border-collapse min-w-[960px]">
               <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                  <th className="py-3.5 px-5">Contact Lead</th>
-                  <th className="py-3.5 px-4 text-center">Calls Done</th>
-                  <th className="py-3.5 px-4">Status</th>
-                  <th className="py-3.5 px-4">Called For / Program</th>
-                  <th className="py-3.5 px-4">Call Type</th>
-                  <th className="py-3.5 px-5">Call Note / Remark</th>
-                  <th className="py-3.5 px-5 text-right">Event Timestamp</th>
+                <tr className="bg-slate-50 border-b border-slate-200/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  <th className="py-3 px-4">Contact Lead</th>
+                  <th className="py-3 px-3 text-center">Calls Done</th>
+                  <th className="py-3 px-3">Status</th>
+                  <th className="py-3 px-3">Called For / Program</th>
+                  <th className="py-3 px-3">Abhivyakti</th>
+                  <th className="py-3 px-3">Call Type</th>
+                  <th className="py-3 px-4">Call Note / Remark</th>
+                  <th className="py-3 px-4 text-right">Event Timestamp</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
@@ -887,24 +925,26 @@ export function MyPerformanceDashboard({
                     callsDoneCount = 1;
                   }
 
+                  const abhInfo = getAbhivyaktiInfo(att);
+
                   return (
-                    <tr key={`${att.id || 'att'}_${idx}`} className="hover:bg-slate-50/60 transition-colors group">
+                    <tr key={`${att.id || 'att'}_${idx}`} className="hover:bg-slate-50/80 transition-colors">
                       
                       {/* Contact Lead */}
-                      <td className="py-3.5 px-5">
+                      <td className="py-3 px-4">
                         <div className="flex flex-col">
-                          <span className="font-extrabold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                          <span className="font-bold text-slate-900">
                             {att.Name || "Unknown Lead"}
                           </span>
                           {att.Phone && (
-                            <div className="flex items-center gap-1 mt-0.5 text-[11px] text-slate-500 font-medium">
+                            <div className="flex items-center gap-1 mt-0.5 text-[11px] text-slate-400 font-medium">
                               <span>{att.Phone}</span>
                               <button
                                 onClick={() => handleCopyPhone(att.Phone, att.id)}
                                 className="text-slate-300 hover:text-indigo-600 transition"
                                 title="Copy Phone Number"
                               >
-                                {copiedId === att.id ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+                                {copiedId === att.id ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
                               </button>
                             </div>
                           )}
@@ -912,43 +952,55 @@ export function MyPerformanceDashboard({
                       </td>
 
                       {/* Calls Done */}
-                      <td className="py-3.5 px-4 text-center font-bold">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[11px] border border-slate-200">
+                      <td className="py-3 px-3 text-center font-bold">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[11px]">
                           📞 {callsDoneCount}
                         </span>
                       </td>
 
                       {/* Status */}
-                      <td className="py-3.5 px-4">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${theme.bg}`}>
+                      <td className="py-3 px-3">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${theme.bg}`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${theme.dot}`}></span>
                           {att.status}
                         </span>
                       </td>
 
-                      {/* Program */}
-                      <td className="py-3.5 px-4">
-                        <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 font-semibold text-[11px]">
+                      {/* Called For / Program */}
+                      <td className="py-3 px-3">
+                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-medium text-[11px]">
                           {att.calledFor || att.programName || "General"}
                         </span>
                       </td>
 
+                      {/* ABHIVYAKTI Column */}
+                      <td className="py-3 px-3">
+                        {abhInfo ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80">
+                            <CheckCircle2 size={11} className="text-emerald-600 shrink-0" />
+                            <span>Abhivyakti – {abhInfo}</span>
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 font-mono text-xs pl-2">—</span>
+                        )}
+                      </td>
+
                       {/* Call Type */}
-                      <td className="py-3.5 px-4 capitalize">
-                        <span className="text-slate-500 font-semibold">
+                      <td className="py-3 px-3 capitalize">
+                        <span className="text-slate-500 font-medium text-[11px]">
                           {att.callType || "outgoing"}
                         </span>
                       </td>
 
-                      {/* Remark */}
-                      <td className="py-3.5 px-5 max-w-xs">
+                      {/* Call Note / Remark */}
+                      <td className="py-3 px-4 max-w-xs">
                         <p className="text-slate-600 font-normal line-clamp-2 italic" title={att.remark}>
-                          {att.remark ? `"${att.remark}"` : <span className="text-slate-300 font-sans not-italic">No note recorded</span>}
+                          {att.remark ? `"${att.remark}"` : <span className="text-slate-300 font-sans not-italic text-[11px]">No note recorded</span>}
                         </p>
                       </td>
 
-                      {/* Timestamp */}
-                      <td className="py-3.5 px-5 text-right font-medium text-slate-400 text-[11px]">
+                      {/* Event Timestamp */}
+                      <td className="py-3 px-4 text-right font-medium text-slate-400 text-[11px]">
                         {dateFormatted}
                       </td>
 
@@ -973,3 +1025,4 @@ export function MyPerformanceDashboard({
 }
 
 export default MyPerformanceDashboard;
+

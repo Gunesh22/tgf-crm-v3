@@ -103,7 +103,7 @@ export function canTransition(fromStage, toStage, event = {}) {
  *   only when evaluating sales pipeline progression.
  * - If no Sales pipeline activity exists, returns null (not "1. New Lead").
  */
-export function getEffectiveStage(contact = {}, targetCalledFor = null) {
+export function getEffectiveStage(contact = {}, targetCalledFor = null, attenderId = null) {
   const normalizeStageStr = (s) => {
     if (!s) return null;
     const str = String(s).trim();
@@ -128,17 +128,66 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null) {
 
   // 1. If targetCalledFor is provided, evaluate program-specific journey FIRST
   if (targetKey) {
-    const currentCfKey = normalizeKey(contact["Called For"] || contact.calledFor || contact.called_for);
-    if (currentCfKey === targetKey && contact.status) {
-      const currentStageStr = normalizeStageStr(contact.status || contact.purposeOutcome);
-      if (currentStageStr) return currentStageStr;
+    // 1. Check attenderStates for explicit caller-provided attenderId FIRST
+    if (attenderId && contact.attenderStates && contact.attenderStates[attenderId]) {
+      const st = contact.attenderStates[attenderId];
+      if (st && typeof st === "object") {
+        const stPurpose = String(st.callPurpose || "").toUpperCase();
+        if (!stPurpose || stPurpose === "SALES") {
+          const stCfKey = normalizeKey(st.calledForKey || st["Called For"] || st.calledFor);
+          if (stCfKey === targetKey) {
+            const stStage = normalizeStageStr(st.pipelineStage || st.status);
+            if (stStage) return stStage;
+          }
+        }
+      }
     }
 
-    // Check programRelationships for explicit targetKey match
+    // 2. Check history for explicit targetKey match (checking most recent sales call first)
+    const history = Array.isArray(contact.history) ? contact.history : [];
+    let hasProgramHistory = false;
+    for (let i = history.length - 1; i >= 0; i--) {
+      const h = history[i];
+      if (!h) continue;
+      const hPurpose = (h.callPurpose || "").toUpperCase();
+      if (hPurpose && hPurpose !== "SALES") continue;
+      const hCfKey = normalizeKey(h.calledFor || h.called_for || h["Called For"]);
+      if (hCfKey === targetKey) {
+        // When attenderId is supplied, skip history records belonging strictly to another attender
+        if (attenderId) {
+          const hAttender = String(h.attenderId || h.callAttenderId || h.attenderName || h.attender || "").trim().toLowerCase();
+          if (hAttender && hAttender !== String(attenderId).trim().toLowerCase()) {
+            continue;
+          }
+        }
+        hasProgramHistory = true;
+        const stat = (h.status || h.purposeOutcome || "").trim().toLowerCase();
+        const rem = (h.remark || "").toLowerCase().trim();
+        const combined = `${stat} ${rem}`;
+        let hStage = null;
+        if (combined.includes("already reg") || combined.includes("reg.done") || combined.includes("registered")) hStage = PIPELINE_STAGES.REGISTERED_WON;
+        else if (combined.includes("previous program pending")) hStage = PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING;
+        else if (combined.includes("interested") && !combined.includes("not interested")) hStage = PIPELINE_STAGES.NURTURE_INTERESTED;
+        else if (combined.includes("info given") || combined.includes("information given") || combined.includes("details send")) hStage = PIPELINE_STAGES.INFO_GIVEN;
+        else if (combined.includes("next time")) hStage = PIPELINE_STAGES.FUTURE_POOL;
+        else if (combined.includes("not interested")) hStage = PIPELINE_STAGES.CLOSED_LOST;
+        else if (INVALID_NUMBER_STATUSES.some(inv => combined.includes(inv.toLowerCase()))) hStage = PIPELINE_STAGES.CLOSED_INVALID;
+        else if (UNCONNECTED_CALL_STATUSES.some(unc => combined.includes(unc.toLowerCase()))) hStage = PIPELINE_STAGES.ATTEMPTING;
+
+        if (hStage) return hStage;
+      }
+    }
+
+    // If calls exist for targetKey but no higher stage was matched -> 2. Attempting Contact
+    if (hasProgramHistory) {
+      return PIPELINE_STAGES.ATTEMPTING;
+    }
+
+    // 3. Check programRelationships for explicit targetKey match
     if (Array.isArray(contact.programRelationships) && contact.programRelationships.length > 0) {
       const rel = contact.programRelationships.find(r => {
         if (!r) return false;
-        const pKey = normalizeKey(typeof r === "string" ? r : (r.program || r.calledForKey || r.calledFor || r["Called For"]));
+        const pKey = normalizeKey(typeof r === "string" ? r : (r.calledForKey || r.calledFor || r.program || r["Called For"]));
         return pKey === targetKey;
       });
       if (rel && typeof rel === "object") {
@@ -147,15 +196,15 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null) {
       }
     }
 
-    // Check attenderStates for explicit targetKey match
-    if (contact.attenderStates && typeof contact.attenderStates === "object") {
+    // 4. Fallback: Check attenderStates across other attenders ONLY if no attenderId was passed
+    if (!attenderId && contact.attenderStates && typeof contact.attenderStates === "object") {
       let highestAttenderStage = null;
       let highestAttenderRank = 0;
       Object.values(contact.attenderStates).forEach(st => {
         if (!st) return;
         const stPurpose = String(st.callPurpose || "").toUpperCase();
         if (stPurpose && stPurpose !== "SALES") return;
-        const stCfKey = normalizeKey(st["Called For"] || st.calledFor);
+        const stCfKey = normalizeKey(st.calledForKey || st["Called For"] || st.calledFor);
         if (stCfKey === targetKey) {
           const stStage = normalizeStageStr(st.pipelineStage || st.status);
           if (stStage) {
@@ -170,38 +219,17 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null) {
       if (highestAttenderStage) return highestAttenderStage;
     }
 
-    // Check history for explicit targetKey match (checking most recent sales call first)
-    const history = Array.isArray(contact.history) ? contact.history : [];
-    for (let i = history.length - 1; i >= 0; i--) {
-      const h = history[i];
-      if (!h) continue;
-      const hPurpose = (h.callPurpose || "").toUpperCase();
-      if (hPurpose && hPurpose !== "SALES") continue;
-      const hCfKey = normalizeKey(h.calledFor || h.called_for || h["Called For"]);
-      if (hCfKey === targetKey) {
-        const stat = (h.status || h.purposeOutcome || "").trim().toLowerCase();
-        const rem = (h.remark || "").toLowerCase().trim();
-        const combined = `${stat} ${rem}`;
-        let hStage = null;
-        if (combined.includes("already reg") || combined.includes("reg.done") || combined.includes("registered")) hStage = PIPELINE_STAGES.REGISTERED_WON;
-        else if (combined.includes("previous program pending")) hStage = PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING;
-        else if (combined.includes("interested") && !combined.includes("not interested")) hStage = PIPELINE_STAGES.NURTURE_INTERESTED;
-        else if (combined.includes("info given") || combined.includes("information given") || combined.includes("details send")) hStage = PIPELINE_STAGES.INFO_GIVEN;
-        else if (combined.includes("next time")) hStage = PIPELINE_STAGES.FUTURE_POOL;
-        else if (combined.includes("not interested")) hStage = PIPELINE_STAGES.CLOSED_LOST;
-        else if (INVALID_NUMBER_STATUSES.some(inv => combined.includes(inv.toLowerCase()))) hStage = PIPELINE_STAGES.CLOSED_INVALID;
-
-        if (hStage) return hStage;
-      }
+    // Target program has no program-specific stage or history recorded yet:
+    // Only inherit root stage if contact's original root Called For explicitly matches targetKey
+    const originalCf = contact.rawOriginalCalledFor || contact.originalCalledFor || (contact._originalRecord ? contact._originalRecord["Called For"] : null) || contact["Called For"] || contact.calledFor;
+    const currentCfKey = normalizeKey(originalCf);
+    if (currentCfKey === targetKey && (contact.status || contact.pipelineStage)) {
+      const currentStageStr = normalizeStageStr(contact.pipelineStage || contact.status || contact.purposeOutcome);
+      if (currentStageStr) return currentStageStr;
     }
 
-    // Target program has no program-specific stage recorded yet:
-    // If contact is Registered / Won for another program, a new program starts clean at 1. New Lead.
-    const canonicalStage = normalizeStageStr(contact.pipelineStage);
-    if (canonicalStage === PIPELINE_STAGES.REGISTERED_WON) {
-      return PIPELINE_STAGES.NEW_LEAD;
-    }
-    return canonicalStage || null;
+    // Otherwise, a new program context starts clean (null / New Lead)
+    return null;
   }
 
   // 2. Direct Source of Truth: MongoDB contact.pipelineStage
@@ -278,7 +306,8 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null) {
  */
 export function evaluatePipeline(contact = {}, callEvent = {}) {
   const calledFor = callEvent.calledFor || callEvent["Called For"] || contact["Called For"] || contact.calledFor || null;
-  const currentStage = getEffectiveStage(contact, calledFor);
+  const attenderId = callEvent.attenderId || callEvent.callAttenderId || contact.attenderId || contact.leadOwner || null;
+  const currentStage = getEffectiveStage(contact, calledFor, attenderId);
   const currentRank  = currentStage ? (STAGE_RANKS[currentStage] || 0) : 0;
 
   const purpose    = (callEvent.callPurpose || "SALES").toUpperCase();
@@ -463,7 +492,7 @@ export function getPipelineStageConfig(stage) {
 /**
  * Extracts program-specific status (purposeOutcome) from registrations, attenderStates, history, or active contact state.
  */
-export function getProgramSpecificStatus(contact = {}, targetProg = "") {
+export function getProgramSpecificStatus(contact = {}, targetProg = "", attenderId = null) {
   if (!targetProg) return contact.status || "";
   const targetKey = String(targetProg).trim().toLowerCase().replace(/[^a-z0-9]/g, "");
   if (!targetKey) return contact.status || "";
@@ -480,11 +509,22 @@ export function getProgramSpecificStatus(contact = {}, targetProg = "") {
     if (foundRel) return "Reg.Done";
   }
 
-  // 2. Check attenderStates for targetKey match
-  if (contact.attenderStates && typeof contact.attenderStates === "object") {
+  // 2. Check attenderStates for caller-provided attenderId FIRST
+  if (attenderId && contact.attenderStates && contact.attenderStates[attenderId]) {
+    const st = contact.attenderStates[attenderId];
+    if (st && typeof st === "object") {
+      const stKey = String(st.calledForKey || st["Called For"] || st.calledFor || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (stKey === targetKey && (st.status || st.purposeOutcome)) {
+        return st.status || st.purposeOutcome;
+      }
+    }
+  }
+
+  // Fallback: Check attenderStates for targetKey match ONLY if no attenderId was passed
+  if (!attenderId && contact.attenderStates && typeof contact.attenderStates === "object") {
     for (const st of Object.values(contact.attenderStates)) {
       if (!st) continue;
-      const stKey = String(st["Called For"] || st.calledFor || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      const stKey = String(st.calledForKey || st["Called For"] || st.calledFor || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
       if (stKey === targetKey && (st.status || st.purposeOutcome)) {
         return st.status || st.purposeOutcome;
       }

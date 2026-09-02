@@ -144,12 +144,34 @@ export const CallEntryTab = ({
       );
       if (res && res.success) {
         toast.success(`Pipeline stage updated to "${res.newStage}"`);
-        setEdited(prev => ({
-          ...prev,
-          pipelineStage: res.newStage,
-          closedReason: res.contact?.closedReason ?? prev.closedReason,
-          history: res.auditHistoryItem ? [res.auditHistoryItem, ...(prev.history || [])] : prev.history
-        }));
+        const targetProg = activeProgram || selectedProgram;
+        const targetProgKey = targetProg ? String(targetProg).toLowerCase().replace(/[^a-z0-9]/g, "-") : "";
+        setEdited(prev => {
+          const rels = Array.isArray(prev.programRelationships) ? [...prev.programRelationships] : [];
+          const existingIdx = rels.findIndex(r => {
+            if (!r) return false;
+            const rKey = String(r.calledForKey || r.calledFor || r.program || "").toLowerCase().replace(/[^a-z0-9]/g, "-");
+            return rKey === targetProgKey;
+          });
+          const newRelEntry = {
+            program: targetProg,
+            calledForKey: targetProgKey,
+            status: res.newStage,
+            pipelineStage: res.newStage,
+            updatedAt: new Date().toISOString()
+          };
+          if (existingIdx >= 0) {
+            rels[existingIdx] = { ...rels[existingIdx], ...newRelEntry };
+          } else if (targetProg) {
+            rels.push(newRelEntry);
+          }
+          return {
+            ...prev,
+            programRelationships: rels,
+            closedReason: res.contact?.closedReason ?? prev.closedReason,
+            history: res.auditHistoryItem ? [res.auditHistoryItem, ...(prev.history || [])] : prev.history
+          };
+        });
         if (typeof onRefreshLead === "function") {
           onRefreshLead();
         }
@@ -178,6 +200,33 @@ export const CallEntryTab = ({
 
   const selectedProgram = String(activeProgram || edited[calledForField] || "").trim();
 
+  const stageSource = row || edited;
+
+  console.log("[PROGRAM STAGE TRACE]", {
+    activeProgram,
+    selectedProgram,
+    activeAttenderId,
+
+    editedCalledFor: edited["Called For"],
+    editedCalledForLower: edited.calledFor,
+
+    editedPipelineStage: edited.pipelineStage,
+    editedStatus: edited.status,
+    editedCallStatus: edited.callStatus,
+
+    rootPipelineStage: row?.pipelineStage,
+    rootCalledFor: row?.["Called For"],
+
+    attenderState: edited?.attenderStates?.[activeAttenderId],
+    rowAttenderState: row?.attenderStates?.[activeAttenderId],
+
+    history: edited?.history,
+    rowHistory: row?.history,
+
+    resolvedStageFromEdited: getEffectiveStage(edited, selectedProgram, activeAttenderId),
+    resolvedStageFromRow: getEffectiveStage(stageSource, selectedProgram, activeAttenderId)
+  });
+
   const evalResult = evaluatePipeline(
     edited,
     {
@@ -185,13 +234,26 @@ export const CallEntryTab = ({
       callStatus: activeCallStatus,
       purposeOutcome: edited.status,
       queryStatus: edited.queryStatus,
-      calledFor: selectedProgram
+      calledFor: selectedProgram,
+      attenderId: activeAttenderId
     }
   );
 
-  const dbStage = getEffectiveStage(edited, selectedProgram) || PIPELINE_STAGES.NEW_LEAD;
-  const displayStage = evalResult.pipelineStage || dbStage;
+  const dbStage = getEffectiveStage(stageSource, selectedProgram, activeAttenderId) || PIPELINE_STAGES.NEW_LEAD;
+  const isFormDirtyCall = Boolean(activeCallStatus && edited.status);
+  const displayStage = isFormDirtyCall ? evalResult.pipelineStage : dbStage;
   const stageConfig = getPipelineStageConfig(displayStage);
+
+  console.log("[MODAL STAGE TRACE]", {
+    activeProgram,
+    activeAttenderId,
+    rootCalledFor: row?.["Called For"],
+    rootPipelineStage: row?.pipelineStage,
+    editedCalledFor: edited?.["Called For"],
+    editedPipelineStage: edited?.pipelineStage,
+    resolvedStage: displayStage,
+    sourceUsed: isFormDirtyCall ? "evalResult (dirty form)" : (row ? "row (saved database contact)" : "edited")
+  });
 
   // Whether this contact qualifies for "Convert to Sales" (only for new/query-only contacts)
   const showConvertToSales = useMemo(() => {
@@ -231,21 +293,8 @@ export const CallEntryTab = ({
       return { exists: true, registrationId: foundReg.registrationId || null, program: targetProg };
     }
 
-    // Check call history for past Reg.Done calls for THIS EXACT program
-    const hist = Array.isArray(mergedHistory) ? mergedHistory : Array.isArray(edited.history) ? edited.history : Array.isArray(row.history) ? row.history : [];
-    const foundHistReg = hist.find(h => {
-      if (!h) return false;
-      const hStatus = String(h?.status || h?.Status || "").trim().toLowerCase();
-      if (hStatus !== "reg.done" && hStatus !== "registered") return false;
-      const hProg = String(h?.calledFor || h?.calledForKey || h?.program || h?.["Called For"] || "").toLowerCase().replace(/[^a-z0-9]/g, "-");
-      return hProg === targetKey;
-    });
-    if (foundHistReg) {
-      return { exists: true, registrationId: null, program: targetProg };
-    }
-
     return { exists: false, program: targetProg };
-  }, [selectedProgram, edited, row, calledForField, mergedHistory]);
+  }, [selectedProgram, edited, row, calledForField]);
 
   const setCallPurpose = (purpose) => {
     setEdited(prev => {
@@ -321,8 +370,11 @@ export const CallEntryTab = ({
     });
   };
 
-  const lastCall = useMemo(() => {
-    if (!mergedHistory || !Array.isArray(mergedHistory) || mergedHistory.length === 0) return null;
+  const activeProgName = selectedProgram || activeProgram || String(edited[calledForField] || "").split(",")[0].trim();
+  const activeProgKey = activeProgName ? activeProgName.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+
+  const programFilteredHistory = useMemo(() => {
+    if (!mergedHistory || !Array.isArray(mergedHistory) || mergedHistory.length === 0) return [];
     const sorted = [...mergedHistory].sort((a, b) => {
       const getMs = (val) => {
         if (!val) return 0;
@@ -334,8 +386,18 @@ export const CallEntryTab = ({
       };
       return getMs(b.timestamp) - getMs(a.timestamp); // Newest first
     });
-    return sorted[0];
-  }, [mergedHistory]);
+
+    if (activeProgKey) {
+      return sorted.filter(h => {
+        const hProg = String(h?.calledFor || h?.called_for || h?.program || h?.["Called For"] || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        return hProg === activeProgKey;
+      });
+    }
+    return sorted;
+  }, [mergedHistory, activeProgKey]);
+
+  const lastCall = programFilteredHistory[0] || null;
+  const programCallCount = programFilteredHistory.length;
 
   const lastCallTime = lastCall?.timestamp
     ? new Date(lastCall.timestamp).toLocaleDateString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
@@ -519,14 +581,16 @@ export const CallEntryTab = ({
               {lastCallTime && (
                 <span className="text-slate-400 font-normal">({lastCallTime})</span>
               )}
-              {mergedHistory && mergedHistory.length > 0 && (
+              {programCallCount > 0 && (
                 <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded text-[10px] font-bold">
-                  {mergedHistory.length} calls total
+                  {programCallCount} {programCallCount === 1 ? 'call' : 'calls'} {activeProgName ? `for ${activeProgName}` : 'total'}
                 </span>
               )}
             </div>
           ) : (
-            <span className="text-[11px] text-slate-400 italic">No previous call history</span>
+            <span className="text-[11px] text-slate-400 italic">
+              No calls logged yet {activeProgName ? `for ${activeProgName}` : ''}
+            </span>
           )}
         </div>
       </div>

@@ -288,7 +288,7 @@ function makeCall(purpose = 'SALES', callStatus = 'Connected', status = 'Info Gi
   assert('31. Same contact + SAME calledFor preserves program stage', stageSame === PIPELINE_STAGES.INFO_GIVEN, `got: ${stageSame}`);
 }
 
-// ── Test 32: Same contact + DIFFERENT calledFor journey evaluation ────────────
+// ── Test 32: Same contact + DIFFERENT calledFor returns isolated clean stage (null) ──
 {
   const contactDiffProg = {
     "Called For": "CBT Basic",
@@ -297,7 +297,7 @@ function makeCall(purpose = 'SALES', callStatus = 'Connected', status = 'Info Gi
     history: [{ calledFor: "CBT Basic", status: "Interested", callPurpose: "SALES" }]
   };
   const stageDiff = getEffectiveStage(contactDiffProg, "Self Care Shivir 2026");
-  assert('32. Same contact + DIFFERENT calledFor preserves contact canonical stage', stageDiff === PIPELINE_STAGES.NURTURE_INTERESTED, `got: ${stageDiff}`);
+  assert('32. Same contact + DIFFERENT calledFor returns isolated clean stage', stageDiff === null, `got: ${stageDiff}`);
 }
 
 // ── Test 33: Fresh lead with blank status and empty history ───────────────────
@@ -436,6 +436,161 @@ function makeCall(purpose = 'SALES', callStatus = 'Connected', status = 'Info Gi
     });
     const res = evaluatePipeline(sharedContact, makeCall('SALES', 'Connected', 'Info Given'));
     assert('36-10. Shared contact → Sales (advances to 3. Information Given)', res.pipelineStage === PIPELINE_STAGES.INFO_GIVEN, `got: ${res.pipelineStage}`);
+  }
+}
+
+// ── Test 37: Strict Multi-Program & Attender Isolation Regression Tests ──────
+{
+  // Test 37-1: Different attenders, same program (Attender A must not inherit Attender B stage)
+  {
+    const multiAttenderContact = {
+      Name: "Amit",
+      attenderStates: {
+        "attenderA": { calledForKey: "cbt-basic", pipelineStage: "3. Information Given" },
+        "attenderB": { calledForKey: "cbt-basic", pipelineStage: "6. Registered / Won" }
+      }
+    };
+    const stageA = getEffectiveStage(multiAttenderContact, "CBT Basic", "attenderA");
+    assert('37-1. Attender A does not inherit Attender B Registered stage', stageA === PIPELINE_STAGES.INFO_GIVEN, `got: ${stageA}`);
+  }
+
+  // Test 37-2: Different programs, same contact
+  {
+    const multiProgContact = {
+      Name: "Amit",
+      programRelationships: [
+        { program: "CBT Basic", calledForKey: "cbt-basic", pipelineStage: "6. Registered / Won" },
+        { program: "CBT Advanced", calledForKey: "cbt-advanced", pipelineStage: "3. Information Given" }
+      ]
+    };
+    assert('37-2a. CBT Basic resolves Registered / Won', getEffectiveStage(multiProgContact, "CBT Basic") === PIPELINE_STAGES.REGISTERED_WON);
+    assert('37-2b. CBT Advanced resolves Information Given', getEffectiveStage(multiProgContact, "CBT Advanced") === PIPELINE_STAGES.INFO_GIVEN);
+  }
+
+  // Test 37-3: New program has no history -> returns null
+  {
+    const zeroHistoryProgContact = {
+      programRelationships: [{ program: "CBT Basic", calledForKey: "cbt-basic", pipelineStage: "6. Registered / Won" }]
+    };
+    const stageNew = getEffectiveStage(zeroHistoryProgContact, "CBT Advanced");
+    assert('37-3. Uncontacted CBT Advanced returns null (New Lead)', stageNew === null, `got: ${stageNew}`);
+  }
+
+  // Test 37-4: Relationship key mismatch (calledForKey precedence)
+  {
+    const keyMismatchContact = {
+      programRelationships: [{
+        program: "Some Wrong Display Name",
+        calledForKey: "cbtadvanced",
+        pipelineStage: "4. Nurture / Interested"
+      }]
+    };
+    const stageKeyMatch = getEffectiveStage(keyMismatchContact, "CBT Advanced");
+    assert('37-4. calledForKey precedence resolves stage correctly despite display mismatch', stageKeyMatch === PIPELINE_STAGES.NURTURE_INTERESTED, `got: ${stageKeyMatch}`);
+  }
+
+  // Test 37-5: evaluatePipeline preserves per-attender stage isolation for same program
+  {
+    const multiAttenderLead = {
+      "Called For": "CBT Basic",
+      attenderStates: {
+        "attenderA": { calledForKey: "cbt-basic", pipelineStage: "3. Information Given", status: "Info Given" },
+        "attenderB": { calledForKey: "cbt-basic", pipelineStage: "6. Registered / Won", status: "Reg.Done" }
+      }
+    };
+    const callA = {
+      calledFor: "CBT Basic",
+      attenderId: "attenderA",
+      callPurpose: "SALES",
+      callStatus: "Not Connected",
+      purposeOutcome: "Not Picked Up"
+    };
+    const evalResultA = evaluatePipeline(multiAttenderLead, callA);
+    assert('37-5. evaluatePipeline for Attender A preserves Information Given (does not jump to Registered)', evalResultA.pipelineStage === PIPELINE_STAGES.INFO_GIVEN, `got: ${evalResultA.pipelineStage}`);
+  }
+
+  // Test 37-6: Critical Acceptance Test 1 (Final Test 228 Scenario: Studya Smater Info Given vs Yoga 1 Yr Attempting)
+  {
+    const finalTest228Contact = {
+      pipelineStage: "3. Information Given",
+      "Called For": "Studya Smater",
+      attenderStates: {
+        attenderA: {
+          calledForKey: "studya-smater",
+          pipelineStage: "3. Information Given"
+        }
+      },
+      history: [
+        {
+          calledFor: "Studya Smater",
+          status: "Info Given",
+          callPurpose: "SALES",
+          attenderId: "attenderA"
+        },
+        {
+          calledFor: "Yoga 1 Yr",
+          status: "Not Connected",
+          callStatus: "Not Connected",
+          callPurpose: "SALES",
+          attenderId: "attenderA"
+        }
+      ]
+    };
+
+    const stageStudya = getEffectiveStage(finalTest228Contact, "Studya Smater", "attenderA");
+    assert('37-6a. Final Test 228 - Studya Smater returns 3. Information Given', stageStudya === PIPELINE_STAGES.INFO_GIVEN, `got: ${stageStudya}`);
+
+    const stageYoga = getEffectiveStage(finalTest228Contact, "Yoga 1 Yr", "attenderA");
+    assert('37-6b. Final Test 228 - Yoga 1 Yr returns 2. Attempting Contact (NEVER Info Given)', stageYoga === PIPELINE_STAGES.ATTEMPTING, `got: ${stageYoga}`);
+
+    const evalYoga = evaluatePipeline(finalTest228Contact, {
+      callPurpose: "SALES",
+      callStatus: "Not Connected",
+      purposeOutcome: "Not Connected",
+      calledFor: "Yoga 1 Yr",
+      attenderId: "attenderA"
+    });
+    assert('37-6c. evaluatePipeline for Yoga 1 Yr returns Attempting Contact (NOT Info Given)', evalYoga.pipelineStage === PIPELINE_STAGES.ATTEMPTING, `got: ${evalYoga.pipelineStage}`);
+  }
+
+  // Test 37-7: Critical Acceptance Test 2 (Two attenders, same program)
+  {
+    const sameProgTwoAttenders = {
+      attenderStates: {
+        "attenderA": { calledForKey: "cbt-basic", pipelineStage: "3. Information Given" },
+        "attenderB": { calledForKey: "cbt-basic", pipelineStage: "6. Registered / Won" }
+      }
+    };
+    const resA = getEffectiveStage(sameProgTwoAttenders, "CBT Basic", "attenderA");
+    const resB = getEffectiveStage(sameProgTwoAttenders, "CBT Basic", "attenderB");
+    assert('37-7a. Attender A gets Information Given', resA === PIPELINE_STAGES.INFO_GIVEN, `got: ${resA}`);
+    assert('37-7b. Attender B gets Registered / Won', resB === PIPELINE_STAGES.REGISTERED_WON, `got: ${resB}`);
+  }
+
+  // Test 37-8: Critical Acceptance Test 3 (Repeated pill switching stability)
+  {
+    const contactSwitch = {
+      pipelineStage: "3. Information Given",
+      "Called For": "Studya Smater",
+      attenderStates: {
+        attenderA: { calledForKey: "studya-smater", pipelineStage: "3. Information Given" }
+      },
+      history: [
+        { calledFor: "Studya Smater", status: "Info Given", callPurpose: "SALES", attenderId: "attenderA" },
+        { calledFor: "Yoga 1 Yr", status: "Not Connected", callStatus: "Not Connected", callPurpose: "SALES", attenderId: "attenderA" }
+      ]
+    };
+
+    // Studya -> Yoga -> Studya -> Yoga
+    const s1 = getEffectiveStage(contactSwitch, "Studya Smater", "attenderA");
+    const y1 = getEffectiveStage(contactSwitch, "Yoga 1 Yr", "attenderA");
+    const s2 = getEffectiveStage(contactSwitch, "Studya Smater", "attenderA");
+    const y2 = getEffectiveStage(contactSwitch, "Yoga 1 Yr", "attenderA");
+
+    assert('37-8a. Pill 1: Studya Smater = Info Given', s1 === PIPELINE_STAGES.INFO_GIVEN, `got: ${s1}`);
+    assert('37-8b. Pill 2: Yoga 1 Yr = Attempting Contact', y1 === PIPELINE_STAGES.ATTEMPTING, `got: ${y1}`);
+    assert('37-8c. Pill 3: Studya Smater = Info Given', s2 === PIPELINE_STAGES.INFO_GIVEN, `got: ${s2}`);
+    assert('37-8d. Pill 4: Yoga 1 Yr = Attempting Contact', y2 === PIPELINE_STAGES.ATTEMPTING, `got: ${y2}`);
   }
 }
 
