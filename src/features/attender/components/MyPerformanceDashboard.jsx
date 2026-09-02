@@ -495,7 +495,7 @@ export function MyPerformanceDashboard({
       const s = getCanonicalStatus(att.status || "Pending");
       statusCounts[s] = (statusCounts[s] || 0) + 1;
 
-      const isUnconnected = classifyCallStatus(att.callStatus || att.status) === "NOT_CONNECTED";
+      const isUnconnected = classifyCallStatus(att.status || att.callStatus) === "NOT_CONNECTED";
 
       if (s !== "Pending") {
         if (isUnconnected) {
