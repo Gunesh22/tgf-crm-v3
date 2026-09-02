@@ -2,36 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { LogIn, Shield, Loader2 } from 'lucide-react';
 import { fetchAPI } from '../../lib/db';
-import lottie from 'lottie-web';
+import LottieAnimation from '../../components/ui/LottieAnimation';
 import customerServiceAnimation from '../../assets/customer_service.json';
 
 function CustomerServiceLogo() {
-  const containerRef = useRef(null);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-
-    // Clear container before mounting animation
-    containerRef.current.innerHTML = '';
-
-    const animInstance = lottie.loadAnimation({
-      container: containerRef.current,
-      renderer: 'svg',
-      loop: true,
-      autoplay: true,
-      animationData: customerServiceAnimation,
-    });
-
-    return () => {
-      if (animInstance) {
-        animInstance.destroy();
-      }
-    };
-  }, []);
-
   return (
-    <div 
-      ref={containerRef} 
+    <LottieAnimation
+      animationData={customerServiceAnimation}
       className="w-56 h-56 sm:w-64 sm:h-64 mx-auto flex items-center justify-center relative z-50 pointer-events-none filter drop-shadow-lg"
     />
   );
