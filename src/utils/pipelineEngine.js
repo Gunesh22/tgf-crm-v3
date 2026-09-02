@@ -23,9 +23,10 @@ export const PIPELINE_STAGES = {
   CLOSED_INVALID:           "Closed / Invalid",
 };
 
-// Legacy stages — recognized for DISPLAY / backward compat but NEVER promoted to
+// Legacy / Auxiliary stages — recognized for DISPLAY & routing
 export const LEGACY_DISPLAY_STAGES = {
   QUERY_DESK:      "Query Desk",
+  REMINDER_DESK:   "Reminder Desk",
   EXISTING_ALUMNI: "Existing Alumni",
 };
 
@@ -50,13 +51,14 @@ export const STAGE_RANKS = {
   "Closed / Lost": 7, "Closed / Invalid": 7,
   // Legacy display-only (kept for backward compat with old data; NOT promotion targets)
   "Query Desk": 3.5, "Query": 3.5,
+  "Reminder Desk": 3.5, "Reminder": 3.5,
   "Existing Alumni": 6, "Alumni": 6,
 };
 
 // Stages that are NOT real sales pipeline stages
 // Contacts at these stages allow any forward Sales transition (treat as New Lead for rank checks)
 const LEGACY_NON_PIPELINE_STAGES = new Set([
-  "Query Desk", "Existing Alumni", "Alumni", "Query",
+  "Query Desk", "Reminder Desk", "Existing Alumni", "Alumni", "Query", "Reminder",
 ]);
 
 /**
@@ -71,16 +73,17 @@ export function canTransition(fromStage, toStage, event = {}) {
   // Same stage is always valid
   if (fromStage === toStage || fromRank === toRank) return true;
 
-  // Previous Program Pending is a normal non-terminal pipeline stage and can transition to any stage
-  if (fromStage === PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING || fromStage === "Previous Program Pending") return true;
+  // Previous Program Pending is a normal non-terminal pipeline stage and can transition to any stage or be transitioned to
+  if (fromStage === PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING || fromStage === "Previous Program Pending" ||
+      toStage === PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING || toStage === "Previous Program Pending") return true;
 
   // Legacy non-pipeline stages: allow any Sales forward movement
   if (LEGACY_NON_PIPELINE_STAGES.has(fromStage)) return true;
 
   // Reactivation: closed lead receives a connected / positive-outcome call
   const isConnected = event.callStatus === "Connected" ||
-    ["Info Given", "Interested", "Reg.Done", "Next Time", "Previous Program Pending"].includes(
-      event.purposeOutcome || event.status
+    ["Info Given", "Interested", "Reg.Done", "Next Time", "Previous Program Pending"].some(st =>
+      String(event.purposeOutcome || event.status || "").toLowerCase().trim() === st.toLowerCase()
     );
   if (fromRank === 7 && isConnected) return true;
 
@@ -180,17 +183,38 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null, attender
     return null;
   }
 
-  // 3. Neither provided -> Highest rank across all programStates (or root stage)
-  let highestRank = 0;
+  // 3. Neither provided -> Highest priority across all programStates (or root stage)
+  const EFFECTIVE_PRIORITY = {
+    [PIPELINE_STAGES.REGISTERED_WON]: 10,
+    "Registered / Won": 10, "Reg.Done": 10, "Registered": 10,
+    [PIPELINE_STAGES.NURTURE_INTERESTED]: 8,
+    "Nurture / Interested": 8, "Interested": 8,
+    [PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING]: 7,
+    "Previous Program Pending": 7,
+    [PIPELINE_STAGES.INFO_GIVEN]: 6,
+    "Information Given": 6, "Info Given": 6,
+    [PIPELINE_STAGES.FUTURE_POOL]: 5,
+    "Future Pool": 5, "Next Time": 5,
+    [PIPELINE_STAGES.ATTEMPTING]: 4,
+    "Attempting Contact": 4, "Attempting": 4,
+    [PIPELINE_STAGES.NEW_LEAD]: 3,
+    "New Lead": 3,
+    [PIPELINE_STAGES.CLOSED_LOST]: 2,
+    "Closed / Lost": 2, "Not Interested": 2,
+    [PIPELINE_STAGES.CLOSED_INVALID]: 1,
+    "Closed / Invalid": 1
+  };
+
+  let highestPriority = 0;
   let highestStage = null;
   Object.values(states).forEach(attMap => {
     if (attMap && typeof attMap === "object") {
       Object.values(attMap).forEach(ps => {
         const st = normalizeStageStr(ps?.pipelineStage);
         if (st) {
-          const r = STAGE_RANKS[st] || 0;
-          if (r > highestRank) {
-            highestRank = r;
+          const prio = EFFECTIVE_PRIORITY[st] || STAGE_RANKS[st] || 0;
+          if (prio > highestPriority) {
+            highestPriority = prio;
             highestStage = st;
           }
         }
@@ -489,8 +513,8 @@ export function normalizeProgramStates(contact = {}) {
     const p = String(purpose || "SALES").toUpperCase();
     if (p && p !== "SALES") return null;
     const s = String(status || "").toLowerCase().trim();
-    if (!s) return null;
-    if (s.includes("already reg") || s.includes("reg.done") || s.includes("registered")) return PIPELINE_STAGES.REGISTERED_WON;
+    if (s.includes("already reg") || s.includes("shivir done")) return "Existing Alumni";
+    if (s.includes("reg.done") || s.includes("registered")) return PIPELINE_STAGES.REGISTERED_WON;
     if (s.includes("previous program pending")) return PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING;
     if (s.includes("interested") && !s.includes("not interested")) return PIPELINE_STAGES.NURTURE_INTERESTED;
     if (s.includes("info given") || s.includes("information given") || s.includes("details send")) return PIPELINE_STAGES.INFO_GIVEN;
@@ -518,7 +542,8 @@ export function normalizeProgramStates(contact = {}) {
       if (stateObj.pipelineStage) {
         const curRank = STAGE_RANKS[existing.pipelineStage] || 0;
         const newRank = STAGE_RANKS[stateObj.pipelineStage] || 0;
-        if (newRank >= curRank) {
+        const isPrevProgPending = stateObj.pipelineStage === PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING || stateObj.status === "Previous Program Pending";
+        if (newRank >= curRank || isPrevProgPending || canTransition(existing.pipelineStage, stateObj.pipelineStage, stateObj)) {
           existing.pipelineStage = stateObj.pipelineStage;
           existing.status = stateObj.status || existing.status;
           existing.updatedAt = stateObj.updatedAt || existing.updatedAt;
@@ -527,7 +552,8 @@ export function normalizeProgramStates(contact = {}) {
     } else if (stateObj.pipelineStage) {
       const curRank = STAGE_RANKS[existing.pipelineStage] || 0;
       const newRank = STAGE_RANKS[stateObj.pipelineStage] || 0;
-      if (newRank > curRank) {
+      const isPrevProgPending = stateObj.pipelineStage === PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING || stateObj.status === "Previous Program Pending";
+      if (newRank > curRank || isPrevProgPending || canTransition(existing.pipelineStage, stateObj.pipelineStage, stateObj)) {
         existing.pipelineStage = stateObj.pipelineStage;
         existing.status = stateObj.status || existing.status;
         existing.updatedAt = stateObj.updatedAt || existing.updatedAt;

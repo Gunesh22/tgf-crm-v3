@@ -41,7 +41,7 @@ function canTransitionServer(fromStage, toStage, event = {}) {
   const fromRank = fromStage ? (STAGE_RANKS[fromStage] || 0) : 0;
   const toRank   = toStage   ? (STAGE_RANKS[toStage]   || 0) : 0;
   if (fromStage === toStage || fromRank === toRank) return true;
-  if (fromStage === "Previous Program Pending") return true;
+  if (fromStage === "Previous Program Pending" || toStage === "Previous Program Pending") return true;
   if (LEGACY_NON_PIPELINE_STAGES.has(fromStage)) return true;
   const isConnected = event.callStatus === "Connected" ||
     ["Info Given", "Interested", "Reg.Done", "Next Time", "Previous Program Pending"].includes(event.purposeOutcome || event.status);

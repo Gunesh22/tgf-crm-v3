@@ -3,7 +3,7 @@ import { toast } from "react-hot-toast";
 import * as XLSX from "xlsx";
 import { BarChart3, Download, Search, X, ChevronDown, Check, Eye } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
-import { COLORS, cleanExportRow, CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, parseTimestamp, getCanonicalStatus, renderVal, isStageNurtureInterested, isStageRegisteredWon, getLocalDateStr, getCanonicalRegistrations, getCanonicalRegisteredPeople, getCanonicalStage6People, getContactPhone } from "../utils.jsx";
+import { COLORS, cleanExportRow, CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, parseTimestamp, getCanonicalStatus, getCanonicalStage, renderVal, isStageNurtureInterested, isStageRegisteredWon, getLocalDateStr, getCanonicalRegistrations, getCanonicalRegisteredPeople, getCanonicalStage6People, getContactPhone } from "../utils.jsx";
 import { isKhojiAffirmative, isKhojiNegative } from "../../attender/utils.js";
 
 // ── Multi-select dropdown ──────────────────────────────────────────────────
@@ -596,21 +596,29 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
   const interestedPeopleList = useMemo(() => {
     const map = new Map();
     filteredLogs.forEach(l => {
-      const cId = String(l.contactId || l.id || l.Phone || l.Name || "");
-      if (!cId || map.has(cId)) return;
-      const contactDoc = (callLogs || []).find(c => String(c.id || c._id) === cId);
+      const contactDoc = (callLogs || []).find(c => {
+        const cId = String(c.id || c._id || "");
+        const lId = String(l.contactId || "");
+        if (cId && lId && cId === lId) return true;
+        const cPhone = getContactPhone(c);
+        const lPhone = getContactPhone(l);
+        return cPhone && lPhone && cPhone === lPhone;
+      });
       const targetObj = contactDoc || l;
+      const key = String((contactDoc && (contactDoc.id || contactDoc._id)) || getContactPhone(targetObj) || targetObj.phone || targetObj.Phone || targetObj.name || targetObj.Name || "").trim();
+      if (!key || map.has(key)) return;
+
       if (isStageNurtureInterested(targetObj)) {
-        map.set(cId, {
-          id: cId,
+        map.set(key, {
+          id: key,
           name: renderVal(targetObj.Name || targetObj.contactName || targetObj.name || l.Name, "Unknown"),
-          phone: renderVal(targetObj.Phone || targetObj.contactPhone || targetObj.phone || targetObj.mobile || l.Phone, "—"),
+          phone: renderVal(getContactPhone(targetObj) || targetObj.Phone || targetObj.contactPhone || targetObj.phone || targetObj.mobile || l.Phone, "—"),
           city: renderVal(targetObj.city || targetObj.City || l.city, "—"),
           khoji: renderVal(targetObj.Khoji || targetObj.khoji || l.Khoji, "—"),
           calledFor: renderVal(targetObj.calledFor || targetObj.called_for || l.calledFor || l.programName, "—"),
           attender: renderVal(targetObj.attenderName || l.attenderName || targetObj.assignedTo, "Unassigned"),
-          status: renderVal(targetObj.status || l.status, "Interested"),
-          stage: targetObj.stage || "3. Interested",
+          status: renderVal(getCanonicalStage(targetObj), "4. Nurture / Interested"),
+          stage: "4. Nurture / Interested",
           updatedAt: targetObj.updatedAt || targetObj.lastCalledAt || l.timestamp
         });
       }
@@ -1644,16 +1652,18 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
 
             {/* Footer */}
             <div className="p-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
-              <span>Showing {inspectModal.items.filter(item => {
-                if (!inspectSearch.trim()) return true;
-                const q = inspectSearch.toLowerCase();
-                return (
-                  (item.name || "").toLowerCase().includes(q) ||
-                  (item.phone || "").toLowerCase().includes(q) ||
-                  (item.calledFor || "").toLowerCase().includes(q) ||
-                  (item.attender || "").toLowerCase().includes(q)
-                );
-              }).length} of {inspectModal.items.length} unique contacts</span>
+              <span>
+                Showing {inspectModal.items.filter(item => {
+                  if (!inspectSearch.trim()) return true;
+                  const q = inspectSearch.toLowerCase();
+                  return (
+                    (item.name || "").toLowerCase().includes(q) ||
+                    (item.phone || "").toLowerCase().includes(q) ||
+                    (item.calledFor || "").toLowerCase().includes(q) ||
+                    (item.attender || "").toLowerCase().includes(q)
+                  );
+                }).length} of {inspectModal.items.length} {inspectModal.type === "registered_programs" ? "registration records" : "unique contacts"}
+              </span>
               <button
                 onClick={() => setInspectModal(null)}
                 className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold text-xs transition-colors cursor-pointer"

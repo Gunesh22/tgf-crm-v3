@@ -5,8 +5,7 @@ import {
   ChevronDown, ChevronUp, Info, UserCheck, Eye, Search, Check
 } from "lucide-react";
 import { 
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, 
-  PieChart, Pie, Cell 
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid 
 } from "recharts";
 import { 
   parseTimestamp, renderVal, getCanonicalStatus, classifyCallStatus, COLORS, getContactName, getContactPhone, getContactCity, getCanonicalStage, getLocalDateStr, getCanonicalPhysicalCalls, getCanonicalRegistrations 
@@ -195,6 +194,44 @@ export const getCallPurpose = (h = {}, contact = {}) => {
   return "unknown_legacy";
 };
 
+// Canonical Helper 1: Program Identity Matcher
+const matchesProgramRecord = (record, targetProgramIds, programsList) => {
+  if (!targetProgramIds || targetProgramIds.length === 0) return true;
+  return targetProgramIds.some(pId => {
+    const progObj = (programsList || []).find(p => String(p.id || p._id || p.key || p.name) === String(pId));
+    const pName = progObj ? progObj.name.toLowerCase().trim() : String(pId).toLowerCase().trim();
+    const targetIdClean = String(pId).toLowerCase().trim();
+
+    const recProgId = String(record.programId || record.calledForKey || "").toLowerCase().trim();
+    const recCalledFor = String(record.calledFor || record.programName || "").toLowerCase().trim();
+    if (recProgId === targetIdClean || recCalledFor === pName || recCalledFor === targetIdClean) return true;
+
+    if (Array.isArray(record.history)) {
+      return record.history.some(h => {
+        const hProgId = String(h.programId || h.calledForKey || "").toLowerCase().trim();
+        const hCalledFor = String(h.calledFor || "").toLowerCase().trim();
+        return hProgId === targetIdClean || hCalledFor === pName || hCalledFor === targetIdClean;
+      });
+    }
+
+    return false;
+  });
+};
+
+// Canonical Helper 2: Attender Identity Set Resolution
+const getRecordAttenderIds = (record) => {
+  const ids = new Set();
+  if (record.attenderId) ids.add(String(record.attenderId));
+  if (Array.isArray(record.assignedTo)) record.assignedTo.forEach(id => ids.add(String(id)));
+  if (record.attenderStates && typeof record.attenderStates === "object") {
+    Object.keys(record.attenderStates).forEach(id => ids.add(String(id)));
+  }
+  if (Array.isArray(record.history)) {
+    record.history.forEach(h => { if (h.attenderId) ids.add(String(h.attenderId)); });
+  }
+  return ids;
+};
+
 export default function PipelineCallsTab({ callLogs = [], registrations = [], programs = [], attenders = [], settingsOptions = {} }) {
   const todayObj = new Date();
   const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, "0")}-${String(todayObj.getDate()).padStart(2, "0")}`;
@@ -219,8 +256,7 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
   const [selectedPipelineStages, setSelectedPipelineStages] = useState([]);
   const [selectedOutcomes, setSelectedOutcomes] = useState([]);
 
-  // Advanced Analytics Collapsible
-  const [showAdvancedAnalytics, setShowAdvancedAnalytics] = useState(false);
+
 
   // Drill-down Modals
   const [drillDownModal, setDrillDownModal] = useState(null); // { title: string, type: string, items: Array }
@@ -272,19 +308,23 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
           if (!attId) attId = "unassigned";
           if (!attName) attName = "Unassigned Attender";
 
+          const rawCallStage = h.pipelineStage || h.stage || (h.status ? getCanonicalStage(h.status) : null);
+          const callStage = rawCallStage ? getCanonicalStage(rawCallStage) : cStage;
+
           events.push({
             callId,
             contactId: cId,
             contactName: cName,
             contactPhone: cPhone,
             contactCity: cCity,
-            pipelineStage: cStage,
+            pipelineStage: callStage,
             status: h.status || contact.status || "Pending",
             callType: (h.callType || contact.callType || "outgoing").toLowerCase(),
             purpose: getCallPurpose(h, contact),
             source: h.source || contact.source || "",
             calledFor: h.calledFor || contact.calledFor || contact.programName || "",
-            programId: h.programId || contact.programId || "",
+            programId: h.programId || h.calledForKey || contact.programId || contact.calledForKey || "",
+            calledForKey: h.calledForKey || h.programId || contact.calledForKey || contact.programId || "",
             attenderId: attId,
             attenderName: attName,
             timestamp: ts,
@@ -311,17 +351,11 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
       }
 
       if (selectedAttenderIds.length > 0) {
-        if (!selectedAttenderIds.includes(ev.attenderId)) return false;
+        const attenderIds = getRecordAttenderIds(ev);
+        if (!selectedAttenderIds.some(id => attenderIds.has(String(id)))) return false;
       }
 
-      if (selectedProgramIds.length > 0) {
-        const match = selectedProgramIds.some(pId => {
-          const progObj = programs.find(p => p.id === pId);
-          const pName = progObj ? progObj.name.toLowerCase() : pId.toLowerCase();
-          return ev.programId === pId || (ev.calledFor || "").toLowerCase().includes(pName);
-        });
-        if (!match) return false;
-      }
+      if (!matchesProgramRecord(ev, selectedProgramIds, programs)) return false;
 
       if (selectedSources.length > 0) {
         if (!selectedSources.includes(ev.source)) return false;
@@ -336,9 +370,15 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
       }
 
       if (selectedCallTypes.length > 0) {
-        const isInc = (ev.callType || "").startsWith("in");
-        if (selectedCallTypes.includes("incoming") && !isInc) return false;
-        if (selectedCallTypes.includes("outgoing") && isInc) return false;
+        const isInc = (ev.callType || "").toLowerCase().startsWith("in");
+        const type = isInc ? "incoming" : "outgoing";
+        if (!selectedCallTypes.includes(type)) return false;
+      }
+
+      if (selectedPurposes.length > 0) {
+        const evPurpose = String(ev.purpose || "SALES").toUpperCase().trim();
+        const hasMatch = selectedPurposes.some(p => String(p).toUpperCase().trim() === evPurpose);
+        if (!hasMatch) return false;
       }
 
       if (selectedPipelineStages.length > 0) {
@@ -352,24 +392,17 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
 
       return true;
     });
-  }, [allCallEvents, dateFrom, dateTo, dateMode, selectedAttenderIds, selectedProgramIds, selectedSources, selectedCalledFors, selectedStatuses, selectedCallTypes, selectedPipelineStages, selectedOutcomes, programs]);
+  }, [allCallEvents, dateFrom, dateTo, dateMode, selectedAttenderIds, selectedProgramIds, selectedSources, selectedCalledFors, selectedStatuses, selectedCallTypes, selectedPurposes, selectedPipelineStages, selectedOutcomes, programs]);
 
   // 3. FILTERED CONTACTS
   const filteredContacts = useMemo(() => {
     return (callLogs || []).filter(c => {
       if (selectedAttenderIds.length > 0) {
-        const attId = c.attenderId || "unassigned";
-        if (!selectedAttenderIds.includes(attId)) return false;
+        const attenderIds = getRecordAttenderIds(c);
+        if (!selectedAttenderIds.some(id => attenderIds.has(String(id)))) return false;
       }
 
-      if (selectedProgramIds.length > 0) {
-        const match = selectedProgramIds.some(pId => {
-          const progObj = programs.find(p => p.id === pId);
-          const pName = progObj ? progObj.name.toLowerCase() : pId.toLowerCase();
-          return c.programId === pId || (c.calledFor || "").toLowerCase().includes(pName);
-        });
-        if (!match) return false;
-      }
+      if (!matchesProgramRecord(c, selectedProgramIds, programs)) return false;
 
       if (selectedSources.length > 0) {
         const srcKey = Object.keys(c).find(k => ["source", "sourse", "source of information", "source of informiton"].includes(k.toLowerCase()));
@@ -390,8 +423,8 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
       if (selectedCallTypes.length > 0) {
         const cType = (c.callType || "outgoing").toLowerCase();
         const isInc = cType.startsWith("in");
-        if (selectedCallTypes.includes("incoming") && !isInc) return false;
-        if (selectedCallTypes.includes("outgoing") && isInc) return false;
+        const type = isInc ? "incoming" : "outgoing";
+        if (!selectedCallTypes.includes(type)) return false;
       }
 
       if (selectedKhojiStatuses.length > 0) {
@@ -405,13 +438,38 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
       }
 
       if (dateFrom || dateTo) {
-        const cDate = parseTimestamp(c.createdAt || c.date_added);
-        if (cDate) {
-          const dStr = getLocalDateStr(cDate);
-          if (dateMode === "contact") {
+        if (dateMode === "contact") {
+          const cDate = parseTimestamp(c.createdAt || c.date_added);
+          if (cDate) {
+            const dStr = getLocalDateStr(cDate);
             if (dateFrom && dStr < dateFrom) return false;
             if (dateTo && dStr > dateTo) return false;
+          } else {
+            return false;
           }
+        } else {
+          // dateMode === "call" (default) - ONLY real physical call timestamps (no generic updatedAt)
+          const activityDates = [];
+          const lastCall = parseTimestamp(c.lastCalledAt);
+          if (lastCall) activityDates.push(lastCall);
+
+          if (Array.isArray(c.history)) {
+            c.history.forEach(h => {
+              const hTs = parseTimestamp(h.timestamp || h.date || h.createdAt);
+              if (hTs) activityDates.push(hTs);
+            });
+          }
+
+          if (activityDates.length === 0) return false;
+
+          const hasMatch = activityDates.some(d => {
+            const dStr = getLocalDateStr(d);
+            if (dateFrom && dStr < dateFrom) return false;
+            if (dateTo && dStr > dateTo) return false;
+            return true;
+          });
+
+          if (!hasMatch) return false;
         }
       }
 
@@ -447,6 +505,7 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
       [PIPELINE_STAGES.NEW_LEAD]: 0,
       [PIPELINE_STAGES.ATTEMPTING]: 0,
       [PIPELINE_STAGES.INFO_GIVEN]: 0,
+      [PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING]: 0,
       [PIPELINE_STAGES.NURTURE_INTERESTED]: 0,
       [PIPELINE_STAGES.FUTURE_POOL]: 0,
       [PIPELINE_STAGES.REGISTERED_WON]: 0,
@@ -493,6 +552,7 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
       PIPELINE_STAGES.NEW_LEAD,
       PIPELINE_STAGES.ATTEMPTING,
       PIPELINE_STAGES.INFO_GIVEN,
+      PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING,
       PIPELINE_STAGES.NURTURE_INTERESTED,
       PIPELINE_STAGES.FUTURE_POOL,
       PIPELINE_STAGES.REGISTERED_WON,
@@ -508,52 +568,6 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
       avgCallsPerPerson: (pipelineStageCounts[st] || 0) > 0 ? ((stageCalls[st] || 0) / pipelineStageCounts[st]).toFixed(1) : "0.0"
     }));
   }, [pipelineStageCounts, filteredEvents]);
-
-  // Engagement Depth
-  const engagementDepth = useMemo(() => {
-    const contactCallCounts = {};
-    filteredEvents.forEach(ev => {
-      const cId = ev.contactId;
-      contactCallCounts[cId] = (contactCallCounts[cId] || 0) + 1;
-    });
-
-    const countsList = Object.values(contactCallCounts);
-    const totalWithCalls = countsList.length;
-
-    let b1 = 0, b2 = 0, b3_5 = 0, b6_10 = 0, b11_plus = 0;
-    countsList.forEach(cnt => {
-      if (cnt === 1) b1++;
-      else if (cnt === 2) b2++;
-      else if (cnt >= 3 && cnt <= 5) b3_5++;
-      else if (cnt >= 6 && cnt <= 10) b6_10++;
-      else if (cnt >= 11) b11_plus++;
-    });
-
-    const totalCallSum = countsList.reduce((a, b) => a + b, 0);
-    const avgCallsPerPerson = totalWithCalls > 0 ? (totalCallSum / totalWithCalls).toFixed(1) : "0.0";
-
-    return {
-      avgCallsPerPerson,
-      totalContactsWithCalls: totalWithCalls,
-      buckets: [
-        { name: "1 call", people: b1 },
-        { name: "2 calls", people: b2 },
-        { name: "3–5 calls", people: b3_5 },
-        { name: "6–10 calls", people: b6_10 },
-        { name: "11+ calls", people: b11_plus }
-      ]
-    };
-  }, [filteredEvents]);
-
-  // Call Outcomes Data
-  const callOutcomesData = useMemo(() => {
-    const map = {};
-    filteredEvents.forEach(ev => {
-      const s = getCanonicalStatus(ev.status) || "Pending";
-      map[s] = (map[s] || 0) + 1;
-    });
-    return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-  }, [filteredEvents]);
 
   // Attender Performance Table
   const attenderPerformance = useMemo(() => {
@@ -606,16 +620,38 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
       if (s === "Reg.Done") item.regDoneCalls++;
     });
 
-    // Group registrations
+    // Group registrations with multi-level attender resolution (ID, Name, and Contact lookup)
     const regCounts = {};
     filteredRegistrations.forEach(r => {
-      const attId = r.attenderId || r.assignedTo || "unassigned";
-      regCounts[attId] = (regCounts[attId] || 0) + 1;
+      let matchedAttenderId = r.attenderId;
+
+      if (!matchedAttenderId && r.attenderName && r.attenderName !== "Unassigned") {
+        const cleanName = r.attenderName.trim().toLowerCase();
+        const found = (attenders || []).find(a => (a.name || "").trim().toLowerCase() === cleanName);
+        if (found) matchedAttenderId = found.id || found._id;
+      }
+
+      if (!matchedAttenderId && r.contactId) {
+        const matchedContact = (callLogs || []).find(c => String(c.id || c._id) === String(r.contactId));
+        if (matchedContact) {
+          matchedAttenderId = matchedContact.attenderId;
+          if (!matchedAttenderId && matchedContact.attenderName) {
+            const cleanName = matchedContact.attenderName.trim().toLowerCase();
+            const found = (attenders || []).find(a => (a.name || "").trim().toLowerCase() === cleanName);
+            if (found) matchedAttenderId = found.id || found._id;
+          }
+        }
+      }
+
+      if (!matchedAttenderId) matchedAttenderId = "unassigned";
+
+      regCounts[matchedAttenderId] = (regCounts[matchedAttenderId] || 0) + 1;
     });
 
     return Object.values(map)
       .map(item => {
         const uniqueContactsCount = item.contactIds.size;
+        const regCount = regCounts[item.id] || (item.name ? regCounts[item.name.trim().toLowerCase()] : 0) || 0;
         return {
           id: item.id,
           name: item.name,
@@ -624,50 +660,13 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
           connectedRate: item.totalCalls > 0 ? ((item.connectedCalls / item.totalCalls) * 100).toFixed(1) : "0.0",
           interestedCalls: item.interestedCalls,
           regDoneCalls: item.regDoneCalls,
-          registrationsCount: regCounts[item.id] || 0,
+          registrationsCount: regCount,
           avgCallsPerContact: uniqueContactsCount > 0 ? (item.totalCalls / uniqueContactsCount).toFixed(1) : "0.0"
         };
       })
       .filter(item => !EXCLUDED_ATTENDER_NAMES.includes((item.name || "").toLowerCase().trim()) && (item.totalCalls > 0 || item.registrationsCount > 0 || (attenders || []).some(a => a.id === item.id)))
       .sort((a, b) => b.totalCalls - a.totalCalls);
-  }, [filteredEvents, filteredRegistrations, attenders]);
-
-  // Purpose Analytics
-  const purposeAnalytics = useMemo(() => {
-    const map = {
-      sales: { calls: 0, connected: 0, contacts: new Set() },
-      query: { calls: 0, connected: 0, contacts: new Set() },
-      reminder: { calls: 0, connected: 0, contacts: new Set() },
-      unknown_legacy: { calls: 0, connected: 0, contacts: new Set() }
-    };
-
-    filteredEvents.forEach(ev => {
-      const p = ev.purpose || "unknown_legacy";
-      if (!map[p]) map[p] = { calls: 0, connected: 0, contacts: new Set() };
-      const item = map[p];
-      item.calls++;
-      item.contacts.add(ev.contactId);
-
-      if (classifyCallStatus(ev.status) === "CONNECTED") {
-        item.connected++;
-      }
-    });
-
-    const labels = {
-      sales: "Sales",
-      query: "Query",
-      reminder: "Reminder",
-      unknown_legacy: "Unknown / Legacy"
-    };
-
-    return Object.entries(map).map(([key, item]) => ({
-      purposeKey: key,
-      purpose: labels[key] || key,
-      calls: item.calls,
-      uniqueContacts: item.contacts.size,
-      connectedRate: item.calls > 0 ? ((item.connected / item.calls) * 100).toFixed(1) : "0.0"
-    }));
-  }, [filteredEvents]);
+  }, [filteredEvents, filteredRegistrations, attenders, callLogs]);
 
   // Attention Needed Lists (Actionable items)
   const attentionNeededLists = useMemo(() => {
@@ -730,7 +729,7 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
 
   // Filter Options Memos
   const programOptions = useMemo(() => {
-    return (programs || []).map(p => ({ value: p.id, label: p.name }));
+    return (programs || []).map(p => ({ value: p.id || p._id || p.key || p.name, label: p.name }));
   }, [programs]);
 
   const attenderOptions = useMemo(() => {
@@ -795,6 +794,9 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
     selectedStatuses.length > 0 && selectedStatuses.length < statusOptions.length,
     selectedCallTypes.length > 0 && selectedCallTypes.length < callTypeOptions.length,
     selectedKhojiStatuses.length > 0 && selectedKhojiStatuses.length < khojiStatusOptions.length,
+    selectedPurposes.length > 0,
+    selectedPipelineStages.length > 0,
+    selectedOutcomes.length > 0,
     (dateFrom && dateFrom !== currentMonthFirstDay) || (dateTo && dateTo !== currentMonthLastDay)
   ].filter(Boolean).length;
 
@@ -966,6 +968,34 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
                   >
                     All Time
                   </button>
+
+                  <div className="flex items-center gap-1 border-l border-slate-200 pl-2 ml-1">
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Mode:</span>
+                    <button
+                      type="button"
+                      onClick={() => setDateMode("call")}
+                      className={`h-7 px-2 rounded-md text-[11px] font-semibold border transition-colors cursor-pointer ${
+                        dateMode === "call"
+                          ? "bg-slate-800 border-slate-800 text-white shadow-2xs"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                      }`}
+                      title="Filter contacts by Call Activity / Updated Date"
+                    >
+                      📞 Call Activity
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDateMode("contact")}
+                      className={`h-7 px-2 rounded-md text-[11px] font-semibold border transition-colors cursor-pointer ${
+                        dateMode === "contact"
+                          ? "bg-slate-800 border-slate-800 text-white shadow-2xs"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                      }`}
+                      title="Filter contacts by Lead Creation Date"
+                    >
+                      👤 Lead Created
+                    </button>
+                  </div>
                 </div>
               );
             })()}
@@ -1285,112 +1315,9 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
         </div>
       </div>
 
-      {/* 6. CALL ANALYTICS (Outcomes + Purpose Summary) */}
-      <div className="grid md:grid-cols-2 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-          <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
-            Call Purpose Analytics
-          </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                <tr>
-                  <th className="py-2 px-3">PURPOSE</th>
-                  <th className="py-2 px-3">CALLS</th>
-                  <th className="py-2 px-3">UNIQUE PEOPLE</th>
-                  <th className="py-2 px-3">CONNECTED %</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                {purposeAnalytics.map(p => (
-                  <tr key={p.purposeKey}>
-                    <td className="py-2 px-3 font-semibold text-slate-900">{p.purpose}</td>
-                    <td className="py-2 px-3 font-bold text-slate-900">{p.calls.toLocaleString()}</td>
-                    <td className="py-2 px-3 font-bold text-indigo-600">{p.uniqueContacts.toLocaleString()}</td>
-                    <td className="py-2 px-3 font-bold text-emerald-600">{p.connectedRate}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-          <div>
-            <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
-              CALL OUTCOMES
-            </h3>
-            <span className="text-[11px] text-slate-500 font-medium block mt-0.5">Historical call events ({totalCallsCount.toLocaleString()})</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="h-[140px] w-[140px] shrink-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={callOutcomesData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={65}
-                    innerRadius={40}
-                    paddingAngle={2}
-                  >
-                    {callOutcomesData.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={{ background: "#0f172a", border: "none", borderRadius: "6px", color: "#fff", fontSize: "11px" }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="grid grid-cols-2 gap-1.5 text-xs font-medium max-h-[140px] overflow-y-auto pr-1 flex-1">
-              {callOutcomesData.map((item, i) => (
-                <div key={item.name} className="flex items-center justify-between p-1 rounded bg-slate-50 text-[11px]">
-                  <span className="flex items-center gap-1 truncate text-slate-700">
-                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                    {renderVal(item.name)}
-                  </span>
-                  <span className="font-bold text-slate-900 ml-1">{item.value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* 7. ADVANCED ANALYTICS (COLLAPSIBLE BY DEFAULT) */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
-        <button
-          onClick={() => setShowAdvancedAnalytics(!showAdvancedAnalytics)}
-          className="w-full px-4 py-3 flex items-center justify-between bg-slate-50/60 hover:bg-slate-100/70 transition-colors cursor-pointer text-xs font-extrabold text-slate-800 uppercase tracking-wider"
-        >
-          <span className="flex items-center gap-1.5">
-            <BarChart3 size={15} className="text-indigo-600" /> ADVANCED ANALYTICS (ENGAGEMENT DEPTH)
-          </span>
-          {showAdvancedAnalytics ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-        </button>
 
-        {showAdvancedAnalytics && (
-          <div className="p-4 border-t border-slate-100 space-y-4">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-slate-700">Distribution of Unique Contacts by Call Volume Received</span>
-              <span className="font-bold text-indigo-600">Avg Calls / Person: {engagementDepth.avgCallsPerPerson}</span>
-            </div>
-            <div className="h-[180px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={engagementDepth.buckets}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} />
-                  <YAxis tick={{ fontSize: 11, fill: "#64748b" }} />
-                  <Tooltip contentStyle={{ background: "#0f172a", border: "none", borderRadius: "8px", color: "#fff", fontSize: "12px" }} />
-                  <Bar dataKey="people" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* ATTENDER DETAIL MODAL */}
       {attenderDetailModal && (
@@ -1488,8 +1415,8 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
                       const item = rawItem.contact || rawItem;
                       if (!drillSearch.trim()) return true;
                       const q = drillSearch.toLowerCase();
-                      const name = getContactName(item).toLowerCase();
-                      const phone = getContactPhone(item).toLowerCase();
+                      const name = String(getContactName(item) || "").toLowerCase();
+                      const phone = String(getContactPhone(item) || "").toLowerCase();
                       return name.includes(q) || phone.includes(q);
                     })
                     .map((rawItem, idx) => {

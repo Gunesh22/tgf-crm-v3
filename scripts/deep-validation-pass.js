@@ -37,6 +37,7 @@ const PIPELINE_STAGES = {
   NEW_LEAD: "1. New Lead",
   ATTEMPTING: "2. Attempting Contact",
   INFO_GIVEN: "3. Information Given",
+  PREVIOUS_PROGRAM_PENDING: "Previous Program Pending",
   NURTURE_INTERESTED: "4. Nurture / Interested",
   FUTURE_POOL: "5. Future Pool",
   REGISTERED_WON: "6. Registered / Won",
@@ -50,13 +51,14 @@ function getCanonicalStage(stageOrContact) {
   if (typeof stageOrContact === "string") rawStage = stageOrContact;
   else if (stageOrContact && typeof stageOrContact === "object") {
     contact = stageOrContact;
-    rawStage = contact.pipelineStage || "";
+    rawStage = contact.pipelineStage || contact.status || "";
   }
   if (rawStage && String(rawStage).trim() !== "" && rawStage !== "null" && rawStage !== "undefined") {
     const s = String(rawStage).trim();
     if (s === PIPELINE_STAGES.NEW_LEAD || s === "New Lead" || s === "1. New Lead") return PIPELINE_STAGES.NEW_LEAD;
     if (s === PIPELINE_STAGES.ATTEMPTING || s === "Attempting Contact" || s === "Attempting" || s === "2. Attempting Contact") return PIPELINE_STAGES.ATTEMPTING;
     if (s === PIPELINE_STAGES.INFO_GIVEN || s === "Information Given" || s === "Info Given" || s === "3. Information Given") return PIPELINE_STAGES.INFO_GIVEN;
+    if (s === PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING || s === "Previous Program Pending") return PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING;
     if (s === PIPELINE_STAGES.NURTURE_INTERESTED || s === "Nurture / Interested" || s === "Interested" || s === "4. Nurture / Interested") return PIPELINE_STAGES.NURTURE_INTERESTED;
     if (s === PIPELINE_STAGES.FUTURE_POOL || s === "Future Pool" || s === "Next Time" || s === "5. Future Pool") return PIPELINE_STAGES.FUTURE_POOL;
     if (s === PIPELINE_STAGES.REGISTERED_WON || s === "Registered / Won" || s === "Reg.Done" || s === "6. Registered / Won" || s === "Registered") return PIPELINE_STAGES.REGISTERED_WON;
