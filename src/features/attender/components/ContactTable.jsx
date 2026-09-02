@@ -3,6 +3,8 @@ import { Flame, Clock, RotateCw, Users, Loader } from "lucide-react";
 import { normalizePhone } from "../../../lib/db";
 import { getFieldWithFallback, isUnansweredCallback, getCanonicalStatus, getSharedAttenders, getAttenderStatus, getAttenderRemark, getContactView, parseTimestamp } from "../utils";
 import { getPipelineStageConfig } from "../../../utils/pipelineEngine";
+import LottieAnimation from "../../../components/ui/LottieAnimation";
+import customerServiceAnimation from "../../../assets/customer_service.json";
 
 function CollapsedTags({ tags }) {
   const [expanded, setExpanded] = React.useState(false);
