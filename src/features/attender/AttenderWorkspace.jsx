@@ -373,6 +373,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
         if (fresh) {
           console.log(`[MODAL OPEN SUCCESS] Loaded fresh lead data for SharedBanner reference: ${fresh.id || contactId}`);
           setFreshSharedLead(fresh);
+          setEditingRow(fresh);
         }
       } catch (err) {
         console.error(`[MODAL OPEN ERROR] Failed to fetch contact ${contactId}:`, err);
@@ -402,6 +403,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
       }
       if (fresh) {
         setFreshSharedLead(fresh);
+        setEditingRow(fresh);
         toast.success(`Updated shared activity for ${leadName}!`, { id: `sync-${contactId}` });
       } else {
         toast.dismiss(`sync-${contactId}`);

@@ -102,15 +102,31 @@ export const CallEntryTab = ({
 
   const formatFollowupDateStr = (dateVal) => {
     if (!dateVal) return "";
-    const d = new Date(dateVal);
-    if (isNaN(d.getTime())) return String(dateVal);
+    let raw = dateVal;
+    if (typeof raw === "object" && raw !== null) {
+      if (raw instanceof Date) {
+        // Date instance
+      } else if (typeof raw.seconds === "number") {
+        raw = new Date(raw.seconds * 1000);
+      } else if (typeof raw._seconds === "number") {
+        raw = new Date(raw._seconds * 1000);
+      } else {
+        raw = raw.date || raw.$date || raw.callbackDate || raw.callback_date || raw.value || raw.iso || raw.formatted || raw.startDate || raw.endDate || "";
+      }
+    }
+    if (!raw) return "";
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) {
+      const str = typeof raw === "string" ? raw : "";
+      return str === "[object Object]" ? "" : str;
+    }
     return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
   };
 
-  const currentCbStatus = edited.callbackStatus || "pending";
-  const hasActivePendingFollowup = !!edited.callbackDate && (currentCbStatus === "pending" || currentCbStatus === "rescheduled");
-  const isFollowupCompleted = currentCbStatus === "done" || currentCbStatus === "completed";
-  const isFollowupCancelled = currentCbStatus === "cancelled";
+  const rawCbStatus = String(edited.callbackStatus || "").toLowerCase().trim();
+  const isFollowupCompleted = rawCbStatus === "done" || rawCbStatus === "completed";
+  const isFollowupCancelled = rawCbStatus === "cancelled";
+  const hasActivePendingFollowup = !!edited.callbackDate && !isFollowupCompleted && !isFollowupCancelled;
 
   // Reset override state & follow-up mode states whenever active contact changes
   const activeContactId = edited._id || edited.id || row._id || row.id;
@@ -1405,7 +1421,7 @@ export const CallEntryTab = ({
         )}
 
         {/* CASE D: No Follow-up set */}
-        {!edited.callbackDate && !edited.callbackStatus && (
+        {!edited.callbackDate && !isFollowupCompleted && !isFollowupCancelled && (
           <>
             {isAddingNext ? (
               <div className="space-y-3 p-3.5 bg-indigo-50/80 border border-indigo-200 rounded-xl animate-fade-in">

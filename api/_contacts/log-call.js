@@ -51,16 +51,36 @@ function canTransitionServer(fromStage, toStage, event = {}) {
   return true;
 }
 
-function getEffectiveStageServer(lead) {
-  const current  = lead.pipelineStage || null;
-  const isLegacy = LEGACY_NON_PIPELINE_STAGES.has(current);
-  let highestRank = isLegacy ? 0 : (current ? (STAGE_RANKS[current] || 0) : 0);
-  let stage       = isLegacy ? null : (current || null);
+function getEffectiveStageServer(lead, targetProgram = null) {
+  let programKey = targetProgram ? normalizeCalledForKey(targetProgram) : null;
+
+  // 1. Direct O(1) lookup from programStates if targetProgram is supplied
+  if (programKey && lead.programStates) {
+    for (const attId of Object.keys(lead.programStates)) {
+      const pMap = lead.programStates[attId];
+      if (pMap && typeof pMap === 'object') {
+        const found = Object.values(pMap).find(entry => {
+          const entryKey = entry.programKey || normalizeCalledForKey(entry.program);
+          return entryKey === programKey;
+        });
+        if (found?.pipelineStage) return found.pipelineStage;
+      }
+    }
+  }
 
   const history = Array.isArray(lead.history) ? lead.history : [];
+  let highestRank = 0;
+  let stage = null;
+
   for (const h of history) {
     const callPurpose = (h.callPurpose || "").toUpperCase();
     if (callPurpose && callPurpose !== "SALES") continue; // Only SALES events affect pipeline
+
+    if (programKey) {
+      const hProg = h.calledFor || h.called_for || h["Called For"] || "";
+      const hKey = normalizeCalledForKey(hProg);
+      if (hKey && hKey !== programKey) continue; // Skip calls for OTHER programs!
+    }
 
     const outcome = (h.status || h.purposeOutcome || "").trim().toLowerCase();
     let hStage = null;
@@ -70,7 +90,6 @@ function getEffectiveStageServer(lead) {
     else if (outcome === "next time")                       hStage = "5. Future Pool";
     else if (outcome === "reg.done" || outcome === "registered") hStage = "6. Registered / Won";
     else if (["not interested", "not possible"].includes(outcome)) hStage = "Closed / Lost";
-    // "already reg.d" / "shivir done" → programRelationships[] only, NOT pipeline
 
     if (hStage) {
       const hRank = STAGE_RANKS[hStage] || 0;
@@ -81,7 +100,8 @@ function getEffectiveStageServer(lead) {
 }
 
 function evaluateStageServer(lead, callEvent) {
-  const currentStage = getEffectiveStageServer(lead);
+  const targetProg = callEvent.calledFor || lead['Called For'] || lead.calledFor || null;
+  const currentStage = getEffectiveStageServer(lead, targetProg);
   const currentRank  = currentStage ? (STAGE_RANKS[currentStage] || 0) : 0;
 
   const purpose    = (callEvent.callPurpose || "SALES").toUpperCase();
@@ -227,8 +247,11 @@ export async function executeLogCall(db, payload) {
       : "Connected"
   );
 
+  const targetCalledFor = calledFor || rootUpdates['Called For'] || existingContact['Called For'] || '';
+
   // ── Evaluate pipeline ──────────────────────────────────────────────────
   const evalResult = evaluateStageServer(existingContact, {
+    calledFor:   targetCalledFor,
     callPurpose: callPurposeClean,
     callStatus:  callStatusClean,
     status,
@@ -296,12 +319,13 @@ export async function executeLogCall(db, payload) {
   delete rootUpdates._id;
   delete rootUpdates.history;
   delete rootUpdates.attenderStates;
+  delete rootUpdates.programStates;
+  delete rootUpdates.programs;
   delete rootUpdates.assignedTo;
   delete rootUpdates.leadOwner;          // ownership never changes via log-call
   delete rootUpdates.leadOwnerName;
   delete rootUpdates.ownerHistory;
 
-  const targetCalledFor = calledFor || rootUpdates['Called For'] || '';
   const ownerCalledFor = existingContact.attenderStates?.[existingContact.leadOwner]?.calledFor ||
                          existingContact['Called For'] || existingContact.calledFor || '';
 
@@ -364,6 +388,27 @@ export async function executeLogCall(db, payload) {
       previousProgram: resolvedPreviousProgram,
     },
   };
+
+  const currentProgKey = normalizeCalledForKey(targetCalledFor || existingContact['Called For'] || '');
+  if (attenderId && currentProgKey) {
+    const progStateObj = {
+      attenderId,
+      attenderName:  attenderName || '',
+      programKey:    currentProgKey,
+      program:       targetCalledFor || existingContact['Called For'] || '',
+      pipelineStage: evalResult.pipelineStage,
+      status:        status || 'Pending',
+      callPurpose:   callPurposeClean,
+      callStatus:    callStatusClean,
+      remark:        remark || queryDetails || '',
+      callbackDate:  callbackDate || null,
+      callbackTime:  callbackTime || null,
+      source:        currentCallSource,
+      updatedAt:     nowIso
+    };
+    setPayload[`programs.${currentProgKey}.${attenderId}`] = progStateObj;
+    setPayload[`programStates.${attenderId}.${currentProgKey}`] = progStateObj;
+  }
 
   if (resolvedPreviousProgram !== undefined) {
     setPayload.previousProgram = resolvedPreviousProgram;

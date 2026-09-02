@@ -8,6 +8,8 @@
 import {
   evaluatePipeline,
   getEffectiveStage,
+  getProgramSpecificStatus,
+  normalizeProgramStates,
   canTransition,
   shouldShowConvertToSales,
   PIPELINE_STAGES,
@@ -591,6 +593,78 @@ function makeCall(purpose = 'SALES', callStatus = 'Connected', status = 'Info Gi
     assert('37-8b. Pill 2: Yoga 1 Yr = Attempting Contact', y1 === PIPELINE_STAGES.ATTEMPTING, `got: ${y1}`);
     assert('37-8c. Pill 3: Studya Smater = Info Given', s2 === PIPELINE_STAGES.INFO_GIVEN, `got: ${s2}`);
     assert('37-8d. Pill 4: Yoga 1 Yr = Attempting Contact', y2 === PIPELINE_STAGES.ATTEMPTING, `got: ${y2}`);
+  }
+
+  // ── Test 38: Canonical programStates[attenderId][programKey] Architecture Suite ─────────
+  {
+    // 38-1: Direct programStates lookup precedence
+    const progStatesContact = {
+      pipelineStage: "3. Information Given",
+      "Called For": "Studya Smater",
+      programStates: {
+        attenderA: {
+          "yoga-1-yr": {
+            pipelineStage: "2. Attempting Contact",
+            status: "Not Connected"
+          },
+          "studya-smater": {
+            pipelineStage: "4. Nurture / Interested",
+            status: "Interested"
+          }
+        },
+        attenderB: {
+          "studya-smater": {
+            pipelineStage: "6. Registered / Won",
+            status: "Reg.Done"
+          }
+        }
+      }
+    };
+
+    const stYogaA = getEffectiveStage(progStatesContact, "Yoga 1 Yr", "attenderA");
+    assert('38-1a. programStates: Attender A Yoga 1 Yr returns Attempting Contact', stYogaA === PIPELINE_STAGES.ATTEMPTING, `got: ${stYogaA}`);
+
+    const stStudyaA = getEffectiveStage(progStatesContact, "Studya Smater", "attenderA");
+    assert('38-1b. programStates: Attender A Studya Smater returns Nurture / Interested', stStudyaA === PIPELINE_STAGES.NURTURE_INTERESTED, `got: ${stStudyaA}`);
+
+    const stStudyaB = getEffectiveStage(progStatesContact, "Studya Smater", "attenderB");
+    assert('38-1c. programStates: Attender B Studya Smater returns Registered / Won', stStudyaB === PIPELINE_STAGES.REGISTERED_WON, `got: ${stStudyaB}`);
+
+    const statusYogaA = getProgramSpecificStatus(progStatesContact, "Yoga 1 Yr", "attenderA");
+    assert('38-1d. programStates status: Attender A Yoga 1 Yr returns Not Connected', statusYogaA === "Not Connected", `got: ${statusYogaA}`);
+
+    // 38-2: normalizeProgramStates migration test
+    const legacyContact = {
+      "Called For": "Studya Smater",
+      pipelineStage: "3. Information Given",
+      status: "Info Given",
+      leadOwner: "attenderA",
+      attenderStates: {
+        attenderB: {
+          calledForKey: "yoga-1-yr",
+          calledFor: "Yoga 1 Yr",
+          pipelineStage: "2. Attempting Contact",
+          status: "Not Connected"
+        }
+      }
+    };
+
+    const normalized = normalizeProgramStates(legacyContact);
+    assert('38-2a. normalizeProgramStates creates programStates structure', Boolean(normalized.programStates), 'programStates missing');
+    assert('38-2b. normalizeProgramStates populates Attender B Yoga state', (normalized.programStates?.attenderB?.["yoga1yr"]?.pipelineStage || normalized.programStates?.attenderB?.["yoga-1-yr"]?.pipelineStage) === "2. Attempting Contact", `got: ${normalized.programStates?.attenderB?.["yoga1yr"]?.pipelineStage}`);
+    assert('38-2c. normalizeProgramStates populates Attender A Studya state from root', (normalized.programStates?.attenderA?.["studyasmater"]?.pipelineStage || normalized.programStates?.attenderA?.["studya-smater"]?.pipelineStage) === "3. Information Given", `got: ${normalized.programStates?.attenderA?.["studyasmater"]?.pipelineStage}`);
+
+    // 38-3: No-Backward rule with programStates
+    const evalResultNoBack = evaluatePipeline(progStatesContact, {
+      callPurpose: "SALES",
+      callStatus: "Not Connected",
+      purposeOutcome: "Not Connected",
+      calledFor: "Studya Smater",
+      attenderId: "attenderA"
+    });
+    assert('38-3a. evaluatePipeline preserves Rank 4 stage on Not Connected call (No-Backward rule)', evalResultNoBack.pipelineStage === PIPELINE_STAGES.NURTURE_INTERESTED, `got: ${evalResultNoBack.pipelineStage}`);
+    assert('38-3b. evaluatePipeline outputs programStatesUpdate object', Boolean(evalResultNoBack.programStatesUpdate), 'programStatesUpdate missing');
+    assert('38-3c. programStatesUpdate retains non-regressed stage', evalResultNoBack.programStatesUpdate?.pipelineStage === PIPELINE_STAGES.NURTURE_INTERESTED, `got: ${evalResultNoBack.programStatesUpdate?.pipelineStage}`);
   }
 }
 

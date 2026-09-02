@@ -6,7 +6,7 @@ import {
   Layers, CheckCircle2
 } from "lucide-react";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
-import { CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, getCanonicalStatus } from "../utils";
+import { CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, getCanonicalStatus, classifyCallStatus } from "../utils";
 
 // ─── Status Color Token System (Restrained Semantic Palette) ─────────────────
 const STATUS_THEMES = {
@@ -386,7 +386,7 @@ export function MyPerformanceDashboard({
   attenderName = "",
   attenderId = ""
 }) {
-  const [dateRange, setDateRange] = useState("month");
+  const [dateRange, setDateRange] = useState("today");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -495,8 +495,10 @@ export function MyPerformanceDashboard({
       const s = getCanonicalStatus(att.status || "Pending");
       statusCounts[s] = (statusCounts[s] || 0) + 1;
 
+      const isUnconnected = classifyCallStatus(att.callStatus || att.status) === "NOT_CONNECTED";
+
       if (s !== "Pending") {
-        if (NOT_CONNECTED_STATUSES.includes(s)) {
+        if (isUnconnected) {
           notConnected++;
         } else {
           connected++;

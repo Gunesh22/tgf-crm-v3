@@ -33,4 +33,11 @@ dist-ssr
 # Build/Scratch artifacts
 *.timestamp-*.mjs
 scratch/
+crm_analytics_code_dump.txt
+*.json.export
+*.json
+!package.json
+!package-lock.json
+!.oxlintrc.json
+
 

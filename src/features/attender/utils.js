@@ -157,10 +157,16 @@ export const NOT_CONNECTED_STATUSES = [
   "Call Cut",
   "switched off",
   "Invalid No",
+  "Invalid Number",
   "Called by mistake",
   "No Network",
   "wrong no.",
-  "no answer"
+  "wrong no",
+  "no answer",
+  "Not Picked Up",
+  "not picked up",
+  "Not Connected",
+  "not connected"
 ];
 
 export const OPTIONAL_COMPULSORY_STATUSES = [
@@ -176,13 +182,40 @@ export const OPTIONAL_COMPULSORY_STATUSES = [
   "wrong no",
   "no answer",
   "not picked up",
-  "Not Picked Up"
+  "Not Picked Up",
+  "Not Connected",
+  "not connected"
 ];
+
+export const classifyCallStatus = (rawStatus) => {
+  if (!rawStatus) return "NOT_CONNECTED";
+  const sLower = String(rawStatus).trim().toLowerCase();
+
+  if (
+    sLower.includes("not connected") ||
+    sLower.includes("busy") ||
+    sLower.includes("call cut") ||
+    sLower.includes("switched off") ||
+    sLower.includes("invalid") ||
+    sLower.includes("no answer") ||
+    sLower.includes("no network") ||
+    sLower.includes("wrong no") ||
+    sLower.includes("not picked") ||
+    sLower.includes("no response") ||
+    sLower.includes("not reachable") ||
+    sLower.includes("unreachable") ||
+    sLower === "na" ||
+    NOT_CONNECTED_STATUSES.some(ns => ns.toLowerCase() === sLower)
+  ) {
+    return "NOT_CONNECTED";
+  }
+
+  return "CONNECTED";
+};
 
 export const isNotConnectedStatus = (status) => {
   if (!status) return false;
-  const sLower = String(status).trim().toLowerCase();
-  return OPTIONAL_COMPULSORY_STATUSES.some(s => s.toLowerCase() === sLower);
+  return classifyCallStatus(status) === "NOT_CONNECTED";
 };
 
 export const findValueInLog = (obj, keysList) => {

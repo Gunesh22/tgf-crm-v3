@@ -148,10 +148,10 @@ export default function MobileEditModal({
     return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
   };
 
-  const currentCbStatus = edited.callbackStatus || "pending";
-  const hasActivePendingFollowup = !!edited.callbackDate && (currentCbStatus === "pending" || currentCbStatus === "rescheduled");
-  const isFollowupCompleted = currentCbStatus === "done" || currentCbStatus === "completed";
-  const isFollowupCancelled = currentCbStatus === "cancelled";
+  const rawCbStatus = String(edited.callbackStatus || "").toLowerCase().trim();
+  const isFollowupCompleted = rawCbStatus === "done" || rawCbStatus === "completed";
+  const isFollowupCancelled = rawCbStatus === "cancelled";
+  const hasActivePendingFollowup = !!edited.callbackDate && !isFollowupCompleted && !isFollowupCancelled;
 
   useEffect(() => {
     const norm = getNormalizedRow();
@@ -230,12 +230,13 @@ export default function MobileEditModal({
     const list = extractProgramsList(row || {});
     const firstProg = list[0] || freshNorm[calledForField] || freshNorm["Called For"] || freshNorm.calledFor || "";
     if (firstProg) {
+      const attId = activeAttenderId || freshNorm.attenderId || row?.attenderId || null;
       freshNorm[calledForField] = firstProg;
       freshNorm.calledFor = firstProg;
       freshNorm["Called For"] = firstProg;
       freshNorm.called_for = firstProg;
-      freshNorm.status = getProgramSpecificStatus(freshNorm, firstProg);
-      freshNorm.pipelineStage = getEffectiveStage(freshNorm, firstProg) || PIPELINE_STAGES.NEW_LEAD;
+      freshNorm.status = getProgramSpecificStatus(freshNorm, firstProg, attId);
+      freshNorm.pipelineStage = getEffectiveStage(freshNorm, firstProg, attId) || PIPELINE_STAGES.NEW_LEAD;
     }
     setSavedRow(freshNorm);
     setEdited(freshNorm);
@@ -247,19 +248,11 @@ export default function MobileEditModal({
 
   const handleSelectProgram = (programName) => {
     if (!programName) return;
-    const targetProg = String(programName).trim();
+    const targetProg = String(programName).split(",")[0].trim();
     setActiveProgram(targetProg);
 
-    const targetStatus = getProgramSpecificStatus(edited, targetProg);
-    const tempContact = {
-      ...edited,
-      [calledForField]: targetProg,
-      calledFor: targetProg,
-      "Called For": targetProg,
-      called_for: targetProg,
-      status: targetStatus
-    };
-    const targetStage = getEffectiveStage(tempContact, targetProg) || PIPELINE_STAGES.NEW_LEAD;
+    const attId = activeAttenderId || edited.attenderId || row?.attenderId || null;
+    const targetStatus = getProgramSpecificStatus(savedRow || row || edited, targetProg, attId);
 
     setEdited(prev => ({
       ...prev,
@@ -267,7 +260,6 @@ export default function MobileEditModal({
       calledFor: targetProg,
       "Called For": targetProg,
       called_for: targetProg,
-      pipelineStage: targetStage,
       status: targetStatus
     }));
   };
@@ -290,7 +282,8 @@ export default function MobileEditModal({
         next.called_for = val;
         if (val) {
           setActiveProgram(val);
-          next.pipelineStage = getEffectiveStage(prev, val) || PIPELINE_STAGES.NEW_LEAD;
+          const attId = activeAttenderId || prev.attenderId || row?.attenderId || null;
+          next.pipelineStage = getEffectiveStage(row || prev, val, attId) || PIPELINE_STAGES.NEW_LEAD;
         }
       }
       if (field === "status" && val === "Reg.Done") {
@@ -1283,7 +1276,7 @@ export default function MobileEditModal({
                 )}
 
                 {/* CASE D: No Follow-up set */}
-                {!edited.callbackDate && !edited.callbackStatus && (
+                {!edited.callbackDate && !isFollowupCompleted && !isFollowupCancelled && (
                   <>
                     {isAddingNext ? (
                       <div className="space-y-2.5 p-3 bg-indigo-50/80 border border-indigo-200 rounded-xl">

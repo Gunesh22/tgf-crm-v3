@@ -211,7 +211,7 @@ export const EditModal = ({
     setActiveProgram(targetProg);
 
     const attId = activeAttenderId || edited.attenderId || row?.attenderId || null;
-    const targetStatus = getProgramSpecificStatus(row || edited, targetProg, attId);
+    const targetStatus = getProgramSpecificStatus(savedRow || row || edited, targetProg, attId);
 
     setEdited(prev => ({
       ...prev,
@@ -1661,6 +1661,23 @@ export const EditModal = ({
               }
             });
           }
+          const progKey = String(updates["Called For"] || targetEdited["Called For"] || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+          const currentProgStates = { ...(targetEdited.programStates || {}) };
+          if (activeAttenderId && progKey) {
+            currentProgStates[activeAttenderId] = currentProgStates[activeAttenderId] || {};
+            currentProgStates[activeAttenderId][progKey] = {
+              attenderId: activeAttenderId,
+              attenderName: activeAttenderName || "",
+              programKey: progKey,
+              program: updates["Called For"] || targetEdited["Called For"] || "",
+              pipelineStage: res?.pipelineStage || targetEdited.pipelineStage,
+              status: updates.status || targetEdited.status || "",
+              remark: updates.remark || targetEdited.remark || "",
+              callbackDate: updates.callbackDate || targetEdited.callbackDate || null,
+              source: updates.source || targetEdited.source || "",
+              updatedAt: new Date().toISOString()
+            };
+          }
           finalAuthoritativePayload = {
             ...targetEdited,
             ...updates,
@@ -1668,6 +1685,7 @@ export const EditModal = ({
             pipelineStage: res?.pipelineStage || targetEdited.pipelineStage,
             attemptCount: res?.attemptCount ?? targetEdited.attemptCount,
             attenderStates: currentAttStates,
+            programStates: currentProgStates,
             history: mergedDocHistory.length > 0 ? mergedDocHistory : (updates.history || targetEdited.history || [])
           };
         }

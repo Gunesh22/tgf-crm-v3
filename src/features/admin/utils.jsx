@@ -10,10 +10,14 @@ export function parseTimestamp(t) {
   if (t instanceof Date) return isNaN(t.getTime()) ? null : t;
   if (typeof t.toDate === "function") return t.toDate();
   if (typeof t.toMillis === "function") return new Date(t.toMillis());
-  if (typeof t === "object" && (t.seconds !== undefined || t._seconds !== undefined)) {
-    const sec = t.seconds !== undefined ? t.seconds : t._seconds;
-    const nsec = t.nanoseconds !== undefined ? t.nanoseconds : (t._nanoseconds || 0);
-    return new Date(sec * 1000 + Math.round(nsec / 1000000));
+  if (typeof t === "object") {
+    if (t.seconds !== undefined || t._seconds !== undefined) {
+      const sec = t.seconds !== undefined ? t.seconds : t._seconds;
+      const nsec = t.nanoseconds !== undefined ? t.nanoseconds : (t._nanoseconds || 0);
+      return new Date(sec * 1000 + Math.round(nsec / 1000000));
+    }
+    const inner = t.date || t.$date || t.value || t.iso || t.formatted || t.startDate || t.endDate;
+    if (inner && inner !== t) return parseTimestamp(inner);
   }
   if (typeof t === "number") return new Date(t);
   if (typeof t === "string") {

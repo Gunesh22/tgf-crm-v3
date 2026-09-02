@@ -157,7 +157,7 @@ export function getProgramContext(contact = {}, programName = "", attenderId = n
   const targetKey = normalizeProgramKey(targetProg);
 
   // Stage resolution using pipelineEngine
-  const stage = getEffectiveStage(contact, targetProg) || PIPELINE_STAGES.NEW_LEAD;
+  const stage = getEffectiveStage(contact, targetProg, attenderId) || PIPELINE_STAGES.NEW_LEAD;
   
   // Registration resolution
   const regInfo = getProgramRegistrationInfo(contact, targetProg);

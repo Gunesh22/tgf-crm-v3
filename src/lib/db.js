@@ -1,3 +1,5 @@
+import { normalizeProgramStates } from "../utils/pipelineEngine.js";
+
 export const normalizePhone = (p) => String(p || '').replace(/\D/g, '');
 
 export const INCOMING_PROGRAM_ID = "incoming";
@@ -312,15 +314,21 @@ export const subscribeToCallLogs = (attenderId, attenderName, callback, onError)
   let lastDataJson = null;
   const cacheKey = `attender_call_logs_${attenderId}`;
 
+  const normalizeList = (list) => {
+    if (!Array.isArray(list)) return [];
+    return list.map(c => normalizeProgramStates(c));
+  };
+
   // 1. INSTANT 0ms RENDERING FROM IN-MEMORY CACHE OR LOCAL STORAGE
   let cacheLoaded = false;
   
   if (memoryCache.has(attenderId)) {
     const cachedMemory = memoryCache.get(attenderId);
     if (Array.isArray(cachedMemory) && cachedMemory.length > 0) {
-      console.log(`%c[0ms MEMORY CACHE] Loaded ${cachedMemory.length} contacts for ${attenderName || attenderId}`, "color: #10b981; font-weight: bold");
-      lastDataJson = JSON.stringify(cachedMemory);
-      callback(cachedMemory);
+      const normMem = normalizeList(cachedMemory);
+      console.log(`%c[0ms MEMORY CACHE] Loaded ${normMem.length} contacts for ${attenderName || attenderId}`, "color: #10b981; font-weight: bold");
+      lastDataJson = JSON.stringify(normMem);
+      callback(normMem);
       cacheLoaded = true;
     }
   }
@@ -331,9 +339,10 @@ export const subscribeToCallLogs = (attenderId, attenderName, callback, onError)
       if (cachedData) {
         const parsed = JSON.parse(cachedData);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          console.log(`%c[0ms LOCAL CACHE] Loaded ${parsed.length} contacts from local storage`, "color: #10b981; font-weight: bold");
-          lastDataJson = JSON.stringify(parsed);
-          callback(parsed);
+          const normParsed = normalizeList(parsed);
+          console.log(`%c[0ms LOCAL CACHE] Loaded ${normParsed.length} contacts from local storage`, "color: #10b981; font-weight: bold");
+          lastDataJson = JSON.stringify(normParsed);
+          callback(normParsed);
           cacheLoaded = true;
         }
       }
@@ -354,7 +363,8 @@ export const subscribeToCallLogs = (attenderId, attenderName, callback, onError)
     try {
       const res = await getAssignedContacts(attenderId);
       if (isSubscribed) {
-        const data = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        const rawData = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        const data = normalizeList(rawData);
         memoryCache.set(attenderId, data);
 
         const newJson = JSON.stringify(data);
@@ -578,6 +588,41 @@ export const assignContactsToAttender = async () => {};
 export const claimContact = async () => {};
 export const removeAttenderFromContact = async () => {};
 export const claimCRMContact = async () => {};
+export function updateLocalContactCache(contact) {
+  if (!contact || typeof contact !== 'object') return;
+  const normalized = normalizeProgramStates(contact);
+  const contactId = String(normalized._id || normalized.id || "");
+  const phone = String(normalized.Phone || normalized.phone || normalized.Mobile || normalized.mobile || "");
+
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("attender_call_logs_")) {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          let modified = false;
+          const newList = list.map(item => {
+            const iId = String(item._id || item.id || "");
+            const iPhone = String(item.Phone || item.phone || item.Mobile || item.mobile || "");
+            if ((contactId && iId === contactId) || (phone && iPhone === phone)) {
+              modified = true;
+              return { ...item, ...normalized };
+            }
+            return item;
+          });
+          if (modified) {
+            safeSetLocalStorage(key, newList);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[DB Cache Sync Error]", e);
+  }
+}
+
 export const getSingleContact = async (contactIdOrPhone) => {
   if (!contactIdOrPhone) return null;
   try {
@@ -585,7 +630,12 @@ export const getSingleContact = async (contactIdOrPhone) => {
     const isPhone = /^\+?\d{7,15}$/.test(cleanStr.replace(/[\s-]/g, ''));
     const param = isPhone ? `phone=${encodeURIComponent(cleanStr)}` : `id=${encodeURIComponent(cleanStr)}`;
     const res = await fetchAPI(`/api/contacts/get-single?${param}`);
-    return (res && res.success) ? res.data : null;
+    if (res && res.success && res.data) {
+      const norm = normalizeProgramStates(res.data);
+      updateLocalContactCache(norm);
+      return norm;
+    }
+    return null;
   } catch (err) {
     console.error(`[DB] Failed to fetch single contact:`, err);
     return null;

@@ -642,19 +642,28 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
     const todayStr = getLocalDateStr(new Date());
 
     filteredLogs.forEach(l => {
-      const cbDateRaw = l.callbackDate || l.callback_date;
+      let cbDateRaw = l.callbackDate || l.callback_date;
+      if (!cbDateRaw && l.attenderStates) {
+        Object.values(l.attenderStates).forEach(st => {
+          if (st?.callbackDate) cbDateRaw = st.callbackDate;
+        });
+      }
       if (!cbDateRaw) return;
+
+      const cbStatus = String(l.callbackStatus || l.callback_status || "").toLowerCase().trim();
+      const isCompleted = cbStatus === "completed" || cbStatus === "done" || cbStatus === "called";
+      const isCancelled = cbStatus === "cancelled";
+
+      if (isCancelled) return;
+
       totalScheduled++;
 
-      const cbStatus = String(l.callbackStatus || l.callback_status || "").toLowerCase();
-      const isCompleted = cbStatus === "completed" || cbStatus === "done" || cbStatus === "called";
-
       const parsedCb = parseTimestamp(cbDateRaw);
-      const cbDateStr = parsedCb ? getLocalDateStr(parsedCb) : String(cbDateRaw).slice(0, 10);
+      const cbDateStr = parsedCb ? getLocalDateStr(parsedCb) : "";
 
       if (isCompleted) {
         completed++;
-      } else if (cbDateStr < todayStr) {
+      } else if (cbDateStr && cbDateStr < todayStr) {
         overdue++;
       } else {
         upcoming++;
@@ -905,18 +914,18 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
         {[
           { label: "Total Calls", value: totalPhysicalCalls, sub: "Physical call events (contact.history)" },
           { 
-            label: "Registered People", 
-            value: registeredPeopleList.length, 
+            label: "Total Registrations", 
+            value: programRegistrationsList.length, 
             color: "text-emerald-600", 
-            sub: "Unique contacts with a program registration", 
+            sub: "Total program registrations by registration ID", 
             inspectable: true,
             onClickInspect: () => {
               setInspectSearch("");
               setInspectModal({
-                title: "Registered People — Unique Contacts",
-                subtitle: "Unique contacts having at least one active program registration",
-                type: "registered_people",
-                items: registeredPeopleList
+                title: "Program Registrations — By Registration ID",
+                subtitle: "Total program registrations tracked by unique registration ID",
+                type: "registered_programs",
+                items: programRegistrationsList
               });
             }
           },

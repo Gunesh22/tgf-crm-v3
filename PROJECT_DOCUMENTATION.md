@@ -26,9 +26,9 @@ Never calculate one metric from the other unless explicitly required by the docu
 ---
 
 ## Document Metadata
-- **Documentation Version**: 3.2.0 (Master CRM Architecture V3 — Strict Attender Isolation & Shared Call History)
-- **Last Updated**: September 1, 2026
-- **Project Version**: 3.2.0 (`tgf-crm-v3`)
+- **Documentation Version**: 3.3.0 (Master CRM Architecture V3 — Unified Pipeline Engine & Call Metric Reconciliation)
+- **Last Updated**: September 2, 2026
+- **Project Version**: 3.3.0 (`tgf-crm-v3`)
 - **Primary Repository**: [https://github.com/Gunesh22/tgf-crm-v3.git](https://github.com/Gunesh22/tgf-crm-v3.git)
 
 ---
@@ -467,6 +467,20 @@ The CRM enforces absolute per-attender working state isolation while maintaining
    - Transformed into a 100% read-only informational display indicating other attenders' activity (e.g., `"This contact is also being handled by Attender A (Manisha)"`).
    - Purely informational: **NEVER** mutates or auto-fills form inputs.
 
+5. **Unified Call Status Classification & Dashboard Analytics (`src/features/attender/utils.js`)**:
+   - `classifyCallStatus(status)` provides a single canonical logic for determining if a call status is `CONNECTED` vs `NOT_CONNECTED`.
+   - Expanded `NOT_CONNECTED_STATUSES` to include `"Not Connected"`, `"not connected"`, `"Not Picked Up"`, `"not picked up"`, `"Busy"`, `"Switched Off"`, etc., eliminating metric Inflation in `MyPerformanceDashboard.jsx`.
+   - Default date range filter in `MyPerformanceDashboard.jsx` set to **`"today"`** for immediate daily focus.
+
+6. **Pipeline Key Normalization & Composite State Resolution (`src/utils/pipelineEngine.js`)**:
+   - Program keys normalized with `replace(/[\s_-]+/g, "")` to guarantee key equivalence between `"yoga-1-yr"`, `"yoga_1_yr"`, and `"yoga1yr"`.
+   - Logical state identity resolved cleanly via `(contact._id, calledForKey, attenderId)`.
+   - `normalizeProgramStates` merges pre-existing `programStates` and `programs` maps with incoming call history, preserving stage integrity and preventing data loss.
+
+7. **Robust Follow-Up Date Parsing & Visibility Protections (`CallEntryTab.jsx` & `MobileEditModal.jsx`)**:
+   - `formatFollowupDateStr` recursively extracts date values from raw objects (`.date`, `.$date`, `.callbackDate`, `.seconds`, `.iso`), completely eliminating `[object Object]` UI rendering errors.
+   - `hasActivePendingFollowup` evaluates to `true` whenever a `callbackDate` is present on a lead (unless explicitly completed or cancelled), ensuring the follow-up management card is always accessible.
+
 ---
 
 ## 10. REPORTING & ANALYTICS — THREE SEPARATE METRIC CATEGORIES
@@ -568,6 +582,8 @@ Located in `<SettingsTab />` and sub-cards:
 |---|---|---|
 | `ensureIndexes(db)` | `api/lib/mongodb.js` | Verifies and builds all MongoDB index suites including unique compound constraints. |
 | `logCall(...)` | `src/lib/db.js` | Frontend client wrapper for calling `/api/contacts/log-call`. |
+| `classifyCallStatus(status)` | `src/features/attender/utils.js` | Standardizes call outcome classification into `CONNECTED` vs `NOT_CONNECTED`. |
+| `normalizeKey(str)` | `src/utils/pipelineEngine.js` | Normalizes program keys by removing spaces, hyphens, and underscores for symmetrical lookups. |
 | `checkGlobalDuplicate(...)` | `src/lib/db.js` | 0ms local cache + instant database duplicate checker. |
 | `getRegistrationLeadOwner(...)` | `AbhivyaktiTab.jsx` | Attribute shared registrations between primary nurturers and assisting attenders. |
 
@@ -642,12 +658,12 @@ graph TD
 ## 21. TESTING
 
 ### Automated Unit & Behavioral Test Suite
-Run the full 78-test verification suite:
+Run the full 124-test verification suite:
 ```bash
 npm test
 ```
 This executes:
-- `tests/pipelineEngine.test.js` (49 pipeline transition & rule tests)
+- `tests/pipelineEngine.test.js` (95 pipeline transition, key normalization & rule tests)
 - `tests/allProductionAuditTests.test.js` (29 behavioral & audit domain tests)
 
 ### Read-Only Reconciliation & Migration Scripts
