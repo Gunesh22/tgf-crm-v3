@@ -257,8 +257,8 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
 
         <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
           {isLoading ? (
-            <div className="h-full flex flex-col items-center justify-center gap-3 py-16">
-              <LottieAnimation animationData={dataResearchAnimation} className="w-64 h-64 sm:w-80 sm:h-80" />
+            <div className="h-full flex flex-col items-center justify-center gap-2 py-12">
+              <LottieAnimation animationData={dataResearchAnimation} className="w-40 h-40 sm:w-48 sm:h-48" />
               <p className="text-sm font-bold text-slate-700">Syncing Admin Data Hub…</p>
             </div>
           ) : (
@@ -297,8 +297,8 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
               )}
               {activeTab === "monthly" && (
                 (callLogsLoading && callLogs.length === 0) ? (
-                  <div className="h-full flex flex-col items-center justify-center gap-3 py-20">
-                    <LottieAnimation animationData={dataResearchAnimation} className="w-56 h-56 sm:w-72 sm:h-72" />
+                  <div className="h-full flex flex-col items-center justify-center gap-2 py-12">
+                    <LottieAnimation animationData={dataResearchAnimation} className="w-36 h-36 sm:w-44 sm:h-44" />
                     <p className="text-slate-600 font-bold text-xs">Loading analytics database...</p>
                   </div>
                 ) : (

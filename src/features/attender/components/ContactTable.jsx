@@ -408,24 +408,22 @@ export function ContactTable({
                         </p>
                       </>
                     ) : (
-                      <>
-                        <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-2 border border-slate-200">
-                          <Users size={20} />
-                        </div>
-                        <p className="text-sm font-bold text-slate-700">No matching contacts found</p>
-                        <p className="text-xs text-slate-500 max-w-sm mt-1 mb-3 leading-relaxed">
-                          No contacts match your active search or filter criteria.
+                      <div className="flex flex-col items-center justify-center py-4">
+                        <LottieAnimation animationData={customerServiceAnimation} className="w-28 h-28 sm:w-36 sm:h-36 mb-1" />
+                        <p className="text-sm font-bold text-slate-800">No matching contacts found</p>
+                        <p className="text-xs text-slate-500 max-w-sm mt-0.5 mb-3 leading-relaxed">
+                          No contacts match your active search query or filter criteria.
                         </p>
                         {onClearFilters && (
                           <button
                             type="button"
                             onClick={onClearFilters}
-                            className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 active:scale-95 text-slate-700 font-bold text-xs rounded-lg transition"
+                            className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 font-bold text-xs rounded-lg transition border border-indigo-200 cursor-pointer shadow-2xs"
                           >
-                            Clear Filters
+                            Clear Search & Filters
                           </button>
                         )}
-                      </>
+                      </div>
                     )}
                   </div>
                 </td>
