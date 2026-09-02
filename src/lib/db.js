@@ -58,6 +58,7 @@ export const globalSearchContacts = async (query) => {
 };
 
 export const updateCallLog = async (contactId, updates = {}, attenderId, attenderName, context = {}) => {
+  const resolvedCalledFor = updates["Called For"] || updates.calledFor || context["Called For"] || context.calledFor || "";
   return fetchAPI(`/api/contacts/log-call`, "POST", {
     contactId,
     attenderId,
@@ -65,8 +66,9 @@ export const updateCallLog = async (contactId, updates = {}, attenderId, attende
     status: updates.status,
     remark: updates.remark,
     callbackDate: updates.callbackDate,
-    calledFor: updates.calledFor || updates["Called For"] || context.calledFor || "",
-    ...updates
+    ...updates,
+    calledFor: resolvedCalledFor,
+    "Called For": resolvedCalledFor
   });
 };
 
@@ -476,14 +478,15 @@ export const addIncomingCallLog = async (attenderId, attenderName, updates = {},
   return res;
 };
 
-export const overridePipelineStage = async (contactId, newStage, attenderId, attenderName, role = "attender", reason = "") => {
+export const overridePipelineStage = async (contactId, newStage, attenderId, attenderName, role = "attender", reason = "", program = "") => {
   const payload = {
     contactId,
     newStage,
     changedByAttenderId: attenderId,
     changedBy: attenderName,
     role,
-    reason
+    reason,
+    program
   };
   return fetchAPI(`/api/contacts/override-stage`, "POST", payload);
 };

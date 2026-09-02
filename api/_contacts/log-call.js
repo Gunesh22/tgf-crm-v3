@@ -435,10 +435,11 @@ export async function executeLogCall(db, payload) {
   );
 
   // ── Atomic programRelationships array swap ─────────────────────────────
-  if (hasProgramRelUpdate) {
+  if (targetCalledFor && calledForKey) {
     const relEntry = {
       program:        targetCalledFor,
-      status:         evalResult.programRelationshipUpdate.status,
+      status:         evalResult.programRelationshipUpdate ? evalResult.programRelationshipUpdate.status : (status || evalResult.pipelineStage),
+      pipelineStage:  evalResult.pipelineStage,
       calledForKey,
       updatedAt:      nowIso,
       evidenceCallId: callId,
@@ -463,7 +464,11 @@ export async function executeLogCall(db, payload) {
 
   // ── Registrations collection ───────────────────────────────────────────
   if (status === "Reg.Done") {
-    const regId = `reg_${contactStrId}_${calledForKey}`;
+    const cleanRegCalledFor = targetCalledFor.includes(",")
+      ? targetCalledFor.split(",")[0].trim()
+      : targetCalledFor;
+    const regCalledForKey = normalizeCalledForKey(cleanRegCalledFor);
+    const regId = `reg_${contactStrId}_${regCalledForKey}`;
     try {
       await db.collection('registrations').updateOne(
         { registrationId: regId },
@@ -471,8 +476,8 @@ export async function executeLogCall(db, payload) {
           $set: {
             registrationId: regId,
             contactId:   contactStrId,
-            calledForKey,
-            calledFor:   targetCalledFor,
+            calledForKey: regCalledForKey,
+            calledFor:   cleanRegCalledFor,
             name:        existingContact.Name || existingContact.name || rootUpdates.Name || '',
             phone:       existingContact.Phone || existingContact.phone || rootUpdates.Phone || '',
             attenderId,
@@ -486,9 +491,9 @@ export async function executeLogCall(db, payload) {
         { upsert: true }
       );
       const regRelEntry = {
-        program: targetCalledFor,
+        program: cleanRegCalledFor,
         status:  'Registered / Won',
-        calledForKey,
+        calledForKey: regCalledForKey,
         registrationId: regId,
         updatedAt: nowIso,
         evidenceCallId: callId,
@@ -496,7 +501,7 @@ export async function executeLogCall(db, payload) {
       const contactQuery = { $or: [{ _id: queryId }, { id: contactId }] };
       await db.collection('contacts').updateOne(
         contactQuery,
-        { $pull: { programRelationships: { calledForKey } } }
+        { $pull: { programRelationships: { calledForKey: regCalledForKey } } }
       );
       await db.collection('contacts').updateOne(
         contactQuery,
@@ -507,7 +512,7 @@ export async function executeLogCall(db, payload) {
       );
     } catch (regErr) {
       if (regErr.code === 11000 || regErr.message?.includes('E11000')) {
-        console.warn('[REGISTRATION DUP] Gracefully handled duplicate for:', contactStrId, calledForKey);
+        console.warn('[REGISTRATION DUP] Gracefully handled duplicate for:', contactStrId, regCalledForKey);
       } else {
         throw regErr;
       }

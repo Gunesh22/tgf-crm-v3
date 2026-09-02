@@ -305,8 +305,8 @@ export default function EditHistoryModal({
                         options={CALLED_FOR_OPTIONS}
                         selected={String(h.calledFor || "")}
                         onChange={(val) => handleChange(h.id, "calledFor", val)}
-                        placeholder="Search & select multiple..."
-                        isMulti={true}
+                        placeholder="Search & select program..."
+                        isMulti={false}
                         colorClass="blue"
                       />
                     </div>

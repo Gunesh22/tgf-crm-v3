@@ -61,7 +61,7 @@ function parseTimestamp(t) {
   return null;
 }
 
-function enrichLogsWithCallbackFlags(logs) {
+function enrichLogsWithCallbackFlags(logs, activeAttenderCtx) {
   if (!Array.isArray(logs)) return [];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -79,11 +79,16 @@ function enrichLogsWithCallbackFlags(logs) {
 
   return uniqueLogs.map(log => {
     let shouldBeDue = false;
-    if (log.callbackDate) {
-      const cbDate = parseTimestamp(log.callbackDate);
+    const view = getContactView(log, activeAttenderCtx);
+    const cbStatus = String(view.callbackStatus || log.callbackStatus || "").trim().toLowerCase();
+    const isDoneOrCancelled = cbStatus === "done" || cbStatus === "completed" || cbStatus === "cancelled";
+    const rawCbDate = view.callbackDate || log.callbackDate;
+
+    if (rawCbDate && !isDoneOrCancelled) {
+      const cbDate = parseTimestamp(rawCbDate);
       if (cbDate && !isNaN(cbDate.getTime())) {
         cbDate.setHours(0, 0, 0, 0);
-        shouldBeDue = cbDate <= today && log.callbackStatus !== "done" && log.callbackStatus !== "cancelled";
+        shouldBeDue = cbDate <= today;
       }
     }
     if (log._callbackDue === shouldBeDue) return log;
@@ -304,7 +309,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
       attenderId,
       attenderName,
       (logs) => {
-        setCallLogs(enrichLogsWithCallbackFlags(logs));
+        setCallLogs(enrichLogsWithCallbackFlags(logs, attenderId || attenderName));
         setIsLoadingProgram(false);
         setLoadError(null);
       },

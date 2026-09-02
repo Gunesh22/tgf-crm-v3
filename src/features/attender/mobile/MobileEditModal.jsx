@@ -27,6 +27,9 @@ import SharedBanner from "../components/edit-modal/SharedBanner";
 import HistoryTimeline from "../components/edit-modal/HistoryTimeline";
 import CityAutofillInput from "../components/edit-modal/CityAutofillInput";
 import EditHistoryModal from "../components/edit-modal/EditHistoryModal";
+import ProgramContextSelector from "../components/edit-modal/ProgramContextSelector";
+import { extractProgramsList, getProgramContext } from "../utils/programContextHelper";
+import { getEffectiveStage, PIPELINE_STAGES, getProgramSpecificStatus } from "../../../utils/pipelineEngine";
 
 function parseTimestamp(t) {
   if (!t) return null;
@@ -71,6 +74,10 @@ export default function MobileEditModal({
 
     const attState = findMatchingAttenderState(normalized.attenderStates, attenderId, attenderName);
     
+    const rootCallbackDate = attState?.callbackDate || row.callbackDate || row["Callback Date"] || row.callback_date || row.nextCallDate || row.next_call_date || row.callback || null;
+    const rootCallbackTime = attState?.callbackTime || row.callbackTime || row["Callback Time"] || row.callback_time || "";
+    const rootCallbackStatus = attState?.callbackStatus || row.callbackStatus || (rootCallbackDate ? "pending" : null);
+
     if (attState) {
       normalized["Called For"] = attState.calledFor || attState["Called For"] || "";
       normalized.calledFor = normalized["Called For"];
@@ -78,8 +85,9 @@ export default function MobileEditModal({
       normalized.source = normalized.Source;
       normalized.status = attState.status || "";
       normalized.remark = "";
-      normalized.callbackDate = attState.callbackDate || null;
-      normalized.callbackStatus = attState.callbackStatus || (attState.callbackDate ? "pending" : null);
+      normalized.callbackDate = rootCallbackDate;
+      normalized.callbackStatus = rootCallbackStatus;
+      normalized.callbackTime = rootCallbackTime;
     } else {
       normalized["Called For"] = "";
       normalized.calledFor = "";
@@ -87,8 +95,9 @@ export default function MobileEditModal({
       normalized.source = rootSource;
       normalized.status = "";
       normalized.remark = "";
-      normalized.callbackDate = null;
-      normalized.callbackStatus = null;
+      normalized.callbackDate = rootCallbackDate;
+      normalized.callbackStatus = rootCallbackStatus;
+      normalized.callbackTime = rootCallbackTime;
     }
 
     normalized.callStatus = "";
@@ -209,14 +218,59 @@ export default function MobileEditModal({
   const [showCalledForPrompt, setShowCalledForPrompt] = useState(false);
   const [promptSelection, setPromptSelection] = useState("");
   const [pendingSave, setPendingSave] = useState(false);
+  const programsList = useMemo(() => extractProgramsList(edited), [edited]);
+
+  const [activeProgram, setActiveProgram] = useState(() => {
+    const list = extractProgramsList(row || {});
+    return list[0] || row[calledForField] || row["Called For"] || row.calledFor || "";
+  });
+
   useEffect(() => {
     const freshNorm = getNormalizedRow();
+    const list = extractProgramsList(row || {});
+    const firstProg = list[0] || freshNorm[calledForField] || freshNorm["Called For"] || freshNorm.calledFor || "";
+    if (firstProg) {
+      freshNorm[calledForField] = firstProg;
+      freshNorm.calledFor = firstProg;
+      freshNorm["Called For"] = firstProg;
+      freshNorm.called_for = firstProg;
+      freshNorm.status = getProgramSpecificStatus(freshNorm, firstProg);
+      freshNorm.pipelineStage = getEffectiveStage(freshNorm, firstProg) || PIPELINE_STAGES.NEW_LEAD;
+    }
     setSavedRow(freshNorm);
-    setEdited(prev => ({
-      ...freshNorm,
-      remark: prev?.remark || ""
-    }));
+    setEdited(freshNorm);
+    setShowCalledForPrompt(false);
+    setPromptSelection("");
+    setPendingSave(false);
+    setActiveProgram(firstProg);
   }, [row]);
+
+  const handleSelectProgram = (programName) => {
+    if (!programName) return;
+    const targetProg = String(programName).trim();
+    setActiveProgram(targetProg);
+
+    const targetStatus = getProgramSpecificStatus(edited, targetProg);
+    const tempContact = {
+      ...edited,
+      [calledForField]: targetProg,
+      calledFor: targetProg,
+      "Called For": targetProg,
+      called_for: targetProg,
+      status: targetStatus
+    };
+    const targetStage = getEffectiveStage(tempContact, targetProg) || PIPELINE_STAGES.NEW_LEAD;
+
+    setEdited(prev => ({
+      ...prev,
+      [calledForField]: targetProg,
+      calledFor: targetProg,
+      "Called For": targetProg,
+      called_for: targetProg,
+      pipelineStage: targetStage,
+      status: targetStatus
+    }));
+  };
 
   const [globalDup, setGlobalDup] = useState(null);
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
@@ -226,7 +280,25 @@ export default function MobileEditModal({
   const isSavingRef = useRef(false);
 
   const handleChange = (field, val) => {
-    setEdited(prev => ({ ...prev, [field]: val }));
+    setEdited(prev => {
+      const next = { ...prev, [field]: val };
+      const isCalledFor = field === calledForField ||
+        ["called for", "called_for", "calledfor"].includes(String(field || "").toLowerCase());
+      if (isCalledFor) {
+        next["Called For"] = val;
+        next.calledFor = val;
+        next.called_for = val;
+        if (val) {
+          setActiveProgram(val);
+          next.pipelineStage = getEffectiveStage(prev, val) || PIPELINE_STAGES.NEW_LEAD;
+        }
+      }
+      if (field === "status" && val === "Reg.Done") {
+        next.callbackDate = null;
+        next.callbackStatus = null;
+      }
+      return next;
+    });
   };
 
   const handleCallTypeChange = (ct) => {
@@ -743,6 +815,16 @@ export default function MobileEditModal({
                 </div>
               </div>
 
+              {/* Multi-Program Context Selector */}
+              <ProgramContextSelector
+                contact={row || edited}
+                programsList={programsList}
+                activeProgram={activeProgram}
+                onSelectProgram={handleSelectProgram}
+                attenderId={attenderId}
+                disabled={!getEditable(calledForField)}
+              />
+
               {/* Called For */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
@@ -750,10 +832,10 @@ export default function MobileEditModal({
                 </label>
                 <SearchableDropdown
                   options={CALLED_FOR_OPTIONS}
-                  selected={String(edited[calledForField] || "")}
+                  selected={String(activeProgram || (edited[calledForField] ? String(edited[calledForField]).split(",")[0].trim() : ""))}
                   onChange={val => handleChange(calledForField, val)}
                   placeholder="Search & select..."
-                  isMulti={true}
+                  isMulti={false}
                   colorClass="blue"
                   disabled={!getEditable(calledForField)}
                 />

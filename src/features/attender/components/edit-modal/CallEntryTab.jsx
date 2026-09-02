@@ -2,11 +2,12 @@ import React, { useRef, useMemo, useState, useEffect } from "react";
 import { toast } from "react-hot-toast";
 import {
   Phone, Tag, CheckCircle2, AlertCircle, MessageSquare,
-  CalendarDays, Flame, HelpCircle, Bell, ArrowRightLeft, Shield, Info, History, RotateCw, Loader, X, Check, Plus, Undo2, Clock
+  CalendarDays, Flame, HelpCircle, Bell, ArrowRightLeft, Shield, Info, History, RotateCw, Loader, X, Check, Plus, Undo2, Clock, Pencil
 } from "lucide-react";
 import SearchableDropdown from "./SearchableDropdown";
 import HistoryTimeline from "./HistoryTimeline";
 import StageInfoModal from "./StageInfoModal";
+import ProgramContextSelector from "./ProgramContextSelector";
 import {
   CALL_DIRECTION_OPTIONS,
   CALL_PURPOSE_OPTIONS,
@@ -54,7 +55,10 @@ export const CallEntryTab = ({
   activeAttenderId = "attender",
   activeAttenderName = "Attender",
   isAdmin = false,
-  onRefreshLead
+  onRefreshLead,
+  programsList = [],
+  activeProgram = "",
+  onSelectProgram = () => {}
 }) => {
   const newNoteRef = useRef(null);
 
@@ -135,7 +139,8 @@ export const CallEntryTab = ({
         activeAttenderId,
         activeAttenderName,
         isAdmin ? "admin" : "attender",
-        overrideReason
+        overrideReason,
+        activeProgram
       );
       if (res && res.success) {
         toast.success(`Pipeline stage updated to "${res.newStage}"`);
@@ -171,7 +176,7 @@ export const CallEntryTab = ({
   // Filter Sales Called For options (exclude Query/Reminder)
   const salesCalledForOptions = CALLED_FOR_OPTIONS.filter(o => o !== "Reminder" && o !== "Query");
 
-  const selectedProgram = String(edited[calledForField] || "").trim();
+  const selectedProgram = String(activeProgram || edited[calledForField] || "").trim();
 
   const evalResult = evaluatePipeline(
     edited,
@@ -184,13 +189,15 @@ export const CallEntryTab = ({
     }
   );
 
-  // Direct DB pipeline stage display for modal header (previews evalResult stage only when user selects today's outcome)
-  const dbStage = getEffectiveStage(edited, selectedProgram) || edited.pipelineStage || row.pipelineStage;
-  const displayStage = (edited.status && edited.callStatus) ? evalResult.pipelineStage : dbStage;
+  const dbStage = getEffectiveStage(edited, selectedProgram) || PIPELINE_STAGES.NEW_LEAD;
+  const displayStage = evalResult.pipelineStage || dbStage;
   const stageConfig = getPipelineStageConfig(displayStage);
 
   // Whether this contact qualifies for "Convert to Sales" (only for new/query-only contacts)
-  const showConvertToSales = useMemo(() => shouldShowConvertToSales(edited), [edited]);
+  const showConvertToSales = useMemo(() => {
+    const prog = activeProgram || selectedProgram || String(edited[calledForField] || "").split(",")[0].trim();
+    return shouldShowConvertToSales(edited, prog);
+  }, [edited, activeProgram, selectedProgram, calledForField]);
 
   const programRegInfo = useMemo(() => {
     const rawProgram = selectedProgram || String(edited[calledForField] || "").trim();
@@ -339,35 +346,31 @@ export const CallEntryTab = ({
     ? lastCall.status
     : null;
 
-  console.log("ACTUAL CURRENT STAGE BADGE:", {
-    rowPipelineStage: row?.pipelineStage,
-    editedPipelineStage: edited?.pipelineStage,
-    dbStage,
-    displayStage,
-    stageConfigLabel: stageConfig?.label
-  });
+
 
   const [showStageInfoModal, setShowStageInfoModal] = useState(false);
 
   return (
-    <div className="space-y-5 md:space-y-6 text-xs bg-white">
-      
+    <div className="space-y-4 text-xs bg-white">
+
+      {/* --- MULTI-PROGRAM CONTEXT SELECTOR --- */}
+      <ProgramContextSelector
+        contact={row || edited}
+        programsList={programsList}
+        activeProgram={activeProgram}
+        onSelectProgram={onSelectProgram}
+        attenderId={activeAttenderId}
+        disabled={!getEditable(calledForField)}
+      />
+
       {/* 0. READ-ONLY HEADER: PIPELINE STAGE & LAST CALL CONTEXT */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50/80 border border-slate-200/60 rounded-xl">
-        <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
-          <Shield size={14} className="text-indigo-600 shrink-0" />
-          <span>Current Stage:</span>
+      <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-50/80 border border-slate-200/60 rounded-xl">
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+          <Shield size={14} className="text-slate-500 shrink-0" />
+          <span>Current Stage{activeProgram ? ` — ${activeProgram}` : ""}:</span>
           <span className={`px-2.5 py-0.5 rounded-lg text-xs font-bold border ${stageConfig.badge}`}>
             {stageConfig.label}
           </span>
-          <button
-            type="button"
-            onClick={() => setShowStageInfoModal(true)}
-            className="w-5 h-5 rounded-full bg-indigo-50 hover:bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-[11px] border border-indigo-200 transition-all cursor-pointer hover:scale-105 shrink-0"
-            title="Click for information about all pipeline stages"
-          >
-            i
-          </button>
 
           {/* Compact Change Stage Popover */}
           <div className="relative inline-block ml-1">
@@ -378,11 +381,10 @@ export const CallEntryTab = ({
                 setSelectedTargetStage(null);
                 setOverrideReason("");
               }}
-              className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
-              title="Manually change or reopen contact pipeline stage"
+              className="p-1 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-600 hover:text-indigo-800 border border-indigo-200/80 transition-all inline-flex items-center justify-center cursor-pointer shadow-2xs shrink-0"
+              title="Change pipeline stage"
             >
-              <RotateCw size={11} className={showStageOverridePicker ? "rotate-180 transition-transform" : ""} />
-              <span>{showStageOverridePicker ? "Close" : "Change Stage"}</span>
+              {showStageOverridePicker ? <X size={11} /> : <Pencil size={11} />}
             </button>
 
             {/* POPOVER DROPDOWN */}
@@ -495,7 +497,7 @@ export const CallEntryTab = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           {activePrimaryResult ? (
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs animate-fade-in">
               <CheckCircle2 size={13} className="text-emerald-600" />
@@ -529,7 +531,6 @@ export const CallEntryTab = ({
         </div>
       </div>
 
-
       {/* 1. CALL DIRECTION & CALL PURPOSE ROW */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center relative z-20">
         {/* Call Direction */}
@@ -547,8 +548,8 @@ export const CallEntryTab = ({
                   onClick={() => handleCallTypeChange(opt)}
                   className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all cursor-pointer capitalize ${
                     isSelected
-                      ? "bg-slate-900 text-white border-slate-900 shadow-2xs"
-                      : "bg-transparent text-slate-600 border-transparent hover:text-slate-900"
+                      ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs font-extrabold"
+                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 font-medium"
                   }`}
                 >
                   {opt}
@@ -585,10 +586,10 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={salesCalledForOptions}
-              selected={String(edited[calledForField] || "")}
+              selected={String(activeProgram || (edited[calledForField] ? String(edited[calledForField]).split(",")[0].trim() : ""))}
               onChange={val => handleChange(calledForField, val)}
               placeholder="Select program..."
-              isMulti={true}
+              isMulti={false}
               colorClass="indigo"
               disabled={!getEditable(calledForField)}
             />
@@ -666,10 +667,10 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={salesCalledForOptions}
-              selected={String(edited[calledForField] || "")}
+              selected={String(activeProgram || (edited[calledForField] ? String(edited[calledForField]).split(",")[0].trim() : ""))}
               onChange={val => handleChange(calledForField, val)}
               placeholder="Which program is this reminder for?"
-              isMulti={true}
+              isMulti={false}
               colorClass="sky"
               disabled={!getEditable(calledForField)}
             />
@@ -709,7 +710,7 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={salesCalledForOptions}
-              selected={String(edited[calledForField] || "")}
+              selected={String(activeProgram || (edited[calledForField] ? String(edited[calledForField]).split(",")[0].trim() : ""))}
               onChange={val => handleChange(calledForField, val)}
               placeholder="Which program is this query about?"
               colorClass="orange"
@@ -764,7 +765,7 @@ export const CallEntryTab = ({
           {/* CONNECTED SALES OUTCOME DROPDOWN */}
           {activePrimaryResult === "Connected" && activePurpose === "SALES" && (
             <div className="space-y-1.5 relative z-20 animate-fade-in">
-              <label className="text-[11px] font-extrabold text-emerald-900 uppercase tracking-wider flex items-center gap-1">
+              <label className="text-[11px] font-extrabold text-slate-600 uppercase tracking-wider flex items-center gap-1">
                 Connected Outcome <span className="text-rose-500 font-bold">*</span>
               </label>
               <SearchableDropdown
@@ -1408,11 +1409,11 @@ export const CallEntryTab = ({
         )}
       </div>
 
-      {/* 8. CONTEXTUAL REGISTRATION DETAILS (ONLY WHEN REGISTERED) */}
-      {(edited.status === "Reg.Done" || row.status === "Reg.Done" || edited.pipelineStage === "6. Registered / Won") && (
+      {/* 8. CONTEXTUAL REGISTRATION DETAILS (ONLY WHEN CURRENT PROGRAM IS REGISTERED) */}
+      {programRegInfo.exists && (
         <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3 animate-fade-in">
           <div className="flex items-center gap-1.5 text-slate-700 font-bold text-xs">
-            <Flame size={15} className="text-amber-500" fill="currentColor" /> Abhivyakti Registration
+            <Flame size={15} className="text-amber-500" fill="currentColor" /> {programRegInfo.program || selectedProgram} Registration
           </div>
           <div className="flex gap-2">
             <span className="px-3 py-1.5 rounded-lg font-bold bg-emerald-600 text-white flex items-center gap-1 text-xs">

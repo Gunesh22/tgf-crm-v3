@@ -170,10 +170,10 @@ export function ContactTable({
               const activeAttenderCtx = attenderId || attenderName;
               const view = getContactView(log, activeAttenderCtx);
 
-              const isDue = log._callbackDue;
-              const isHot = log.isHotLead;
-              const cbStatus = view.callbackStatus || log.callbackStatus || "";
+              const cbStatus = String(view.callbackStatus || log.callbackStatus || "").trim().toLowerCase();
               const isDoneOrCancelled = cbStatus === "done" || cbStatus === "completed" || cbStatus === "cancelled";
+              const isDue = log._callbackDue && !isDoneOrCancelled;
+              const isHot = log.isHotLead;
               const hasFollowup = !isDoneOrCancelled && (view.callbackDate || view.status === "reminder" || view.status === "Next time" || log.callbackDate);
               const isUnanswered = isUnansweredCallback(log);
               const isCalled = !!(view.status || view.callbackDate || view.remark);

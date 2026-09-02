@@ -40,7 +40,8 @@ export async function executeOverrideStage(db, payload) {
     changedBy,
     changedByAttenderId,
     role = "attender",
-    reason = ""
+    reason = "",
+    program = ""
   } = payload || {};
 
   if (!contactId) throw new Error("contactId is required");
@@ -80,7 +81,7 @@ export async function executeOverrideStage(db, payload) {
     }
   }
 
-  const previousStage = getEffectiveStage(existingContact) || existingContact.pipelineStage || PIPELINE_STAGES.NEW_LEAD;
+  const previousStage = getEffectiveStage(existingContact, program) || existingContact.pipelineStage || PIPELINE_STAGES.NEW_LEAD;
   const previousRank = STAGE_RANKS[previousStage] || 0;
   const newRank = STAGE_RANKS[canonicalNewStage] || 0;
 
@@ -136,6 +137,34 @@ export async function executeOverrideStage(db, payload) {
     },
     { returnDocument: "after" }
   );
+
+  // Update programRelationships for target program context if present
+  const targetProg = program || existingContact["Called For"] || existingContact.calledFor;
+  if (targetProg) {
+    const calledForKey = String(targetProg).trim().toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
+    if (calledForKey) {
+      const relEntry = {
+        program: targetProg,
+        status: canonicalNewStage,
+        pipelineStage: canonicalNewStage,
+        calledForKey,
+        updatedAt: nowIso,
+        evidenceCallId: overrideCallId
+      };
+      try {
+        await db.collection("contacts").updateOne(
+          { _id: existingContact._id },
+          { $pull: { programRelationships: { calledForKey } } }
+        );
+        await db.collection("contacts").updateOne(
+          { _id: existingContact._id },
+          { $push: { programRelationships: relEntry } }
+        );
+      } catch (prErr) {
+        console.warn("[OVERRIDE-STAGE] programRelationship write failed:", prErr.message);
+      }
+    }
+  }
 
   const updatedContact = result.value || result;
 

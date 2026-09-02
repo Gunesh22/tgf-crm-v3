@@ -39,12 +39,13 @@ function parseTimestamp(t) {
 import SearchableDropdown from "./edit-modal/SearchableDropdown";
 import DuplicateBanner from "./edit-modal/DuplicateBanner";
 import SharedBanner from "./edit-modal/SharedBanner";
+import EditHistoryModal from "./edit-modal/EditHistoryModal";
 import CallEntryTab from "./edit-modal/CallEntryTab";
 import ProfileDetailsTab from "./edit-modal/ProfileDetailsTab";
 import CallButton from "./CallButton";
 import WhatsAppButton from "./WhatsAppButton";
-import EditHistoryModal from "./edit-modal/EditHistoryModal";
-import { getEffectiveStage } from "../../../utils/pipelineEngine";
+import { getEffectiveStage, PIPELINE_STAGES, getProgramSpecificStatus } from "../../../utils/pipelineEngine";
+import { extractProgramsList, getProgramContext, getProgramRegistrationInfo } from "../utils/programContextHelper";
 
 export const EditModal = ({
   row,
@@ -104,6 +105,10 @@ export const EditModal = ({
 
     normalized.callType = normalized.callType || "outgoing";
 
+    const rootCallbackDate = attState?.callbackDate || row.callbackDate || row["Callback Date"] || row.callback_date || row.nextCallDate || row.next_call_date || row.callback || null;
+    const rootCallbackTime = attState?.callbackTime || row.callbackTime || row["Callback Time"] || row.callback_time || "";
+    const rootCallbackStatus = attState?.callbackStatus || row.callbackStatus || (rootCallbackDate ? "pending" : null);
+
     // Call-entry fields: restore ACTIVE attender's own saved state if present, else START COMPLETELY EMPTY
     if (attState) {
       normalized["Called For"] = attState.calledFor || attState["Called For"] || "";
@@ -114,9 +119,9 @@ export const EditModal = ({
       normalized.callPurpose = attState.callPurpose || "SALES";
       normalized.status = attState.status || "";
       normalized.remark = "";
-      normalized.callbackDate = attState.callbackDate || null;
-      normalized.callbackStatus = attState.callbackStatus || (attState.callbackDate ? "pending" : null);
-      normalized.callbackTime = attState.callbackTime || "";
+      normalized.callbackDate = rootCallbackDate;
+      normalized.callbackStatus = rootCallbackStatus;
+      normalized.callbackTime = rootCallbackTime;
     } else {
       normalized["Called For"] = "";
       normalized.calledFor = "";
@@ -126,9 +131,9 @@ export const EditModal = ({
       normalized.callPurpose = "SALES";
       normalized.status = "";
       normalized.remark = "";
-      normalized.callbackDate = null;
-      normalized.callbackStatus = null;
-      normalized.callbackTime = "";
+      normalized.callbackDate = rootCallbackDate;
+      normalized.callbackStatus = rootCallbackStatus;
+      normalized.callbackTime = rootCallbackTime;
     }
 
     normalized.callStatus = "";
@@ -161,11 +166,68 @@ export const EditModal = ({
   const [showEditHistory, setShowEditHistory] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
 
+  const programsList = useMemo(() => extractProgramsList(edited), [edited]);
+
+  const [activeProgram, setActiveProgram] = useState(() => {
+    const list = extractProgramsList(row || {});
+    return list[0] || (row ? (row["Called For"] || row.calledFor || row.called_for) : "") || "";
+  });
+
   useEffect(() => {
     const freshNorm = getNormalizedRow();
     setSavedRow(freshNorm);
     setEdited(freshNorm);
+    setShowCalledForPrompt(false);
+    setPromptSelection("");
+    setPendingSave(false);
+    setValidationErrors([]);
+
+    const list = extractProgramsList(row || {});
+    const rawFirstProg = list[0] || freshNorm["Called For"] || freshNorm.calledFor || freshNorm.called_for || "";
+    const firstProg = rawFirstProg ? String(rawFirstProg).split(",")[0].trim() : "";
+
+    if (firstProg) {
+      freshNorm.calledFor = firstProg;
+      freshNorm["Called For"] = firstProg;
+      freshNorm.called_for = firstProg;
+      freshNorm.status = getProgramSpecificStatus(freshNorm, firstProg);
+      freshNorm.pipelineStage = getEffectiveStage(freshNorm, firstProg) || PIPELINE_STAGES.NEW_LEAD;
+    }
+
+    setSavedRow(freshNorm);
+    setEdited(freshNorm);
+    setShowCalledForPrompt(false);
+    setPromptSelection("");
+    setPendingSave(false);
+    setValidationErrors([]);
+    setActiveProgram(firstProg);
   }, [row]);
+
+  const handleSelectProgram = (programName) => {
+    if (!programName) return;
+    const targetProg = String(programName).split(",")[0].trim();
+    setActiveProgram(targetProg);
+
+    // Resolve stage and status for selected program context
+    const targetStatus = getProgramSpecificStatus(edited, targetProg);
+    const tempContact = {
+      ...edited,
+      calledFor: targetProg,
+      "Called For": targetProg,
+      called_for: targetProg,
+      status: targetStatus
+    };
+    const targetStage = getEffectiveStage(tempContact, targetProg) || PIPELINE_STAGES.NEW_LEAD;
+
+    setEdited(prev => ({
+      ...prev,
+      calledFor: targetProg,
+      "Called For": targetProg,
+      called_for: targetProg,
+      pipelineStage: targetStage,
+      status: targetStatus
+    }));
+  };
 
   useEffect(() => {
     setLocalPrograms(programs);
@@ -1025,6 +1087,19 @@ export const EditModal = ({
   const handleChange = (key, val) => {
     setEdited(prev => {
       const next = { ...prev, [key]: val };
+      const isCalledFor = key === calledForField || 
+        ["called for", "called_for", "calledfor"].includes(String(key || "").toLowerCase());
+      if (isCalledFor) {
+        const singleProg = String(val || "").split(",")[0].trim();
+        next[calledForField] = singleProg;
+        next["Called For"] = singleProg;
+        next.calledFor = singleProg;
+        next.called_for = singleProg;
+        if (singleProg) {
+          setActiveProgram(singleProg);
+          next.pipelineStage = getEffectiveStage(prev, singleProg) || PIPELINE_STAGES.NEW_LEAD;
+        }
+      }
       if (key === "status" && val === "Reg.Done") {
         next.callbackDate = null;
         next.callbackStatus = null;
@@ -1422,8 +1497,8 @@ export const EditModal = ({
             remark: updates.remark || "Payment query / incoming confirmation",
             attenderName: safeName,
             timestamp: nowStr,
-            calledFor: targetEdited[calledForField] || targetEdited["Called For"] || targetEdited.calledFor || "",
-            source: targetEdited[sourceField] || targetEdited.Source || targetEdited.source || targetEdited.Sourse || targetEdited.sourse || "",
+            calledFor: targetEdited["Called For"] || targetEdited.calledFor || "",
+            source: targetEdited.Source || targetEdited.source || targetEdited.Sourse || targetEdited.sourse || "",
             callType: targetEdited.callType || "incoming"
           };
 
@@ -1433,8 +1508,8 @@ export const EditModal = ({
             remark: "Registered",
             attenderName: safeName,
             timestamp: new Date(new Date(nowStr).getTime() + 1000).toISOString(),
-            calledFor: targetEdited[calledForField] || targetEdited["Called For"] || targetEdited.calledFor || "",
-            source: targetEdited[sourceField] || targetEdited.Source || targetEdited.source || targetEdited.Sourse || targetEdited.sourse || "",
+            calledFor: targetEdited["Called For"] || targetEdited.calledFor || "",
+            source: targetEdited.Source || targetEdited.source || targetEdited.Sourse || targetEdited.sourse || "",
             callType: "outgoing"
           };
 
@@ -1444,8 +1519,8 @@ export const EditModal = ({
           const safeName = activeAttenderName || attenderName || "Unknown";
           const nowStr = new Date().toISOString();
 
-          const oldCalledForVal = String(savedRow[calledForField] || savedRow["Called For"] || savedRow.calledFor || "").trim().toLowerCase();
-          const newCalledForVal = String(targetEdited[calledForField] || targetEdited["Called For"] || targetEdited.calledFor || "").trim().toLowerCase();
+          const oldCalledForVal = String(savedRow["Called For"] || savedRow.calledFor || "").trim().toLowerCase();
+          const newCalledForVal = String(targetEdited["Called For"] || targetEdited.calledFor || "").trim().toLowerCase();
           const calledForChanged = oldCalledForVal !== newCalledForVal;
 
           const isNewConversionEvent = (oldStatus !== "Reg.Done" && targetEdited.status === "Reg.Done") ||
@@ -1461,8 +1536,8 @@ export const EditModal = ({
             remark: updates.remark || "",
             attenderName: safeName,
             timestamp: nowStr,
-            calledFor: targetEdited[calledForField] || targetEdited["Called For"] || targetEdited.calledFor || "",
-            source: targetEdited[sourceField] || targetEdited.Source || targetEdited.source || targetEdited.Sourse || targetEdited.sourse || "",
+            calledFor: targetEdited["Called For"] || targetEdited.calledFor || "",
+            source: targetEdited.Source || targetEdited.source || targetEdited.Sourse || targetEdited.sourse || "",
             callType: targetEdited.callType || "outgoing"
           };
 
@@ -1524,8 +1599,8 @@ export const EditModal = ({
           ...prevAttState,
           attenderId: activeAttenderId,
           attenderName: activeAttenderName || prevAttState.attenderName || "Unknown",
-          calledFor: targetEdited[calledForField] || targetEdited["Called For"] || targetEdited.calledFor || prevAttState.calledFor || "",
-          source: targetEdited[sourceField] || targetEdited.Source || targetEdited.source || prevAttState.source || "",
+          calledFor: targetEdited["Called For"] || targetEdited.calledFor || prevAttState.calledFor || "",
+          source: targetEdited.Source || targetEdited.source || prevAttState.source || "",
           previousProgram: targetEdited.previousProgram || prevAttState.previousProgram || "",
           status: updates.status || prevAttState.status,
           remark: updates.remark !== undefined ? updates.remark : prevAttState.remark,
@@ -1687,6 +1762,10 @@ export const EditModal = ({
         callTypeBtnUnselected: "bg-gray-50 text-gray-600 border-gray-100 hover:bg-gray-200"
       };
 
+  const cbSt = String(edited.callbackStatus || "").trim().toLowerCase();
+  const isCbDone = cbSt === "done" || cbSt === "completed" || cbSt === "cancelled";
+  const isDueHeader = edited._callbackDue && !isCbDone;
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in" onClick={handleDismiss}>
       <div
@@ -1694,7 +1773,7 @@ export const EditModal = ({
         onClick={e => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className={`px-5 py-3.5 flex items-center justify-between rounded-t-2xl shrink-0 ${edited._callbackDue ? "bg-rose-800 text-white shadow-xs" : isIncomingCall ? "bg-emerald-800 text-white shadow-xs" : "bg-slate-900 text-white shadow-xs"}`}>
+        <div className={`px-5 py-3.5 flex items-center justify-between rounded-t-2xl shrink-0 ${isDueHeader ? "bg-rose-800 text-white shadow-xs" : isIncomingCall ? "bg-emerald-800 text-white shadow-xs" : "bg-slate-900 text-white shadow-xs"}`}>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-white/10 border border-white/20 rounded-lg flex items-center justify-center text-white shrink-0">
               {edited.callType === "incoming" ? <PhoneIncoming size={18} /> : <PhoneOutgoing size={18} />}
@@ -1904,6 +1983,9 @@ export const EditModal = ({
               activeAttenderName={selectedAttenderName || attenderName}
               isAdmin={allowAttenderSelection}
               onRefreshLead={onRefreshLead}
+              programsList={programsList}
+              activeProgram={activeProgram}
+              onSelectProgram={handleSelectProgram}
             />
           ) : (
             <ProfileDetailsTab
@@ -1934,8 +2016,8 @@ export const EditModal = ({
 
         <div className="px-7 py-4 bg-slate-50 border-t border-slate-200/80 flex items-center justify-between shadow-inner shrink-0 z-10">
           {(!row._isNew && row.id) ? (
-            <button onClick={handleDelete} className="flex items-center gap-2 text-xs font-bold text-red-500 hover:text-red-700 transition cursor-pointer">
-              <Trash2 size={14} /> Remove Entry
+            <button onClick={handleDelete} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition cursor-pointer">
+              <Trash2 size={13} /> Remove Entry
             </button>
           ) : (
             <div />
@@ -2011,12 +2093,14 @@ export const EditModal = ({
                   }
                   const valStr = promptSelection;
                   handleChange(calledForField, valStr);
+                  handleChange("calledFor", valStr);
+                  handleChange("Called For", valStr);
                   handleChange("status", "Reg.Done");
                   setShowCalledForPrompt(false);
                   
                   if (pendingSave) {
                     setPendingSave(false);
-                    handleSaveAndClose({ [calledForField]: valStr, status: "Reg.Done" });
+                    handleSaveAndClose({ [calledForField]: valStr, calledFor: valStr, "Called For": valStr, status: "Reg.Done" });
                   } else {
                     toast.success("Called For and Registration status updated!");
                   }

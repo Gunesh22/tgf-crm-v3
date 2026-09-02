@@ -292,12 +292,12 @@ function makeCall(purpose = 'SALES', callStatus = 'Connected', status = 'Info Gi
 {
   const contactDiffProg = {
     "Called For": "CBT Basic",
-    pipelineStage: "6. Registered / Won",
-    programRelationships: [{ program: "CBT Basic", status: "Registered / Won" }],
-    history: [{ calledFor: "CBT Basic", status: "Reg.Done", callPurpose: "SALES" }]
+    pipelineStage: "4. Nurture / Interested",
+    programRelationships: [{ program: "CBT Basic", status: "Nurture / Interested" }],
+    history: [{ calledFor: "CBT Basic", status: "Interested", callPurpose: "SALES" }]
   };
   const stageDiff = getEffectiveStage(contactDiffProg, "Self Care Shivir 2026");
-  assert('32. Same contact + DIFFERENT calledFor preserves contact canonical stage', stageDiff === PIPELINE_STAGES.REGISTERED_WON, `got: ${stageDiff}`);
+  assert('32. Same contact + DIFFERENT calledFor preserves contact canonical stage', stageDiff === PIPELINE_STAGES.NURTURE_INTERESTED, `got: ${stageDiff}`);
 }
 
 // ── Test 33: Fresh lead with blank status and empty history ───────────────────

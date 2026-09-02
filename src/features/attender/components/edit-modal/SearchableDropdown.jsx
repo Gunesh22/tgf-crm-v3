@@ -143,10 +143,10 @@ const SearchableDropdown = ({
   const buttonStyle = disabled
     ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed"
     : hasValue
-      ? "bg-indigo-50/50 border-indigo-200 text-indigo-950 font-semibold"
-      : "bg-white border-slate-200 text-slate-500 hover:border-slate-300 font-normal";
+      ? "bg-white border-slate-200 text-slate-900 font-semibold hover:border-slate-300"
+      : "bg-white border-slate-200 text-slate-400 hover:border-slate-300 font-normal";
 
-  const iconColor = hasValue ? "text-indigo-600" : "text-slate-400";
+  const iconColor = "text-slate-400";
 
   return (
     <div className="w-full">
