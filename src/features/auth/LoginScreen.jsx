@@ -1,7 +1,51 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { LogIn, Phone, Shield, Loader2 } from 'lucide-react';
+import { LogIn, Shield, Loader2 } from 'lucide-react';
 import { fetchAPI } from '../../lib/db';
+import customerServiceAnimation from '../../assets/customer_service.json';
+
+function CustomerServiceLogo() {
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    let animInstance = null;
+    let isMounted = true;
+
+    import('lottie-web').then((lottieModule) => {
+      if (!isMounted || !containerRef.current) return;
+      const lottie = lottieModule.default || lottieModule;
+      
+      // Clear container before mounting animation
+      if (containerRef.current) {
+        containerRef.current.innerHTML = '';
+      }
+      
+      animInstance = lottie.loadAnimation({
+        container: containerRef.current,
+        renderer: 'svg',
+        loop: true,
+        autoplay: true,
+        animationData: customerServiceAnimation,
+      });
+    }).catch((err) => {
+      console.error('Lottie animation failed to load:', err);
+    });
+
+    return () => {
+      isMounted = false;
+      if (animInstance) {
+        animInstance.destroy();
+      }
+    };
+  }, []);
+
+  return (
+    <div 
+      ref={containerRef} 
+      className="w-56 h-56 sm:w-64 sm:h-64 mx-auto flex items-center justify-center relative z-50 pointer-events-none filter drop-shadow-lg"
+    />
+  );
+}
 
 const FALLBACK_ATTENDERS = [
   { id: "9VZZnV00X63PzUSaGTgq", name: "Manisha", role: "attender", password: "629001" },
@@ -117,17 +161,15 @@ export default function LoginScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center">
-          <div className="w-14 h-14 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 ring-1 ring-white/10">
-            <Phone size={28} className="text-white" />
-          </div>
+    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col justify-center py-6 sm:px-6 lg:px-8 font-sans relative z-0">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-50">
+        <div className="flex justify-center -mb-4 relative z-50 overflow-visible">
+          <CustomerServiceLogo />
         </div>
-        <h2 className="mt-5 text-center text-2xl font-bold tracking-tight text-white">
+        <h2 className="text-center text-2xl font-bold tracking-tight text-white relative z-50">
           TGF Call Center CRM
         </h2>
-        <p className="mt-1.5 text-center text-sm text-slate-400 font-medium">
+        <p className="mt-1 text-center text-sm text-slate-400 font-medium relative z-50">
           Sign in to access your assigned workspace
         </p>
       </div>

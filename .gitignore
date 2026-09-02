@@ -39,5 +39,7 @@ crm_analytics_code_dump.txt
 !package.json
 !package-lock.json
 !.oxlintrc.json
+!src/assets/*.json
+
 
 
