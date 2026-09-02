@@ -1785,7 +1785,7 @@ export const EditModal = ({
         onClick={e => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className={`px-5 py-3.5 flex items-center justify-between rounded-t-2xl shrink-0 ${isDueHeader ? "bg-rose-800 text-white shadow-xs" : isIncomingCall ? "bg-emerald-800 text-white shadow-xs" : "bg-slate-900 text-white shadow-xs"}`}>
+        <div className={`px-5 py-3.5 flex items-center justify-between rounded-t-2xl shrink-0 ${isDueHeader ? "bg-rose-800 text-white shadow-xs" : isIncomingCall ? "bg-emerald-800 text-white shadow-xs" : "bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white shadow-md border-b border-blue-700/40"}`}>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-white/10 border border-white/20 rounded-lg flex items-center justify-center text-white shrink-0">
               {edited.callType === "incoming" ? <PhoneIncoming size={18} /> : <PhoneOutgoing size={18} />}

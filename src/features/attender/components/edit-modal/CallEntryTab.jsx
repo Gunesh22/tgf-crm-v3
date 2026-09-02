@@ -621,6 +621,9 @@ export const CallEntryTab = ({
           <div className="flex gap-1.5 bg-slate-100/80 p-1.5 rounded-xl border border-slate-200/60">
             {["outgoing", "incoming"].map(opt => {
               const isSelected = (edited.callType || "outgoing").toLowerCase().startsWith(opt);
+              const activeColor = opt === "outgoing"
+                ? "bg-blue-600 text-white border-blue-600 shadow-xs font-extrabold"
+                : "bg-emerald-600 text-white border-emerald-600 shadow-xs font-extrabold";
               return (
                 <button
                   key={opt}
@@ -628,7 +631,7 @@ export const CallEntryTab = ({
                   onClick={() => handleCallTypeChange(opt)}
                   className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all cursor-pointer capitalize ${
                     isSelected
-                      ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs font-extrabold"
+                      ? activeColor
                       : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 font-medium"
                   }`}
                 >
