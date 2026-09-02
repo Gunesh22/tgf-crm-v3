@@ -40,6 +40,8 @@ crm_analytics_code_dump.txt
 !package-lock.json
 !.oxlintrc.json
 !src/assets/*.json
+!vercel.json
+
 
 
 

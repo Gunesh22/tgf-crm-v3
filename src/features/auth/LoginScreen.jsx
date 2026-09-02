@@ -2,37 +2,27 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { LogIn, Shield, Loader2 } from 'lucide-react';
 import { fetchAPI } from '../../lib/db';
+import lottie from 'lottie-web';
 import customerServiceAnimation from '../../assets/customer_service.json';
 
 function CustomerServiceLogo() {
   const containerRef = useRef(null);
 
   useEffect(() => {
-    let animInstance = null;
-    let isMounted = true;
+    if (!containerRef.current) return;
 
-    import('lottie-web').then((lottieModule) => {
-      if (!isMounted || !containerRef.current) return;
-      const lottie = lottieModule.default || lottieModule;
-      
-      // Clear container before mounting animation
-      if (containerRef.current) {
-        containerRef.current.innerHTML = '';
-      }
-      
-      animInstance = lottie.loadAnimation({
-        container: containerRef.current,
-        renderer: 'svg',
-        loop: true,
-        autoplay: true,
-        animationData: customerServiceAnimation,
-      });
-    }).catch((err) => {
-      console.error('Lottie animation failed to load:', err);
+    // Clear container before mounting animation
+    containerRef.current.innerHTML = '';
+
+    const animInstance = lottie.loadAnimation({
+      container: containerRef.current,
+      renderer: 'svg',
+      loop: true,
+      autoplay: true,
+      animationData: customerServiceAnimation,
     });
 
     return () => {
-      isMounted = false;
       if (animInstance) {
         animInstance.destroy();
       }
