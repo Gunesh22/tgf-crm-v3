@@ -13,6 +13,8 @@ import AbhivyaktiTab from "./components/AbhivyaktiTab";
 import SettingsTab from "./components/SettingsTab";
 import AllAttendersSheetTab from "./components/AllAttendersSheetTab";
 import PipelineCallsTab from "./components/PipelineCallsTab";
+import LottieAnimation from "../../components/ui/LottieAnimation";
+import dataResearchAnimation from "../../assets/data_research_analysis.json";
 
 export default function AdminPanel({ onExit, onAttendersChange }) {
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -255,8 +257,9 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
 
         <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
           {isLoading ? (
-            <div className="h-full flex items-center justify-center">
-              <Loader size={28} className="text-indigo-600 animate-spin" />
+            <div className="h-full flex flex-col items-center justify-center gap-3 py-16">
+              <LottieAnimation animationData={dataResearchAnimation} className="w-64 h-64 sm:w-80 sm:h-80" />
+              <p className="text-sm font-bold text-slate-700">Syncing Admin Data Hub…</p>
             </div>
           ) : (
             <>
@@ -295,8 +298,8 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
               {activeTab === "monthly" && (
                 (callLogsLoading && callLogs.length === 0) ? (
                   <div className="h-full flex flex-col items-center justify-center gap-3 py-20">
-                    <Loader size={28} className="text-indigo-600 animate-spin" />
-                    <p className="text-slate-500 font-semibold text-xs">Loading call database...</p>
+                    <LottieAnimation animationData={dataResearchAnimation} className="w-56 h-56 sm:w-72 sm:h-72" />
+                    <p className="text-slate-600 font-bold text-xs">Loading analytics database...</p>
                   </div>
                 ) : (
                   <MonthlyReportTab programs={programs} attenders={attenders} settingsOptions={settingsOptions} callLogs={callLogs} />
