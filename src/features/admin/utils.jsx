@@ -161,38 +161,58 @@ export const getCanonicalStage = (stageOrContact) => {
   if (typeof stageOrContact === "object") {
     const contact = stageOrContact;
 
-    const rawStage = String(contact.pipelineStage || contact.status || "").trim();
-    if (rawStage === "Query Desk" || rawStage === "Query") return "Query Desk";
-    if (rawStage === "Reminder Desk" || rawStage === "Reminder") return "Reminder Desk";
-
-    // 1. High Priority Status Check: Previous Program Pending status/stage override
-    const hasPrevProgPendingStatus =
-      String(contact.status || "").trim().toLowerCase() === "previous program pending" ||
-      String(contact.pipelineStage || "").trim().toLowerCase() === "previous program pending" ||
-      String(contact.callStatus || "").trim().toLowerCase() === "previous program pending" ||
-      (Array.isArray(contact.history) && contact.history.length > 0 && String(contact.history[contact.history.length - 1]?.status || "").trim().toLowerCase() === "previous program pending") ||
-      (contact.attenderStates && typeof contact.attenderStates === "object" && Object.values(contact.attenderStates).some(st => String(st?.status || "").trim().toLowerCase() === "previous program pending"));
-
-    if (hasPrevProgPendingStatus) {
-      return PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING;
+    let latestAttenderState = null;
+    if (contact.attenderStates && typeof contact.attenderStates === "object") {
+      const states = Object.values(contact.attenderStates);
+      if (states.length > 0) {
+        latestAttenderState = states[states.length - 1];
+      }
     }
 
-    // 1b. Existing Alumni Status Check (Already Reg.d / Already Registered / Shivir done)
-    const statusLower = String(contact.status || "").trim().toLowerCase();
-    const callStatusLower = String(contact.callStatus || "").trim().toLowerCase();
-    const isAlreadyRegistered =
-      statusLower === "already reg.d" || statusLower === "already registered" || statusLower.includes("shivir done") ||
-      callStatusLower === "already reg.d" || callStatusLower === "already registered" ||
-      (Array.isArray(contact.history) && contact.history.length > 0 && (
-        String(contact.history[contact.history.length - 1]?.status || "").trim().toLowerCase() === "already reg.d" ||
-        String(contact.history[contact.history.length - 1]?.status || "").trim().toLowerCase() === "already registered"
-      ));
+    const rawCallPurpose = String(contact.callPurpose || latestAttenderState?.callPurpose || "").toUpperCase();
+    const rawStatus = String(contact.status || latestAttenderState?.status || "").trim();
+    const rawQueryStatus = String(contact.queryStatus || latestAttenderState?.queryStatus || "").trim();
 
-    if (isAlreadyRegistered) {
-      return "Existing Alumni";
+    // 0. Registered / Won Check (Top Priority: Once registered, Sales pipeline stage remains Registered / Won)
+    const hasRegHistory =
+      String(contact.status || "").toLowerCase().includes("reg.done") ||
+      String(contact.pipelineStage || "").toLowerCase().includes("registered") ||
+      (Array.isArray(contact.history) && contact.history.some(h => String(h.status || "").toLowerCase().includes("reg.done") || String(h.status || "").toLowerCase().includes("registered"))) ||
+      (contact.attenderStates && typeof contact.attenderStates === "object" && Object.values(contact.attenderStates).some(st => String(st?.status || "").toLowerCase().includes("reg.done") || String(st?.status || "").toLowerCase().includes("registered")));
+
+    if (hasRegHistory) {
+      return PIPELINE_STAGES.REGISTERED_WON;
     }
 
-    // 1c. Closed / Lost Status Check (Not Interested / Closed / Lost on latest status or history)
+    // 0b. Query or Reminder Workstream Check
+    const isExplicitQuery = rawCallPurpose === "QUERY" || rawStatus === "Query" || (rawQueryStatus && rawCallPurpose !== "SALES");
+    if (isExplicitQuery) {
+      return "Query Desk";
+    }
+
+    const isExplicitReminder = rawCallPurpose === "REMINDER" || rawStatus.toLowerCase().includes("reminder");
+    if (isExplicitReminder) {
+      return "Reminder Desk";
+    }
+
+    const statusLower = rawStatus.toLowerCase();
+
+    // 1d. Nurture / Interested Check
+    if (statusLower === "interested" || statusLower === "nurture / interested" || statusLower === "4. nurture / interested") {
+      return PIPELINE_STAGES.NURTURE_INTERESTED;
+    }
+
+    // 1e. Info Given Check
+    if (statusLower === "info given" || statusLower === "information given" || statusLower === "3. information given") {
+      return PIPELINE_STAGES.INFO_GIVEN;
+    }
+
+    // 1f. Future Pool Check
+    if (statusLower === "next time" || statusLower === "future pool" || statusLower === "5. future pool") {
+      return PIPELINE_STAGES.FUTURE_POOL;
+    }
+
+    // 1g. Closed / Lost Status Check
     const lastHistStatus = Array.isArray(contact.history) && contact.history.length > 0
       ? String(contact.history[contact.history.length - 1]?.status || "").trim().toLowerCase()
       : "";
@@ -201,12 +221,18 @@ export const getCanonicalStage = (stageOrContact) => {
       return PIPELINE_STAGES.CLOSED_LOST;
     }
 
-    // 1d. Closed / Invalid Status Check (Invalid No / Wrong Number / Closed / Invalid)
+    // 1h. Closed / Invalid Status Check
     if (statusLower.includes("invalid") || statusLower.includes("wrong number") || lastHistStatus.includes("invalid") || lastHistStatus.includes("wrong number")) {
       return PIPELINE_STAGES.CLOSED_INVALID;
     }
 
-    // 2. Resolve stage from rawStage
+    // 1i. Attempting Contact Check
+    if (statusLower === "not connected" || statusLower === "not picked up" || statusLower === "attempting contact" || statusLower === "2. attempting contact") {
+      return PIPELINE_STAGES.ATTEMPTING;
+    }
+
+    // 2. Resolve stage from rawStage fallback
+    const rawStage = String(contact.pipelineStage || "").trim();
     if (rawStage) {
       const s = rawStage;
       if (s === PIPELINE_STAGES.NEW_LEAD || s === "New Lead" || s === "1. New Lead") return PIPELINE_STAGES.NEW_LEAD;
