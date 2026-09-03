@@ -3,7 +3,7 @@ import { toast } from "react-hot-toast";
 import * as XLSX from "xlsx";
 import { BarChart3, Download, Search, X, ChevronDown, Check, Eye } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
-import { COLORS, cleanExportRow, CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, parseTimestamp, getCanonicalStatus, getCanonicalStage, renderVal, isStageNurtureInterested, isStageRegisteredWon, getLocalDateStr, getCanonicalRegistrations, getCanonicalRegisteredPeople, getCanonicalStage6People, getContactPhone } from "../utils.jsx";
+import { COLORS, cleanExportRow, CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, parseTimestamp, getCanonicalStatus, getCanonicalStage, renderVal, isStageNurtureInterested, isStageRegisteredWon, getLocalDateStr, getCanonicalRegistrations, getCanonicalRegisteredPeople, getCanonicalStage6People, getContactPhone, formatDateTimeNoSeconds } from "../utils.jsx";
 import { isKhojiAffirmative, isKhojiNegative } from "../../attender/utils.js";
 
 // ── Multi-select dropdown ──────────────────────────────────────────────────
@@ -626,6 +626,30 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
     return Array.from(map.values());
   }, [filteredLogs, callLogs]);
 
+  const interestedCallsList = useMemo(() => {
+    return filteredLogs
+      .filter(l => l.isHistory && getCanonicalStatus(l.status) === "Interested")
+      .map((l, idx) => {
+        const ts = parseTimestamp(l.timestamp || l.createdAt || l.updatedAt);
+        const dateTimeStr = formatDateTimeNoSeconds(ts);
+
+        return {
+          id: l.id || `int_call_${idx}`,
+          name: renderVal(l.Name || l.contactName || l.name, "Unknown"),
+          phone: renderVal(getContactPhone(l) || l.Phone || l.phone, "—"),
+          city: renderVal(l.city || l.City, "—"),
+          khoji: renderVal(l.Khoji || l.khoji, "—"),
+          calledFor: renderVal(l.calledFor || l.programName, "—"),
+          attender: renderVal(l.attenderName || l.assignedTo, "Unassigned"),
+          status: renderVal(l.status, "Interested"),
+          dateTime: dateTimeStr,
+          timestamp: ts,
+          remark: renderVal(l.remark, "—")
+        };
+      })
+      .sort((a, b) => (b.timestamp ? b.timestamp.getTime() : 0) - (a.timestamp ? a.timestamp.getTime() : 0));
+  }, [filteredLogs]);
+
   const callPurposeData = useMemo(() => {
     const counts = { SALES: 0, QUERY: 0, REMINDER: 0 };
     filteredLogs.forEach(l => {
@@ -946,10 +970,10 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
             onClickInspect: () => {
               setInspectSearch("");
               setInspectModal({
-                title: "Interested People — Contact List",
-                subtitle: "Contacts in Nurture / Interested stage",
-                type: "interested_people",
-                items: interestedPeopleList
+                title: "Interested Calls — Logged Activities",
+                subtitle: "Every call logged with Interested outcome (with Date & Time)",
+                type: "interested_calls",
+                items: interestedCallsList
               });
             }
           },
@@ -1520,10 +1544,10 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
 
       {/* INSPECT REGISTRATIONS / PEOPLE MODAL */}
       {inspectModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-5xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             {/* Header */}
-            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50 shrink-0">
               <div>
                 <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
                   <Eye size={18} className="text-emerald-600" /> {inspectModal.title}
@@ -1539,7 +1563,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
             </div>
 
             {/* Search and Action Bar */}
-            <div className="p-3 border-b border-slate-100 bg-white flex items-center justify-between gap-3">
+            <div className="p-3 border-b border-slate-100 bg-white flex items-center justify-between gap-3 shrink-0">
               <div className="relative flex-1">
                 <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
                 <input
@@ -1560,18 +1584,21 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
                       (item.phone || "").toLowerCase().includes(q) ||
                       (item.calledFor || "").toLowerCase().includes(q) ||
                       (item.attender || "").toLowerCase().includes(q) ||
-                      (item.city || "").toLowerCase().includes(q)
+                      (item.city || "").toLowerCase().includes(q) ||
+                      (item.remark || "").toLowerCase().includes(q)
                     );
                   });
                   const ws = XLSX.utils.json_to_sheet(filteredItems.map((item, idx) => ({
                     "#": idx + 1,
                     "Name": item.name,
                     "Phone": item.phone,
+                    "Date & Time": item.dateTime || "",
                     "City": item.city,
                     "Khoji": item.khoji,
                     "Called For / Program": item.calledFor,
                     "Attender": item.attender,
                     "Stage / Status": item.status,
+                    "Remark": item.remark || ""
                   })));
                   const wb = XLSX.utils.book_new();
                   XLSX.utils.book_append_sheet(wb, ws, "Inspected List");
@@ -1585,7 +1612,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
             </div>
 
             {/* Table View */}
-            <div className="p-4 overflow-y-auto flex-1 text-xs">
+            <div className="overflow-y-auto overflow-x-hidden flex-1 text-xs">
               {(() => {
                 const filtered = inspectModal.items.filter(item => {
                   if (!inspectSearch.trim()) return true;
@@ -1595,7 +1622,8 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
                     (item.phone || "").toLowerCase().includes(q) ||
                     (item.calledFor || "").toLowerCase().includes(q) ||
                     (item.attender || "").toLowerCase().includes(q) ||
-                    (item.city || "").toLowerCase().includes(q)
+                    (item.city || "").toLowerCase().includes(q) ||
+                    (item.remark || "").toLowerCase().includes(q)
                   );
                 });
 
@@ -1608,32 +1636,39 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
                 }
 
                 return (
-                  <table className="w-full text-left border-collapse">
-                    <thead className="bg-slate-50 text-slate-600 font-bold uppercase text-[10px] border-b border-slate-200 sticky top-0">
+                  <table className="w-full text-left border-collapse table-fixed">
+                    <thead className="bg-slate-100 text-slate-700 font-extrabold uppercase text-[10px] border-b border-slate-200 sticky top-0 z-10 shadow-2xs">
                       <tr>
-                        <th className="p-2.5">#</th>
-                        <th className="p-2.5">Name & Phone</th>
-                        <th className="p-2.5">City / Khoji</th>
-                        <th className="p-2.5">Program / Called For</th>
-                        <th className="p-2.5">Attender</th>
-                        <th className="p-2.5 text-right">Stage Status</th>
+                        <th className="py-2.5 px-3 w-8">#</th>
+                        <th className="py-2.5 px-3 w-36">Name & Phone</th>
+                        {inspectModal.type === "interested_calls" && <th className="py-2.5 px-3 w-36">Date & Time</th>}
+                        <th className="py-2.5 px-3 w-24">City / Khoji</th>
+                        <th className="py-2.5 px-3 w-28">Program / Called For</th>
+                        <th className="py-2.5 px-3 w-24">Attender</th>
+                        <th className="py-2.5 px-3 w-28">Stage Status</th>
+                        {inspectModal.type === "interested_calls" && <th className="py-2.5 px-3">Remark</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                       {filtered.map((item, idx) => (
                         <tr key={item.id + "_" + idx} className="hover:bg-slate-50 transition-colors">
-                          <td className="p-2.5 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
-                          <td className="p-2.5 font-bold text-slate-900">
-                            <div>{item.name}</div>
-                            <div className="text-[11px] font-normal text-slate-500 font-mono">{item.phone}</div>
+                          <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
+                          <td className="py-2.5 px-3 font-bold text-slate-900 truncate" title={`${item.name} (${item.phone})`}>
+                            <div className="truncate">{item.name}</div>
+                            <div className="text-[11px] font-normal text-slate-500 font-mono truncate">{item.phone}</div>
                           </td>
-                          <td className="p-2.5 text-slate-600">
-                            <div>{item.city}</div>
-                            {item.khoji !== "—" && <span className="text-[10px] text-slate-400">{item.khoji}</span>}
+                          {inspectModal.type === "interested_calls" && (
+                            <td className="py-2.5 px-3 text-slate-600 font-mono text-[11px] whitespace-nowrap">
+                              {item.dateTime}
+                            </td>
+                          )}
+                          <td className="py-2.5 px-3 text-slate-600 truncate">
+                            <div className="truncate">{item.city}</div>
+                            {item.khoji !== "—" && <span className="text-[10px] text-slate-400 block truncate">{item.khoji}</span>}
                           </td>
-                          <td className="p-2.5 text-indigo-700 font-semibold">{item.calledFor}</td>
-                          <td className="p-2.5 text-slate-700 font-medium">{item.attender}</td>
-                          <td className="p-2.5 text-right">
+                          <td className="py-2.5 px-3 text-indigo-700 font-semibold truncate" title={item.calledFor}>{item.calledFor}</td>
+                          <td className="py-2.5 px-3 text-slate-700 font-medium truncate" title={item.attender}>{item.attender}</td>
+                          <td className="py-2.5 px-3">
                             <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
                               inspectModal.type === "stage6"
                                 ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
@@ -1642,6 +1677,11 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
                               {item.status}
                             </span>
                           </td>
+                          {inspectModal.type === "interested_calls" && (
+                            <td className="py-2.5 px-3 text-slate-600 truncate max-w-0" title={item.remark}>
+                              {item.remark}
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>

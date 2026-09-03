@@ -31,6 +31,21 @@ export function parseTimestamp(t) {
   return null;
 }
 
+export function formatDateTimeNoSeconds(t) {
+  const d = parseTimestamp(t);
+  if (!d || isNaN(d.getTime())) return "—";
+  const day = d.getDate();
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct", "Nov", "Dec"];
+  const monthStr = months[d.getMonth()];
+  const yr = d.getFullYear();
+  let hours = d.getHours();
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  const ampm = hours >= 12 ? "pm" : "am";
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  return `${day} ${monthStr} ${yr}, ${hours}:${minutes} ${ampm}`;
+}
+
 export function renderVal(val, fallback = "—") {
   if (val === undefined || val === null || val === "") return fallback;
   if (typeof val === "object") {
