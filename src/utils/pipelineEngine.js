@@ -185,8 +185,11 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null, attender
     if (highestStage) return highestStage;
 
     const contactKey = normalizeKey(contact["Called For"] || contact.calledFor || contact.called_for);
-    const rootSt = normalizeStageStr(contact.pipelineStage || contact.status);
-    if (rootSt) return rootSt;
+    const matchesContactKey = contactKey && targetKey && (contactKey === targetKey || contactKey.includes(targetKey) || targetKey.includes(contactKey));
+    if (matchesContactKey) {
+      const rootSt = normalizeStageStr(contact.pipelineStage || contact.status);
+      if (rootSt) return rootSt;
+    }
 
     return null;
   }
