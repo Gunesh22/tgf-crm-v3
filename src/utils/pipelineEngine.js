@@ -366,7 +366,7 @@ export function evaluatePipeline(contact = {}, callEvent = {}) {
     program: calledFor,
     pipelineStage: finalStage,
     status: outcome || callStatus || "Pending",
-    queryStatus: evaluatedQueryStatus || callEvent.queryStatus || null,
+    queryStatus: evaluatedQueryStatus || (purpose === "QUERY" ? callEvent.queryStatus || null : null),
     remark: callEvent.remark || "",
     callbackDate: callEvent.callbackDate || null,
     callbackTime: callEvent.callbackTime || null,

@@ -6,12 +6,8 @@ export const STATUS_OPTIONS = [
   "Interested",
   "Reg.Done",
   "Previous Program Pending",
+  "Not Connected",
   "Not interested",
-  "Not Attended",
-  "NA",
-  "Busy",
-  "Call Cut",
-  "switched off",
   "Invalid No",
   "Already Reg.d",
   "Info given",
@@ -19,19 +15,10 @@ export const STATUS_OPTIONS = [
   "reminder",
   "Reminder Given",
   "Reminder Pending",
-  "Query",
-  "Called by mistake",
-  "Shivir done",
-  "no answer"
+  "Query"
 ];
 
-export const OBJECTION_REASONS = [
-  "Too Expensive",
-  "Wrong Dates",
-  "Location Too Far",
-  "No Time",
-  "Other"
-];
+export const OBJECTION_REASONS = [];
 
 export const SOURCE_OPTIONS = [
   "Facebook",
@@ -800,10 +787,31 @@ export const isKhojiNegative = (val) => {
   );
 };
 
+export const STATUS_STAGE_MAPPING = {
+  "Reg.Done": "6. Registered / Won",
+  "Already Reg.d": "Existing Alumni",
+  "Interested": "4. Nurture / Interested",
+  "Previous Program Pending": "Previous Program Pending",
+  "Info given": "3. Information Given",
+  "Next time": "5. Future Pool",
+  "reminder": "Reminder Desk",
+  "Reminder Given": "Reminder Desk",
+  "Reminder Pending": "Reminder Desk",
+  "Query": "Query Desk",
+  "Not interested": "Closed / Lost",
+  "Invalid No": "Closed / Invalid",
+  "Not Connected": "2. Attempting Contact"
+};
+
 export const updateDynamicOptions = (data) => {
   if (data) {
+    if (data.statusStageMapping && typeof data.statusStageMapping === "object") {
+      Object.assign(STATUS_STAGE_MAPPING, data.statusStageMapping);
+    }
     if (Array.isArray(data.statusOptions)) {
-      STATUS_OPTIONS.splice(0, STATUS_OPTIONS.length, ...data.statusOptions);
+      const removedSet = new Set(Array.isArray(data.removedStatuses) ? data.removedStatuses : []);
+      const filtered = data.statusOptions.filter(s => !removedSet.has(s));
+      STATUS_OPTIONS.splice(0, STATUS_OPTIONS.length, ...filtered);
     }
     if (Array.isArray(data.sourceOptions)) {
       SOURCE_OPTIONS.splice(0, SOURCE_OPTIONS.length, ...data.sourceOptions);

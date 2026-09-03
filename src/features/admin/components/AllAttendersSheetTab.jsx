@@ -38,7 +38,6 @@ import {
   STATUS_OPTIONS,
   SOURCE_OPTIONS,
   CALLED_FOR_OPTIONS,
-  OBJECTION_REASONS,
   CALL_TYPE_OPTIONS,
   isUnansweredCallback
 } from "../../attender/utils.js";

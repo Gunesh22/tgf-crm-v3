@@ -11,7 +11,6 @@ import {
 import { searchCRMByPhone } from "../../../lib/ghl";
 import {
   STATUS_OPTIONS,
-  OBJECTION_REASONS,
   SOURCE_OPTIONS,
   CALLED_FOR_OPTIONS,
   isKhojiField,
@@ -899,30 +898,7 @@ export default function MobileEditModal({
                 )}
               </div>
 
-              {/* Objection tracker if not interested */}
-              {(edited.status === "Not interested" || edited.status === "Not possible") && (
-                <div className="space-y-2 p-3 bg-red-50/50 border border-red-100 rounded-2xl">
-                  <label className="text-[10px] font-black text-red-500 uppercase tracking-widest flex items-center gap-1.5">
-                    <AlertCircle size={13} /> Reason for {edited.status.toLowerCase()}?
-                  </label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {OBJECTION_REASONS.map(reason => (
-                      <button
-                        key={reason}
-                        type="button"
-                        onClick={() => handleChange("objectionReason", edited.objectionReason === reason ? "" : reason)}
-                        className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black border transition-all ${
-                          edited.objectionReason === reason
-                            ? "bg-red-500 text-white border-red-500 shadow-md"
-                            : "bg-white text-red-600 border-red-200"
-                        }`}
-                      >
-                        {reason}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+
 
               {/* Call Notes & History */}
               <div className="space-y-2">

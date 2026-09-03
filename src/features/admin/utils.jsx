@@ -4,6 +4,7 @@ import {
 } from "lucide-react";
 import { isKhojiField } from "../../lib/khojiHelper";
 import { PIPELINE_STAGES, getEffectiveStage, QUERY_PIPELINE_STAGES, getCanonicalQueryStage } from "../../utils/pipelineEngine";
+import { STATUS_STAGE_MAPPING } from "../attender/utils";
 export { QUERY_PIPELINE_STAGES, getCanonicalQueryStage };
 
 export function parseTimestamp(t) {
@@ -200,7 +201,7 @@ export const getCanonicalStage = (stageOrContact) => {
     }
 
     // 0b. Query or Reminder Workstream Check
-    const isExplicitQuery = rawCallPurpose === "QUERY" || rawStatus === "Query" || (rawQueryStatus && rawCallPurpose !== "SALES");
+    const isExplicitQuery = rawCallPurpose === "QUERY" || rawStatus === "Query" || (Boolean(rawQueryStatus) && rawCallPurpose === "QUERY");
     if (isExplicitQuery) {
       return "Query Desk";
     }
@@ -208,6 +209,11 @@ export const getCanonicalStage = (stageOrContact) => {
     const isExplicitReminder = rawCallPurpose === "REMINDER" || rawStatus.toLowerCase().includes("reminder");
     if (isExplicitReminder) {
       return "Reminder Desk";
+    }
+
+    // 0c. Dynamic Status to Stage DB-Backed Mapping Check
+    if (rawStatus && STATUS_STAGE_MAPPING && STATUS_STAGE_MAPPING[rawStatus]) {
+      return STATUS_STAGE_MAPPING[rawStatus];
     }
 
     const statusLower = rawStatus.toLowerCase();

@@ -313,9 +313,9 @@ export function ContactTable({
                     <td className="py-2 px-3 align-top">
                       {(() => {
                         const stageToUse = view.pipelineStage;
-                        const qStatus = view.queryStatus || (view.callPurpose === "QUERY" ? "Pending" : null);
-                        const isQueryActive = qStatus && qStatus !== "None" && qStatus !== "Solved" && qStatus !== "Query Solved";
-                        const isQuerySolved = qStatus === "Query Solved" || qStatus === "Solved";
+                        const rawQ = String(view.queryStatus || "").trim();
+                        const isQueryActive = (rawQ === "Pending" || rawQ === "Query Pending" || rawQ === "Attempting Query") && (String(view.callPurpose || "").toUpperCase() === "QUERY" || view.status === "Query" || stageToUse === "Query Desk");
+                        const isQuerySolved = rawQ === "Query Solved" || rawQ === "Solved";
 
                         if (stageToUse && stageToUse !== "Query Desk" && stageToUse !== "Reminder Desk") {
                           const pConfig = getPipelineStageConfig(stageToUse);

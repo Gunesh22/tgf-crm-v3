@@ -12,7 +12,6 @@ import {
 import { searchCRMByPhone } from "../../../lib/ghl";
 import {
   STATUS_OPTIONS,
-  OBJECTION_REASONS,
   SOURCE_OPTIONS,
   CALLED_FOR_OPTIONS,
   CALL_TYPE_OPTIONS,
@@ -137,7 +136,7 @@ export const EditModal = ({
     }
 
     normalized.callStatus = "";
-    normalized.queryStatus = row.queryStatus || "Pending";
+    normalized.queryStatus = row.queryStatus || "";
     normalized.queryDetails = "";
     normalized.objectionReason = "";
 
@@ -1314,6 +1313,10 @@ export const EditModal = ({
       if (isQueryMode) {
         if (!targetEdited.status) targetEdited.status = "Query";
         if (!targetEdited.queryStatus) targetEdited.queryStatus = "Pending";
+      } else if (targetEdited.status !== "Query") {
+        if (targetEdited.queryStatus === "Pending" && !savedRow?.queryStatus) {
+          targetEdited.queryStatus = "";
+        }
       }
 
       if (!phoneVal) missingFields.push("Phone Number");
@@ -1328,9 +1331,7 @@ export const EditModal = ({
         if (!sourceVal) missingFields.push("Source");
       }
 
-      if ((statusVal === "Not interested" || statusVal === "Not possible") && !targetEdited.objectionReason) {
-        missingFields.push(`Objection Reason for "${statusVal}"`);
-      }
+
 
       if (missingFields.length > 0) {
         setValidationErrors(missingFields);

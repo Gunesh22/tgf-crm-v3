@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { ShieldCheck, PhoneCall, MessageSquare, ListChecks, SlidersHorizontal, Database } from "lucide-react";
+import { ShieldCheck, PhoneCall, MessageSquare, ListChecks, SlidersHorizontal, Database, Layers } from "lucide-react";
 
 export function SettingsSubnav({ activeSection, onSelectSection }) {
   const activeTabRef = useRef(null);
@@ -10,6 +10,7 @@ export function SettingsSubnav({ activeSection, onSelectSection }) {
     { id: "call-center", label: "Call Center", icon: PhoneCall },
     { id: "whatsapp-templates", label: "WhatsApp", icon: MessageSquare },
     { id: "status-rules", label: "Status Rules", icon: ListChecks },
+    { id: "status-stage-mapping", label: "Stage Mapping", icon: Layers },
     { id: "call-classification", label: "Classification", icon: SlidersHorizontal },
     { id: "data-management", label: "Data Management", icon: Database },
   ];
@@ -30,7 +31,7 @@ export function SettingsSubnav({ activeSection, onSelectSection }) {
   }, [activeSection]);
 
   return (
-    <div className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-[#E4E7EC] -mx-4 md:-mx-6 px-4 md:px-6 mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] transition-all duration-150">
+    <div className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-[#E4E7EC] -mx-4 md:-mx-6 -mt-4 md:-mt-6 px-4 md:px-6 mb-4 shadow-[0_1px_3px_rgba(16,24,40,0.04)] transition-all duration-150">
       <div 
         ref={containerRef}
         className="max-w-[1240px] mx-auto flex items-center gap-1.5 overflow-x-auto no-scrollbar h-12 py-1"

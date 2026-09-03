@@ -9,6 +9,7 @@ import CompulsoryFieldBypassCard from "./CompulsoryFieldBypassCard";
 import { SettingsSubnav } from "./SettingsSubnav";
 import { AdminPasswordCard } from "./AdminPasswordCard";
 import { StatusClassificationCard } from "./StatusClassificationCard";
+import { StatusStageMappingCard } from "./StatusStageMappingCard";
 import { AddStatusCategorizationModal } from "./AddStatusCategorizationModal";
 import { 
   getSettingsOptions, 
@@ -39,7 +40,7 @@ export default function SettingsTab() {
     loadMonths();
   }, []);
 
-  const sectionIds = ["security", "call-center", "whatsapp-templates", "status-rules", "call-classification", "data-management"];
+  const sectionIds = ["security", "call-center", "whatsapp-templates", "status-rules", "status-stage-mapping", "call-classification", "data-management"];
 
   useEffect(() => {
     if (isLoading) return;
@@ -320,6 +321,7 @@ export default function SettingsTab() {
     "call-center": { title: "Call Center Options", desc: "Configure global dropdown options and status lists." },
     "whatsapp-templates": { title: "WhatsApp Message Templates", desc: "Customize quick message templates used by attenders when sending WhatsApp messages." },
     "status-rules": { title: "Status Rules & Compulsory Fields", desc: "Configure which fields are required when an attender logs a specific call status." },
+    "status-stage-mapping": { title: "Status to Pipeline Stage Mapping", desc: "Configure which pipeline stage each call status maps to. Stored in MongoDB." },
     "call-classification": { title: "Call Classification (Drag & Drop)", desc: "Classify statuses into Connected, Not Connected, or Unassigned categories for reporting." },
     "data-management": { title: "Data Management & Historical Logs", desc: "Manage monthly log archives, raw database purges, and historical snapshots." }
   };
@@ -328,9 +330,15 @@ export default function SettingsTab() {
 
   return (
     <div className="bg-[#F6F8FB] min-h-screen p-4 md:p-6 pb-24 space-y-6">
-      <div className="max-w-[1240px] mx-auto space-y-6">
+      <div className="max-w-[1240px] mx-auto space-y-4">
+        {/* Compact Settings Navigation Bar */}
+        <SettingsSubnav
+          activeSection={activeSection}
+          onSelectSection={scrollToSection}
+        />
+
         {/* Page & Active Section Header */}
-        <div className="pt-1 pb-1">
+        <div className="pt-0 pb-1">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 tracking-wide">
             <span>Settings</span>
             <span className="text-[#98A2B3]">/</span>
@@ -343,12 +351,6 @@ export default function SettingsTab() {
             {currentSection.desc}
           </p>
         </div>
-
-        {/* Compact Settings Navigation Bar */}
-        <SettingsSubnav
-          activeSection={activeSection}
-          onSelectSection={scrollToSection}
-        />
 
         {/* Section 1: Security */}
         <div 
@@ -420,6 +422,22 @@ export default function SettingsTab() {
           <CompulsoryFieldBypassCard
             options={options}
             setOptions={setOptions}
+          />
+        </div>
+
+        {/* Section 4b: Status to Pipeline Stage Mapping */}
+        <div 
+          id="status-stage-mapping" 
+          className="relative isolate overflow-hidden bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-4"
+        >
+          <StatusStageMappingCard
+            options={options}
+            onSaveMapping={async (payload) => {
+              const updatePayload = payload.statusStageMapping ? payload : { statusStageMapping: payload };
+              await updateCallCenterOptions(updatePayload);
+              setOptions(prev => ({ ...prev, ...updatePayload }));
+              updateDynamicOptions({ ...options, ...updatePayload });
+            }}
           />
         </div>
 

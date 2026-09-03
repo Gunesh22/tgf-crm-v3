@@ -16,8 +16,7 @@ import {
   QUERY_STATUS_OPTIONS,
   CALLED_FOR_OPTIONS,
   SOURCE_OPTIONS,
-  CALL_SOURCE_OPTIONS,
-  OBJECTION_REASONS
+  CALL_SOURCE_OPTIONS
 } from "../../utils";
 import { evaluatePipeline, getPipelineStageConfig, getEffectiveStage, shouldShowConvertToSales, PIPELINE_STAGES } from "../../../../utils/pipelineEngine";
 import { overridePipelineStage } from "../../../../lib/db";
@@ -1045,30 +1044,7 @@ export const CallEntryTab = ({
         </div>
       </div>
 
-      {/* Objection Reason for Not Interested - full width below */}
-      {activePrimaryResult === "Connected" && (edited.status?.toLowerCase() === "not interested") && (
-        <div className="space-y-2 p-3 bg-rose-50/70 border border-rose-200/80 rounded-xl animate-slide-up">
-          <label className="text-xs font-bold text-rose-800 flex items-center gap-1">
-            <AlertCircle size={13} /> Reason for Not Interested:
-          </label>
-          <div className="flex flex-wrap gap-1.5">
-            {OBJECTION_REASONS.map(reason => (
-              <button
-                key={reason}
-                type="button"
-                onClick={() => handleChange("objectionReason", edited.objectionReason === reason ? "" : reason)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
-                  edited.objectionReason === reason
-                    ? "bg-rose-600 text-white border-rose-600 shadow-2xs font-bold"
-                    : "bg-white text-rose-700 border-rose-200 hover:bg-rose-100"
-                }`}
-              >
-                {reason}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+
 
       {/* 6. CALL NOTES */}
       <div className="space-y-2">
