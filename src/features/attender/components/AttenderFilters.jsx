@@ -772,15 +772,15 @@ export function AttenderFilters({
           )}
         </div>
 
-        {/* Views group (Pill-style view tabs with fixed dimensions & zero reflow) */}
+        {/* Views group (Light gray pills navigation with purple active tab) */}
         <div className="flex items-center gap-1.5 overflow-x-auto shrink-0 py-0.5 select-none">
           {[
-            { id: "All", label: "All", icon: null, activeBg: "bg-indigo-600 text-white border-indigo-600 shadow-2xs" },
-            { id: "Hot Leads", label: "Hot Leads", icon: Flame, iconActive: "text-white", iconInactive: "text-orange-500", activeBg: "bg-orange-500 text-white border-orange-500 shadow-2xs" },
-            { id: "Follow up", label: "Follow up", icon: Clock, iconActive: "text-white", iconInactive: "text-blue-500", activeBg: "bg-blue-600 text-white border-blue-600 shadow-2xs" },
-            { id: "Unanswered Callback", label: "Unanswered Callback", icon: PhoneOff, iconActive: "text-white", iconInactive: "text-amber-500", activeBg: "bg-amber-500 text-white border-amber-500 shadow-2xs" },
-            { id: "Today Activity", label: "Today Activity", icon: Calendar, iconActive: "text-white", iconInactive: "text-teal-500", activeBg: "bg-teal-600 text-white border-teal-600 shadow-2xs" },
-            { id: "Shared", label: "Shared", icon: Users, iconActive: "text-white", iconInactive: "text-purple-500", activeBg: "bg-purple-600 text-white border-purple-600 shadow-2xs" },
+            { id: "All", label: "All", icon: null },
+            { id: "Hot Leads", label: "Hot Leads", icon: Flame },
+            { id: "Follow up", label: "Follow-up", icon: Clock },
+            { id: "Unanswered Callback", label: "Unanswered", icon: PhoneOff },
+            { id: "Today Activity", label: "Today", icon: Calendar },
+            { id: "Shared", label: "Shared", icon: Users },
           ].map(tab => {
             const isActive = filterStatus === tab.id;
             const IconComp = tab.icon;
@@ -789,14 +789,14 @@ export function AttenderFilters({
                 key={tab.id}
                 type="button"
                 onClick={() => { setFilterStatus(tab.id); setPage(1); }}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap border transition-[background-color,border-color,color,box-shadow] duration-150 ease-in-out cursor-pointer h-7 ${
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap border transition-all duration-150 ease-in-out cursor-pointer h-7 ${
                   isActive
-                    ? tab.activeBg
+                    ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs font-bold"
                     : "bg-slate-100 border-slate-200/60 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900"
                 }`}
               >
                 {IconComp && (
-                  <IconComp size={12} className={`shrink-0 transition-colors duration-150 ${isActive ? tab.iconActive : tab.iconInactive}`} />
+                  <IconComp size={12} className={`shrink-0 ${isActive ? "text-white" : "text-slate-500"}`} />
                 )}
                 <span>{tab.label}</span>
               </button>

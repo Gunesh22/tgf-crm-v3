@@ -1,16 +1,42 @@
 import React from "react";
-import { Flame, Clock, RotateCw, Users, Loader } from "lucide-react";
+import { Flame, Clock, RotateCw, Users, Loader, ArrowDownLeft, ArrowUpRight, Calendar } from "lucide-react";
 import { normalizePhone } from "../../../lib/db";
 import { getFieldWithFallback, isUnansweredCallback, getCanonicalStatus, getSharedAttenders, getAttenderStatus, getAttenderRemark, getContactView, parseTimestamp } from "../utils";
 import { getPipelineStageConfig } from "../../../utils/pipelineEngine";
 import LottieAnimation from "../../../components/ui/LottieAnimation";
 import customerServiceAnimation from "../../../assets/customer_service.json";
 
+function formatCallbackDisplay(rawDate, isDue) {
+  if (!rawDate) return null;
+  const d = parseTimestamp(rawDate);
+  if (!d || isNaN(d.getTime())) return null;
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const targetDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+  const diffDays = Math.round((targetDay - today) / (1000 * 60 * 60 * 24));
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const dateStr = `${d.getDate()} ${monthNames[d.getMonth()]}`;
+  const hasTime = d.getHours() > 0 || d.getMinutes() > 0;
+  const timeStr = hasTime ? d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "";
+
+  if (isDue || diffDays < 0) {
+    return { text: `Overdue · ${dateStr}`, type: "overdue" };
+  } else if (diffDays === 0) {
+    return { text: timeStr ? `Today · ${timeStr}` : `Today · ${dateStr}`, type: "today" };
+  } else if (diffDays === 1) {
+    return { text: timeStr ? `Tomorrow · ${timeStr}` : `Tomorrow · ${dateStr}`, type: "tomorrow" };
+  } else {
+    return { text: timeStr ? `${dateStr} · ${timeStr}` : dateStr, type: "normal" };
+  }
+}
+
 function CollapsedTags({ tags }) {
   const [expanded, setExpanded] = React.useState(false);
 
   if (tags.length === 0) {
-    return <span className="text-gray-400">—</span>;
+    return <span className="text-slate-300">—</span>;
   }
 
   // If there are 2 or fewer tags, just render them
@@ -18,7 +44,7 @@ function CollapsedTags({ tags }) {
     return (
       <div className="flex flex-col gap-1 items-start">
         {tags.map((t, idx) => (
-          <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 whitespace-nowrap">
+          <span key={idx} className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200/60 whitespace-nowrap">
             #{t}
           </span>
         ))}
@@ -37,11 +63,11 @@ function CollapsedTags({ tags }) {
         }}
       >
         {tags.map((t, idx) => (
-          <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 whitespace-nowrap">
+          <span key={idx} className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200/60 whitespace-nowrap">
             #{t}
           </span>
         ))}
-        <button className="text-[10px] text-indigo-600 hover:text-indigo-800 font-extrabold underline mt-0.5 transition-colors">
+        <button className="text-[10px] text-indigo-600 hover:text-indigo-800 font-semibold underline mt-0.5 transition-colors">
           Show Less
         </button>
       </div>
@@ -55,7 +81,7 @@ function CollapsedTags({ tags }) {
   return (
     <div className="flex flex-col gap-1 items-start">
       {visibleTags.map((t, idx) => (
-        <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 whitespace-nowrap">
+        <span key={idx} className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200/60 whitespace-nowrap">
           #{t}
         </span>
       ))}
@@ -64,7 +90,7 @@ function CollapsedTags({ tags }) {
           e.stopPropagation(); // Prevent opening EditModal
           setExpanded(true);
         }}
-        className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black bg-gray-100 hover:bg-indigo-100 text-gray-600 hover:text-indigo-700 border border-gray-200 hover:border-indigo-200 transition-colors whitespace-nowrap"
+        className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 border border-slate-200 transition-colors whitespace-nowrap"
       >
         +{remaining} more
       </button>
@@ -98,22 +124,22 @@ export function ContactTable({
     const status = getCanonicalStatus(rawStatus || "");
 
     if (isUnansweredCallback(log)) {
-      return { bg: "bg-amber-100 border border-amber-300/80", text: "text-amber-800 font-extrabold", label: status || "Unanswered Callback" };
+      return { bg: "bg-amber-50 border border-amber-200", text: "text-amber-700 font-semibold", label: status || "Unanswered Callback" };
     }
     if (status && status !== "Pending" && status !== "Call Log Added") {
-      if (status === "Reg.Done") return { bg: "bg-emerald-100", text: "text-emerald-700", label: status };
-      if (status === "Interested") return { bg: "bg-blue-100", text: "text-blue-700", label: status };
-      if (status === "Info given") return { bg: "bg-purple-100", text: "text-purple-700", label: status };
+      if (status === "Reg.Done") return { bg: "bg-emerald-50 border border-emerald-200", text: "text-emerald-700 font-semibold", label: status };
+      if (status === "Interested") return { bg: "bg-purple-50 border border-purple-200", text: "text-purple-700 font-semibold", label: status };
+      if (status === "Info given") return { bg: "bg-indigo-50 border border-indigo-200", text: "text-indigo-700 font-semibold", label: status };
       if (["NA", "Busy", "Call Cut", "switched off", "Not interested", "Invalid No", "no answer", "Not Attended"].includes(status)) {
-        return { bg: "bg-red-100", text: "text-red-600", label: status };
+        return { bg: "bg-rose-50 border border-rose-200", text: "text-rose-700 font-semibold", label: status };
       }
-      return { bg: "bg-indigo-100", text: "text-indigo-700", label: status };
+      return { bg: "bg-slate-100 border border-slate-200", text: "text-slate-700 font-semibold", label: status };
     }
     const hasAttempt = log.callbackDate || log.remark || log.Remark || log.remarks || (Array.isArray(log.history) && log.history.length > 0);
     if (hasAttempt) {
       return { bg: "bg-amber-50 border border-amber-200", text: "text-amber-700 font-semibold", label: status || "NA" };
     }
-    return { bg: "bg-gray-100", text: "text-gray-400", label: "Pending" };
+    return { bg: "bg-slate-50 border border-slate-200", text: "text-slate-400 font-medium", label: "Pending" };
   };
 
   const getCallbackStr = (log) => {
@@ -303,41 +329,61 @@ export function ContactTable({
                     );
                   })}
                   {!hiddenColumns.includes("Type") && (
-                    <td className="py-2 px-3 align-top">
-                      <span className={`text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.2 rounded border ${view.callType === "incoming" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-700 border-slate-200"}`}>
-                        {view.callType || "outgoing"}
+                    <td className="py-2.5 px-3 align-top whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500">
+                        {view.callType === "incoming" ? (
+                          <>
+                            <ArrowDownLeft size={13} className="text-emerald-600 shrink-0" />
+                            <span>Incoming</span>
+                          </>
+                        ) : (
+                          <>
+                            <ArrowUpRight size={13} className="text-slate-400 shrink-0" />
+                            <span>Outgoing</span>
+                          </>
+                        )}
                       </span>
                     </td>
                   )}
                   {!hiddenColumns.includes("Status") && (
-                    <td className="py-2 px-3 align-top">
+                    <td className="py-2.5 px-3 align-top">
                       {(() => {
                         const stageToUse = view.pipelineStage;
                         const rawQ = String(view.queryStatus || "").trim();
                         const isQueryActive = (rawQ === "Pending" || rawQ === "Query Pending" || rawQ === "Attempting Query") && (String(view.callPurpose || "").toUpperCase() === "QUERY" || view.status === "Query" || stageToUse === "Query Desk");
                         const isQuerySolved = rawQ === "Query Solved" || rawQ === "Solved";
 
+                        const getStageBadgeStyle = (stage) => {
+                          if (stage?.includes("Registered") || stage?.includes("Won")) return "bg-emerald-50 text-emerald-700 border-emerald-200";
+                          if (stage?.includes("Nurture") || stage?.includes("Interested")) return "bg-purple-50 text-purple-700 border-purple-200";
+                          if (stage?.includes("Attempting")) return "bg-amber-50 text-amber-700 border-amber-200";
+                          if (stage?.includes("Information") || stage?.includes("Pending")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
+                          if (stage?.includes("Future") || stage?.includes("Pool")) return "bg-slate-100 text-slate-700 border-slate-200";
+                          return "bg-slate-100 text-slate-700 border-slate-200";
+                        };
+
                         if (stageToUse && stageToUse !== "Query Desk" && stageToUse !== "Reminder Desk") {
                           const pConfig = getPipelineStageConfig(stageToUse);
+                          const style = getStageBadgeStyle(stageToUse);
                           return (
-                            <div className="flex flex-col gap-0.5">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border ${pConfig.badge}`}>
-                                {log.isHotLead && <Flame size={10} className="inline text-amber-500 mr-0.5" fill="currentColor" />}
+                            <div className="flex flex-col gap-0.5 items-start">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${style}`}>
+                                {log.isHotLead && <Flame size={10} className="inline text-amber-500 mr-1" fill="currentColor" />}
                                 {pConfig.label}
                               </span>
                               {isQueryActive && (
-                                <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-amber-50 text-amber-800 border border-amber-200 w-fit">
+                                <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
                                   ❓ Query Pending
                                 </span>
                               )}
                               {isQuerySolved && (
-                                <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 w-fit">
+                                <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                   ✓ Query Solved
                                 </span>
                               )}
                               {view.status && !isQueryActive && !isQuerySolved && (
-                                <span className="text-[9px] text-slate-500 font-medium ml-0.5">
-                                  Outcome: {view.status}
+                                <span className="text-[10px] text-slate-500 font-medium ml-0.5">
+                                  {view.status}
                                 </span>
                               )}
                             </div>
@@ -346,13 +392,13 @@ export function ContactTable({
 
                         if (stageToUse === "Query Desk" || isQueryActive) {
                           return (
-                            <div className="flex flex-col gap-0.5">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                            <div className="flex flex-col gap-0.5 items-start">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-sky-50 text-sky-700 border border-sky-200">
                                 ❓ Query Pending
                               </span>
                               {view.status && (
-                                <span className="text-[9px] text-slate-500 font-medium ml-0.5">
-                                  Outcome: {view.status}
+                                <span className="text-[10px] text-slate-500 font-medium ml-0.5">
+                                  {view.status}
                                 </span>
                               )}
                             </div>
@@ -361,13 +407,13 @@ export function ContactTable({
 
                         if (stageToUse === "Reminder Desk" || String(view.callPurpose || "").toUpperCase() === "REMINDER") {
                           return (
-                            <div className="flex flex-col gap-0.5">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-900 border border-sky-300">
-                                ⏰ Reminder Scheduled
+                            <div className="flex flex-col gap-0.5 items-start">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-sky-50 text-sky-700 border border-sky-200">
+                                ⏰ Reminder
                               </span>
                               {view.status && (
-                                <span className="text-[9px] text-slate-500 font-medium ml-0.5">
-                                  Outcome: {view.status}
+                                <span className="text-[10px] text-slate-500 font-medium ml-0.5">
+                                  {view.status}
                                 </span>
                               )}
                             </div>
@@ -376,7 +422,7 @@ export function ContactTable({
 
                         const badge = getStatusBadge(log, activeAttenderCtx);
                         return (
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider ${badge.bg} ${badge.text}`}>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold border ${badge.bg} ${badge.text}`}>
                             {log.isHotLead && <Flame size={10} className="inline text-amber-500" fill="currentColor" />}
                             {badge.label}
                           </span>
@@ -385,7 +431,7 @@ export function ContactTable({
                     </td>
                   )}
                   {!hiddenColumns.includes("Remark") && (
-                    <td className="py-2 px-3 text-slate-700 text-xs leading-relaxed min-w-[200px] max-w-[320px] break-words align-top">
+                    <td className="py-2.5 px-3 text-slate-700 text-xs leading-relaxed min-w-[200px] max-w-[320px] break-words align-top">
                       {(() => {
                         const remarkVal = view.remark;
                         if (remarkVal) return remarkVal;
@@ -394,7 +440,7 @@ export function ContactTable({
                     </td>
                   )}
                   {!hiddenColumns.includes("Callback") && (
-                    <td className="py-2 px-3 align-top whitespace-nowrap">
+                    <td className="py-2.5 px-3 align-top whitespace-nowrap">
                       {(() => {
                         const rawCb = view.callbackDate || log.callbackDate;
                         const parsedDate = parseTimestamp(rawCb) || parseTimestamp(log.callbackDate);

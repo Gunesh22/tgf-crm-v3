@@ -1085,96 +1085,132 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
         </div>
       </div>
 
-      {/* 2. PIPELINE OVERVIEW — MAIN FUNNEL SECTION */}
-      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-2.5 gap-2">
-          <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-            <span>🎯</span> PIPELINE OVERVIEW
-          </h3>
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 font-extrabold text-[11px] border border-indigo-100">
-              Sales Funnel: {Object.values(pipelineStageCounts).reduce((a, b) => a + b, 0)} Leads
-            </span>
-            <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 font-extrabold text-[11px] border border-amber-200/60">
-              Query/Reminder Desks: {activeFunnelPeopleCount - Object.values(pipelineStageCounts).reduce((a, b) => a + b, 0)} Leads
-            </span>
-            <span className="text-slate-900 font-black text-xs bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
-              Total Contacts: {activeFunnelPeopleCount}
-            </span>
+      {/* 2. PIPELINE & CALL ANALYTICS — SLEEK DENSE FLAT INTERFACE */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-6">
+        
+        {/* Top Statistical Summary Header with Subtle Vertical Separators */}
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100">
+          <div className="flex items-center gap-6 divide-x divide-slate-200">
+            <div className="pr-4">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">SALES FUNNEL</span>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="text-xl font-black text-slate-900">{Object.values(pipelineStageCounts).reduce((a, b) => a + b, 0)}</span>
+                <span className="text-xs font-semibold text-slate-500">leads</span>
+              </div>
+            </div>
+
+            <div className="px-6">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">QUERY + REMINDER</span>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="text-xl font-black text-amber-700">{activeFunnelPeopleCount - Object.values(pipelineStageCounts).reduce((a, b) => a + b, 0)}</span>
+                <span className="text-xs font-semibold text-slate-500">leads</span>
+              </div>
+            </div>
+
+            <div className="pl-6">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">TOTAL CONTACTS</span>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="text-xl font-black text-indigo-600">{activeFunnelPeopleCount}</span>
+                <span className="text-xs font-semibold text-slate-500">total</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Funnel Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
-          {[
-            { key: "new_lead", stageName: "1. New Lead", stageValue: PIPELINE_STAGES.NEW_LEAD, bg: "bg-slate-50 border-slate-200 text-slate-700" },
-            { key: "attempting", stageName: "2. Attempting Contact", stageValue: PIPELINE_STAGES.ATTEMPTING, bg: "bg-amber-50/50 border-amber-200 text-amber-900" },
-            { key: "info_given", stageName: "3. Information Given", stageValue: PIPELINE_STAGES.INFO_GIVEN, bg: "bg-blue-50/50 border-blue-200 text-blue-900" },
-            { key: "prev_prog_pending", stageName: "Previous Program Pending", stageValue: PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING, bg: "bg-purple-50/50 border-purple-200 text-purple-900" },
-            { key: "nurture", stageName: "4. Nurture / Interested", stageValue: PIPELINE_STAGES.NURTURE_INTERESTED, bg: "bg-indigo-50/50 border-indigo-200 text-indigo-900" },
-            { key: "future_pool", stageName: "5. Future Pool", stageValue: PIPELINE_STAGES.FUTURE_POOL, bg: "bg-purple-50/50 border-purple-200 text-purple-900" },
-            { key: "registered", stageName: "6. Registered / Won", stageValue: PIPELINE_STAGES.REGISTERED_WON, bg: "bg-emerald-50/50 border-emerald-200 text-emerald-900" }
-          ].map(st => {
-            const count = pipelineStageCounts[st.stageValue] || 0;
-            const pct = activeFunnelPeopleCount > 0 ? ((count / activeFunnelPeopleCount) * 100).toFixed(1) : "0.0";
+        {/* Section Header: Sales Pipeline */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
+              SALES PIPELINE
+            </h3>
+            <span className="text-xs font-bold text-slate-500">
+              {Object.values(pipelineStageCounts).reduce((a, b) => a + b, 0)} Leads
+            </span>
+          </div>
 
-            return (
-              <div
-                key={st.key}
-                onClick={() => handleStageClick(st.stageName, st.stageValue)}
-                className={`p-3 rounded-lg border ${st.bg} hover:shadow-sm transition-all cursor-pointer group`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold truncate">{st.stageName}</span>
-                  <span className="text-[10px] font-bold opacity-65">{pct}%</span>
+          {/* Continuous Strip Sales Pipeline */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 bg-slate-50/70 rounded-xl border border-slate-200/80 overflow-hidden">
+            {[
+              { key: "new_lead", label: "New Lead", stageValue: PIPELINE_STAGES.NEW_LEAD },
+              { key: "attempting", label: "Attempting Contact", stageValue: PIPELINE_STAGES.ATTEMPTING },
+              { key: "info_given", label: "Information Given", stageValue: PIPELINE_STAGES.INFO_GIVEN },
+              { key: "nurture", label: "Nurture / Interested", stageValue: PIPELINE_STAGES.NURTURE_INTERESTED },
+              { key: "future_pool", label: "Future Pool", stageValue: PIPELINE_STAGES.FUTURE_POOL },
+              { key: "registered", label: "Registered / Won", stageValue: PIPELINE_STAGES.REGISTERED_WON, isWon: true }
+            ].map(st => {
+              const count = pipelineStageCounts[st.stageValue] || 0;
+              const totalFunnel = Object.values(pipelineStageCounts).reduce((a, b) => a + b, 0);
+              const pct = totalFunnel > 0 ? ((count / totalFunnel) * 100).toFixed(1) : "0.0";
+
+              return (
+                <div
+                  key={st.key}
+                  onClick={() => handleStageClick(st.label, st.stageValue)}
+                  className={`p-3.5 hover:bg-white transition-all cursor-pointer group flex flex-col justify-between ${
+                    st.isWon ? "bg-emerald-50/40" : ""
+                  }`}
+                >
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate block">
+                    {st.label}
+                  </span>
+                  <div className="mt-2 flex items-baseline justify-between">
+                    <span className={`text-2xl font-black transition-transform group-hover:scale-105 origin-left ${
+                      st.isWon ? "text-emerald-600" : count > 0 ? "text-slate-900" : "text-slate-400"
+                    }`}>
+                      {count}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400">
+                      {pct}%
+                    </span>
+                  </div>
                 </div>
-                <p className="text-2xl font-black mt-1 group-hover:scale-105 transition-transform origin-left">{count}</p>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
 
-        {/* Previous Program Pending Breakdown */}
+        {/* Compact Previous Program Pending Insight */}
         {prevProgPendingBreakdown.length > 0 && (
-          <div className="p-3 bg-purple-50/60 border border-purple-200 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-extrabold text-purple-900 uppercase tracking-wider flex items-center gap-1">
-                <span>⏳</span> PREVIOUS PROGRAM PENDING BACKLOG BY PROGRAM
-              </span>
-              <span className="text-[11px] font-bold text-purple-700">
-                {prevProgPendingBreakdown.reduce((sum, item) => sum + item.count, 0)} Total Leads
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {prevProgPendingBreakdown.map((item) => (
-                <div 
-                  key={item.name}
-                  onClick={() => handleStageClick(`Previous Program Pending — ${item.name}`, PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING)}
-                  className="px-2.5 py-1 bg-white border border-purple-200 rounded-md text-xs font-semibold text-purple-900 flex items-center gap-2 shadow-2xs hover:bg-purple-100/50 cursor-pointer transition-colors"
-                >
-                  <span>{item.name}</span>
-                  <span className="px-1.5 py-0.2 bg-purple-600 text-white rounded-full text-[10px] font-extrabold">
-                    {item.count}
-                  </span>
-                </div>
-              ))}
+          <div className="pt-2">
+            <div className="p-3 bg-purple-50/50 border border-purple-200/80 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs font-bold text-purple-950 uppercase tracking-wider">
+                  PREVIOUS PROGRAM PENDING
+                </span>
+                <span className="px-2 py-0.5 bg-purple-200 text-purple-900 font-extrabold text-[11px] rounded-full">
+                  {prevProgPendingBreakdown.reduce((sum, item) => sum + item.count, 0)}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {prevProgPendingBreakdown.map((item) => (
+                  <div
+                    key={item.name}
+                    onClick={() => handleStageClick(`Previous Program Pending — ${item.name}`, PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING)}
+                    className="px-2.5 py-1 bg-white border border-purple-200/80 rounded-lg text-xs font-semibold text-purple-900 flex items-center gap-1.5 shadow-2xs hover:bg-purple-100/60 cursor-pointer transition-colors"
+                  >
+                    <span>{item.name}</span>
+                    <span className="font-black text-purple-700">({item.count})</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Auxiliary Sales Outcomes */}
+        {/* Auxiliary Outcomes Row (Closed / Lost, Closed / Invalid, Existing Alumni, Legacy) */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
           <div
             onClick={() => handleStageClick("Closed / Lost", PIPELINE_STAGES.CLOSED_LOST)}
-            className="p-2.5 bg-rose-50/50 border border-rose-200 rounded-lg flex items-center justify-between cursor-pointer hover:bg-rose-100/50 transition-colors"
+            className="p-3 bg-rose-50/40 border border-rose-200/80 rounded-xl flex items-center justify-between cursor-pointer hover:bg-rose-100/50 transition-colors"
           >
             <span className="text-xs font-bold text-rose-900">Closed / Lost</span>
-            <span className="text-lg font-black text-rose-900">{pipelineStageCounts[PIPELINE_STAGES.CLOSED_LOST] || 0}</span>
+            <span className="text-lg font-black text-rose-800">{pipelineStageCounts[PIPELINE_STAGES.CLOSED_LOST] || 0}</span>
           </div>
 
           <div
             onClick={() => handleStageClick("Closed / Invalid", PIPELINE_STAGES.CLOSED_INVALID)}
-            className="p-2.5 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between cursor-pointer hover:bg-slate-200/60 transition-colors"
+            className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center justify-between cursor-pointer hover:bg-slate-100 transition-colors"
           >
             <span className="text-xs font-bold text-slate-700">Closed / Invalid</span>
             <span className="text-lg font-black text-slate-800">{pipelineStageCounts[PIPELINE_STAGES.CLOSED_INVALID] || 0}</span>
@@ -1182,155 +1218,143 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
 
           <div
             onClick={() => handleStageClick("Existing Alumni", "Existing Alumni")}
-            className="p-2.5 bg-teal-50/50 border border-teal-200 rounded-lg flex items-center justify-between cursor-pointer hover:bg-teal-100/50 transition-colors"
+            className="p-3 bg-violet-50/40 border border-violet-200/80 rounded-xl flex items-center justify-between cursor-pointer hover:bg-violet-100/50 transition-colors"
           >
-            <span className="text-xs font-bold text-teal-900">Existing Alumni</span>
-            <span className="text-lg font-black text-teal-900">{pipelineStageCounts["Existing Alumni"] || 0}</span>
+            <span className="text-xs font-bold text-violet-900">Existing Alumni</span>
+            <span className="text-lg font-black text-violet-800">{pipelineStageCounts["Existing Alumni"] || 0}</span>
           </div>
 
           <div
             onClick={() => handleStageClick("Unknown / Legacy", "Unknown / Legacy")}
-            className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between cursor-pointer hover:bg-slate-100 transition-colors"
+            className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center justify-between cursor-pointer hover:bg-slate-100 transition-colors"
           >
-            <span className="text-xs font-bold text-slate-800 flex items-center gap-1">
+            <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
               <Info size={13} className="text-slate-400" /> Legacy / Unmapped
             </span>
-            <span className="text-lg font-black text-indigo-600">{pipelineStageCounts["Unknown / Legacy"] || 0}</span>
+            <span className="text-lg font-black text-slate-800">{pipelineStageCounts["Unknown / Legacy"] || 0}</span>
           </div>
         </div>
 
-        {/* ── SEPARATE QUERY & REMINDER REPORTING SECTIONS ── */}
+        {/* ── WORKSPACE SECTIONS: QUERY DESK & REMINDER ACTIVITY ── */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-          {/* 1. QUERY PIPELINE BREAKDOWN (Independent State Machine) */}
-          <div className="p-3.5 bg-cyan-50/40 border border-cyan-200 rounded-xl space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-extrabold text-cyan-900 uppercase tracking-wider flex items-center gap-1.5">
-                <HelpCircle size={15} className="text-cyan-600" /> QUERY PIPELINE (INDEPENDENT)
+          {/* QUERY DESK */}
+          <div className="p-4 bg-slate-50/60 border border-slate-200/80 rounded-xl space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+              <span className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                <HelpCircle size={15} className="text-blue-600" /> QUERY DESK
               </span>
-              <span className="text-[11px] font-bold text-cyan-700">
-                {Object.values(queryStageCounts).reduce((a, b) => a + b, 0)} Total Query Leads
+              <span className="text-xs font-semibold text-slate-500">
+                {Object.values(queryStageCounts).reduce((a, b) => a + b, 0)} active/history
               </span>
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div 
                 onClick={() => {
                   const items = filteredContacts.filter(c => getCanonicalQueryStage(c) === QUERY_PIPELINE_STAGES.ATTEMPTING_QUERY);
-                  setDrillDownModal({ title: `Query Pipeline: ${QUERY_PIPELINE_STAGES.ATTEMPTING_QUERY} (${items.length})`, type: "people", items });
+                  setDrillDownModal({ title: `Query Desk: ${QUERY_PIPELINE_STAGES.ATTEMPTING_QUERY} (${items.length})`, type: "people", items });
                 }}
-                className="p-2.5 bg-white border border-cyan-200 rounded-lg text-center cursor-pointer hover:bg-cyan-100/40 transition-colors"
+                className="p-2.5 bg-white border border-slate-200/80 rounded-lg text-center cursor-pointer hover:bg-slate-100/60 transition-colors"
               >
-                <span className="text-[11px] font-bold text-cyan-800 block">1. Attempting Query</span>
-                <span className="text-base font-black text-cyan-900">{queryStageCounts[QUERY_PIPELINE_STAGES.ATTEMPTING_QUERY] || 0}</span>
+                <span className="text-[10px] font-bold text-slate-500 uppercase block">Attempting</span>
+                <span className="text-xl font-black text-slate-900 mt-0.5 block">{queryStageCounts[QUERY_PIPELINE_STAGES.ATTEMPTING_QUERY] || 0}</span>
               </div>
               <div 
                 onClick={() => {
                   const items = filteredContacts.filter(c => getCanonicalQueryStage(c) === QUERY_PIPELINE_STAGES.QUERY_PENDING);
-                  setDrillDownModal({ title: `Query Pipeline: ${QUERY_PIPELINE_STAGES.QUERY_PENDING} (${items.length})`, type: "people", items });
+                  setDrillDownModal({ title: `Query Desk: ${QUERY_PIPELINE_STAGES.QUERY_PENDING} (${items.length})`, type: "people", items });
                 }}
-                className="p-2.5 bg-white border border-amber-200 rounded-lg text-center cursor-pointer hover:bg-amber-100/40 transition-colors"
+                className="p-2.5 bg-white border border-amber-200/80 rounded-lg text-center cursor-pointer hover:bg-amber-50/50 transition-colors"
               >
-                <span className="text-[11px] font-bold text-amber-800 block">2. Query Pending</span>
-                <span className="text-base font-black text-amber-900">{queryStageCounts[QUERY_PIPELINE_STAGES.QUERY_PENDING] || 0}</span>
+                <span className="text-[10px] font-bold text-amber-700 uppercase block">Pending</span>
+                <span className="text-xl font-black text-amber-800 mt-0.5 block">{queryStageCounts[QUERY_PIPELINE_STAGES.QUERY_PENDING] || 0}</span>
               </div>
               <div 
                 onClick={() => {
                   const items = filteredContacts.filter(c => getCanonicalQueryStage(c) === QUERY_PIPELINE_STAGES.QUERY_SOLVED);
-                  setDrillDownModal({ title: `Query Pipeline: ${QUERY_PIPELINE_STAGES.QUERY_SOLVED} (${items.length})`, type: "people", items });
+                  setDrillDownModal({ title: `Query Desk: ${QUERY_PIPELINE_STAGES.QUERY_SOLVED} (${items.length})`, type: "people", items });
                 }}
-                className="p-2.5 bg-white border border-emerald-200 rounded-lg text-center cursor-pointer hover:bg-emerald-100/40 transition-colors"
+                className="p-2.5 bg-white border border-emerald-200/80 rounded-lg text-center cursor-pointer hover:bg-emerald-50/50 transition-colors"
               >
-                <span className="text-[11px] font-bold text-emerald-800 block">3. Query Solved</span>
-                <span className="text-base font-black text-emerald-900">{queryStageCounts[QUERY_PIPELINE_STAGES.QUERY_SOLVED] || 0}</span>
+                <span className="text-[10px] font-bold text-emerald-700 uppercase block">Solved</span>
+                <span className="text-xl font-black text-emerald-800 mt-0.5 block">{queryStageCounts[QUERY_PIPELINE_STAGES.QUERY_SOLVED] || 0}</span>
               </div>
             </div>
           </div>
 
-          {/* 2. REMINDER ACTIVITY SUMMARY (Activity Category, Not a Pipeline) */}
-          <div className="p-3.5 bg-sky-50/40 border border-sky-200 rounded-xl space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-extrabold text-sky-900 uppercase tracking-wider flex items-center gap-1.5">
-                <Clock size={15} className="text-sky-600" /> REMINDER DESK & ACTIVITY
+          {/* REMINDER ACTIVITY */}
+          <div className="p-4 bg-slate-50/60 border border-slate-200/80 rounded-xl space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+              <span className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                <Clock size={15} className="text-orange-600" /> REMINDER ACTIVITY
               </span>
-              <span className="text-[11px] font-bold text-sky-700">
-                Activity Only (No Pipeline Stage)
+              <span className="text-xs font-semibold text-slate-500">
+                Activity Tracked
               </span>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <div className="p-2.5 bg-white border border-sky-200 rounded-lg text-center">
-                <span className="text-[11px] font-bold text-sky-800 block">Reminder Calls Logged</span>
-                <span className="text-base font-black text-sky-900">{reminderCounts.reminderCallsCount}</span>
+              <div className="p-2.5 bg-white border border-slate-200/80 rounded-lg text-center">
+                <span className="text-[10px] font-bold text-slate-500 uppercase block">Reminder Calls</span>
+                <span className="text-xl font-black text-slate-900 mt-0.5 block">{reminderCounts.reminderCallsCount}</span>
               </div>
-              <div className="p-2.5 bg-white border border-sky-200 rounded-lg text-center">
-                <span className="text-[11px] font-bold text-sky-800 block">Contacts with Reminders</span>
-                <span className="text-base font-black text-sky-900">{reminderCounts.reminderContactsCount}</span>
+              <div className="p-2.5 bg-white border border-slate-200/80 rounded-lg text-center">
+                <span className="text-[10px] font-bold text-slate-500 uppercase block">Contacts</span>
+                <span className="text-xl font-black text-slate-900 mt-0.5 block">{reminderCounts.reminderContactsCount}</span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 3. ACTIONABLE INSIGHTS — ATTENTION NEEDED */}
-      <div className="bg-white p-4 rounded-xl border border-amber-200 shadow-2xs space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-extrabold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+      {/* 3. ATTENTION NEEDED — SEPARATE COMPACT ALERT BOX */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+          <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
             <AlertTriangle size={15} className="text-amber-600" /> ATTENTION NEEDED
           </h3>
-          <span className="text-[11px] font-medium text-amber-700">Actionable leads requiring follow-up</span>
+          <span className="text-xs font-semibold text-slate-500">Actionable lead alerts</span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs font-medium">
+        <div className="divide-y divide-slate-100 bg-slate-50/50 border border-slate-200/80 rounded-xl overflow-hidden text-xs font-medium">
           <div
             onClick={() => {
               const items = attentionNeededLists.nurtureNoRecentCall;
-              setDrillDownModal({
-                title: `Nurture (No call >7 days) — Contacts (${items.length})`,
-                type: "people",
-                items
-              });
+              setDrillDownModal({ title: `Nurture (>7 days no call) (${items.length})`, type: "people", items });
             }}
-            className="p-3 rounded-lg border border-amber-200 bg-amber-50/50 hover:bg-amber-100/50 transition-colors cursor-pointer flex items-center justify-between"
+            className="p-3.5 hover:bg-white transition-colors cursor-pointer flex items-center justify-between group"
           >
-            <div>
-              <span className="font-bold text-amber-900 block">Nurture leads with no call &gt;7 days</span>
-              <span className="text-[10px] text-amber-700 font-medium">Click to inspect list</span>
+            <div className="flex items-center gap-2">
+              <span className="text-amber-600 font-bold text-sm">⚠</span>
+              <span className="font-semibold text-slate-800 group-hover:text-amber-900 transition-colors">Nurture leads with no call &gt; 7 days</span>
             </div>
-            <span className="text-lg font-black text-amber-900 bg-amber-200/80 px-2 py-0.5 rounded-md ml-2">{attentionNeededLists.nurtureNoRecentCall.length}</span>
+            <span className="font-black text-slate-900 text-sm">{attentionNeededLists.nurtureNoRecentCall.length}</span>
           </div>
 
           <div
             onClick={() => {
               const items = attentionNeededLists.stuckInAttempting;
-              setDrillDownModal({
-                title: `Attempting (>5 calls stuck) — Contacts (${items.length})`,
-                type: "people",
-                items
-              });
+              setDrillDownModal({ title: `Attempting (>5 calls stuck) (${items.length})`, type: "people", items });
             }}
-            className="p-3 rounded-lg border border-rose-200 bg-rose-50/50 hover:bg-rose-100/50 transition-colors cursor-pointer flex items-center justify-between"
+            className="p-3.5 hover:bg-white transition-colors cursor-pointer flex items-center justify-between group"
           >
-            <div>
-              <span className="font-bold text-rose-900 block">Attempting leads with &gt;5 calls</span>
-              <span className="text-[10px] text-rose-700 font-medium">Click to inspect list</span>
+            <div className="flex items-center gap-2">
+              <span className="text-rose-600 font-bold text-sm">⚠</span>
+              <span className="font-semibold text-slate-800 group-hover:text-rose-900 transition-colors">Attempting leads with &gt; 5 calls</span>
             </div>
-            <span className="text-lg font-black text-rose-900 bg-rose-200/80 px-2 py-0.5 rounded-md ml-2">{attentionNeededLists.stuckInAttempting.length}</span>
+            <span className="font-black text-slate-900 text-sm">{attentionNeededLists.stuckInAttempting.length}</span>
           </div>
 
           <div
             onClick={() => {
               const items = attentionNeededLists.stuckInInfoGiven;
-              setDrillDownModal({
-                title: `Information Given (>10 days old) — Contacts (${items.length})`,
-                type: "people",
-                items
-              });
+              setDrillDownModal({ title: `Information Given (>10 days old) (${items.length})`, type: "people", items });
             }}
-            className="p-3 rounded-lg border border-blue-200 bg-blue-50/50 hover:bg-blue-100/50 transition-colors cursor-pointer flex items-center justify-between"
+            className="p-3.5 hover:bg-white transition-colors cursor-pointer flex items-center justify-between group"
           >
-            <div>
-              <span className="font-bold text-blue-900 block">Information Given &gt;10 days old</span>
-              <span className="text-[10px] text-blue-700 font-medium">Click to inspect list</span>
+            <div className="flex items-center gap-2">
+              <span className="text-blue-600 font-bold text-sm">ℹ</span>
+              <span className="font-semibold text-slate-800 group-hover:text-blue-900 transition-colors">Information Given &gt; 10 days old</span>
             </div>
-            <span className="text-lg font-black text-blue-900 bg-blue-200/80 px-2 py-0.5 rounded-md ml-2">{attentionNeededLists.stuckInInfoGiven.length}</span>
+            <span className="font-black text-slate-900 text-sm">{attentionNeededLists.stuckInInfoGiven.length}</span>
           </div>
         </div>
       </div>

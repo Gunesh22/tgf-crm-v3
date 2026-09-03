@@ -168,8 +168,9 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null, attender
     Object.values(states).forEach(attMap => {
       if (attMap && typeof attMap === "object") {
         Object.entries(attMap).forEach(([k, ps]) => {
-          if (normalizeKey(k) === targetKey || normalizeKey(ps?.programKey || ps?.program) === targetKey) {
-            const st = normalizeStageStr(ps?.pipelineStage);
+          const pKey = normalizeKey(k) || normalizeKey(ps?.programKey || ps?.program);
+          if (pKey === targetKey || (pKey && targetKey && (pKey.includes(targetKey) || targetKey.includes(pKey)))) {
+            const st = normalizeStageStr(ps?.pipelineStage || ps?.status);
             if (st) {
               const r = STAGE_RANKS[st] || 0;
               if (r > highestRank) {
@@ -184,9 +185,9 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null, attender
     if (highestStage) return highestStage;
 
     const contactKey = normalizeKey(contact["Called For"] || contact.calledFor || contact.called_for);
-    if (contactKey === targetKey && contact.pipelineStage) {
-      return normalizeStageStr(contact.pipelineStage);
-    }
+    const rootSt = normalizeStageStr(contact.pipelineStage || contact.status);
+    if (rootSt) return rootSt;
+
     return null;
   }
 

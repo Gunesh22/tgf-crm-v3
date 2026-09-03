@@ -1853,15 +1853,6 @@ export const EditModal = ({
             <button onClick={handleDismiss} className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center text-white hover:bg-white/20 active:scale-[0.98] transition-all duration-150 cursor-pointer" title="Discard changes & close">
               <X size={16} />
             </button>
-            <button
-              onClick={handleSaveAndClose}
-              disabled={saving}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 active:scale-[0.98] rounded-lg text-white text-xs font-semibold transition-all duration-150 shadow-2xs disabled:opacity-50 cursor-pointer"
-              title="Save changes & close"
-            >
-              {saving ? <Loader size={12} className="animate-spin" /> : <Save size={12} />}
-              <span>{saving ? "Saving..." : "Save"}</span>
-            </button>
           </div>
         </div>
 

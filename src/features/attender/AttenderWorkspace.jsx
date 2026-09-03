@@ -2082,17 +2082,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
         </div>
       ) : (
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Results Summary Bar (Results context beside table) */}
-          <div className="bg-slate-50/80 border-b border-slate-200 px-5 py-1.5 flex items-center justify-between shrink-0 text-xs font-semibold text-slate-500">
-            <span>
-              {isLoadingProgram
-                ? "Loading contacts…"
-                : `${tagFilteredLogs.length} contact${tagFilteredLogs.length !== 1 ? "s" : ""}${selectedTags.length === 0 ? " · All tags" : ` · ${selectedTags.length} tag${selectedTags.length > 1 ? "s" : ""}`}`}
-            </span>
-            <span className="text-[11px] text-slate-400 font-medium">
-              Page {page} of {totalPages || 1}
-            </span>
-          </div>
+
 
           <ContactTable
             isLoadingProgram={isLoadingProgram}

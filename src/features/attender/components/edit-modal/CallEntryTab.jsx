@@ -414,7 +414,7 @@ export const CallEntryTab = ({
     if (activeProgKey) {
       return sorted.filter(h => {
         const hProg = String(h?.calledFor || h?.called_for || h?.program || h?.["Called For"] || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-        return hProg === activeProgKey;
+        return !hProg || hProg === activeProgKey || hProg.includes(activeProgKey) || activeProgKey.includes(hProg);
       });
     }
     return sorted;

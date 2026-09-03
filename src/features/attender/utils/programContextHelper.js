@@ -142,8 +142,8 @@ export function getProgramCallCount(contact = {}, programName = "") {
 
   const count = history.filter(h => {
     if (!h) return false;
-    const hProgKey = normalizeProgramKey(h.calledFor || h["Called For"] || h.called_for);
-    return hProgKey === targetKey;
+    const hProgKey = normalizeProgramKey(h.calledFor || h["Called For"] || h.called_for || h.program);
+    return hProgKey === targetKey || (hProgKey && (hProgKey.includes(targetKey) || targetKey.includes(hProgKey)));
   }).length;
 
   return count;

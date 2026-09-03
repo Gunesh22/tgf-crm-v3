@@ -26,9 +26,9 @@ Never calculate one metric from the other unless explicitly required by the docu
 ---
 
 ## Document Metadata
-- **Documentation Version**: 3.3.0 (Master CRM Architecture V3 — Unified Pipeline Engine & Call Metric Reconciliation)
-- **Last Updated**: September 2, 2026
-- **Project Version**: 3.3.0 (`tgf-crm-v3`)
+- **Documentation Version**: 3.4.0 (Master CRM Architecture V3.4 — Dynamic Stage Mapping, Interactive Vertical Flowchart & Strict Query Status Isolation)
+- **Last Updated**: September 3, 2026
+- **Project Version**: 3.4.0 (`tgf-crm-v3`)
 - **Primary Repository**: [https://github.com/Gunesh22/tgf-crm-v3.git](https://github.com/Gunesh22/tgf-crm-v3.git)
 
 ---
@@ -498,17 +498,30 @@ Reports in `api/_admin/stats.js` strictly isolate three distinct counting units:
 
 ---
 
-## 11. SETTINGS SYSTEM
+## 11. SETTINGS SYSTEM & DYNAMIC PIPELINE CONFIGURATION
 
 Located in `<SettingsTab />` and sub-cards:
 
-1. **Status Rules (`StatusClassificationCard.jsx`)**:
-   - Classifies statuses into **Connected** (e.g. `Interested`, `Information Given`, `Reg.Done`) vs. **Not Connected** (e.g. `Ringing`, `Busy`, `Switched Off`).
-2. **Compulsory Field Bypass (`CompulsoryFieldBypassCard.jsx`)**:
+1. **Pipeline Stage & Status Mapping (`StatusStageMappingCard.jsx`)**:
+   - **Interactive Vertical Flowchart View**: Displays the main sales funnel vertically top-to-bottom (`1. New Lead` 👇 `2. Attempting Contact` 👇 `3. Information Given` 👇 `4. Nurture / Interested` 👇 `5. Future Pool` 👇 `6. Registered / Won`) alongside parallel workstreams (`Previous Program Pending`, `Existing Alumni`, `Query Desk`, `Reminder Desk`) and terminal outcomes (`Closed / Lost`, `Closed / Invalid`).
+   - **Dynamic CRUD & Autosave**: Add or remove stages and status options with real-time persistence to MongoDB (`callCenterOptions.statusStageMapping`).
+   - **Stage Deletion Safeguards**: Modal confirmation with automatic re-mapping of orphaned statuses to prevent unassigned data.
+   - **Clean Outcome Options**: Filters out obsolete legacy aliases (`Called by mistake`, `Registered`, `Info`, `Pending`, etc.), showing strictly active call outcome choices.
+
+2. **Strict Query Status Isolation & Protection**:
+   - `queryStatus` defaults to empty (`""`) on contact initialization instead of forced `"Pending"`.
+   - Non-query calls (`Invalid No`, `Not Connected`, Sales calls) strictly omit `queryStatus` and do not generate false `Query Pending` tags on contact tables or reports.
+
+3. **Status Rules (`StatusClassificationCard.jsx`)**:
+   - Classifies statuses into **Connected** (e.g. `Interested`, `Information Given`, `Reg.Done`) vs. **Not Connected** (e.g. `Not Connected`, `Invalid No`).
+
+4. **Compulsory Field Bypass (`CompulsoryFieldBypassCard.jsx`)**:
    - Toggles whether remarks/callbacks are mandatory before saving call logs.
-3. **Attender Password Manager (`AdminPasswordCard.jsx`)**:
+
+5. **Attender Password Manager (`AdminPasswordCard.jsx`)**:
    - Updates administrative master password (`198219`) and individual attender PINs.
-4. **WhatsApp Templates (`WhatsAppTemplatesCard.jsx`)**:
+
+6. **WhatsApp Templates (`WhatsAppTemplatesCard.jsx`)**:
    - Manages pre-formatted WhatsApp message triggers.
 
 ---
