@@ -197,6 +197,15 @@ export const getCanonicalStage = (stageOrContact) => {
 
     const statusLower = rawStatus.toLowerCase();
 
+    // 1c. Previous Program Pending Check
+    const lastHistStatus = Array.isArray(contact.history) && contact.history.length > 0
+      ? String(contact.history[contact.history.length - 1]?.status || "").trim().toLowerCase()
+      : "";
+
+    if (statusLower === "previous program pending" || statusLower.includes("previous program pending") || lastHistStatus === "previous program pending" || lastHistStatus.includes("previous program pending")) {
+      return PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING;
+    }
+
     // 1d. Nurture / Interested Check
     if (statusLower === "interested" || statusLower === "nurture / interested" || statusLower === "4. nurture / interested") {
       return PIPELINE_STAGES.NURTURE_INTERESTED;
@@ -213,10 +222,6 @@ export const getCanonicalStage = (stageOrContact) => {
     }
 
     // 1g. Closed / Lost Status Check
-    const lastHistStatus = Array.isArray(contact.history) && contact.history.length > 0
-      ? String(contact.history[contact.history.length - 1]?.status || "").trim().toLowerCase()
-      : "";
-
     if (statusLower === "not interested" || statusLower === "closed / lost" || lastHistStatus === "not interested" || lastHistStatus === "closed / lost") {
       return PIPELINE_STAGES.CLOSED_LOST;
     }
