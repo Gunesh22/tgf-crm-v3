@@ -8,9 +8,9 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid 
 } from "recharts";
 import { 
-  parseTimestamp, renderVal, getCanonicalStatus, classifyCallStatus, COLORS, getContactName, getContactPhone, getContactCity, getCanonicalStage, getLocalDateStr, getCanonicalPhysicalCalls, getCanonicalRegistrations 
+  parseTimestamp, renderVal, getCanonicalStatus, classifyCallStatus, COLORS, getContactName, getContactPhone, getContactCity, getCanonicalStage, getLocalDateStr, getCanonicalPhysicalCalls, getCanonicalRegistrations, getCanonicalQueryStage 
 } from "../utils.jsx";
-import { PIPELINE_STAGES, getEffectiveStage } from "../../../utils/pipelineEngine";
+import { PIPELINE_STAGES, QUERY_PIPELINE_STAGES, getEffectiveStage } from "../../../utils/pipelineEngine";
 
 // Multi-select dropdown component
 function MultiSelect({ options, selected, onChange, placeholder, allLabel = "All" }) {
@@ -499,7 +499,7 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
   const activeFunnelPeopleCount = filteredContacts.length;
   const registrationsCount = filteredRegistrations.length;
 
-  // Pipeline Stage Counts (Canonicalized)
+  // Pipeline Stage Counts (Sales Pipeline — Canonicalized)
   const pipelineStageCounts = useMemo(() => {
     const counts = {
       [PIPELINE_STAGES.NEW_LEAD]: 0,
@@ -511,13 +511,16 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
       [PIPELINE_STAGES.REGISTERED_WON]: 0,
       [PIPELINE_STAGES.CLOSED_LOST]: 0,
       [PIPELINE_STAGES.CLOSED_INVALID]: 0,
-      "Query Desk": 0,
       "Existing Alumni": 0,
       "Unknown / Legacy": 0
     };
 
     filteredContacts.forEach(c => {
       const stage = getCanonicalStage(c);
+      if (stage === "Query Desk" || stage === "Reminder Desk") {
+        // Query & Reminder workstreams are tracked separately in their dedicated sections below
+        return;
+      }
       if (counts[stage] !== undefined) {
         counts[stage]++;
       } else {
@@ -527,6 +530,41 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
 
     return counts;
   }, [filteredContacts]);
+
+  // Query Pipeline Stage Counts (Independent Query State Machine)
+  const queryStageCounts = useMemo(() => {
+    const counts = {
+      [QUERY_PIPELINE_STAGES.ATTEMPTING_QUERY]: 0,
+      [QUERY_PIPELINE_STAGES.QUERY_PENDING]: 0,
+      [QUERY_PIPELINE_STAGES.QUERY_SOLVED]: 0,
+    };
+    filteredContacts.forEach(c => {
+      const qStage = getCanonicalQueryStage(c);
+      if (qStage && counts[qStage] !== undefined) {
+        counts[qStage]++;
+      }
+    });
+    return counts;
+  }, [filteredContacts]);
+
+  // Reminder Activity Summary (Activity Metric, Not a Pipeline)
+  const reminderCounts = useMemo(() => {
+    let reminderCallsCount = 0;
+    let reminderContactsCount = 0;
+    filteredEvents.forEach(ev => {
+      if (String(ev.callPurpose || "").toUpperCase() === "REMINDER" || String(ev.status || "").toLowerCase().includes("reminder")) {
+        reminderCallsCount++;
+      }
+    });
+    filteredContacts.forEach(c => {
+      const purpose = String(c.callPurpose || "").toUpperCase();
+      const status = String(c.status || "").toLowerCase();
+      if (purpose === "REMINDER" || status.includes("reminder")) {
+        reminderContactsCount++;
+      }
+    });
+    return { reminderCallsCount, reminderContactsCount };
+  }, [filteredContacts, filteredEvents]);
 
   const prevProgPendingBreakdown = useMemo(() => {
     const map = {};
@@ -558,6 +596,9 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
       PIPELINE_STAGES.REGISTERED_WON,
       PIPELINE_STAGES.CLOSED_LOST,
       PIPELINE_STAGES.CLOSED_INVALID,
+      "Query Desk",
+      "Reminder Desk",
+      "Existing Alumni",
       "Unknown / Legacy"
     ];
 
@@ -1046,13 +1087,21 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
 
       {/* 2. PIPELINE OVERVIEW — MAIN FUNNEL SECTION */}
       <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-2.5 gap-2">
           <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
             <span>🎯</span> PIPELINE OVERVIEW
           </h3>
-          <span className="text-xs font-semibold text-slate-500">
-            Total Pipeline Contacts: <strong className="text-slate-900">{activeFunnelPeopleCount}</strong>
-          </span>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 font-extrabold text-[11px] border border-indigo-100">
+              Sales Funnel: {Object.values(pipelineStageCounts).reduce((a, b) => a + b, 0)} Leads
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 font-extrabold text-[11px] border border-amber-200/60">
+              Query/Reminder Desks: {activeFunnelPeopleCount - Object.values(pipelineStageCounts).reduce((a, b) => a + b, 0)} Leads
+            </span>
+            <span className="text-slate-900 font-black text-xs bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+              Total Contacts: {activeFunnelPeopleCount}
+            </span>
+          </div>
         </div>
 
         {/* Funnel Grid */}
@@ -1113,8 +1162,8 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
           </div>
         )}
 
-        {/* Auxiliary & Legacy Stages Row */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 pt-1">
+        {/* Auxiliary Sales Outcomes */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
           <div
             onClick={() => handleStageClick("Closed / Lost", PIPELINE_STAGES.CLOSED_LOST)}
             className="p-2.5 bg-rose-50/50 border border-rose-200 rounded-lg flex items-center justify-between cursor-pointer hover:bg-rose-100/50 transition-colors"
@@ -1132,15 +1181,7 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
           </div>
 
           <div
-            onClick={() => handleStageClick("Query Desk (Legacy)", "Query Desk")}
-            className="p-2.5 bg-cyan-50/50 border border-cyan-200 rounded-lg flex items-center justify-between cursor-pointer hover:bg-cyan-100/50 transition-colors"
-          >
-            <span className="text-xs font-bold text-cyan-900">Query Desk</span>
-            <span className="text-lg font-black text-cyan-900">{pipelineStageCounts["Query Desk"] || 0}</span>
-          </div>
-
-          <div
-            onClick={() => handleStageClick("Existing Alumni (Legacy)", "Existing Alumni")}
+            onClick={() => handleStageClick("Existing Alumni", "Existing Alumni")}
             className="p-2.5 bg-teal-50/50 border border-teal-200 rounded-lg flex items-center justify-between cursor-pointer hover:bg-teal-100/50 transition-colors"
           >
             <span className="text-xs font-bold text-teal-900">Existing Alumni</span>
@@ -1155,6 +1196,75 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
               <Info size={13} className="text-slate-400" /> Legacy / Unmapped
             </span>
             <span className="text-lg font-black text-indigo-600">{pipelineStageCounts["Unknown / Legacy"] || 0}</span>
+          </div>
+        </div>
+
+        {/* ── SEPARATE QUERY & REMINDER REPORTING SECTIONS ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          {/* 1. QUERY PIPELINE BREAKDOWN (Independent State Machine) */}
+          <div className="p-3.5 bg-cyan-50/40 border border-cyan-200 rounded-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-extrabold text-cyan-900 uppercase tracking-wider flex items-center gap-1.5">
+                <HelpCircle size={15} className="text-cyan-600" /> QUERY PIPELINE (INDEPENDENT)
+              </span>
+              <span className="text-[11px] font-bold text-cyan-700">
+                {Object.values(queryStageCounts).reduce((a, b) => a + b, 0)} Total Query Leads
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div 
+                onClick={() => {
+                  const items = filteredContacts.filter(c => getCanonicalQueryStage(c) === QUERY_PIPELINE_STAGES.ATTEMPTING_QUERY);
+                  setDrillDownModal({ title: `Query Pipeline: ${QUERY_PIPELINE_STAGES.ATTEMPTING_QUERY} (${items.length})`, type: "people", items });
+                }}
+                className="p-2.5 bg-white border border-cyan-200 rounded-lg text-center cursor-pointer hover:bg-cyan-100/40 transition-colors"
+              >
+                <span className="text-[11px] font-bold text-cyan-800 block">1. Attempting Query</span>
+                <span className="text-base font-black text-cyan-900">{queryStageCounts[QUERY_PIPELINE_STAGES.ATTEMPTING_QUERY] || 0}</span>
+              </div>
+              <div 
+                onClick={() => {
+                  const items = filteredContacts.filter(c => getCanonicalQueryStage(c) === QUERY_PIPELINE_STAGES.QUERY_PENDING);
+                  setDrillDownModal({ title: `Query Pipeline: ${QUERY_PIPELINE_STAGES.QUERY_PENDING} (${items.length})`, type: "people", items });
+                }}
+                className="p-2.5 bg-white border border-amber-200 rounded-lg text-center cursor-pointer hover:bg-amber-100/40 transition-colors"
+              >
+                <span className="text-[11px] font-bold text-amber-800 block">2. Query Pending</span>
+                <span className="text-base font-black text-amber-900">{queryStageCounts[QUERY_PIPELINE_STAGES.QUERY_PENDING] || 0}</span>
+              </div>
+              <div 
+                onClick={() => {
+                  const items = filteredContacts.filter(c => getCanonicalQueryStage(c) === QUERY_PIPELINE_STAGES.QUERY_SOLVED);
+                  setDrillDownModal({ title: `Query Pipeline: ${QUERY_PIPELINE_STAGES.QUERY_SOLVED} (${items.length})`, type: "people", items });
+                }}
+                className="p-2.5 bg-white border border-emerald-200 rounded-lg text-center cursor-pointer hover:bg-emerald-100/40 transition-colors"
+              >
+                <span className="text-[11px] font-bold text-emerald-800 block">3. Query Solved</span>
+                <span className="text-base font-black text-emerald-900">{queryStageCounts[QUERY_PIPELINE_STAGES.QUERY_SOLVED] || 0}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. REMINDER ACTIVITY SUMMARY (Activity Category, Not a Pipeline) */}
+          <div className="p-3.5 bg-sky-50/40 border border-sky-200 rounded-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-extrabold text-sky-900 uppercase tracking-wider flex items-center gap-1.5">
+                <Clock size={15} className="text-sky-600" /> REMINDER DESK & ACTIVITY
+              </span>
+              <span className="text-[11px] font-bold text-sky-700">
+                Activity Only (No Pipeline Stage)
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-2.5 bg-white border border-sky-200 rounded-lg text-center">
+                <span className="text-[11px] font-bold text-sky-800 block">Reminder Calls Logged</span>
+                <span className="text-base font-black text-sky-900">{reminderCounts.reminderCallsCount}</span>
+              </div>
+              <div className="p-2.5 bg-white border border-sky-200 rounded-lg text-center">
+                <span className="text-[11px] font-bold text-sky-800 block">Contacts with Reminders</span>
+                <span className="text-base font-black text-sky-900">{reminderCounts.reminderContactsCount}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1423,7 +1533,13 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
                       const item = rawItem.contact || rawItem;
                       const name = getContactName(item) || (getContactPhone(item) ? `Contact (${getContactPhone(item)})` : `Contact #${(item.id || item._id || "").slice(-4)}`);
                       const phone = getContactPhone(item);
-                      const stage = getCanonicalStage(item);
+                      
+                      const modalCategory = drillDownModal.category || 
+                        (drillDownModal.title.toLowerCase().includes("query") ? "query" : 
+                         drillDownModal.title.toLowerCase().includes("reminder") ? "reminder" : "sales");
+
+                      const salesStage = getCanonicalStage(item);
+                      const queryStage = getCanonicalQueryStage(item);
 
                       return (
                         <tr key={idx} className="hover:bg-slate-50">
@@ -1433,9 +1549,29 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
                           </td>
                           <td className="p-2">{renderVal(item.attenderName || item.assignedTo)}</td>
                           <td className="p-2">
-                            <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold text-[10px]">
-                              {stage || item.status || "Pending"}
-                            </span>
+                            {modalCategory === "query" ? (
+                              <div className="space-y-0.5">
+                                <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-bold text-[10px] inline-block">
+                                  {queryStage || item.queryStatus || "Query Pending"}
+                                </span>
+                                {salesStage && salesStage !== "Query Desk" && salesStage !== "Reminder Desk" && (
+                                  <p className="text-[9px] text-slate-500 font-medium">Sales: {salesStage}</p>
+                                )}
+                              </div>
+                            ) : modalCategory === "reminder" ? (
+                              <div className="space-y-0.5">
+                                <span className="px-2 py-0.5 rounded bg-sky-100 text-sky-900 font-bold text-[10px] inline-block">
+                                  {item.status || "Reminder"}
+                                </span>
+                                {salesStage && salesStage !== "Query Desk" && salesStage !== "Reminder Desk" && (
+                                  <p className="text-[9px] text-slate-500 font-medium">Sales: {salesStage}</p>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold text-[10px]">
+                                {salesStage || "1. New Lead"}
+                              </span>
+                            )}
                           </td>
                           <td className="p-2">{renderVal(item.calledFor || item.source)}</td>
                         </tr>

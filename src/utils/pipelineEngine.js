@@ -23,6 +23,13 @@ export const PIPELINE_STAGES = {
   CLOSED_INVALID:           "Closed / Invalid",
 };
 
+// Query Pipeline stages (Separate, independent state machine for Query call purpose)
+export const QUERY_PIPELINE_STAGES = {
+  ATTEMPTING_QUERY: "Attempting Query",
+  QUERY_PENDING:    "Query Pending",
+  QUERY_SOLVED:     "Query Solved",
+};
+
 // Legacy / Auxiliary stages — recognized for DISPLAY & routing
 export const LEGACY_DISPLAY_STAGES = {
   QUERY_DESK:      "Query Desk",
@@ -337,6 +344,20 @@ export function evaluatePipeline(contact = {}, callEvent = {}) {
   const allowed    = canTransition(currentStage, targetStage, { ...callEvent, closedReason, purposeOutcome: outcome });
   const finalStage = allowed ? targetStage : currentStage;
 
+  let evaluatedQueryStatus = null;
+  if (purpose === "QUERY") {
+    if (isUnconnected) {
+      evaluatedQueryStatus = QUERY_PIPELINE_STAGES.ATTEMPTING_QUERY;
+    } else {
+      const qNorm = String(callEvent.queryStatus || callEvent.status || "").trim().toLowerCase();
+      if (qNorm === "solved" || qNorm === "query solved") {
+        evaluatedQueryStatus = QUERY_PIPELINE_STAGES.QUERY_SOLVED;
+      } else {
+        evaluatedQueryStatus = QUERY_PIPELINE_STAGES.QUERY_PENDING;
+      }
+    }
+  }
+
   const targetProgKey = String(calledFor || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
   const activeAttId = callEvent.attenderId || contact.attenderId || null;
   const programStatesUpdate = (activeAttId && targetProgKey) ? {
@@ -345,6 +366,7 @@ export function evaluatePipeline(contact = {}, callEvent = {}) {
     program: calledFor,
     pipelineStage: finalStage,
     status: outcome || callStatus || "Pending",
+    queryStatus: evaluatedQueryStatus || callEvent.queryStatus || null,
     remark: callEvent.remark || "",
     callbackDate: callEvent.callbackDate || null,
     callbackTime: callEvent.callbackTime || null,
@@ -354,6 +376,7 @@ export function evaluatePipeline(contact = {}, callEvent = {}) {
 
   return {
     pipelineStage: finalStage,
+    queryStatus: evaluatedQueryStatus,
     attemptCount,
     closedReason: allowed ? closedReason : (contact.closedReason || null),
     isAttenderCreditEligible,
@@ -431,6 +454,9 @@ export function getPipelineStageConfig(stage) {
     case "Query Desk":
     case "Query":
       return { label: "Query Desk (Legacy)", bg: "bg-orange-50", border: "border-orange-300", text: "text-orange-800", badge: "bg-orange-100 text-orange-900 border-orange-300 font-semibold" };
+    case "Reminder Desk":
+    case "Reminder":
+      return { label: "Reminder Desk (Legacy)", bg: "bg-sky-50", border: "border-sky-300", text: "text-sky-800", badge: "bg-sky-100 text-sky-900 border-sky-300 font-semibold" };
     case "Existing Alumni":
     case "Alumni":
       return { label: "Existing Alumni (Legacy)", bg: "bg-cyan-50", border: "border-cyan-300", text: "text-cyan-800", badge: "bg-cyan-100 text-cyan-900 border-cyan-300" };
@@ -592,6 +618,9 @@ export function normalizeProgramStates(contact = {}) {
   if (Array.isArray(contact.history)) {
     contact.history.forEach(h => {
       if (!h || typeof h !== "object") return;
+      const purpose = String(h.callPurpose || "").toUpperCase();
+      if (purpose === "QUERY" || purpose === "REMINDER") return; // Query / Reminder calls do not modify Sales pipeline stage
+
       const attId = h.attenderId || h.callAttenderId || contact.leadOwner || "default";
       const prog = h.calledFor || h["Called For"] || h.called_for || "";
       const pKey = normalizeKey(prog);
@@ -643,6 +672,8 @@ export function normalizeProgramStates(contact = {}) {
   if (contact.attenderStates && typeof contact.attenderStates === "object") {
     Object.entries(contact.attenderStates).forEach(([attId, st]) => {
       if (!st || typeof st !== "object") return;
+      const purpose = String(st.callPurpose || "").toUpperCase();
+      if (purpose === "QUERY" || purpose === "REMINDER") return; // Skip Query / Reminder attenderStates
       const prog = st.calledFor || st["Called For"] || st.called_for || contact["Called For"] || contact.calledFor || "";
       const pKey = normalizeKey(st.calledForKey || prog);
       if (!pKey) return;
@@ -697,5 +728,65 @@ export function normalizeProgramStates(contact = {}) {
     programStates,
     programs
   };
+}
+
+/**
+ * Derives the Query Pipeline stage (Attempting Query, Query Pending, Query Solved, or null)
+ * for a contact or call event cleanly isolated from the Sales Pipeline.
+ */
+export function getCanonicalQueryStage(contactOrEvent) {
+  if (!contactOrEvent) return null;
+
+  const purposeLower = String(contactOrEvent.callPurpose || "").trim().toLowerCase();
+  const statusLower = String(contactOrEvent.status || "").trim().toLowerCase();
+  const history = Array.isArray(contactOrEvent.history) ? contactOrEvent.history : [];
+  
+  // Check if contact has ANY actual Query activity
+  const hasQueryCallInHistory = history.some(h => 
+    String(h?.callPurpose || "").toLowerCase() === "query" ||
+    (h?.queryStatus && String(h.queryStatus).toLowerCase().includes("query"))
+  );
+  
+  const hasQueryAttenderState = contactOrEvent.attenderStates && typeof contactOrEvent.attenderStates === "object" && Object.values(contactOrEvent.attenderStates).some(st => 
+    String(st?.callPurpose || "").toLowerCase() === "query" ||
+    (st?.queryStatus && String(st.queryStatus).toLowerCase().includes("query"))
+  );
+
+  const isQueryRoot = purposeLower === "query" || statusLower.includes("query") || contactOrEvent.pipelineStage === "Query Desk";
+
+  // A contact is ONLY in the Query Pipeline if they have actual Query purpose, Query history, or explicit Query attenderState!
+  if (!isQueryRoot && !hasQueryCallInHistory && !hasQueryAttenderState) {
+    return null;
+  }
+
+  // Resolve specific Query stage
+  const qStatus = String(contactOrEvent.queryStatus || contactOrEvent.query_status || "").trim();
+  const qStatusLower = qStatus.toLowerCase();
+
+  if (qStatusLower === "query solved" || qStatusLower === "solved") return QUERY_PIPELINE_STAGES.QUERY_SOLVED;
+  if (qStatusLower === "attempting query" || qStatusLower === "attempting") return QUERY_PIPELINE_STAGES.ATTEMPTING_QUERY;
+
+  // Check history (newest first)
+  if (history.length > 0) {
+    const historyRev = [...history].reverse();
+    for (const h of historyRev) {
+      if (!h) continue;
+      const purpose = String(h.callPurpose || "").toUpperCase();
+      const hQS = String(h.queryStatus || h.query_status || "").trim().toLowerCase();
+      if (hQS === "query solved" || hQS === "solved") return QUERY_PIPELINE_STAGES.QUERY_SOLVED;
+      if (hQS === "attempting query" || hQS === "attempting") return QUERY_PIPELINE_STAGES.ATTEMPTING_QUERY;
+      if (purpose === "QUERY") {
+        const callStatus = String(h.callStatus || h.status || "").trim();
+        const isUnconnected = UNCONNECTED_CALL_STATUSES.some(s => s.toLowerCase() === callStatus.toLowerCase());
+        if (isUnconnected) {
+          return QUERY_PIPELINE_STAGES.ATTEMPTING_QUERY;
+        }
+        return QUERY_PIPELINE_STAGES.QUERY_PENDING;
+      }
+    }
+  }
+
+  // Default for actual query leads if no specific status was set
+  return QUERY_PIPELINE_STAGES.QUERY_PENDING;
 }
 

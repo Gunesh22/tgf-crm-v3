@@ -313,13 +313,42 @@ export function ContactTable({
                     <td className="py-2 px-3 align-top">
                       {(() => {
                         const stageToUse = view.pipelineStage;
-                        if (stageToUse) {
+                        const qStatus = view.queryStatus || (view.callPurpose === "QUERY" ? "Pending" : null);
+                        const isQueryActive = qStatus && qStatus !== "None" && qStatus !== "Solved" && qStatus !== "Query Solved";
+                        const isQuerySolved = qStatus === "Query Solved" || qStatus === "Solved";
+
+                        if (stageToUse && stageToUse !== "Query Desk" && stageToUse !== "Reminder Desk") {
                           const pConfig = getPipelineStageConfig(stageToUse);
                           return (
                             <div className="flex flex-col gap-0.5">
                               <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border ${pConfig.badge}`}>
                                 {log.isHotLead && <Flame size={10} className="inline text-amber-500 mr-0.5" fill="currentColor" />}
                                 {pConfig.label}
+                              </span>
+                              {isQueryActive && (
+                                <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-amber-50 text-amber-800 border border-amber-200 w-fit">
+                                  ❓ Query Pending
+                                </span>
+                              )}
+                              {isQuerySolved && (
+                                <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 w-fit">
+                                  ✓ Query Solved
+                                </span>
+                              )}
+                              {view.status && !isQueryActive && !isQuerySolved && (
+                                <span className="text-[9px] text-slate-500 font-medium ml-0.5">
+                                  Outcome: {view.status}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        if (stageToUse === "Query Desk" || isQueryActive) {
+                          return (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                ❓ Query Pending
                               </span>
                               {view.status && (
                                 <span className="text-[9px] text-slate-500 font-medium ml-0.5">
@@ -329,6 +358,22 @@ export function ContactTable({
                             </div>
                           );
                         }
+
+                        if (stageToUse === "Reminder Desk" || String(view.callPurpose || "").toUpperCase() === "REMINDER") {
+                          return (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-900 border border-sky-300">
+                                ⏰ Reminder Scheduled
+                              </span>
+                              {view.status && (
+                                <span className="text-[9px] text-slate-500 font-medium ml-0.5">
+                                  Outcome: {view.status}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        }
+
                         const badge = getStatusBadge(log, activeAttenderCtx);
                         return (
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider ${badge.bg} ${badge.text}`}>

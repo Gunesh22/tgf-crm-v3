@@ -26,19 +26,34 @@ export const HistoryTimeline = ({
                     return d && !isNaN(d.getTime()) ? d.toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
                   })()}
                 </span>
-                {h.status && (
-                  <span className={`px-1.5 py-0.2 rounded text-[10px] font-semibold ${
-                    h.status === "Interested" ? "bg-indigo-50 text-indigo-700 border border-indigo-200" :
-                    h.status === "Reg.Done" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
-                    h.status === "Previous Program Pending" ? "bg-purple-50 text-purple-700 border border-purple-200" :
-                    (h.status === "Query" || h.callPurpose === "QUERY") ? "bg-amber-50 text-amber-800 border border-amber-200" :
-                    "bg-slate-100 text-slate-600 border border-slate-200"
-                  }`}>
-                    {h.status === "Query" || h.callPurpose === "QUERY" 
-                      ? `Query [${h.queryStatus || "Pending"}]` 
-                      : h.status}
-                  </span>
-                )}
+                {(() => {
+                  const isQueryCall = h.callPurpose === "QUERY" || h.status === "Query" || String(h.callType || "").toUpperCase() === "QUERY";
+                  if (!isQueryCall) {
+                    if (!h.status) return null;
+                    return (
+                      <span className={`px-1.5 py-0.2 rounded text-[10px] font-semibold ${
+                        h.status === "Interested" ? "bg-indigo-50 text-indigo-700 border border-indigo-200" :
+                        h.status === "Reg.Done" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
+                        h.status === "Previous Program Pending" ? "bg-purple-50 text-purple-700 border border-purple-200" :
+                        "bg-slate-100 text-slate-600 border border-slate-200"
+                      }`}>
+                        {h.status}
+                      </span>
+                    );
+                  }
+
+                  const rawQ = String(h.queryStatus || (h.status !== "Query" ? h.status : "") || "").trim();
+                  const isSolved = rawQ === "Query Solved" || rawQ === "Solved";
+                  const isAttempting = rawQ === "Attempting Query" || rawQ === "Attempting";
+                  const label = isSolved ? "Query [Solved]" : (isAttempting ? "Query [Attempting]" : "Query [Pending]");
+                  const badgeStyle = isSolved ? "bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold" : "bg-amber-50 text-amber-800 border border-amber-200 font-semibold";
+
+                  return (
+                    <span className={`px-1.5 py-0.2 rounded text-[10px] ${badgeStyle}`}>
+                      {label}
+                    </span>
+                  );
+                })()}
                 {calledForStr && (
                   <span className="text-slate-600 font-medium text-[10px] truncate max-w-[140px]">
                     • {calledForStr}

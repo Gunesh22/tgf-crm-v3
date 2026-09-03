@@ -319,9 +319,12 @@ export const CallEntryTab = ({
 
       if (isUnconnected) {
         if (!next.status) next.status = "Not Connected";
+        if (purpose === "QUERY") {
+          next.queryStatus = "Attempting Query";
+        }
       } else if (purpose === "QUERY") {
         next.status = "Query";
-        if (!next.queryStatus) next.queryStatus = "Pending";
+        if (!next.queryStatus || next.queryStatus === "Attempting Query") next.queryStatus = "Query Pending";
       } else if (purpose === "REMINDER") {
         next.status = "Reminder Given";
       } else {
@@ -344,12 +347,18 @@ export const CallEntryTab = ({
             next.status = "Not Connected";
           }
         }
+        if (prev.callPurpose === "QUERY") {
+          next.queryStatus = "Attempting Query";
+        }
       } else if (prev.callStatus !== "Connected") {
         const curPurpose = prev.callPurpose || "SALES";
         if (curPurpose === "REMINDER") {
           next.status = "Reminder Given";
         } else if (curPurpose === "QUERY") {
           next.status = "Query";
+          if (!next.queryStatus || next.queryStatus === "Attempting Query") {
+            next.queryStatus = "Query Pending";
+          }
         } else {
           next.status = "";
         }
@@ -443,12 +452,46 @@ export const CallEntryTab = ({
 
       {/* 0. READ-ONLY HEADER: PIPELINE STAGE & LAST CALL CONTEXT */}
       <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-50/80 border border-slate-200/60 rounded-xl">
-        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 flex-wrap">
           <Shield size={14} className="text-slate-500 shrink-0" />
-          <span>Current Stage{activeProgram ? ` — ${activeProgram}` : ""}:</span>
-          <span className={`px-2.5 py-0.5 rounded-lg text-xs font-bold border ${stageConfig.badge}`}>
-            {stageConfig.label}
-          </span>
+          {activePurpose === "QUERY" ? (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span>Query Status:</span>
+              <span className={`px-2.5 py-0.5 rounded-lg text-xs font-bold border ${
+                edited.queryStatus === "Query Solved" || edited.queryStatus === "Solved"
+                  ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+                  : edited.queryStatus === "Attempting Query"
+                  ? "bg-cyan-100 text-cyan-900 border-cyan-300"
+                  : "bg-amber-100 text-amber-900 border-amber-300"
+              }`}>
+                {edited.queryStatus === "Query Solved" || edited.queryStatus === "Solved"
+                  ? "✓ Query Solved"
+                  : edited.queryStatus === "Attempting Query"
+                  ? "📞 Attempting Query"
+                  : "⏳ Query Pending"}
+              </span>
+              <span className="text-[10px] text-slate-400 font-medium ml-1">
+                (Sales Stage: {stageConfig.label})
+              </span>
+            </div>
+          ) : activePurpose === "REMINDER" ? (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span>Activity Mode:</span>
+              <span className="px-2.5 py-0.5 rounded-lg text-xs font-bold bg-sky-100 text-sky-900 border border-sky-300">
+                Reminder Call
+              </span>
+              <span className="text-[10px] text-slate-400 font-medium ml-1">
+                (Sales Stage: {stageConfig.label})
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span>Current Stage{activeProgram ? ` — ${activeProgram}` : ""}:</span>
+              <span className={`px-2.5 py-0.5 rounded-lg text-xs font-bold border ${stageConfig.badge}`}>
+                {stageConfig.label}
+              </span>
+            </div>
+          )}
 
           {/* Compact Change Stage Popover */}
           <div className="relative inline-block ml-1">
@@ -702,30 +745,7 @@ export const CallEntryTab = ({
         </div>
       )}
 
-      {/* --- QUERY CONTEXT BANNER --- */}
-      {activePurpose === "QUERY" && (
-        <div className="p-3 bg-orange-50/70 border border-orange-200/80 rounded-xl flex items-start justify-between gap-3 animate-fade-in">
-          <div className="flex items-center gap-2">
-            <HelpCircle size={16} className="text-orange-600 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-bold text-orange-950 text-xs">Query / Helpdesk Mode</span>
-              <p className="text-[11px] text-orange-800 leading-tight mt-0.5">
-                Pipeline stage is preserved. Select the program this query concerns.
-              </p>
-            </div>
-          </div>
-          {/* Only show Convert-to-Sales for NEW / query-only contacts (rank < Info Given) */}
-          {showConvertToSales && (
-            <button
-              type="button"
-              onClick={() => setCallPurpose("SALES")}
-              className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 bg-white px-3 py-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-50 flex items-center gap-1 transition cursor-pointer shadow-2xs shrink-0"
-            >
-              <ArrowRightLeft size={12} /> Convert to Sales
-            </button>
-          )}
-        </div>
-      )}
+
 
       {/* --- REMINDER CONTEXT BANNER — NO Convert-to-Sales button --- */}
       {activePurpose === "REMINDER" && (
@@ -959,34 +979,65 @@ export const CallEntryTab = ({
           )}
 
           {/* CONNECTED QUERY OUTCOME */}
-          {activePrimaryResult === "Connected" && activePurpose === "QUERY" && (
-            <div className="space-y-2 animate-fade-in">
-              <label className="text-[11px] font-extrabold text-amber-900 uppercase tracking-wider flex items-center gap-1">
-                Query Status <span className="text-rose-500 font-bold">*</span>
-              </label>
-              <div className="flex gap-2">
-                {QUERY_STATUS_OPTIONS.map(qs => {
-                  const currentQueryStatus = edited.queryStatus || "Pending";
-                  return (
+          {activePrimaryResult === "Connected" && activePurpose === "QUERY" && (() => {
+            const qVal = String(edited.queryStatus || "").trim();
+            const isSolved = qVal === "Query Solved" || qVal === "Solved";
+            const cardStyle = isSolved
+              ? "bg-emerald-50/80 border-emerald-200/90"
+              : "bg-amber-50/80 border-amber-200/90";
+            const labelColor = isSolved ? "text-emerald-950" : "text-amber-950";
+            const textSubColor = isSolved ? "text-emerald-800" : "text-amber-900";
+            const borderDivider = isSolved ? "border-emerald-200/90" : "border-amber-200/90";
+
+            return (
+              <div className={`space-y-2.5 animate-fade-in p-3 rounded-xl border transition-colors ${cardStyle}`}>
+                <label className={`text-[11px] font-extrabold uppercase tracking-wider flex items-center gap-1 ${labelColor}`}>
+                  Query Status <span className="text-rose-500 font-bold">*</span>
+                </label>
+                <div className="flex gap-2">
+                  {["Query Pending", "Query Solved"].map(qs => {
+                    const isMatch = qVal === qs || (qs === "Query Pending" && (qVal === "Pending" || !qVal)) || (qs === "Query Solved" && qVal === "Solved");
+                    const label = qs === "Query Pending" ? "⏳ Query Pending" : "✓ Query Solved";
+                    return (
+                      <button
+                        key={qs}
+                        type="button"
+                        onClick={() => handleChange("queryStatus", qs)}
+                        className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                          isMatch
+                            ? qs === "Query Pending"
+                              ? "bg-amber-500 text-white border-amber-500 shadow-2xs"
+                              : "bg-emerald-600 text-white border-emerald-600 shadow-2xs font-extrabold"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* CONVERT TO SALES ACTION */}
+                {showConvertToSales && (
+                  <div className={`pt-2 border-t flex items-center justify-between gap-2 ${borderDivider}`}>
+                    <span className={`text-[11px] font-medium ${textSubColor}`}>Lead interested in buying/enrolling?</span>
                     <button
-                      key={qs}
                       type="button"
-                      onClick={() => handleChange("queryStatus", qs)}
-                      className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                        currentQueryStatus === qs
-                          ? qs === "Pending"
-                            ? "bg-amber-500 text-white border-amber-500 shadow-2xs"
-                            : "bg-emerald-600 text-white border-emerald-600 shadow-2xs"
-                          : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
-                      }`}
+                      onClick={() => {
+                        setCallPurpose("SALES");
+                        handleChange("pipelineStage", PIPELINE_STAGES.INFO_GIVEN);
+                        handleChange("status", "Info Given");
+                        handleChange("queryStatus", "Query Solved");
+                      }}
+                      className="px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg text-xs font-extrabold shadow-2xs transition flex items-center gap-1 cursor-pointer shrink-0"
                     >
-                      {qs === "Pending" ? "⏳ Pending" : "✓ Solved"}
+                      ✨ Convert to Sales (Stage 3)
                     </button>
-                  );
-                })}
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
 
 

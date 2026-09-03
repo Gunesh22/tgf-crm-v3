@@ -130,10 +130,22 @@ function evaluateStageServer(lead, callEvent) {
     closedReason = "Invalid / Wrong Number";
     wasConnected = false;
   }
+  let evaluatedQueryStatus = null;
+
   // QUERY — NEVER changes pipelineStage
-  else if (purpose === "QUERY") {
+  if (purpose === "QUERY") {
     targetStage = currentStage || null;
     if (callStatus === "Connected") wasConnected = true;
+    if (isUnconnected) {
+      evaluatedQueryStatus = "Attempting Query";
+    } else {
+      const qNorm = String(callEvent.queryStatus || callEvent.status || "").trim().toLowerCase();
+      if (qNorm === "solved" || qNorm === "query solved") {
+        evaluatedQueryStatus = "Query Solved";
+      } else {
+        evaluatedQueryStatus = "Query Pending";
+      }
+    }
   }
   // REMINDER — NEVER changes pipelineStage
   else if (purpose === "REMINDER") {
@@ -195,6 +207,7 @@ function evaluateStageServer(lead, callEvent) {
 
   return {
     pipelineStage: finalStage,
+    queryStatus: evaluatedQueryStatus,
     attemptCount,
     closedReason: allowed ? closedReason : (lead.closedReason || null),
     isAttenderCreditEligible,
@@ -301,7 +314,7 @@ export async function executeLogCall(db, payload) {
     callStatus:  callStatusClean,
     status:      status || 'Pending',
     pipelineStage: evalResult.pipelineStage,
-    queryStatus: queryStatus || null,
+    queryStatus: evalResult.queryStatus || queryStatus || null,
     queryDetails: queryDetails || null,
     remark:       remark || queryDetails || '',
     callbackDate: callbackDate || null,
@@ -359,8 +372,12 @@ export async function executeLogCall(db, payload) {
   // ── $set payload ───────────────────────────────────────────────────────
   const setPayload = {
     ...rootUpdates,
-    callType:    callDirection,
-    attemptCount: evalResult.attemptCount,
+    pipelineStage: evalResult.pipelineStage,
+    queryStatus:   evalResult.queryStatus || queryStatus || null,
+    callPurpose:   callPurposeClean,
+    status:        status || callStatusClean || 'Connected',
+    callType:      callDirection,
+    attemptCount:  evalResult.attemptCount,
     isAttenderCreditEligible: evalResult.isAttenderCreditEligible,
     closedReason: evalResult.closedReason,
     wasConnected: evalResult.wasConnected || existingContact.wasConnected || false,
@@ -374,9 +391,9 @@ export async function executeLogCall(db, payload) {
       callDirection,
       callPurpose:  callPurposeClean,
       callStatus:   callStatusClean,
-      status:       status || 'Pending',
+      status:       status || callStatusClean || 'Connected',
       pipelineStage: evalResult.pipelineStage,
-      queryStatus:  queryStatus || null,
+      queryStatus:  evalResult.queryStatus || queryStatus || null,
       queryDetails: queryDetails || null,
       remark:       remark || queryDetails || '',
       callbackDate: callbackDate || null,
@@ -397,9 +414,10 @@ export async function executeLogCall(db, payload) {
       programKey:    currentProgKey,
       program:       targetCalledFor || existingContact['Called For'] || '',
       pipelineStage: evalResult.pipelineStage,
-      status:        status || 'Pending',
+      status:        status || callStatusClean || 'Connected',
       callPurpose:   callPurposeClean,
       callStatus:    callStatusClean,
+      queryStatus:   evalResult.queryStatus || queryStatus || null,
       remark:        remark || queryDetails || '',
       callbackDate:  callbackDate || null,
       callbackTime:  callbackTime || null,
@@ -418,7 +436,7 @@ export async function executeLogCall(db, payload) {
     setPayload.callPurpose = callPurposeClean;
     setPayload.callStatus = callStatusClean;
     setPayload.status = status || existingContact.status || 'Pending';
-    setPayload.queryStatus = queryStatus || existingContact.queryStatus || null;
+    setPayload.queryStatus = evalResult.queryStatus || queryStatus || existingContact.queryStatus || null;
     setPayload.queryDetails = queryDetails || existingContact.queryDetails || null;
     setPayload.Source = currentCallSource;
     setPayload.source = currentCallSource;

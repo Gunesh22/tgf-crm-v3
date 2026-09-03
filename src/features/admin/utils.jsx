@@ -3,7 +3,8 @@ import {
   BarChart3, FolderOpen, Upload, Users, ClipboardCheck, FileText, Settings, FileSpreadsheet, TrendingUp
 } from "lucide-react";
 import { isKhojiField } from "../../lib/khojiHelper";
-import { PIPELINE_STAGES, getEffectiveStage } from "../../utils/pipelineEngine";
+import { PIPELINE_STAGES, getEffectiveStage, QUERY_PIPELINE_STAGES, getCanonicalQueryStage } from "../../utils/pipelineEngine";
+export { QUERY_PIPELINE_STAGES, getCanonicalQueryStage };
 
 export function parseTimestamp(t) {
   if (!t) return null;
@@ -160,6 +161,10 @@ export const getCanonicalStage = (stageOrContact) => {
   if (typeof stageOrContact === "object") {
     const contact = stageOrContact;
 
+    const rawStage = String(contact.pipelineStage || contact.status || "").trim();
+    if (rawStage === "Query Desk" || rawStage === "Query") return "Query Desk";
+    if (rawStage === "Reminder Desk" || rawStage === "Reminder") return "Reminder Desk";
+
     // 1. High Priority Status Check: Previous Program Pending status/stage override
     const hasPrevProgPendingStatus =
       String(contact.status || "").trim().toLowerCase() === "previous program pending" ||
@@ -201,32 +206,9 @@ export const getCanonicalStage = (stageOrContact) => {
       return PIPELINE_STAGES.CLOSED_INVALID;
     }
 
-    // 2. Delegate to pipeline engine's getEffectiveStage to resolve actual stage
-    const effectiveStage = getEffectiveStage(contact);
-    const isHigherSalesStage = effectiveStage && effectiveStage !== PIPELINE_STAGES.NEW_LEAD && effectiveStage !== PIPELINE_STAGES.ATTEMPTING;
-
-    // 3. Query Desk / Reminder status check (if lead has not reached an advanced sales stage like Info Given / Nurture / Registered)
-    if (!isHigherSalesStage) {
-      const statusStr = String(contact.status || "").trim().toLowerCase();
-      const isQueryOrReminderStatus =
-        statusStr.includes("query") ||
-        statusStr.includes("reminder") ||
-        (Array.isArray(contact.history) && contact.history.length > 0 && (
-          String(contact.history[contact.history.length - 1]?.status || "").trim().toLowerCase().includes("query") ||
-          String(contact.history[contact.history.length - 1]?.status || "").trim().toLowerCase().includes("reminder")
-        ));
-
-      if (isQueryOrReminderStatus) {
-        return "Query Desk";
-      }
-    }
-
-    if (effectiveStage) return effectiveStage;
-
-    // 3. Fallback to status or pipelineStage
-    const rawStage = contact.status || contact.pipelineStage || "";
+    // 2. Resolve stage from rawStage
     if (rawStage) {
-      const s = String(rawStage).trim();
+      const s = rawStage;
       if (s === PIPELINE_STAGES.NEW_LEAD || s === "New Lead" || s === "1. New Lead") return PIPELINE_STAGES.NEW_LEAD;
       if (s === PIPELINE_STAGES.ATTEMPTING || s === "Attempting Contact" || s === "Attempting" || s === "2. Attempting Contact") return PIPELINE_STAGES.ATTEMPTING;
       if (s === PIPELINE_STAGES.INFO_GIVEN || s === "Information Given" || s === "Info Given" || s === "3. Information Given") return PIPELINE_STAGES.INFO_GIVEN;
@@ -236,14 +218,12 @@ export const getCanonicalStage = (stageOrContact) => {
       if (s === PIPELINE_STAGES.REGISTERED_WON || s === "Registered / Won" || s === "Reg.Done" || s === "6. Registered / Won" || s === "Registered") return PIPELINE_STAGES.REGISTERED_WON;
       if (s === PIPELINE_STAGES.CLOSED_LOST || s === "Closed / Lost" || s === "Closed Lost" || s === "7. Closed / Lost" || s === "Not Interested") return PIPELINE_STAGES.CLOSED_LOST;
       if (s === PIPELINE_STAGES.CLOSED_INVALID || s === "Closed / Invalid" || s === "Invalid") return PIPELINE_STAGES.CLOSED_INVALID;
-      if (s === "Query Desk" || s === "Query") return "Query Desk";
       if (s === "Existing Alumni" || s === "Alumni") return "Existing Alumni";
     }
 
     return PIPELINE_STAGES.NEW_LEAD;
   }
 
-  // String argument
   const s = String(stageOrContact).trim();
   if (s === PIPELINE_STAGES.NEW_LEAD || s === "New Lead" || s === "1. New Lead") return PIPELINE_STAGES.NEW_LEAD;
   if (s === PIPELINE_STAGES.ATTEMPTING || s === "Attempting Contact" || s === "Attempting" || s === "2. Attempting Contact") return PIPELINE_STAGES.ATTEMPTING;
@@ -255,6 +235,7 @@ export const getCanonicalStage = (stageOrContact) => {
   if (s === PIPELINE_STAGES.CLOSED_LOST || s === "Closed / Lost" || s === "Closed Lost" || s === "7. Closed / Lost" || s === "Not Interested") return PIPELINE_STAGES.CLOSED_LOST;
   if (s === PIPELINE_STAGES.CLOSED_INVALID || s === "Closed / Invalid" || s === "Invalid") return PIPELINE_STAGES.CLOSED_INVALID;
   if (s === "Query Desk" || s === "Query") return "Query Desk";
+  if (s === "Reminder Desk" || s === "Reminder") return "Reminder Desk";
   if (s === "Existing Alumni" || s === "Alumni") return "Existing Alumni";
 
   return PIPELINE_STAGES.NEW_LEAD;

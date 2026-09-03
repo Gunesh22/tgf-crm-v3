@@ -743,6 +743,8 @@ export function getContactView(contact, currentAttenderIdOrName) {
   const status = getAttenderStatus(contact, activeAttender);
   const remark = getAttenderRemark(contact, activeAttender);
   const pipelineStage = getEffectiveStage(contact, calledFor);
+  const queryStatus = getFieldWithFallback(contact, "queryStatus", activeAttender) || contact.queryStatus || "";
+  const callPurpose = getFieldWithFallback(contact, "callPurpose", activeAttender) || contact.callPurpose || "";
   const callbackDate = getFieldWithFallback(contact, "callbackDate", activeAttender) || contact.callbackDate || "";
   const callbackStatus = getFieldWithFallback(contact, "callbackStatus", activeAttender) || contact.callbackStatus || "";
   const callType = getFieldWithFallback(contact, "callType", activeAttender) || contact.callType || "outgoing";
@@ -753,6 +755,8 @@ export function getContactView(contact, currentAttenderIdOrName) {
     status,
     remark,
     pipelineStage,
+    queryStatus,
+    callPurpose,
     callbackDate,
     callbackStatus,
     callType,
