@@ -17,6 +17,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'attenderId is required' });
     }
 
+    const label = attenderName ? `${attenderName} (${attenderId})` : attenderId;
+    console.log(`[ATTENDER API REQ] /api/contacts/create-incoming | Attender: "${label}" | Action: "Create Lead"`);
+
     const client = await clientPromise;
     const db     = client.db('tgf_crm');
     const nowIso = new Date().toISOString();

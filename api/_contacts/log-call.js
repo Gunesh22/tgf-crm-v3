@@ -618,6 +618,10 @@ export default async function handler(req, res) {
   try {
     const client = await clientPromise;
     const db     = client.db('tgf_crm');
+    const { attenderId, attenderName, status } = req.body || {};
+    const label = attenderName ? `${attenderName} (${attenderId})` : (attenderId || 'unknown');
+    console.log(`[ATTENDER API REQ] /api/contacts/log-call | Attender: "${label}" | Outcome: "${status || 'Call Logged'}"`);
+
     const result = await executeLogCall(db, req.body);
     return res.status(200).json(result);
   } catch (error) {
