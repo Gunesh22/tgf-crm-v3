@@ -315,8 +315,12 @@ export function safeSetLocalStorage(key, data) {
   }
 }
 
-export const subscribeToCallLogs = (attenderId, attenderName, callback, onError) => {
+export const subscribeToCallLogs = (attenderId, nameOrCb, cbOrErr, optionalErr) => {
   if (!attenderId) return () => {};
+
+  const attenderName = typeof nameOrCb === 'string' ? nameOrCb : (typeof attenderId === 'string' ? attenderId : '');
+  const callback = typeof nameOrCb === 'function' ? nameOrCb : (typeof cbOrErr === 'function' ? cbOrErr : () => {});
+  const onError = typeof cbOrErr === 'function' && typeof nameOrCb === 'string' ? cbOrErr : optionalErr;
 
   let isSubscribed = true;
   const controller = new AbortController();

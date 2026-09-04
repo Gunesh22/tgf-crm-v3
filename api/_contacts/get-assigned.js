@@ -27,9 +27,23 @@ export default async function handler(req, res) {
       'iragizmzzxqzubjjhibi': 'IrAgizMZzxqzUbJjHIBI',
     };
 
+    const ID_NAME_MAP = {
+      'ZJQsev2aLqi2ispr3j74': 'Priyanka',
+      '9VZZnV00X63PzUSaGTgq': 'Manisha',
+      'WbND9Oa4yPUuWXVyibb3': 'Geeta',
+      'IrAgizMZzxqzUbJjHIBI': 'Rakhi',
+      'priyanka': 'Priyanka',
+      'manisha': 'Manisha',
+      'geeta': 'Geeta',
+      'rakhi': 'Rakhi'
+    };
+
     const cleanInput = (attenderId || '').trim();
     const resolvedId = ID_ALIASES[cleanInput.toLowerCase()] || cleanInput;
-    const attenderLabel = attenderName ? `${attenderName} (${resolvedId})` : resolvedId;
+    const resolvedName = (attenderName && typeof attenderName === 'string' && attenderName.trim() && attenderName !== 'undefined')
+      ? attenderName.trim()
+      : (ID_NAME_MAP[cleanInput.toLowerCase()] || ID_NAME_MAP[resolvedId] || cleanInput);
+    const attenderLabel = `${resolvedName} (${resolvedId})`;
     console.log(`[ATTENDER API REQ] /api/contacts/get-assigned | Attender: "${attenderLabel}" | Purpose: "${purpose}" | Device: "${device}"`);
 
     const client = await clientPromise;
