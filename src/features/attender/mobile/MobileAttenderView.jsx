@@ -17,6 +17,8 @@ export default function MobileAttenderView({
   setFilterStatus,
   onExit,
   openCallEntryDialog,
+  handleSyncDB,
+  isSyncingDB,
   handleRebuildCache,
   isRebuildingCache,
   setEditingRow,
@@ -201,12 +203,12 @@ export default function MobileAttenderView({
 
           <button
             type="button"
-            onClick={handleRebuildCache}
-            disabled={isRebuildingCache}
+            onClick={handleSyncDB || handleRebuildCache}
+            disabled={isSyncingDB || isRebuildingCache}
             className="w-9 h-9 rounded-full bg-[#1e293b] text-indigo-300 border border-indigo-500/30 flex items-center justify-center hover:bg-indigo-900 transition active:scale-95 disabled:opacity-50"
-            title="Rebuild cache from callCenterCache (Last 3 Months)"
+            title="Sync Database"
           >
-            <RefreshCw size={16} className={isRebuildingCache ? "animate-spin text-indigo-400" : ""} />
+            <RefreshCw size={16} className={(isSyncingDB || isRebuildingCache) ? "animate-spin text-indigo-400" : ""} />
           </button>
 
           <button

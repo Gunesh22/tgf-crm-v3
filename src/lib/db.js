@@ -13,7 +13,7 @@ export const DEFAULT_CONNECTED_STATUSES = ["Info given", "Interested", "Reg.Done
 
 
 // API FETCH HELPERS
-export const fetchAPI = async (endpoint, method = "GET", body = null) => {
+export const fetchAPI = async (endpoint, method = "GET", body = null, extraOptions = {}) => {
   console.log(`%c[API CALL] %c${method} %c${endpoint}`, "color: #3b82f6; font-weight: bold", "color: #10b981; font-weight: bold", "color: gray");
   if (body) {
     console.log("%c[PAYLOAD]", "color: #f59e0b; font-weight: bold", body);
@@ -21,7 +21,8 @@ export const fetchAPI = async (endpoint, method = "GET", body = null) => {
 
   const options = {
     method,
-    headers: { "Content-Type": "application/json" }
+    headers: { "Content-Type": "application/json" },
+    ...extraOptions
   };
   if (body) options.body = JSON.stringify(body);
   
@@ -41,14 +42,19 @@ export const fetchAPI = async (endpoint, method = "GET", body = null) => {
     console.log(`%c[API SUCCESS] %c${endpoint}`, "color: #10b981; font-weight: bold", "color: gray", data);
     return data;
   } catch (error) {
-    console.error(`%c[API ERROR] %c${endpoint}`, "color: #ef4444; font-weight: bold", "color: gray", error.message || error);
+    if (error?.name === "AbortError" || error?.message?.includes("aborted")) {
+      console.log(`%c[API ABORTED] %c${endpoint}`, "color: #f59e0b; font-weight: bold", "color: gray");
+    } else {
+      console.error(`%c[API ERROR] %c${endpoint}`, "color: #ef4444; font-weight: bold", "color: gray", error.message || error);
+    }
     throw error;
   }
 };
 
 // CONTACTS API
-export const getAssignedContacts = async (attenderId) => {
-  return fetchAPI(`/api/contacts/get-assigned?attenderId=${attenderId}`);
+export const getAssignedContacts = async (attenderId, options = {}) => {
+  const { signal } = options;
+  return fetchAPI(`/api/contacts/get-assigned?attenderId=${attenderId}`, "GET", null, signal ? { signal } : {});
 };
 
 export const searchAttenderContacts = async (attenderId, query, limit = 50) => {
@@ -311,6 +317,7 @@ export const subscribeToCallLogs = (attenderId, attenderName, callback, onError)
   if (!attenderId) return () => {};
 
   let isSubscribed = true;
+  const controller = new AbortController();
   let lastDataJson = null;
   const cacheKey = `attender_call_logs_${attenderId}`;
 
@@ -351,19 +358,13 @@ export const subscribeToCallLogs = (attenderId, attenderName, callback, onError)
     }
   }
 
-  // Clear existing active interval for this attender if present
-  if (activeSubscriptionTimers.has(attenderId)) {
-    clearInterval(activeSubscriptionTimers.get(attenderId));
-    activeSubscriptionTimers.delete(attenderId);
-  }
-
   // 2. BACKGROUND FETCH & SYNC FROM MONGODB API
   const fetchLogs = async () => {
-    if (!isSubscribed) return;
+    if (!isSubscribed || controller.signal.aborted) return;
     if (typeof document !== "undefined" && document.hidden) return;
     try {
-      const res = await getAssignedContacts(attenderId);
-      if (isSubscribed) {
+      const res = await getAssignedContacts(attenderId, { signal: controller.signal });
+      if (isSubscribed && !controller.signal.aborted) {
         const rawData = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
         const data = normalizeList(rawData);
         memoryCache.set(attenderId, data);
@@ -376,7 +377,11 @@ export const subscribeToCallLogs = (attenderId, attenderName, callback, onError)
         }
       }
     } catch (e) {
-      console.error("[subscribeToCallLogs polling error]", e);
+      if (e?.name === "AbortError" || e?.message?.includes("aborted") || controller.signal.aborted) {
+        console.log("[subscribeToCallLogs] Initial fetch aborted cleanly");
+        return;
+      }
+      console.error("[subscribeToCallLogs error]", e);
       if (isSubscribed) {
         if (!cacheLoaded) {
           const mem = memoryCache.get(attenderId) || [];
@@ -389,16 +394,11 @@ export const subscribeToCallLogs = (attenderId, attenderName, callback, onError)
     }
   };
   
-  fetchLogs(); // initial background fetch
-  const interval = setInterval(fetchLogs, 30000);
-  activeSubscriptionTimers.set(attenderId, interval);
-  
+  fetchLogs(); // Initial load from MongoDB on mount
+
   return () => {
     isSubscribed = false;
-    if (activeSubscriptionTimers.get(attenderId) === interval) {
-      clearInterval(interval);
-      activeSubscriptionTimers.delete(attenderId);
-    }
+    controller.abort();
   };
 };
 

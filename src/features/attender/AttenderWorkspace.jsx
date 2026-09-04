@@ -9,7 +9,7 @@ import {
   Bell, Sparkles, UserCheck, RefreshCw, Info, Eye
 } from "lucide-react";
 import {
-  subscribeToCallLogs, updateCallLog, addIncomingCallLog,
+  subscribeToCallLogs, getAssignedContacts, safeSetLocalStorage, updateCallLog, addIncomingCallLog,
   assignContactsToAttender, normalizePhone, getActiveTags,
   INCOMING_PROGRAM_ID, INCOMING_PROGRAM_NAME, ensureIncomingProgram,
   OUTGOING_PROGRAM_ID, OUTGOING_PROGRAM_NAME, ensureOutgoingProgram,
@@ -35,6 +35,7 @@ import {
   getCanonicalStatus,
   isUnansweredCallback
 } from "./utils";
+import { normalizeProgramStates } from "../../utils/pipelineEngine";
 import { EditModal } from "./components/EditModal";
 import { MyPerformanceDashboard } from "./components/MyPerformanceDashboard";
 import { ColumnsSelector } from "./components/ColumnsSelector";
@@ -169,6 +170,74 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [showStageInfoModal, setShowStageInfoModal] = useState(false);
   const [isQuickGuideOpen, setIsQuickGuideOpen] = useState(false);
+  const [isSyncingDB, setIsSyncingDB] = useState(false);
+  const isSyncingRef = useRef(false);
+  const syncAbortControllerRef = useRef(null);
+  const isComponentMountedRef = useRef(true);
+
+  useEffect(() => {
+    isComponentMountedRef.current = true;
+    return () => {
+      isComponentMountedRef.current = false;
+      if (syncAbortControllerRef.current) {
+        syncAbortControllerRef.current.abort();
+        syncAbortControllerRef.current = null;
+      }
+      isSyncingRef.current = false;
+    };
+  }, []);
+
+  // Abort active manual sync whenever attenderId changes to prevent cross-contamination
+  useEffect(() => {
+    if (syncAbortControllerRef.current) {
+      syncAbortControllerRef.current.abort();
+      syncAbortControllerRef.current = null;
+    }
+    isSyncingRef.current = false;
+    setIsSyncingDB(false);
+  }, [attenderId]);
+
+  const handleSyncDB = async () => {
+    if (isSyncingRef.current || !attenderId) return;
+
+    const requestAttenderId = attenderId;
+    isSyncingRef.current = true;
+    setIsSyncingDB(true);
+
+    if (syncAbortControllerRef.current) {
+      syncAbortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    syncAbortControllerRef.current = controller;
+
+    const toastId = toast.loading("Syncing with database...");
+    try {
+      const res = await getAssignedContacts(requestAttenderId, { signal: controller.signal });
+      if (controller.signal.aborted || attenderId !== requestAttenderId) return;
+
+      const rawData = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+      const normList = rawData.map(c => normalizeProgramStates(c));
+
+      if (isComponentMountedRef.current && !controller.signal.aborted && attenderId === requestAttenderId) {
+        setCallLogs(normList);
+        safeSetLocalStorage(`attender_call_logs_${requestAttenderId}`, normList);
+        toast.success(`Database synced! Downloaded ${normList.length} contacts.`, { id: toastId });
+      }
+    } catch (err) {
+      if (err?.name === "AbortError" || err?.message?.includes("aborted") || controller.signal.aborted) {
+        console.log("[Sync DB] Request intentionally aborted.");
+        toast.dismiss(toastId);
+        return;
+      }
+      console.error("[Sync DB Error]", err);
+      toast.error(`Failed to sync database: ${err.message || err}`, { id: toastId });
+    } finally {
+      isSyncingRef.current = false;
+      if (isComponentMountedRef.current) {
+        setIsSyncingDB(false);
+      }
+    }
+  };
 
 
 
@@ -1556,6 +1625,8 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
           setFilterStatus={setFilterStatus}
           onExit={onExit}
           openCallEntryDialog={openCallEntryDialog}
+          handleSyncDB={handleSyncDB}
+          isSyncingDB={isSyncingDB}
           handleRebuildCache={handleRebuildCache}
           isRebuildingCache={isRebuildingCache}
           setEditingRow={handleSelectRow}
@@ -1670,6 +1741,22 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
         <div className="flex items-center gap-3">
           {/* Notifications & Quick Info Row */}
           <div className="flex items-center gap-2">
+            {/* Sync DB Manual Download Button */}
+            <button
+              type="button"
+              onClick={handleSyncDB}
+              disabled={isSyncingDB}
+              className={`px-3 py-1.5 rounded-xl border font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+                isSyncingDB
+                  ? "bg-slate-100 border-slate-300 text-slate-400 cursor-not-allowed"
+                  : "bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300"
+              }`}
+              title="Manually sync & download fresh data from MongoDB Database"
+            >
+              <RefreshCw size={14} className={isSyncingDB ? "animate-spin text-indigo-600" : "text-indigo-600"} />
+              <span>{isSyncingDB ? "Syncing..." : "Sync DB"}</span>
+            </button>
+
             {/* Assisted Registration Notification Bell */}
             <div className="relative" ref={notifRef}>
               <button
