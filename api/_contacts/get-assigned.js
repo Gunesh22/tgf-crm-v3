@@ -74,7 +74,7 @@ export default async function handler(req, res) {
         remark: attState.remark !== undefined ? attState.remark : (c.remark || ''),
         callbackDate: attState.callbackDate || c.callbackDate || null,
         lastCalledAt: attState.lastCalledAt || c.lastCalledAt || null,
-        history: c.history || []
+        history: Array.isArray(c.history) ? c.history : []
       };
     });
 

@@ -479,6 +479,11 @@ export function MyPerformanceDashboard({
     }).length;
   }, [logs, attenderId]);
 
+  // Total assigned contacts in list for this attender
+  const totalAssignedLeadsCount = useMemo(() => {
+    return logs.filter(l => !l._deleted).length;
+  }, [logs]);
+
   // Key KPI Statistics
   const stats = useMemo(() => {
     let connected = 0;
@@ -656,8 +661,8 @@ export function MyPerformanceDashboard({
             <span className="text-xs font-semibold text-slate-500">attempts</span>
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>Today's Calls:</span>
-            <span className="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md text-[11px]">{todayCallsCount}</span>
+            <span>Leads Contacted:</span>
+            <span className="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md text-[11px]">{stats.totalLeads}</span>
           </div>
         </div>
 
@@ -710,8 +715,8 @@ export function MyPerformanceDashboard({
             <span className="text-xs font-semibold text-slate-500">pending</span>
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>Assigned Leads:</span>
-            <span className="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md text-[11px]">{stats.totalLeads}</span>
+            <span>Total Assigned Pool:</span>
+            <span className="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md text-[11px]">{totalAssignedLeadsCount}</span>
           </div>
         </div>
 

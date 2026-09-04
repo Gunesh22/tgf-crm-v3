@@ -360,6 +360,7 @@ export const subscribeToCallLogs = (attenderId, attenderName, callback, onError)
   // 2. BACKGROUND FETCH & SYNC FROM MONGODB API
   const fetchLogs = async () => {
     if (!isSubscribed) return;
+    if (typeof document !== "undefined" && document.hidden) return;
     try {
       const res = await getAssignedContacts(attenderId);
       if (isSubscribed) {
@@ -420,6 +421,7 @@ export const subscribeToAllCallLogs = (programId, month, callback) => {
 
   const fetchAll = async () => {
     if (!isSubscribed) return;
+    if (typeof document !== "undefined" && document.hidden) return;
     try {
       const monthParam = (!month || month === 'ALL') ? '' : month;
       const res = await fetchAPI(`/api/contacts/search?includeHistory=true&${monthParam ? `month=${monthParam}&` : ''}limit=15000`);
@@ -439,9 +441,14 @@ export const subscribeToAllCallLogs = (programId, month, callback) => {
   };
 };
 
-export const subscribeToRegistrations = (programId, callback) => {
+export const subscribeToRegistrations = (programId, month, callback) => {
   let isSubscribed = true;
-  const cacheKey = `registrations_cache_${programId || 'all'}`;
+  if (typeof month === 'function') {
+    callback = month;
+    month = 'ALL';
+  }
+  const targetMonth = month || 'ALL';
+  const cacheKey = `registrations_cache_${programId || 'all'}_${targetMonth}`;
 
   try {
     const cachedData = localStorage.getItem(cacheKey);
@@ -455,8 +462,10 @@ export const subscribeToRegistrations = (programId, callback) => {
 
   const fetchRegs = async () => {
     if (!isSubscribed) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
     try {
-      const res = await fetchAPI(`/api/registrations`);
+      const monthParam = (!targetMonth || targetMonth === 'ALL') ? '' : targetMonth;
+      const res = await fetchAPI(`/api/registrations${monthParam ? `?month=${monthParam}` : ''}`);
       if (isSubscribed && res.data) {
         safeSetLocalStorage(cacheKey, res.data);
         callback(res.data);

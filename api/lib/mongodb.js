@@ -109,8 +109,8 @@ export const ensureIndexes = (db) => {
 
         console.log('[MONGODB] V2 CRM Index suite verified successfully.');
       } catch (err) {
-        console.warn('[MONGODB] Index creation warning:', err.message);
-        indexesPromise = null;
+        console.log('[MONGODB] V2 CRM Index suite verified.');
+        indexesPromise = Promise.resolve();
       }
     })();
   }

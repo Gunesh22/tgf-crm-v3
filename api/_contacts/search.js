@@ -97,7 +97,7 @@ export default async function handler(req, res) {
     const limitNum = Math.min(15000, Math.max(1, parseInt(limit, 10)));
     const skipNum = (pageNum - 1) * limitNum;
 
-    // Fast query execution: fetch contacts with projection (excluding heavy history array for fast transfer)
+    // Fast query execution: fetch contacts with projection
     const includeHistory = req.query.includeHistory === 'true';
     const projection = includeHistory ? {} : { history: 0 };
 
@@ -118,9 +118,16 @@ export default async function handler(req, res) {
 
     const totalPages = Math.ceil(totalCount / limitNum);
 
+    const trimmedContacts = contacts.map(c => {
+      if (Array.isArray(c.history)) {
+        return { ...c, history: c.history };
+      }
+      return c;
+    });
+
     return res.status(200).json({
       success: true,
-      data: contacts,
+      data: trimmedContacts,
       pagination: {
         totalRecords: totalCount,
         currentPage: pageNum,

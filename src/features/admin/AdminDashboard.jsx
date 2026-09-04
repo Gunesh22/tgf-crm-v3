@@ -27,7 +27,14 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
   const [callLogs, setCallLogs] = useState([]);
   const [callLogsLoading, setCallLogsLoading] = useState(true);
 
-  const [selectedMonth, setSelectedMonth] = useState("ALL");
+  const getCurrentMonthKey = () => {
+    const d = new Date();
+    const yr = d.getFullYear();
+    const mn = String(d.getMonth() + 1).padStart(2, "0");
+    return `${yr}-${mn}`;
+  };
+
+  const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthKey);
   const [registrations, setRegistrations] = useState([]);
   const [registrationsLoading, setRegistrationsLoading] = useState(false);
   const [monthOptions, setMonthOptions] = useState([]);
@@ -67,9 +74,13 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
       try {
         const months = await getRegistrationMonths();
         setMonthOptions(months);
-        const rangeOptions = ["ALL"];
-        if (months.length > 0 && !months.includes(selectedMonth) && !rangeOptions.includes(selectedMonth)) {
-          setSelectedMonth(months[0]);
+        if (months.length > 0) {
+          const currentKey = getCurrentMonthKey();
+          if (months.includes(currentKey)) {
+            setSelectedMonth(currentKey);
+          } else if (!months.includes(selectedMonth)) {
+            setSelectedMonth(months[0]);
+          }
         }
       } catch (err) {
         console.error("Failed to load registration months", err);
@@ -78,17 +89,18 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
     loadMonths();
   }, []);
 
-  // Hoisted subscription to registrations — fetch once on mount
+  // Hoisted subscription to registrations — sync with selectedMonth
   useEffect(() => {
+    if (!selectedMonth) return;
     setRegistrationsLoading(true);
-    const unsubRegs = subscribeToRegistrations("ALL", (data) => {
+    const unsubRegs = subscribeToRegistrations("ALL", selectedMonth, (data) => {
       setRegistrations(data);
       setRegistrationsLoading(false);
     });
     return () => {
       if (unsubRegs) unsubRegs();
     };
-  }, []); // [] = fetch once, not on every tab change
+  }, [selectedMonth]);
 
   const loadAll = async () => {
     try {
