@@ -200,6 +200,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   const handleSyncDB = async () => {
     if (isSyncingRef.current || !attenderId) return;
 
+    console.log(`%c[MANUAL SYNC DB] Manual sync triggered by ${attenderName} (${attenderId})`, "background: #2563eb; color: #ffffff; font-weight: bold; padding: 4px 8px; border-radius: 4px;");
     const requestAttenderId = attenderId;
     isSyncingRef.current = true;
     setIsSyncingDB(true);

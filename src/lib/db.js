@@ -358,10 +358,11 @@ export const subscribeToCallLogs = (attenderId, attenderName, callback, onError)
     }
   }
 
-  // 2. BACKGROUND FETCH & SYNC FROM MONGODB API
+  // 2. INITIAL NETWORK FETCH FROM MONGODB API (Runs ONCE on mount)
   const fetchLogs = async () => {
     if (!isSubscribed || controller.signal.aborted) return;
     if (typeof document !== "undefined" && document.hidden) return;
+    console.log(`%c[INITIAL MOUNT FETCH] Single initial network fetch for attender "${attenderName}" (${attenderId})`, "background: #059669; color: #ffffff; font-weight: bold; padding: 4px 8px; border-radius: 4px;");
     try {
       const res = await getAssignedContacts(attenderId, { signal: controller.signal });
       if (isSubscribed && !controller.signal.aborted) {
