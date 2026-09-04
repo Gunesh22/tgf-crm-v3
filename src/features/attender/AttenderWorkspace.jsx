@@ -577,13 +577,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     });
   }, [filterDateType, filterDateRange, customDateFrom, customDateTo, attenderId, attenderName]);
 
-  // Refresh callback-due flags every 60 seconds for long-running sessions
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCallLogs(prev => enrichLogsWithCallbackFlags(prev));
-    }, 60000);
-    return () => clearInterval(interval);
-  }, []);
+
 
   const loadPrograms = async () => {
     // Ensure the default programs always exist in Firestore
