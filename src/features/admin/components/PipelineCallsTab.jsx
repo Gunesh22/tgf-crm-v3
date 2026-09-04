@@ -770,8 +770,43 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
 
   // Filter Options Memos
   const programOptions = useMemo(() => {
-    return (programs || []).map(p => ({ value: p.id || p._id || p.key || p.name, label: p.name }));
-  }, [programs]);
+    const map = new Map();
+
+    (programs || []).forEach(p => {
+      const val = String(p.id || p._id || p.key || p.name || "").trim();
+      const label = String(p.name || val).trim();
+      if (val) map.set(val, { value: val, label });
+    });
+
+    (callLogs || []).forEach(c => {
+      if (Array.isArray(c.tags)) {
+        c.tags.forEach(t => {
+          const tagStr = String(t || "").trim();
+          if (tagStr && !map.has(tagStr)) {
+            map.set(tagStr, { value: tagStr, label: tagStr });
+          }
+        });
+      }
+      if (c.Tags) {
+        String(c.Tags).split(",").forEach(t => {
+          const tagStr = t.trim();
+          if (tagStr && !map.has(tagStr)) {
+            map.set(tagStr, { value: tagStr, label: tagStr });
+          }
+        });
+      }
+      if (c.programName) {
+        const pn = String(c.programName).trim();
+        if (pn && !map.has(pn)) map.set(pn, { value: pn, label: pn });
+      }
+      if (c.programId) {
+        const pid = String(c.programId).trim();
+        if (pid && !map.has(pid)) map.set(pid, { value: pid, label: pid });
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [programs, callLogs]);
 
   const attenderOptions = useMemo(() => {
     return (attenders || [])

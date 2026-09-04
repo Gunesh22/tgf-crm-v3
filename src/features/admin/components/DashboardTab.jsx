@@ -146,7 +146,44 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
 
   const EXCLUDED_ATTENDER_NAMES = ["admin", "super admin", "administrator", "agent"];
 
-  const programOptions = programs.map(p => ({ value: p.id, label: p.name }));
+  const programOptions = useMemo(() => {
+    const map = new Map();
+
+    (programs || []).forEach(p => {
+      const val = String(p.id || p._id || p.key || p.name || "").trim();
+      const label = String(p.name || val).trim();
+      if (val) map.set(val, { value: val, label });
+    });
+
+    (callLogs || []).forEach(c => {
+      if (Array.isArray(c.tags)) {
+        c.tags.forEach(t => {
+          const tagStr = String(t || "").trim();
+          if (tagStr && !map.has(tagStr)) {
+            map.set(tagStr, { value: tagStr, label: tagStr });
+          }
+        });
+      }
+      if (c.Tags) {
+        String(c.Tags).split(",").forEach(t => {
+          const tagStr = t.trim();
+          if (tagStr && !map.has(tagStr)) {
+            map.set(tagStr, { value: tagStr, label: tagStr });
+          }
+        });
+      }
+      if (c.programName) {
+        const pn = String(c.programName).trim();
+        if (pn && !map.has(pn)) map.set(pn, { value: pn, label: pn });
+      }
+      if (c.programId) {
+        const pid = String(c.programId).trim();
+        if (pid && !map.has(pid)) map.set(pid, { value: pid, label: pid });
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [programs, callLogs]);
   const attenderOptions = attenders
     .filter(a => a.role !== 'admin' && !EXCLUDED_ATTENDER_NAMES.includes((a.name || "").toLowerCase().trim()))
     .map(a => ({ value: a.id, label: a.name }));
