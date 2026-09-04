@@ -2,6 +2,7 @@ import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { useAutoUpdater } from './hooks/useAutoUpdater';
 import LoginScreen from './features/auth/LoginScreen';
 import './index.css';
 
@@ -42,6 +43,8 @@ function ProtectedRoute({ children, requiredRole }) {
 
 function AppRoutes() {
   const { user, logout } = useAuth();
+  useAutoUpdater();
+
   return (
     <div className="app-container">
       <Suspense fallback={<LoadingFallback />}>

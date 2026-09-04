@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { attenderId } = req.query;
+    const { attenderId, attenderName, purpose = 'initial_mount', device = 'desktop' } = req.query;
     if (!attenderId) {
       return res.status(400).json({ error: 'attenderId query parameter is required' });
     }
@@ -29,6 +29,8 @@ export default async function handler(req, res) {
 
     const cleanInput = (attenderId || '').trim();
     const resolvedId = ID_ALIASES[cleanInput.toLowerCase()] || cleanInput;
+    const attenderLabel = attenderName ? `${attenderName} (${resolvedId})` : resolvedId;
+    console.log(`[ATTENDER API REQ] /api/contacts/get-assigned | Attender: "${attenderLabel}" | Purpose: "${purpose}" | Device: "${device}"`);
 
     const client = await clientPromise;
     const db = client.db('tgf_crm');

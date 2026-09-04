@@ -213,7 +213,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
 
     const toastId = toast.loading("Syncing with database...");
     try {
-      const res = await getAssignedContacts(requestAttenderId, { signal: controller.signal });
+      const res = await getAssignedContacts(requestAttenderId, { signal: controller.signal, attenderName, purpose: 'manual_sync', device: 'desktop' });
       if (controller.signal.aborted || attenderId !== requestAttenderId) return;
 
       const rawData = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);

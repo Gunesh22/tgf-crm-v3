@@ -53,8 +53,10 @@ export const fetchAPI = async (endpoint, method = "GET", body = null, extraOptio
 
 // CONTACTS API
 export const getAssignedContacts = async (attenderId, options = {}) => {
-  const { signal } = options;
-  return fetchAPI(`/api/contacts/get-assigned?attenderId=${attenderId}`, "GET", null, signal ? { signal } : {});
+  const { signal, attenderName, purpose = 'initial_mount', device = 'desktop' } = options;
+  const nameQuery = attenderName ? `&attenderName=${encodeURIComponent(attenderName)}` : '';
+  const tagQuery = `&purpose=${purpose}&device=${device}`;
+  return fetchAPI(`/api/contacts/get-assigned?attenderId=${attenderId}${nameQuery}${tagQuery}`, "GET", null, signal ? { signal } : {});
 };
 
 export const searchAttenderContacts = async (attenderId, query, limit = 50) => {
@@ -364,7 +366,7 @@ export const subscribeToCallLogs = (attenderId, attenderName, callback, onError)
     if (typeof document !== "undefined" && document.hidden) return;
     console.log(`%c[INITIAL MOUNT FETCH] Single initial network fetch for attender "${attenderName}" (${attenderId})`, "background: #059669; color: #ffffff; font-weight: bold; padding: 4px 8px; border-radius: 4px;");
     try {
-      const res = await getAssignedContacts(attenderId, { signal: controller.signal });
+      const res = await getAssignedContacts(attenderId, { signal: controller.signal, attenderName, purpose: 'initial_mount', device: 'desktop' });
       if (isSubscribed && !controller.signal.aborted) {
         const rawData = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
         const data = normalizeList(rawData);
