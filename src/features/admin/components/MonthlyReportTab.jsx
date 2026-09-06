@@ -1225,8 +1225,6 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
               const lastDayStr = `${yr}-${String(mn + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
               const isThisMonthSelected = startDate === firstDayStr && endDate === lastDayStr;
 
-              const isAllTimeSelected = !startDate && !endDate;
-
               return (
                 <div className="flex items-center gap-1 ml-1">
                   <button
@@ -1254,19 +1252,6 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
                     }`}
                   >
                     This Month
-                  </button>
-                  <button
-                    onClick={() => {
-                      setStartDate("");
-                      setEndDate("");
-                    }}
-                    className={`h-8 px-2.5 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
-                      isAllTimeSelected
-                        ? "bg-indigo-600 border-indigo-600 text-white"
-                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                    }`}
-                  >
-                    All Time
                   </button>
                 </div>
               );

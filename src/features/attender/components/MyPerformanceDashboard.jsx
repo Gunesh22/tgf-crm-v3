@@ -30,7 +30,6 @@ const DATE_FILTERS = [
   { label: "This Week",  key: "week" },
   { label: "This Month", key: "month" },
   { label: "Custom",     key: "custom" },
-  { label: "All Time",   key: "all" },
 ];
 
 // ─── Date & Timestamp Parser ─────────────────────────────────────────────────

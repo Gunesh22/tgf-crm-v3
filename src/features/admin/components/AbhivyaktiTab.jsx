@@ -955,19 +955,29 @@ export default function AbhivyaktiTab({
               className="h-8 px-2.5 bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
             />
 
-            {(dateFrom || dateTo) && (
-              <button
-                type="button"
-                onClick={() => {
-                  setDateFrom("");
-                  setDateTo("");
-                }}
-                className="h-8 px-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-md text-xs font-medium transition flex items-center gap-1 cursor-pointer"
-                title="Reset date range filter"
-              >
-                <X size={12} /> Reset
-              </button>
-            )}
+            {(() => {
+              const todayObj = new Date();
+              const yr = todayObj.getFullYear();
+              const mn = todayObj.getMonth();
+              const defaultFirstDay = `${yr}-${String(mn + 1).padStart(2, "0")}-01`;
+              const lastDay = new Date(yr, mn + 1, 0).getDate();
+              const defaultLastDay = `${yr}-${String(mn + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+              const isDefaultMonth = dateFrom === defaultFirstDay && dateTo === defaultLastDay;
+
+              return !isDefaultMonth ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDateFrom(defaultFirstDay);
+                    setDateTo(defaultLastDay);
+                  }}
+                  className="h-8 px-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-md text-xs font-medium transition flex items-center gap-1 cursor-pointer"
+                  title="Reset date range filter to current month"
+                >
+                  <X size={12} /> Reset
+                </button>
+              ) : null;
+            })()}
 
             {(() => {
               const todayObj = new Date();
