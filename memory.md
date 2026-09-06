@@ -650,3 +650,28 @@ Enable administrators to visually inspect the exact list of canonical registrati
   - `history[1]` (`Other`): `leadOrigin: "Facebook"`, `currentSource: "YouTube"`
 - **Automated Unit Test Suite**: **134 / 134 PASSED (0 failures)** (`npm test`).
 - **Production Build Verification**: **Vite build PASSED with 0 errors** (`npm run build`).
+
+---
+
+## 38. Root Cause Fix: Registration Synthesis, Duplicate ID Guard & City Resolution
+
+### Root Cause Analysis & Solution Summary
+1. **Duplicate Rows & Raw ID Strings in Total Registrations Modal**:
+   - **Root Cause**: `getCanonicalRegistrations` fallback step 2 iterated over `Object.keys(c.attenderStates)`. Since `attenderStates` is keyed by `attenderId` (e.g. `JW20HztSjMfwNbVaCpxz`, `lrAgizMZzxqzUbJjHIBI`), `stKey` was treated as `rawCalledFor`, injecting raw attender ID strings as program names and failing deduplication against explicit registration keys `${contactId}_${calledForKey}`.
+   - **Fix**: Added `isRawIdString` helper in `src/utils/registrationEngine.js` to detect and filter 15–32 char hex/alphanumeric MongoDB and attender IDs. Updated fallback step 2 to iterate over `Object.values(c.attenderStates)` and extract `stObj.calledFor || stObj.program`, defaulting unresolvable ID strings to `"Other"`.
+
+2. **False Program Registration Filtering**:
+   - **Root Cause**: Fallback step 2 in `getCanonicalRegistrations` was adding every program found in `c.history` to `programMap` regardless of call status (e.g. Amit Shah's 1st call for `TGF Info` at status `Interested` generated a false `TGF Info` registration row).
+   - **Fix**: Added `isStatusRegDone(st)` helper requiring explicit `Reg.Done`, `Registered`, `Won`, or `Registered / Won` status on `h.status` / `rel.status` / `stObj.status` before adding a program to `programMap`.
+
+3. **City & Khoji Resolution for Explicit Registrations**:
+   - **Root Cause**: Explicit registration documents in `registrations` collection do not store `city` directly. `getCanonicalRegistrations` in `registrationEngine.js` line 550 was reading `reg.city` (which returned `undefined`) and defaulting to `"—"` instead of looking up `getContactCity(contact)`.
+   - **Fix**: Enhanced contact lookup in `getCanonicalRegistrations` Step 1 to match across `_id`, `Phone`, `Mobile`, `normalizedPhone`, and `normalizedMobile`. Set `contactCity`/`city` via `getContactCity(contact) || getContactCity(reg)`. Updated `getContactCity()` to ignore `'—'` string fallbacks.
+
+4. **Monthly Report Tab Import Fix**:
+   - **Fix**: Added `getContactSource` to named imports in `MonthlyReportTab.jsx`.
+
+### Verification & Git Release
+- **Automated Test Suite**: **171 / 171 PASSED (0 failures)** (`npm test`).
+- **Production Build**: **Vite build PASSED with 0 errors** (`npm run build`).
+- **Git Push**: Merged and pushed to `main` (`origin/main`) and `version-3.1` (`origin/version-3.1`) at commit `962c2aa`.
