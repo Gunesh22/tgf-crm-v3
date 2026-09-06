@@ -1,12 +1,17 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "react-hot-toast";
 import * as XLSX from "xlsx";
 import { BarChart3, Download, Search, X, ChevronDown, Check, Eye } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
-import { COLORS, cleanExportRow, CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, parseTimestamp, getCanonicalStatus, getCanonicalStage, renderVal, isStageNurtureInterested, isStageRegisteredWon, getLocalDateStr, getCanonicalRegistrations, getCanonicalRegisteredPeople, getCanonicalStage6People, getContactPhone, formatDateTimeNoSeconds } from "../utils.jsx";
+import { COLORS, cleanExportRow, CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, parseTimestamp, getCanonicalStatus, getCanonicalStage, renderVal, isStageNurtureInterested, isStageRegisteredWon, getLocalDateStr, getCanonicalRegistrations, getCanonicalRegisteredPeople, getCanonicalStage6People, getContactPhone, formatDateTimeNoSeconds, getContactLeadOrigin, getContactSource } from "../utils.jsx";
 import { isKhojiAffirmative, isKhojiNegative } from "../../attender/utils.js";
 import { fetchAPI } from "../../../lib/db.js";
 import { useAuth } from "../../../context/AuthContext";
+import { getAllPresets } from "../../../utils/presetEngine.js";
+import { PresetBarWidget } from "./PresetBarWidget.jsx";
+import { PresetSummaryCards } from "./PresetSummaryCards.jsx";
+import { PresetBuilderModal } from "./PresetBuilderModal.jsx";
 
 // ── Multi-select dropdown ──────────────────────────────────────────────────
 
@@ -117,11 +122,13 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [selectedProgramIds, setSelectedProgramIds] = useState([]); // empty = ALL
   const [selectedAttenderIds, setSelectedAttenderIds] = useState([]); // empty = ALL
+  const [selectedLeadOrigins, setSelectedLeadOrigins] = useState([]);
   const [selectedSources, setSelectedSources] = useState([]);
   const [selectedCalledFors, setSelectedCalledFors] = useState([]);
   const [selectedStatuses, setSelectedStatuses] = useState([]);
   const [selectedCallTypes, setSelectedCallTypes] = useState([]);
   const [selectedKhojiStatuses, setSelectedKhojiStatuses] = useState([]);
+  const [sourceDimension, setSourceDimension] = useState("currentSource"); // "currentSource" | "leadOrigin"
   const currentMonthFirstDay = `${todayStr.slice(0, 7)}-01`;
   const currentMonthLastDay = (() => {
     const now = new Date();
@@ -137,6 +144,16 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
   const [inspectModal, setInspectModal] = useState(null); // { title: string, subtitle: string, items: Array, type: string }
   const [inspectSearch, setInspectSearch] = useState("");
   const [serverStats, setServerStats] = useState(null);
+
+  // Dynamic Preset Engine State
+  const [presets, setPresets] = useState(() => getAllPresets());
+  const [activePresetId, setActivePresetId] = useState(null);
+  const [isBuilderOpen, setIsBuilderOpen] = useState(false);
+  const [presetToEdit, setPresetToEdit] = useState(null);
+
+  const activePreset = useMemo(() => {
+    return presets.find(p => p.id === activePresetId) || null;
+  }, [presets, activePresetId]);
 
   useEffect(() => {
     if (!user || user.role !== 'admin') return;
@@ -223,12 +240,20 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
     .filter(a => a.role !== 'admin' && !EXCLUDED_ATTENDER_NAMES.includes((a.name || "").toLowerCase().trim()))
     .map(a => ({ value: a.id, label: a.name }));
 
+  const leadOriginOptions = useMemo(() => {
+    const origins = new Set();
+    callLogs.forEach(log => {
+      const val = getContactLeadOrigin(log) || "Direct / Organic";
+      origins.add(val);
+    });
+    return Array.from(origins).sort().map(s => ({ value: s, label: s }));
+  }, [callLogs]);
+
   const sourceOptions = useMemo(() => {
     const sources = new Set(settingsOptions?.sourceOptions || []);
     callLogs.forEach(log => {
-      const sourceKey = Object.keys(log).find(k => ["source", "sourse", "source of information", "source of informiton"].includes(k.toLowerCase()));
-      const val = sourceKey ? String(log[sourceKey] || "").trim() : "";
-      if (val) sources.add(val);
+      const val = getContactSource(log) || "Online/Direct";
+      sources.add(val);
     });
     return Array.from(sources).sort().map(s => ({ value: s, label: s }));
   }, [callLogs, settingsOptions]);
@@ -458,6 +483,12 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
         if (!matchesId && !matchesName) return false;
       }
 
+      // Lead Origin filter
+      if (selectedLeadOrigins.length > 0) {
+        const leadOriginVal = getContactLeadOrigin(log);
+        if (!selectedLeadOrigins.includes(leadOriginVal)) return false;
+      }
+
       // Source filter
       if (selectedSources.length > 0 && !selectedSources.includes(log.source || "")) return false;
 
@@ -506,7 +537,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
       return true;
     });
     return res;
-  }, [flattenedLogs, selectedProgramIds, selectedAttenderIds, selectedSources, selectedCalledFors, selectedStatuses, selectedCallTypes, selectedKhojiStatuses, dateFrom, dateTo, programs, attenders]);
+  }, [flattenedLogs, selectedProgramIds, selectedAttenderIds, selectedSources, selectedLeadOrigins, selectedCalledFors, selectedStatuses, selectedCallTypes, selectedKhojiStatuses, dateFrom, dateTo, programs, attenders]);
 
   // CANONICAL REGISTRATION DERIVATIONS (SINGLE SOURCE OF TRUTH)
   const programRegistrationsList = useMemo(() => {
@@ -516,9 +547,10 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
       selectedAttenderIds,
       selectedProgramIds,
       selectedSources,
+      selectedLeadOrigins,
       selectedCalledFors
     });
-  }, [registrations, callLogs, dateFrom, dateTo, selectedAttenderIds, selectedProgramIds, selectedSources, selectedCalledFors]);
+  }, [registrations, callLogs, dateFrom, dateTo, selectedAttenderIds, selectedProgramIds, selectedSources, selectedLeadOrigins, selectedCalledFors]);
 
   const attenderStats = useMemo(() => {
     const map = {};
@@ -655,9 +687,10 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
       selectedAttenderIds,
       selectedProgramIds,
       selectedSources,
+      selectedLeadOrigins,
       selectedCalledFors
     });
-  }, [registrations, callLogs, dateFrom, dateTo, selectedAttenderIds, selectedProgramIds, selectedSources, selectedCalledFors]);
+  }, [registrations, callLogs, dateFrom, dateTo, selectedAttenderIds, selectedProgramIds, selectedSources, selectedLeadOrigins, selectedCalledFors]);
 
   const stage6PeopleList = useMemo(() => {
     return getCanonicalStage6People(callLogs, {
@@ -855,7 +888,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
     return `${Math.floor(hrs / 24)}d ago`;
   };
 
-  const activeFilters = selectedProgramIds.length + selectedAttenderIds.length + selectedSources.length + selectedCalledFors.length + selectedStatuses.length + selectedCallTypes.length + selectedKhojiStatuses.length;
+  const activeFilters = selectedLeadOrigins.length + selectedProgramIds.length + selectedAttenderIds.length + selectedSources.length + selectedCalledFors.length + selectedStatuses.length + selectedCallTypes.length + selectedKhojiStatuses.length;
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto">
@@ -866,6 +899,33 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
           <p className="text-xs text-slate-500 mt-0.5">Call performance analytics and team metrics.</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {/* Source Analysis Segmented Control */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 shadow-2xs">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-2">Source analysis:</span>
+            <button
+              type="button"
+              onClick={() => setSourceDimension("currentSource")}
+              className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                sourceDimension === "currentSource"
+                  ? "bg-white text-indigo-600 shadow-2xs border border-slate-200"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Current Source
+            </button>
+            <button
+              type="button"
+              onClick={() => setSourceDimension("leadOrigin")}
+              className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                sourceDimension === "leadOrigin"
+                  ? "bg-white text-indigo-600 shadow-2xs border border-slate-200"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Lead Origin
+            </button>
+          </div>
+
           <button
             onClick={handleExport}
             disabled={filteredLogs.length === 0}
@@ -881,6 +941,22 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
         {/* Dropdowns grid */}
         <div className="flex flex-wrap items-center gap-2">
           <MultiSelect
+            options={leadOriginOptions}
+            selected={selectedLeadOrigins}
+            onChange={setSelectedLeadOrigins}
+            placeholder="Lead Origin"
+            allLabel="All Lead Origins"
+          />
+
+          <MultiSelect
+            options={sourceOptions}
+            selected={selectedSources}
+            onChange={setSelectedSources}
+            placeholder="Current Source"
+            allLabel="All Current Sources"
+          />
+
+          <MultiSelect
             options={programOptions}
             selected={selectedProgramIds}
             onChange={setSelectedProgramIds}
@@ -894,14 +970,6 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
             onChange={setSelectedAttenderIds}
             placeholder="Attenders"
             allLabel="All Attenders"
-          />
-
-          <MultiSelect
-            options={sourceOptions}
-            selected={selectedSources}
-            onChange={setSelectedSources}
-            placeholder="Source"
-            allLabel="All Sources"
           />
 
           <MultiSelect
@@ -1004,6 +1072,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
             {activeFilters > 0 && (
               <button
                 onClick={() => {
+                  setSelectedLeadOrigins([]);
                   setSelectedProgramIds([]);
                   setSelectedAttenderIds([]);
                   setSelectedSources([]);
@@ -1480,7 +1549,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
       </div>
 
       {/* Drill-down Modal for Selected Attender */}
-      {selectedAttenderDetails && (
+      {selectedAttenderDetails && createPortal(
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl border border-gray-100 shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Header */}
@@ -1622,11 +1691,12 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* INSPECT REGISTRATIONS / PEOPLE MODAL */}
-      {inspectModal && (
+      {inspectModal && createPortal(
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-5xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             {/* Header */}
@@ -1815,9 +1885,26 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
+      {/* Custom Preset Builder Modal */}
+      {isBuilderOpen && (
+        <PresetBuilderModal
+          presetToEdit={presetToEdit}
+          contacts={callLogs}
+          onClose={() => {
+            setIsBuilderOpen(false);
+            setPresetToEdit(null);
+          }}
+          onSaved={() => {
+            setPresets(getAllPresets());
+            setIsBuilderOpen(false);
+            setPresetToEdit(null);
+          }}
+        />
+      )}
     </div>
   );
 }

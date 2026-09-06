@@ -4,7 +4,7 @@ import * as XLSX from "xlsx";
 import {
   Download, Calendar, TrendingUp, UserCheck, Smile, Info, Search, X, ChevronDown, Check, ChevronRight, RotateCw
 } from "lucide-react";
-import { CONNECTED_STATUSES, getContactKhoji, renderVal } from "../utils.jsx";
+import { CONNECTED_STATUSES, getContactKhoji, renderVal, getContactLeadOrigin, getContactSource } from "../utils.jsx";
 
 function ReportSection({ title, subtitle, badge, action, children, defaultOpen = true }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -295,6 +295,8 @@ export default function AbhivyaktiTab({
   const [selectedCallTypes, setSelectedCallTypes] = useState([]);
   const [selectedCalledFors, setSelectedCalledFors] = useState([]);
   const [selectedSources, setSelectedSources] = useState([]);
+  const [selectedLeadOrigins, setSelectedLeadOrigins] = useState([]);
+  const [sourceDimension, setSourceDimension] = useState("currentSource");
   const [selectedAttenders, setSelectedAttenders] = useState([]);
   const [dateFrom, setDateFrom] = useState(() => {
     const todayObj = new Date();
@@ -337,7 +339,16 @@ export default function AbhivyaktiTab({
   const sourceOptions = useMemo(() => {
     const set = new Set();
     registrations.forEach(r => {
-      const val = r.conversionSource || r.Source || r.source;
+      const val = r.conversionSource || r.Source || r.source || getContactSource(r) || "Online/Direct";
+      if (val) set.add(String(val).trim());
+    });
+    return Array.from(set).sort().map(val => ({ value: val, label: val }));
+  }, [registrations]);
+
+  const leadOriginOptions = useMemo(() => {
+    const set = new Set();
+    registrations.forEach(r => {
+      const val = r.leadOrigin || getContactLeadOrigin(r) || "Direct / Organic";
       if (val) set.add(String(val).trim());
     });
     return Array.from(set).sort().map(val => ({ value: val, label: val }));
@@ -369,9 +380,15 @@ export default function AbhivyaktiTab({
         if (!rCalledFors.some(cf => selectedCalledFors.includes(cf))) return false;
       }
 
-      // 3. Source Filter
+      // 3. Current Source Filter
       const rSource = r.conversionSource || r.Source || r.source;
       if (selectedSources.length > 0 && (!rSource || !selectedSources.includes(String(rSource).trim()))) {
+        return false;
+      }
+
+      // 3b. Lead Origin Filter (AND logic)
+      const rLeadOrigin = r.leadOrigin || getContactLeadOrigin(r);
+      if (selectedLeadOrigins.length > 0 && (!rLeadOrigin || !selectedLeadOrigins.includes(String(rLeadOrigin).trim()))) {
         return false;
       }
 
@@ -398,10 +415,10 @@ export default function AbhivyaktiTab({
     });
 
     return res;
-  }, [registrations, selectedCallTypes, selectedCalledFors, selectedSources, selectedAttenders, dateFrom, dateTo]);
+  }, [registrations, selectedCallTypes, selectedCalledFors, selectedSources, selectedLeadOrigins, selectedAttenders, dateFrom, dateTo]);
 
   // Active filters count
-  const activeFilters = selectedCallTypes.length + selectedCalledFors.length + selectedSources.length + selectedAttenders.length + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0);
+  const activeFilters = selectedCallTypes.length + selectedCalledFors.length + selectedSources.length + selectedLeadOrigins.length + selectedAttenders.length + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0);
 
   const metrics = useMemo(() => {
     const stats = {
@@ -448,7 +465,9 @@ export default function AbhivyaktiTab({
     const map = {};
     let total = 0;
     filteredRegistrations.forEach(r => {
-      const src = r.conversionSource || r.Source || "Online/Direct";
+      const src = sourceDimension === "leadOrigin"
+        ? (r.leadOrigin || getContactLeadOrigin(r) || "Direct / Organic")
+        : (r.conversionSource || r.Source || r.source || "Online/Direct");
       map[src] = (map[src] || 0) + 1;
       total++;
     });
@@ -457,7 +476,7 @@ export default function AbhivyaktiTab({
       "Count": count,
       "Percentage (%)": total ? `${((count / total) * 100).toFixed(1)}%` : "0.0%"
     })).sort((a, b) => b.Count - a.Count);
-  }, [filteredRegistrations]);
+  }, [filteredRegistrations, sourceDimension]);
 
   const dayWiseTimeline = useMemo(() => {
     const map = {};
@@ -890,13 +909,22 @@ export default function AbhivyaktiTab({
             allLabel="All Called For"
           />
 
-          {/* Source Dropdown */}
+          {/* Lead Origin Dropdown */}
+          <MultiSelect
+            options={leadOriginOptions}
+            selected={selectedLeadOrigins}
+            onChange={setSelectedLeadOrigins}
+            placeholder="Lead Origin"
+            allLabel="All Lead Origins"
+          />
+
+          {/* Current Source Dropdown */}
           <MultiSelect
             options={sourceOptions}
             selected={selectedSources}
             onChange={setSelectedSources}
-            placeholder="Source"
-            allLabel="All Sources"
+            placeholder="Current Source"
+            allLabel="All Current Sources"
           />
 
           {/* Attender Dropdown */}
@@ -1011,6 +1039,33 @@ export default function AbhivyaktiTab({
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Source analysis Segmented Control */}
+            <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600">
+              <span className="text-[10px] uppercase font-bold text-slate-400 px-2">Source analysis:</span>
+              <button
+                type="button"
+                onClick={() => setSourceDimension("currentSource")}
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                  sourceDimension === "currentSource"
+                    ? "bg-white text-indigo-700 shadow-2xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Current Source
+              </button>
+              <button
+                type="button"
+                onClick={() => setSourceDimension("leadOrigin")}
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                  sourceDimension === "leadOrigin"
+                    ? "bg-white text-indigo-700 shadow-2xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Lead Origin
+              </button>
+            </div>
+
             <span className="text-xs text-slate-500 font-medium">{filteredRegistrations.length} entries</span>
 
             {activeFilters > 0 && (
@@ -1020,6 +1075,7 @@ export default function AbhivyaktiTab({
                   setSelectedCallTypes([]);
                   setSelectedCalledFors([]);
                   setSelectedSources([]);
+                  setSelectedLeadOrigins([]);
                   setSelectedAttenders([]);
                   setDateFrom("");
                   setDateTo("");
@@ -1375,7 +1431,8 @@ export default function AbhivyaktiTab({
                     <th className="px-4 py-2.5 text-center">Calls Done</th>
                     <th className="px-4 py-2.5">Called For</th>
                     <th className="px-4 py-2.5">Khoji Type</th>
-                    <th className="px-4 py-2.5">Source</th>
+                    <th className="px-4 py-2.5">Lead Origin</th>
+                    <th className="px-4 py-2.5">Current Source</th>
                     <th className="px-4 py-2.5">Call Type</th>
                   </tr>
                 </thead>
@@ -1400,6 +1457,7 @@ export default function AbhivyaktiTab({
                     const callsDoneVal = r.callCount !== undefined ? r.callCount : (r.history ? r.history.length : 0);
                     const calledForVal = r.calledFor || r["Called For"] || "N/A";
                     const khojiVal = getContactKhoji(r) || "No";
+                    const leadOriginVal = r.leadOrigin || getContactLeadOrigin(r) || "Direct / Organic";
                     const sourceVal = r.conversionSource || r.Source || r.source || "N/A";
                     const callTypeVal = r.callType || "N/A";
 
@@ -1423,6 +1481,7 @@ export default function AbhivyaktiTab({
                             <span className="text-slate-500 font-normal">{khojiVal}</span>
                           )}
                         </td>
+                        <td className="px-4 py-2.5 text-indigo-700 font-medium">{leadOriginVal}</td>
                         <td className="px-4 py-2.5 text-slate-600">{sourceVal}</td>
                         <td className="px-4 py-2.5 text-slate-600 uppercase text-[11px]">{callTypeVal}</td>
                       </tr>

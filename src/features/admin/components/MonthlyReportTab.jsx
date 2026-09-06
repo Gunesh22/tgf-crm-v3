@@ -1,12 +1,17 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "react-hot-toast";
 import * as XLSX from "xlsx";
 import {
   Download, ChevronRight, ChevronDown, Calendar, TrendingUp, UserCheck, Smile, Info, Search, X, Check, Eye
 } from "lucide-react";
 import { subscribeToAllCallLogs } from "../../../lib/db";
-import { CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, parseTimestamp, getCanonicalStatus, getContactPhone, getContactName, getContactCity, getContactKhoji, renderVal, classifyCallStatus, getCanonicalPhysicalCalls, getLocalDateStr, getCanonicalRegistrations } from "../utils.jsx";
+import { CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, parseTimestamp, getCanonicalStatus, getContactPhone, getContactName, getContactCity, getContactKhoji, renderVal, classifyCallStatus, getCanonicalPhysicalCalls, getLocalDateStr, getCanonicalRegistrations, getContactLeadOrigin, getContactSource } from "../utils.jsx";
 import { isKhojiAffirmative, isKhojiNegative } from "../../attender/utils.js";
+import { getAllPresets } from "../../../utils/presetEngine.js";
+import { PresetBarWidget } from "./PresetBarWidget.jsx";
+import { PresetSummaryCards } from "./PresetSummaryCards.jsx";
+import { PresetBuilderModal } from "./PresetBuilderModal.jsx";
 
 function MonthlySection({ title, subtitle, action, children, defaultOpen = true }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -392,16 +397,28 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
   const [selectedAttenderIds, setSelectedAttenderIds] = useState([]); // empty = ALL
   const [startDate, setStartDate] = useState(currentMonthFirstDay);
   const [endDate, setEndDate] = useState(currentMonthLastDay);
+  const [selectedLeadOrigins, setSelectedLeadOrigins] = useState([]);
   const [selectedSources, setSelectedSources] = useState([]);
   const [selectedCalledFors, setSelectedCalledFors] = useState([]);
   const [selectedStatuses, setSelectedStatuses] = useState([]);
   const [selectedCallTypes, setSelectedCallTypes] = useState([]);
   const [selectedKhojiStatuses, setSelectedKhojiStatuses] = useState([]);
+  const [sourceDimension, setSourceDimension] = useState("currentSource"); // "currentSource" | "leadOrigin"
   const [conversionSearch, setConversionSearch] = useState("");
   const [convPage, setConvPage] = useState(1);
   const [inspectModalData, setInspectModalData] = useState(null);
   const [inspectSearch, setInspectSearch] = useState("");
   const loading = false;
+
+  // Dynamic Preset Engine State
+  const [presets, setPresets] = useState(() => getAllPresets());
+  const [activePresetId, setActivePresetId] = useState(null);
+  const [isBuilderOpen, setIsBuilderOpen] = useState(false);
+  const [presetToEdit, setPresetToEdit] = useState(null);
+
+  const activePreset = React.useMemo(() => {
+    return presets.find(p => p.id === activePresetId) || null;
+  }, [presets, activePresetId]);
 
   const callTypeOptions = React.useMemo(() => [
     { value: "incoming", label: "Incoming" },
@@ -453,12 +470,20 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
   }, [programs, callLogs]);
 
+  const leadOriginOptions = React.useMemo(() => {
+    const origins = new Set();
+    callLogs.forEach(log => {
+      const val = getContactLeadOrigin(log) || "Direct / Organic";
+      origins.add(val);
+    });
+    return Array.from(origins).sort().map(s => ({ value: s, label: s }));
+  }, [callLogs]);
+
   const sourceOptions = React.useMemo(() => {
     const sources = new Set(settingsOptions?.sourceOptions || []);
     callLogs.forEach(log => {
-      const sourceKey = Object.keys(log).find(k => ["source", "sourse", "source of information", "source of informiton"].includes(k.toLowerCase()));
-      const val = sourceKey ? String(log[sourceKey] || "").trim() : "";
-      if (val) sources.add(val);
+      const val = getContactSource(log) || "Online/Direct";
+      sources.add(val);
     });
     return Array.from(sources).sort().map(s => ({ value: s, label: s }));
   }, [callLogs, settingsOptions]);
@@ -514,12 +539,13 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
       selectedAttenderIds,
       selectedProgramIds,
       selectedSources,
+      selectedLeadOrigins,
       selectedCalledFors,
       selectedStatuses,
       selectedCallTypes,
       selectedKhojiStatuses
     });
-  }, [callLogs, startDate, endDate, selectedAttenderIds, selectedProgramIds, selectedSources, selectedCalledFors, selectedStatuses, selectedCallTypes, selectedKhojiStatuses]);
+  }, [callLogs, startDate, endDate, selectedAttenderIds, selectedProgramIds, selectedSources, selectedLeadOrigins, selectedCalledFors, selectedStatuses, selectedCallTypes, selectedKhojiStatuses]);
 
 
 
@@ -547,9 +573,10 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
       selectedAttenderIds,
       selectedProgramIds,
       selectedSources,
+      selectedLeadOrigins,
       selectedCalledFors
     });
-  }, [registrations, callLogs, startDate, endDate, selectedAttenderIds, selectedProgramIds, selectedSources, selectedCalledFors]);
+  }, [registrations, callLogs, startDate, endDate, selectedAttenderIds, selectedProgramIds, selectedSources, selectedLeadOrigins, selectedCalledFors]);
 
   const metrics = React.useMemo(() => {
     const stats = {
@@ -765,7 +792,7 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
     const map = {};
     const seenRegs = new Set();
     allAttempts.forEach(c => {
-      const src = String(c.source || "").trim() || "Unknown";
+      const src = String((sourceDimension === "leadOrigin" ? c.leadOrigin : c.source) || "").trim() || "Unknown";
       const calledFors = String(c.calledFor || "").trim()
         ? String(c.calledFor).split(",").map(x => x.trim()).filter(Boolean)
         : ["Unknown"];
@@ -812,7 +839,7 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
 
     // Populate conversions directly from canonical programRegistrationsList
     programRegistrationsList.forEach(reg => {
-      const src = String(reg.source || "").trim() || "Unknown";
+      const src = String((sourceDimension === "leadOrigin" ? reg.leadOrigin : reg.source) || "").trim() || "Unknown";
       const prog = String(reg.calledFor || reg.programName || "").trim() || "Unknown";
       const key = `${prog} &&& ${src}`;
       if (!map[key]) {
@@ -841,10 +868,11 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
     });
 
     const calledForTotals = {};
+    const sourceColName = sourceDimension === "leadOrigin" ? "Lead Origin" : "Source";
     const rows = Object.values(map).map(a => {
       const row = {
         "Called For": a.calledFor,
-        "Source": a.source,
+        [sourceColName]: a.source,
         "Total Calls": a.total,
         "Incoming Calls": a.incoming,
         "Outgoing Calls": a.outgoing,
@@ -882,7 +910,7 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
       
       return b["Total Calls"] - a["Total Calls"];
     });
-  }, [allAttempts, selectedCalledFors, programRegistrationsList]);
+  }, [allAttempts, selectedCalledFors, programRegistrationsList, sourceDimension]);
 
   const calledForVsSourceBreakdownTotals = React.useMemo(() => {
     const totals = { 
@@ -1051,7 +1079,7 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
     toast.success("Excel analytics report downloaded successfully!");
   };
 
-  const activeFilters = selectedProgramIds.length + selectedAttenderIds.length + selectedSources.length + selectedCalledFors.length + selectedStatuses.length + selectedCallTypes.length + selectedKhojiStatuses.length;
+  const activeFilters = selectedLeadOrigins.length + selectedProgramIds.length + selectedAttenderIds.length + selectedSources.length + selectedCalledFors.length + selectedStatuses.length + selectedCallTypes.length + selectedKhojiStatuses.length;
 
   return (
     <div className="p-4 md:p-6 space-y-5">
@@ -1062,6 +1090,33 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
           <p className="text-xs text-slate-500 mt-0.5">Generate comprehensive custom range analytics and export to Excel.</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {/* Source Analysis Segmented Control */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 shadow-2xs">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-2">Source analysis:</span>
+            <button
+              type="button"
+              onClick={() => setSourceDimension("currentSource")}
+              className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                sourceDimension === "currentSource"
+                  ? "bg-white text-indigo-600 shadow-2xs border border-slate-200"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Current Source
+            </button>
+            <button
+              type="button"
+              onClick={() => setSourceDimension("leadOrigin")}
+              className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                sourceDimension === "leadOrigin"
+                  ? "bg-white text-indigo-600 shadow-2xs border border-slate-200"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Lead Origin
+            </button>
+          </div>
+
           <button
             onClick={handleExport}
             disabled={!allAttempts.length}
@@ -1077,6 +1132,22 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
         {/* Row 1: Dropdowns grid */}
         <div className="flex flex-wrap items-center gap-2">
           <MultiSelect
+            options={leadOriginOptions}
+            selected={selectedLeadOrigins}
+            onChange={setSelectedLeadOrigins}
+            placeholder="Lead Origin"
+            allLabel="All Lead Origins"
+          />
+
+          <MultiSelect
+            options={sourceOptions}
+            selected={selectedSources}
+            onChange={setSelectedSources}
+            placeholder="Current Source"
+            allLabel="All Current Sources"
+          />
+
+          <MultiSelect
             options={programOptions}
             selected={selectedProgramIds}
             onChange={setSelectedProgramIds}
@@ -1090,14 +1161,6 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
             onChange={setSelectedAttenderIds}
             placeholder="Attenders"
             allLabel="All Attenders"
-          />
-
-          <MultiSelect
-            options={sourceOptions}
-            selected={selectedSources}
-            onChange={setSelectedSources}
-            placeholder="Source"
-            allLabel="All Sources"
           />
 
           <MultiSelect
@@ -1216,6 +1279,7 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
             {activeFilters > 0 && (
               <button
                 onClick={() => {
+                  setSelectedLeadOrigins([]);
                   setSelectedProgramIds([]);
                   setSelectedAttenderIds([]);
                   setSelectedSources([]);
@@ -1588,7 +1652,7 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
         </div>
 
         {/* Inspect Registrations Modal */}
-        {inspectModalData && (
+        {inspectModalData && createPortal(
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
             {/* Header */}
@@ -1700,9 +1764,27 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
         </>
+      )}
+
+      {/* Custom Preset Builder Modal */}
+      {isBuilderOpen && (
+        <PresetBuilderModal
+          presetToEdit={presetToEdit}
+          contacts={callLogs}
+          onClose={() => {
+            setIsBuilderOpen(false);
+            setPresetToEdit(null);
+          }}
+          onSaved={() => {
+            setPresets(getAllPresets());
+            setIsBuilderOpen(false);
+            setPresetToEdit(null);
+          }}
+        />
       )}
     </div>
   );

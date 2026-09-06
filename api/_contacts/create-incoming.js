@@ -78,6 +78,10 @@ export default async function handler(req, res) {
     // 2. Genuinely new contact creation
     const callId = 'call_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
 
+    const leadOriginVal = updates.leadOrigin || updates.original_source || updates.originalSource || updates['Lead Origin'] || updates.Source || updates.source || 'Incoming';
+    const currentSourceVal = updates.currentSource || updates.callSource || updates['Current Source'] || updates.Source || updates.source || leadOriginVal;
+    const targetCalledForVal = updates.calledFor || updates['Called For'] || '';
+
     const historyItem = {
       callId,
       attenderId: cleanAttenderId,
@@ -94,7 +98,13 @@ export default async function handler(req, res) {
       remark:            updates.remark || '',
       callbackDate:      updates.callbackDate || null,
       callbackTime:      updates.callbackTime || null,
-      calledFor:         updates.calledFor || updates['Called For'] || '',
+      calledFor:         targetCalledForVal,
+      leadOrigin:        leadOriginVal,
+      original_source:   leadOriginVal,
+      originalSource:    leadOriginVal,
+      currentSource:     currentSourceVal,
+      source:            currentSourceVal,
+      callSource:        currentSourceVal,
       timestamp:         nowIso,
     };
 
@@ -109,9 +119,12 @@ export default async function handler(req, res) {
       city:  updates.City  || updates.city  || '',
       State: updates.State || updates.state || '',
       state: updates.State || updates.state || '',
-      Source: updates.Source || updates.source || 'Incoming',
-      source: updates.Source || updates.source || 'Incoming',
-      original_source: updates.original_source || updates.Source || updates.source || 'Incoming',
+      leadOrigin: leadOriginVal,
+      original_source: leadOriginVal,
+      originalSource:  leadOriginVal,
+      currentSource:   currentSourceVal,
+      source:          currentSourceVal,
+      Source:          currentSourceVal,
       programId:   programId   || 'incoming',
       programName: programName || 'Incoming Calls',
       pipelineStage: '1. New Lead',
@@ -137,7 +150,11 @@ export default async function handler(req, res) {
           callbackDate:  updates.callbackDate || null,
           callbackTime:  updates.callbackTime || null,
           lastCalledAt:  nowIso,
-          calledFor:     updates.calledFor || updates['Called For'] || '',
+          calledFor:     targetCalledForVal,
+          leadOrigin:    leadOriginVal,
+          original_source: leadOriginVal,
+          currentSource: currentSourceVal,
+          source:        currentSourceVal,
         },
       },
       createdAt: nowIso,

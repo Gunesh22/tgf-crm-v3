@@ -479,8 +479,10 @@ export function resolveCurrentAttenderContext(log, fieldName, currentAttenderId,
   const candidateKeys = [];
   if (cleanField === "called for") {
     candidateKeys.push("calledFor", "Called For", "called_for", "calledfor");
-  } else if (cleanField === "source") {
-    candidateKeys.push("source", "Source", "sourse", "currentCallSource");
+  } else if (cleanField === "source" || cleanField === "current source" || cleanField === "currentsource") {
+    candidateKeys.push("currentSource", "source", "Source", "sourse", "currentCallSource");
+  } else if (cleanField === "lead origin" || cleanField === "leadorigin" || cleanField === "original_source" || cleanField === "originalsource") {
+    candidateKeys.push("leadOrigin", "lead_origin", "Lead Origin", "original_source", "originalSource");
   } else if (cleanField === "status") {
     candidateKeys.push("status", "Status", "callStatus");
   } else {

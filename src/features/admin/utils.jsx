@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  BarChart3, FolderOpen, Upload, Users, ClipboardCheck, FileText, Settings, FileSpreadsheet, TrendingUp
+  BarChart3, FolderOpen, Upload, Users, ClipboardCheck, FileText, Settings, FileSpreadsheet, TrendingUp, Filter
 } from "lucide-react";
 import { isKhojiField } from "../../lib/khojiHelper";
 import { PIPELINE_STAGES, getEffectiveStage, QUERY_PIPELINE_STAGES, getCanonicalQueryStage } from "../../utils/pipelineEngine";
@@ -69,13 +69,14 @@ export const getContactPhone = (log, attempt) => {
   if (attempt?.mobile && String(attempt.mobile).trim()) return String(attempt.mobile).trim();
 
   if (!log || typeof log !== "object") return "";
+  const actualLog = log.contact || log.row || log;
 
   const directCandidates = [
-    log.Phone, log.Mobile, log.phone, log.mobile, log.contactPhone,
-    log.normalizedPhone, log.normalizedMobile, log["Mobile Number"],
-    log["Phone Number"], log["Whatsapp Number"], log["WhatsApp Number"],
-    log["Contact Number"], log["Contact No"], log["Phone No"], log["Mobile No"],
-    log.contact_no, log.whatsapp, log.number
+    actualLog.Phone, actualLog.Mobile, actualLog.phone, actualLog.mobile, actualLog.contactPhone,
+    actualLog.normalizedPhone, actualLog.normalizedMobile, actualLog["Mobile Number"],
+    actualLog["Phone Number"], actualLog["Whatsapp Number"], actualLog["WhatsApp Number"],
+    actualLog["Contact Number"], actualLog["Contact No"], actualLog["Phone No"], actualLog["Mobile No"],
+    actualLog.contact_no, actualLog.whatsapp, actualLog.number
   ];
 
   for (const c of directCandidates) {
@@ -84,39 +85,44 @@ export const getContactPhone = (log, attempt) => {
     }
   }
 
-  const keys = Object.keys(log);
+  const keys = Object.keys(actualLog);
   const phoneKey = keys.find(k => {
     const lk = k.toLowerCase();
     return lk.includes("phone") || lk.includes("mobile") || lk.includes("whatsapp") || lk.includes("contact") || lk.includes("number");
   });
 
-  return (phoneKey && log[phoneKey]) ? String(log[phoneKey]).trim() : "";
+  return (phoneKey && actualLog[phoneKey]) ? String(actualLog[phoneKey]).trim() : "";
 };
 
 export const getContactName = (log, attempt) => {
   if (attempt?.contactName && String(attempt.contactName).trim()) return String(attempt.contactName).trim();
   if (attempt?.name && String(attempt.name).trim()) return String(attempt.name).trim();
 
-  if (!log || typeof log !== "object") return "Unknown";
+  if (!log || typeof log !== "object") return "";
+  const actualLog = log.contact || log.row || log;
 
   const directCandidates = [
-    log.Name, log.name, log.leadName, log["Lead Name"], log["Full Name"],
-    log.caller, log["Caller Name"], log["Name of Caller"], log.fullName
+    actualLog.Name, actualLog.name, actualLog.leadName, actualLog["Lead Name"], actualLog["Full Name"],
+    actualLog.caller, actualLog["Caller Name"], actualLog["Name of Caller"], actualLog.fullName,
+    actualLog.contactName, actualLog.customerName, actualLog.studentName
   ];
 
   for (const c of directCandidates) {
-    if (c !== undefined && c !== null && String(c).trim() !== "") {
+    if (c !== undefined && c !== null && String(c).trim() !== "" && String(c).trim() !== "Unknown") {
       return String(c).trim();
     }
   }
 
-  const keys = Object.keys(log);
+  const keys = Object.keys(actualLog);
   const nameKey = keys.find(k => {
     const lk = k.toLowerCase();
-    return lk.includes("name") || lk.includes("caller") || lk.includes("lead");
+    return (lk.includes("name") || lk.includes("caller") || lk.includes("lead")) && !lk.includes("attender") && !lk.includes("program") && !lk.includes("file");
   });
 
-  return (nameKey && log[nameKey]) ? String(log[nameKey]).trim() : "Unknown";
+  const val = (nameKey && actualLog[nameKey]) ? String(actualLog[nameKey]).trim() : "";
+  if (val && val !== "Unknown") return val;
+
+  return "";
 };
 
 export const getContactCity = (log, attempt) => {
@@ -314,14 +320,18 @@ import {
   getCanonicalRegistrations,
   getCanonicalRegisteredPeople,
   getCanonicalStage6People,
-  isStageRegisteredWon
+  isStageRegisteredWon,
+  getContactSource,
+  getContactLeadOrigin
 } from "../../utils/registrationEngine.js";
 
 export {
   getCanonicalRegistrations,
   getCanonicalRegisteredPeople,
   getCanonicalStage6People,
-  isStageRegisteredWon
+  isStageRegisteredWon,
+  getContactSource,
+  getContactLeadOrigin
 };
 
 function getContactValue(c, keysList) {
@@ -368,6 +378,7 @@ export function getCanonicalPhysicalCalls(contacts = [], filters = {}) {
     selectedAttenderIds = [],
     selectedProgramIds = [],
     selectedSources = [],
+    selectedLeadOrigins = [],
     selectedCalledFors = [],
     selectedStatuses = [],
     selectedCallTypes = [],
@@ -401,8 +412,11 @@ export function getCanonicalPhysicalCalls(contacts = [], filters = {}) {
       if (!matchesProgram) return;
     }
 
-    const sourceVal = c.source || getContactValue(c, ["source", "sourse", "source of information", "source of informiton"]);
+    const sourceVal = getContactSource(c) || c.source || getContactValue(c, ["source", "sourse", "source of information", "source of informiton"]) || "Online/Direct";
     if (selectedSources.length > 0 && !selectedSources.includes(sourceVal)) return;
+
+    const leadOriginVal = getContactLeadOrigin(c) || "Direct / Organic";
+    if (selectedLeadOrigins.length > 0 && !selectedLeadOrigins.includes(leadOriginVal)) return;
 
     const calledForVal = c.calledFor || getContactValue(c, ["called for", "called_for", "calledfor"]);
     const logCalledFors = String(calledForVal).split(",").map(x => x.trim()).filter(Boolean);
@@ -450,6 +464,7 @@ export function getCanonicalPhysicalCalls(contacts = [], filters = {}) {
           callType,
           calledFor: h.calledFor || calledForVal,
           source: h.source || sourceVal,
+          leadOrigin: leadOriginVal,
           isHistory: true
         });
       });
@@ -479,6 +494,7 @@ export const COLORS = ["#3b82f6", "#10b981", "#ef4444", "#f59e0b", "#8b5cf6", "#
 
 export const TAB_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: <BarChart3 size={18} /> },
+  { id: "presets", label: "Funnel Presets", icon: <Filter size={18} /> },
   { id: "pipeline-calls", label: "Pipeline & Calls 📈", icon: <TrendingUp size={18} /> },
   { id: "monthly", label: "Report", icon: <FileText size={18} /> },
   { id: "abhivyakti", label: "Abhivyakti", icon: <ClipboardCheck size={18} /> },

@@ -285,16 +285,15 @@ export async function executeLogCall(db, payload) {
   const currentLeadOwnerName = existingContact.leadOwnerName || null;
   const isNewOwnerAssignment = !currentLeadOwner;
 
-  // ── original_source — immutable ────────────────────────────────────────
-  const originalSource = existingContact.original_source ||
-    existingContact.originalSource ||
-    existingContact.Source || existingContact.source ||
-    rootUpdates.original_source || rootUpdates.originalSource ||
-    rootUpdates.Source || rootUpdates.source || "Direct Entry";
+  // ── original_source & currentSource — contextual persistence ───────────────
+  const originalSource = payload.leadOrigin || payload.original_source || payload.originalSource ||
+    rootUpdates.leadOrigin || rootUpdates.original_source || rootUpdates.originalSource ||
+    existingContact.leadOrigin || existingContact.original_source || existingContact.originalSource ||
+    existingContact.Source || existingContact.source || "Direct Entry";
 
-  const currentCallSource = payload.callSource ||
-    rootUpdates.Source || rootUpdates.source ||
-    existingContact.Source || existingContact.source || originalSource;
+  const currentCallSource = payload.currentSource || payload.callSource || payload.source || payload.Source ||
+    rootUpdates.currentSource || rootUpdates.callSource || rootUpdates.source || rootUpdates.Source ||
+    existingContact.currentSource || existingContact.Source || existingContact.source || originalSource;
 
   const resolvedPreviousProgram = previousProgram !== undefined
     ? previousProgram
@@ -324,9 +323,14 @@ export async function executeLogCall(db, payload) {
     remark:       remark || queryDetails || '',
     callbackDate: callbackDate || null,
     callbackTime: callbackTime || null,
-    calledFor:    calledFor || rootUpdates['Called For'] || existingContact['Called For'] || '',
+    calledFor:    targetCalledFor || '',
+    calledForKey: normalizeCalledForKey(targetCalledFor || ''),
+    currentSource: currentCallSource,
+    source:       currentCallSource,
     callSource:   currentCallSource,
+    leadOrigin:   originalSource,
     original_source: originalSource,
+    originalSource: originalSource,
     previousProgram: resolvedPreviousProgram,
     timestamp: nowIso,
   };
@@ -362,6 +366,10 @@ export async function executeLogCall(db, payload) {
     delete rootUpdates.calledFor;
     delete rootUpdates.Source;
     delete rootUpdates.source;
+    delete rootUpdates.currentSource;
+    delete rootUpdates.leadOrigin;
+    delete rootUpdates.original_source;
+    delete rootUpdates.originalSource;
   }
 
   // Normalize phone numbers if modified
@@ -387,6 +395,11 @@ export async function executeLogCall(db, payload) {
     closedReason: evalResult.closedReason,
     wasConnected: evalResult.wasConnected || existingContact.wasConnected || false,
     original_source: originalSource,
+    originalSource:  originalSource,
+    leadOrigin:      originalSource,
+    currentSource:   currentCallSource,
+    source:          currentCallSource,
+    Source:          currentCallSource,
     updatedAt: nowIso,
     isAssigned: true,
     // Per-attender state (call-specific snapshot)
@@ -405,8 +418,12 @@ export async function executeLogCall(db, payload) {
       callbackTime: callbackTime || null,
       lastCalledAt: nowIso,
       calledFor:    targetCalledFor || existingContact['Called For'] || '',
+      calledForKey: normalizeCalledForKey(targetCalledFor || ''),
+      currentSource: currentCallSource,
       source:       currentCallSource,
+      leadOrigin:   originalSource,
       original_source: originalSource,
+      originalSource: originalSource,
       previousProgram: resolvedPreviousProgram,
     },
   };
@@ -426,7 +443,11 @@ export async function executeLogCall(db, payload) {
       remark:        remark || queryDetails || '',
       callbackDate:  callbackDate || null,
       callbackTime:  callbackTime || null,
+      currentSource: currentCallSource,
       source:        currentCallSource,
+      leadOrigin:    originalSource,
+      original_source: originalSource,
+      originalSource: originalSource,
       updatedAt:     nowIso
     };
     setPayload[`programs.${currentProgKey}.${cleanAttenderId}`] = progStateObj;
@@ -552,6 +573,8 @@ export async function executeLogCall(db, payload) {
             attenderName: cleanAttenderName || '',
             leadOwner:   currentLeadOwner || cleanAttenderId,
             original_source: originalSource,
+            source:      currentCallSource,
+            conversionSource: currentCallSource,
             createdAt:   nowIso,
             updatedAt:   nowIso,
           },

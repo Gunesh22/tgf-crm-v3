@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "react-hot-toast";
 import * as XLSX from "xlsx";
 import {
@@ -1563,7 +1564,7 @@ export default function AllAttendersSheetTab({
       </div>
 
       {/* Advanced Filters Modal */}
-      {showAdvancedFilters && (
+      {showAdvancedFilters && createPortal(
         <div
           onClick={e => { if (e.target === e.currentTarget) setShowAdvancedFilters(false); }}
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in"
@@ -1749,11 +1750,12 @@ export default function AllAttendersSheetTab({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Column Visibility Selector Modal */}
-      {isColumnModalOpen && (
+      {isColumnModalOpen && createPortal(
         <div
           onClick={e => { if (e.target === e.currentTarget) setIsColumnModalOpen(false); }}
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in"
@@ -1813,7 +1815,8 @@ export default function AllAttendersSheetTab({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Edit Contact / Add Call Entry Modal */}

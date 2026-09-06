@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "react-hot-toast";
 import {
   Phone, Plus, X, Save, Tag, User, MapPin, MessageSquare,
@@ -45,6 +46,7 @@ import CallButton from "./CallButton";
 import WhatsAppButton from "./WhatsAppButton";
 import { getEffectiveStage, PIPELINE_STAGES, getProgramSpecificStatus } from "../../../utils/pipelineEngine";
 import { extractProgramsList, getProgramContext, getProgramRegistrationInfo } from "../utils/programContextHelper";
+import { getContactSource } from "../../../utils/registrationEngine";
 
 export const EditModal = ({
   row,
@@ -83,9 +85,9 @@ export const EditModal = ({
       normalized[col] = getFieldWithFallback(row, col, activeAttenderId, activeAttenderName);
     });
 
-    const rootSource = normalized.Source || getFieldWithFallback(row, "Source", activeAttenderId, activeAttenderName) || "";
-    normalized.Source = rootSource;
-    normalized.source = rootSource;
+    const rootOriginalSource = row?.original_source || row?.originalSource || "";
+    normalized.original_source = rootOriginalSource;
+    normalized.originalSource = rootOriginalSource;
 
     if (row._isNew && !normalized.Khoji) {
       normalized.Khoji = "No";
@@ -115,9 +117,9 @@ export const EditModal = ({
     if (attState) {
       normalized["Called For"] = attState.calledFor || attState["Called For"] || "";
       normalized.calledFor = normalized["Called For"];
-      normalized.Source = attState.source || attState.Source || rootSource;
+      normalized.Source = attState.source || attState.Source || "";
       normalized.source = normalized.Source;
-      normalized.previousProgram = attState.previousProgram || row.previousProgram || rootSource;
+      normalized.previousProgram = attState.previousProgram || row.previousProgram || "";
       normalized.callPurpose = attState.callPurpose || "SALES";
       normalized.status = cleanAttStatus;
       normalized.remark = "";
@@ -127,9 +129,9 @@ export const EditModal = ({
     } else {
       normalized["Called For"] = "";
       normalized.calledFor = "";
-      normalized.Source = rootSource;
-      normalized.source = rootSource;
-      normalized.previousProgram = row.previousProgram || rootSource;
+      normalized.Source = "";
+      normalized.source = "";
+      normalized.previousProgram = row.previousProgram || "";
       normalized.callPurpose = "SALES";
       normalized.status = cleanAttStatus;
       normalized.remark = "";
@@ -195,6 +197,11 @@ export const EditModal = ({
       freshNorm["Called For"] = firstProg;
       freshNorm.called_for = firstProg;
       freshNorm.status = getProgramSpecificStatus(freshNorm, firstProg, attId);
+      const programSource = getContactSource(row, firstProg);
+      if (programSource) {
+        freshNorm.Source = programSource;
+        freshNorm.source = programSource;
+      }
       freshNorm.pipelineStage = getEffectiveStage(freshNorm, firstProg, attId) || PIPELINE_STAGES.NEW_LEAD;
     }
 
@@ -214,13 +221,16 @@ export const EditModal = ({
 
     const attId = activeAttenderId || edited.attenderId || row?.attenderId || null;
     const targetStatus = getProgramSpecificStatus(savedRow || row || edited, targetProg, attId);
+    const targetSource = getContactSource(savedRow || row || edited, targetProg);
 
     setEdited(prev => ({
       ...prev,
       calledFor: targetProg,
       "Called For": targetProg,
       called_for: targetProg,
-      status: targetStatus
+      status: targetStatus,
+      Source: targetSource || "",
+      source: targetSource || ""
     }));
   };
 
@@ -583,7 +593,6 @@ export const EditModal = ({
               if (email) updated.Email = email;
               if (city) updated.City = city;
               if (state) updated.State = state;
-              if (source) updated.Source = source;
               if (tags) updated.Tags = tags;
               if (ghlId) updated.GHL_ID = ghlId;
               return updated;
@@ -1537,13 +1546,25 @@ export const EditModal = ({
             histStatus = "Call Log Added";
           }
 
+          const resolvedLeadOrigin = targetEdited.original_source || targetEdited.originalSource || targetEdited.leadOrigin || targetEdited["Lead Origin"] || savedRow.original_source || "";
+          const resolvedCurrentSource = targetEdited.Source || targetEdited.source || targetEdited.currentSource || targetEdited["Current Source"] || "";
+
+          updates.leadOrigin = resolvedLeadOrigin;
+          updates.original_source = resolvedLeadOrigin;
+          updates.originalSource = resolvedLeadOrigin;
+          updates.currentSource = resolvedCurrentSource;
+          updates.source = resolvedCurrentSource;
+          updates.Source = resolvedCurrentSource;
+
           const newHist = {
             status: histStatus,
             remark: updates.remark || "",
             attenderName: safeName,
             timestamp: nowStr,
             calledFor: targetEdited["Called For"] || targetEdited.calledFor || "",
-            source: targetEdited.Source || targetEdited.source || targetEdited.Sourse || targetEdited.sourse || "",
+            leadOrigin: resolvedLeadOrigin,
+            currentSource: resolvedCurrentSource,
+            source: resolvedCurrentSource,
             callType: targetEdited.callType || "outgoing"
           };
 
@@ -1567,6 +1588,8 @@ export const EditModal = ({
                   status: newHist.status,
                   remark: newHist.remark || lastEntry.remark,
                   calledFor: newHist.calledFor,
+                  leadOrigin: newHist.leadOrigin,
+                  currentSource: newHist.currentSource,
                   source: newHist.source,
                   callType: newHist.callType,
                   timestamp: nowStr
@@ -1606,7 +1629,10 @@ export const EditModal = ({
           attenderId: activeAttenderId,
           attenderName: activeAttenderName || prevAttState.attenderName || "Unknown",
           calledFor: targetEdited["Called For"] || targetEdited.calledFor || prevAttState.calledFor || "",
-          source: targetEdited.Source || targetEdited.source || prevAttState.source || "",
+          leadOrigin: targetEdited.original_source || targetEdited.originalSource || targetEdited.leadOrigin || prevAttState.leadOrigin || "",
+          original_source: targetEdited.original_source || targetEdited.originalSource || targetEdited.leadOrigin || prevAttState.original_source || "",
+          currentSource: targetEdited.Source || targetEdited.source || targetEdited.currentSource || prevAttState.currentSource || "",
+          source: targetEdited.Source || targetEdited.source || targetEdited.currentSource || prevAttState.source || "",
           previousProgram: targetEdited.previousProgram || prevAttState.previousProgram || "",
           status: updates.status || prevAttState.status,
           remark: updates.remark !== undefined ? updates.remark : prevAttState.remark,
@@ -1686,7 +1712,10 @@ export const EditModal = ({
               status: updates.status || targetEdited.status || "",
               remark: updates.remark || targetEdited.remark || "",
               callbackDate: updates.callbackDate || targetEdited.callbackDate || null,
-              source: updates.source || targetEdited.source || "",
+              leadOrigin: targetEdited.original_source || targetEdited.originalSource || targetEdited.leadOrigin || "",
+              original_source: targetEdited.original_source || targetEdited.originalSource || targetEdited.leadOrigin || "",
+              currentSource: updates.source || targetEdited.source || targetEdited.Source || "",
+              source: updates.source || targetEdited.source || targetEdited.Source || "",
               updatedAt: new Date().toISOString()
             };
           }
@@ -1790,7 +1819,7 @@ export const EditModal = ({
   const isCbDone = cbSt === "done" || cbSt === "completed" || cbSt === "cancelled";
   const isDueHeader = edited._callbackDue && !isCbDone;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in" onClick={handleDismiss}>
       <div
         className="bg-white rounded-2xl w-full max-w-4xl h-[88vh] max-h-[88vh] flex flex-col overflow-hidden shadow-2xl border-0 animate-modal-in"
@@ -2214,6 +2243,7 @@ export const EditModal = ({
           mergedHistory={mergedHistory}
         />
       )}
-    </div>
+    </div>,
+    document.body
   );
 };

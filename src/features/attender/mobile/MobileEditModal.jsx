@@ -252,6 +252,7 @@ export default function MobileEditModal({
 
     const attId = activeAttenderId || edited.attenderId || row?.attenderId || null;
     const targetStatus = getProgramSpecificStatus(savedRow || row || edited, targetProg, attId);
+    const targetSource = getContactSource(savedRow || row || edited, targetProg);
 
     setEdited(prev => ({
       ...prev,
@@ -259,7 +260,9 @@ export default function MobileEditModal({
       calledFor: targetProg,
       "Called For": targetProg,
       called_for: targetProg,
-      status: targetStatus
+      status: targetStatus,
+      Source: targetSource || "",
+      source: targetSource || ""
     }));
   };
 
@@ -429,6 +432,16 @@ export default function MobileEditModal({
 
       const isCallAttemptUpdated = statusChanged || remarkChanged || purposeChanged || callStatusChanged;
       if (isCallAttemptUpdated) {
+        const resolvedLeadOrigin = targetEdited.original_source || targetEdited.originalSource || targetEdited.leadOrigin || targetEdited["Lead Origin"] || savedRow.original_source || "";
+        const resolvedCurrentSource = targetEdited[sourceField] || targetEdited.Source || targetEdited.source || targetEdited.currentSource || "";
+
+        updates.leadOrigin = resolvedLeadOrigin;
+        updates.original_source = resolvedLeadOrigin;
+        updates.originalSource = resolvedLeadOrigin;
+        updates.currentSource = resolvedCurrentSource;
+        updates.source = resolvedCurrentSource;
+        updates.Source = resolvedCurrentSource;
+
         const newHist = {
           callPurpose: targetEdited.callPurpose || "SALES",
           callStatus: targetEdited.callStatus || "",
@@ -438,7 +451,9 @@ export default function MobileEditModal({
           attenderName: attenderName || "Unknown",
           timestamp: new Date().toISOString(),
           calledFor: targetEdited[calledForField] || targetEdited["Called For"] || targetEdited.calledFor || "",
-          source: targetEdited[sourceField] || targetEdited.Source || targetEdited.source || "",
+          leadOrigin: resolvedLeadOrigin,
+          currentSource: resolvedCurrentSource,
+          source: resolvedCurrentSource,
           callType: targetEdited.callType || "outgoing"
         };
         updates.history = [...baseHistory, newHist];

@@ -213,6 +213,29 @@ export const CallEntryTab = ({
   // Filter Sales Called For options (exclude Query/Reminder)
   const salesCalledForOptions = CALLED_FOR_OPTIONS.filter(o => o !== "Reminder" && o !== "Query");
 
+  const contactTagsList = useMemo(() => {
+    const rawTags = edited.Tags || edited.tags || row?.Tags || row?.tags || "";
+    let tagsArr = [];
+    if (Array.isArray(rawTags)) {
+      tagsArr = rawTags.map(t => typeof t === "object" ? (t?.name || t?.label || t?.tag || "") : String(t));
+    } else if (typeof rawTags === "string") {
+      tagsArr = rawTags.split(",");
+    } else if (typeof rawTags === "object" && rawTags !== null) {
+      tagsArr = [rawTags.name || rawTags.label || rawTags.tag || ""];
+    }
+    return Array.from(new Set(
+      tagsArr
+        .map(t => String(t || "").trim().replace(/^#+/, ""))
+        .filter(t => t.length > 0 && t !== "[object Object]")
+    ));
+  }, [edited.Tags, edited.tags, row?.Tags, row?.tags]);
+
+  const currentSourceDropdownOptions = useMemo(() => {
+    // Top N tags first, followed by all standard source options
+    const combined = new Set([...contactTagsList, ...CALL_SOURCE_OPTIONS]);
+    return Array.from(combined);
+  }, [contactTagsList]);
+
   const selectedProgram = String(activeProgram || edited[calledForField] || "").trim();
 
   const stageSource = row || edited;
@@ -701,9 +724,9 @@ export const CallEntryTab = ({
         </div>
       </div>
 
-      {/* 2. PROGRAM & ORIGINAL SOURCE (SALES MODE / UNSELECTED) */}
+      {/* 2. PROGRAM, LEAD ORIGIN & CURRENT SOURCE (SALES MODE / UNSELECTED) */}
       {(activePurpose === "SALES" || activePurpose === "") && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-30 animate-fade-in">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 relative z-30 animate-fade-in">
           {/* Program (Called For) */}
           <div className="space-y-1.5">
             <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
@@ -720,31 +743,40 @@ export const CallEntryTab = ({
             />
           </div>
 
-          {/* Call Source (Current Call) */}
+          {/* Lead Origin */}
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-1">
-              <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
-                Call Source (Current Call) <span className="text-rose-500 font-bold">*</span>
-              </label>
-              {(edited.original_source || row.original_source || edited.originalSource) && (
-                <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200" title="Permanent Original Acquisition Source">
-                  Orig: <strong className="text-slate-700 font-bold">{edited.original_source || row.original_source || edited.originalSource}</strong>
-                </span>
-              )}
-            </div>
+            <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+              Lead Origin
+            </label>
             <SearchableDropdown
               options={CALL_SOURCE_OPTIONS}
+              selected={String(edited.original_source || edited.originalSource || row?.original_source || row?.originalSource || "")}
+              onChange={val => {
+                handleChange("original_source", val);
+                handleChange("originalSource", val);
+              }}
+              placeholder="Select Lead Origin..."
+              colorClass="indigo"
+              disabled={!getEditable("Source")}
+            />
+          </div>
+
+          {/* Current Source */}
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+              Current Source <span className="text-rose-500 font-bold">*</span>
+            </label>
+            <SearchableDropdown
+              options={currentSourceDropdownOptions}
               selected={String(edited[sourceField] || edited.Source || edited.source || "")}
               onChange={val => handleChange(sourceField, val)}
-              placeholder="Select call source..."
+              placeholder="Select Current Source..."
               colorClass="amber"
               disabled={!getEditable(sourceField)}
             />
           </div>
         </div>
       )}
-
-
 
       {/* --- REMINDER CONTEXT BANNER — NO Convert-to-Sales button --- */}
       {activePurpose === "REMINDER" && (
@@ -759,9 +791,9 @@ export const CallEntryTab = ({
         </div>
       )}
 
-      {/* REMINDER: Program & Call Source grid (2-column) */}
+      {/* REMINDER: Program, Lead Origin & Current Source grid (3-column) */}
       {activePurpose === "REMINDER" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-30 animate-fade-in">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 relative z-30 animate-fade-in">
           {/* Reminder For (Program / Shivir) */}
           <div className="space-y-1.5">
             <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
@@ -778,23 +810,34 @@ export const CallEntryTab = ({
             />
           </div>
 
-          {/* Call Source (Current Call) */}
+          {/* Lead Origin */}
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-1">
-              <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
-                Call Source (Current Call) <span className="text-rose-500 font-bold">*</span>
-              </label>
-              {(edited.original_source || row.original_source || edited.originalSource) && (
-                <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200" title="Permanent Original Acquisition Source">
-                  Orig: <strong className="text-slate-700 font-bold">{edited.original_source || row.original_source || edited.originalSource}</strong>
-                </span>
-              )}
-            </div>
+            <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+              Lead Origin
+            </label>
             <SearchableDropdown
               options={CALL_SOURCE_OPTIONS}
-              selected={String(edited[sourceField] || edited.Source || edited.source || edited.original_source || row.original_source || edited.originalSource || "")}
+              selected={String(edited.original_source || edited.originalSource || row?.original_source || row?.originalSource || "")}
+              onChange={val => {
+                handleChange("original_source", val);
+                handleChange("originalSource", val);
+              }}
+              placeholder="Select Lead Origin..."
+              colorClass="sky"
+              disabled={!getEditable("Source")}
+            />
+          </div>
+
+          {/* Current Source */}
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+              Current Source <span className="text-rose-500 font-bold">*</span>
+            </label>
+            <SearchableDropdown
+              options={currentSourceDropdownOptions}
+              selected={String(edited[sourceField] || edited.Source || edited.source || "")}
               onChange={val => handleChange(sourceField, val)}
-              placeholder="Select call source..."
+              placeholder="Select Current Source..."
               colorClass="amber"
               disabled={!getEditable(sourceField)}
             />
@@ -802,9 +845,9 @@ export const CallEntryTab = ({
         </div>
       )}
 
-      {/* QUERY: Program & Call Source grid (2-column) */}
+      {/* QUERY: Program, Lead Origin & Current Source grid (3-column) */}
       {activePurpose === "QUERY" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-30 animate-fade-in">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 relative z-30 animate-fade-in">
           {/* Query About (Program / Context) */}
           <div className="space-y-1.5">
             <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
@@ -820,23 +863,34 @@ export const CallEntryTab = ({
             />
           </div>
 
-          {/* Call Source (Current Call) */}
+          {/* Lead Origin */}
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-1">
-              <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
-                Call Source (Current Call) <span className="text-rose-500 font-bold">*</span>
-              </label>
-              {(edited.original_source || row.original_source || edited.originalSource) && (
-                <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200" title="Permanent Original Acquisition Source">
-                  Orig: <strong className="text-slate-700 font-bold">{edited.original_source || row.original_source || edited.originalSource}</strong>
-                </span>
-              )}
-            </div>
+            <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+              Lead Origin
+            </label>
             <SearchableDropdown
               options={CALL_SOURCE_OPTIONS}
-              selected={String(edited[sourceField] || edited.Source || edited.source || edited.original_source || row.original_source || edited.originalSource || "")}
+              selected={String(edited.original_source || edited.originalSource || row?.original_source || row?.originalSource || "")}
+              onChange={val => {
+                handleChange("original_source", val);
+                handleChange("originalSource", val);
+              }}
+              placeholder="Select Lead Origin..."
+              colorClass="orange"
+              disabled={!getEditable("Source")}
+            />
+          </div>
+
+          {/* Current Source */}
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+              Current Source <span className="text-rose-500 font-bold">*</span>
+            </label>
+            <SearchableDropdown
+              options={currentSourceDropdownOptions}
+              selected={String(edited[sourceField] || edited.Source || edited.source || "")}
               onChange={val => handleChange(sourceField, val)}
-              placeholder="Select call source..."
+              placeholder="Select Current Source..."
               colorClass="amber"
               disabled={!getEditable(sourceField)}
             />

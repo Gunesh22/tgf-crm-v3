@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 import { X, Trash2, Save } from "lucide-react";
 const doc = () => {};
 import { db } from "../../../../lib/firebase";
@@ -209,7 +210,7 @@ export default function EditHistoryModal({
     }
   };
 
-  return (
+  return createPortal(
     <div 
       onClick={e => {
         e.stopPropagation();
@@ -374,6 +375,7 @@ export default function EditHistoryModal({
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

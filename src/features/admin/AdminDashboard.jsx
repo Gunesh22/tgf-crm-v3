@@ -14,6 +14,7 @@ import AbhivyaktiTab from "./components/AbhivyaktiTab";
 import SettingsTab from "./components/SettingsTab";
 import AllAttendersSheetTab from "./components/AllAttendersSheetTab";
 import PipelineCallsTab from "./components/PipelineCallsTab";
+import FunnelReportsTab from "./components/FunnelReportsTab";
 import LottieAnimation from "../../components/ui/LottieAnimation";
 import dataResearchAnimation from "../../assets/data_research_analysis.json";
 
@@ -297,6 +298,14 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
                   callLogs={callLogs}
                   registrations={registrations}
                   callLogsLoading={callLogsLoading}
+                />
+              )}
+              {activeTab === "presets" && (
+                <FunnelReportsTab
+                  callLogs={callLogs}
+                  programs={programs}
+                  attenders={attenders}
+                  settingsOptions={settingsOptions}
                 />
               )}
               {activeTab === "pipeline-calls" && (

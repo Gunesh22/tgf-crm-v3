@@ -1,16 +1,18 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { 
   BarChart3, Users, PhoneCall, TrendingUp, Award, Filter, X, Download, 
   ArrowRight, CheckCircle2, AlertTriangle, Clock, RefreshCw, Layers, ShieldCheck, HelpCircle,
-  ChevronDown, ChevronUp, Info, UserCheck, Eye, Search, Check
+  ChevronDown, ChevronUp, Info, UserCheck, Eye, Search, Check, Pencil
 } from "lucide-react";
 import { 
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid 
 } from "recharts";
 import { 
-  parseTimestamp, renderVal, getCanonicalStatus, classifyCallStatus, COLORS, getContactName, getContactPhone, getContactCity, getCanonicalStage, getLocalDateStr, getCanonicalPhysicalCalls, getCanonicalRegistrations, getCanonicalQueryStage 
+  parseTimestamp, renderVal, getCanonicalStatus, classifyCallStatus, COLORS, getContactName, getContactPhone, getContactCity, getCanonicalStage, getLocalDateStr, getCanonicalPhysicalCalls, getCanonicalRegistrations, getCanonicalQueryStage, getContactLeadOrigin, getContactSource 
 } from "../utils.jsx";
 import { PIPELINE_STAGES, QUERY_PIPELINE_STAGES, getEffectiveStage } from "../../../utils/pipelineEngine";
+import { EditModal } from "../../attender/components/EditModal";
 
 // Multi-select dropdown component
 function MultiSelect({ options, selected, onChange, placeholder, allLabel = "All" }) {
@@ -247,11 +249,13 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
   const [dateMode, setDateMode] = useState("call"); // "call" or "contact"
   const [selectedProgramIds, setSelectedProgramIds] = useState([]);
   const [selectedAttenderIds, setSelectedAttenderIds] = useState([]);
+  const [selectedLeadOrigins, setSelectedLeadOrigins] = useState([]);
   const [selectedSources, setSelectedSources] = useState([]);
   const [selectedCalledFors, setSelectedCalledFors] = useState([]);
   const [selectedStatuses, setSelectedStatuses] = useState([]);
   const [selectedCallTypes, setSelectedCallTypes] = useState([]);
   const [selectedKhojiStatuses, setSelectedKhojiStatuses] = useState([]);
+  const [sourceDimension, setSourceDimension] = useState("currentSource");
   const [selectedPurposes, setSelectedPurposes] = useState([]);
   const [selectedPipelineStages, setSelectedPipelineStages] = useState([]);
   const [selectedOutcomes, setSelectedOutcomes] = useState([]);
@@ -262,6 +266,7 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
   const [drillDownModal, setDrillDownModal] = useState(null); // { title: string, type: string, items: Array }
   const [drillSearch, setDrillSearch] = useState("");
   const [attenderDetailModal, setAttenderDetailModal] = useState(null);
+  const [selectedLeadForEdit, setSelectedLeadForEdit] = useState(null);
 
   // 1. EXTRACT ALL HISTORICAL CALL EVENTS
   const allCallEvents = useMemo(() => {
@@ -321,7 +326,8 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
             status: h.status || contact.status || "Pending",
             callType: (h.callType || contact.callType || "outgoing").toLowerCase(),
             purpose: getCallPurpose(h, contact),
-            source: h.source || contact.source || "",
+            source: getContactSource(contact, h) || h.source || contact.source || "Online/Direct",
+            leadOrigin: getContactLeadOrigin(contact, h) || "Direct / Organic",
             calledFor: h.calledFor || contact.calledFor || contact.programName || "",
             programId: h.programId || h.calledForKey || contact.programId || contact.calledForKey || "",
             calledForKey: h.calledForKey || h.programId || contact.calledForKey || contact.programId || "",
@@ -358,7 +364,13 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
       if (!matchesProgramRecord(ev, selectedProgramIds, programs)) return false;
 
       if (selectedSources.length > 0) {
-        if (!selectedSources.includes(ev.source)) return false;
+        const evSource = ev.source || getContactSource(ev) || "Online/Direct";
+        if (!selectedSources.includes(evSource)) return false;
+      }
+
+      if (selectedLeadOrigins.length > 0) {
+        const evLeadOrigin = ev.leadOrigin || getContactLeadOrigin(ev) || "Direct / Organic";
+        if (!selectedLeadOrigins.includes(evLeadOrigin)) return false;
       }
 
       if (selectedCalledFors.length > 0) {
@@ -392,7 +404,7 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
 
       return true;
     });
-  }, [allCallEvents, dateFrom, dateTo, dateMode, selectedAttenderIds, selectedProgramIds, selectedSources, selectedCalledFors, selectedStatuses, selectedCallTypes, selectedPurposes, selectedPipelineStages, selectedOutcomes, programs]);
+  }, [allCallEvents, dateFrom, dateTo, dateMode, selectedAttenderIds, selectedProgramIds, selectedSources, selectedLeadOrigins, selectedCalledFors, selectedStatuses, selectedCallTypes, selectedPurposes, selectedPipelineStages, selectedOutcomes, programs]);
 
   // 3. FILTERED CONTACTS
   const filteredContacts = useMemo(() => {
@@ -405,9 +417,13 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
       if (!matchesProgramRecord(c, selectedProgramIds, programs)) return false;
 
       if (selectedSources.length > 0) {
-        const srcKey = Object.keys(c).find(k => ["source", "sourse", "source of information", "source of informiton"].includes(k.toLowerCase()));
-        const srcVal = srcKey ? String(c[srcKey] || "").trim() : "";
-        if (!selectedSources.includes(srcVal)) return false;
+        const cSource = getContactSource(c) || "Online/Direct";
+        if (!selectedSources.includes(cSource)) return false;
+      }
+
+      if (selectedLeadOrigins.length > 0) {
+        const cLeadOrigin = getContactLeadOrigin(c) || "Direct / Organic";
+        if (!selectedLeadOrigins.includes(cLeadOrigin)) return false;
       }
 
       if (selectedCalledFors.length > 0) {
@@ -748,7 +764,11 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
 
   // Helper for clicking stage cards
   const handleStageClick = (stageName, stageValue) => {
-    const items = filteredContacts.filter(c => getCanonicalStage(c) === stageValue);
+    const targetCanonical = getCanonicalStage(stageValue);
+    const items = (filteredContacts || []).filter(c => {
+      const cStage = getCanonicalStage(c);
+      return cStage === targetCanonical || cStage === stageValue || String(cStage).toLowerCase().trim() === String(stageValue).toLowerCase().trim();
+    });
     setDrillDownModal({
       title: `${stageName} — Contacts (${items.length})`,
       type: "people",
@@ -814,12 +834,20 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
       .map(a => ({ value: a.id || a._id, label: a.name }));
   }, [attenders]);
 
+  const leadOriginOptions = useMemo(() => {
+    const origins = new Set();
+    (callLogs || []).forEach(log => {
+      const val = getContactLeadOrigin(log) || "Direct / Organic";
+      origins.add(val);
+    });
+    return Array.from(origins).sort().map(s => ({ value: s, label: s }));
+  }, [callLogs]);
+
   const sourceOptions = useMemo(() => {
     const sources = new Set(settingsOptions?.sourceOptions || []);
     (callLogs || []).forEach(log => {
-      const sourceKey = Object.keys(log).find(k => ["source", "sourse", "source of information", "source of informiton"].includes(k.toLowerCase()));
-      const val = sourceKey ? String(log[sourceKey] || "").trim() : "";
-      if (val) sources.add(val);
+      const val = getContactSource(log) || "Online/Direct";
+      sources.add(val);
     });
     return Array.from(sources).sort().map(s => ({ value: s, label: s }));
   }, [callLogs, settingsOptions]);
@@ -865,6 +893,7 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
   const activeFilters = [
     selectedProgramIds.length > 0 && selectedProgramIds.length < programOptions.length,
     selectedAttenderIds.length > 0 && selectedAttenderIds.length < attenderOptions.length,
+    selectedLeadOrigins.length > 0 && selectedLeadOrigins.length < leadOriginOptions.length,
     selectedSources.length > 0 && selectedSources.length < sourceOptions.length,
     selectedCalledFors.length > 0 && selectedCalledFors.length < calledForOptions.length,
     selectedStatuses.length > 0 && selectedStatuses.length < statusOptions.length,
@@ -881,6 +910,7 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
     setDateTo(currentMonthLastDay);
     setSelectedProgramIds([]);
     setSelectedAttenderIds([]);
+    setSelectedLeadOrigins([]);
     setSelectedSources([]);
     setSelectedCalledFors([]);
     setSelectedStatuses([]);
@@ -942,11 +972,19 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
           />
 
           <MultiSelect
+            options={leadOriginOptions}
+            selected={selectedLeadOrigins}
+            onChange={setSelectedLeadOrigins}
+            placeholder="Lead Origin"
+            allLabel="All Lead Origins"
+          />
+
+          <MultiSelect
             options={sourceOptions}
             selected={selectedSources}
             onChange={setSelectedSources}
-            placeholder="Source"
-            allLabel="All Sources"
+            placeholder="Current Source"
+            allLabel="All Current Sources"
           />
 
           <MultiSelect
@@ -1489,7 +1527,7 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
 
 
       {/* ATTENDER DETAIL MODAL */}
-      {attenderDetailModal && (
+      {attenderDetailModal && createPortal(
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
@@ -1544,11 +1582,12 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* DRILL-DOWN MODAL */}
-      {drillDownModal && (
+      {drillDownModal && createPortal(
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
@@ -1575,23 +1614,25 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
                     <th className="p-2">Name & Phone</th>
                     <th className="p-2">Attender</th>
                     <th className="p-2">Stage / Status</th>
-                    <th className="p-2">Called For / Source</th>
+                    <th className="p-2">Called For</th>
+                    <th className="p-2">Lead Origin</th>
+                    <th className="p-2">Current Source</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                   {drillDownModal.items
                     .filter(rawItem => {
-                      const item = rawItem.contact || rawItem;
+                      const item = rawItem.contact || rawItem.row || rawItem;
                       if (!drillSearch.trim()) return true;
                       const q = drillSearch.toLowerCase();
-                      const name = String(getContactName(item) || "").toLowerCase();
-                      const phone = String(getContactPhone(item) || "").toLowerCase();
+                      const name = String(getContactName(item, rawItem) || "").toLowerCase();
+                      const phone = String(getContactPhone(item, rawItem) || "").toLowerCase();
                       return name.includes(q) || phone.includes(q);
                     })
                     .map((rawItem, idx) => {
-                      const item = rawItem.contact || rawItem;
-                      const name = getContactName(item) || (getContactPhone(item) ? `Contact (${getContactPhone(item)})` : `Contact #${(item.id || item._id || "").slice(-4)}`);
-                      const phone = getContactPhone(item);
+                      const item = rawItem.contact || rawItem.row || rawItem;
+                      const name = getContactName(item, rawItem) || (getContactPhone(item, rawItem) ? `Contact (${getContactPhone(item, rawItem)})` : `Lead #${(item.id || item._id || "").slice(-6) || idx + 1}`);
+                      const phone = getContactPhone(item, rawItem);
                       
                       const modalCategory = drillDownModal.category || 
                         (drillDownModal.title.toLowerCase().includes("query") ? "query" : 
@@ -1599,11 +1640,17 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
 
                       const salesStage = getCanonicalStage(item);
                       const queryStage = getCanonicalQueryStage(item);
+                      const originVal = getContactLeadOrigin(item) || "—";
+                      const currentSrcVal = getContactSource(item) || "—";
 
                       return (
-                        <tr key={idx} className="hover:bg-slate-50">
+                        <tr
+                          key={idx}
+                          onClick={() => setSelectedLeadForEdit(item)}
+                          className="hover:bg-indigo-50/60 transition-colors cursor-pointer group"
+                        >
                           <td className="p-2">
-                            <p className="font-bold text-slate-900">{name}</p>
+                            <p className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{name}</p>
                             {phone && <p className="text-[10px] text-indigo-600 font-mono">{phone}</p>}
                           </td>
                           <td className="p-2">{renderVal(item.attenderName || item.assignedTo)}</td>
@@ -1632,20 +1679,48 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
                               </span>
                             )}
                           </td>
-                          <td className="p-2">{renderVal(item.calledFor || item.source)}</td>
+                          <td className="p-2">{renderVal(item.calledFor || item.programName)}</td>
+                          <td className="p-2">
+                            <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-semibold text-[10px] border border-emerald-100">
+                              {originVal}
+                            </span>
+                          </td>
+                          <td className="p-2">
+                            <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-semibold text-[10px] border border-blue-100">
+                              {currentSrcVal}
+                            </span>
+                          </td>
                         </tr>
                       );
                     })}
                   {drillDownModal.items.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="py-6 text-center text-slate-400 font-medium">No contacts found for this criteria.</td>
+                      <td colSpan={4} className="py-8 text-center text-slate-400 font-medium">
+                        No contacts found for this criteria.
+                      </td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
+
+      {/* EDIT LEAD MODAL */}
+      {selectedLeadForEdit && (
+        <EditModal
+          row={selectedLeadForEdit}
+          attenderId="admin"
+          attenderName="Admin"
+          attenders={attenders}
+          programs={programs}
+          onClose={() => setSelectedLeadForEdit(null)}
+          onSave={() => {
+            setSelectedLeadForEdit(null);
+          }}
+        />
       )}
 
     </div>

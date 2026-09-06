@@ -185,10 +185,10 @@ export const ProfileDetailsTab = ({
           </div>
         </div>
 
-        {/* Tags */}
+        {/* Tags Badges Display */}
         <div className="space-y-1.5 col-span-1 md:col-span-4">
           <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-            <Tag size={13} className="text-slate-400" /> Tags
+            <Tag size={13} className="text-slate-400" /> Tags Summary
           </label>
           <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50/80 border border-slate-200/80 rounded-xl min-h-[42px] items-center">
             {(() => {
@@ -212,7 +212,7 @@ export const ProfileDetailsTab = ({
               return cleanTags.map((tag, idx) => (
                 <span
                   key={idx}
-                  className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-200/60 text-slate-700 border border-slate-300/50"
+                  className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100"
                 >
                   {tag}
                 </span>

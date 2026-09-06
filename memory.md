@@ -507,11 +507,146 @@ Enable administrators to visually inspect the exact list of canonical registrati
 ### Verification Results
 * **Automated Unit Test Suite (`npm test`):** **134 / 134 PASSED (0 failures)**.
 
+---
 
+## 28. Dedicated Funnel Presets Tab & Executive Intelligence Engine
 
+### Implementation Summary
+- Built a dedicated **Funnel Presets** tab in the Admin Panel sidebar navigation (`Filter` icon) between Dashboard and Pipeline & Calls.
+- Full non-truncated titles, category filter pills (*All*, *Upsell & Progression*, *Lead Origins*, *Dropouts & Risk*, *Custom*), live KPI summary banner, filterable inspection table, and **1-Click Excel Export (`.xlsx`)**.
+- Removed inline preset blocks from `DashboardTab.jsx` and `MonthlyReportTab.jsx` to maintain a light, uncluttered UI.
 
+---
 
+## 29. Funnel Reports Redesign & V1 Builder Experience
 
+### Implementation Summary
+- Redesigned the Funnel Presets experience into a clean, light, business-oriented **Funnel Reports** system matching the CRM's light theme.
+- **V1 Streamlined Flow (`Choose template → choose simple filters → see results → save`)**:
+  - Built `ReportBuilderDrawer.jsx` offering clean 2-step report creation with live matching lead counters.
+  - Collapsed technical query/regex fields behind `Advanced filters ▸`.
+  - Zero emojis across all cards, drawers, and tables.
+- **Source of Truth Preservation (`presetEngine.js`)**:
+  - Retained `presetEngine.js` as the source of truth, introducing `createReportFromSimpleInputs` adapter function to translate simple business dropdown selections into technical matching rules transparently.
 
+---
 
+## 30. Lead Origin & Current Source Model Alignment
 
+### Architectural Rules & Implementation Summary
+1. **Terminology Alignment & Conceptual Separation**:
+   - **Lead Origin (Original Source)**: Permanent initial acquisition channel where the lead entered the database (e.g. `Facebook Ads`, `Instagram`, `Website`, `YouTube`, `Referral`, `Organic`). Bound to `contact.original_source` / `contact.originalSource` / `contact.Source` / `contact.source`.
+   - **Current Source (Active Tags / Registration Tags)**: Dynamic active campaign tags in GHL/CRM representing what the lead signed up for or is currently being called for (e.g. `CBT Basic`, `CBT Advanced`, `Happy Thoughts`). Bound to `contact.tags` / `contact.Tags`.
+   - Completely eliminated vague/ambiguous "Source" naming in report dropdowns, tables, and edit modals.
+
+2. **Edit Modal Enhancement (`EditModal.jsx`, `ProfileDetailsTab.jsx`, `CallEntryTab.jsx`)**:
+   - Explicitly added **Lead Origin** and **Current Source (Active Tags)** fields in `ProfileDetailsTab.jsx`.
+   - Explicitly updated `CallEntryTab.jsx` to render **Current Source** dropdown with a `Lead Origin: Facebook` acquisition badge.
+
+3. **Funnel Reports Table & Excel Export (`FunnelReportsTab.jsx`, `ReportBuilderDrawer.jsx`)**:
+   - Added `Lead Origin` and `Current Source` as separate side-by-side columns in the main report inspection table.
+   - Included `Lead Origin` and `Current Source` in 1-Click Excel Export (`.xlsx`) outputs.
+
+### Final Verification Results
+- **Automated Unit Test Suite (`npm test` & `node tests/presetEngine.test.js`)**: **100% PASSED** (0 failures across all 132 tests).
+- **Production Build (`npm run build`)**: **Vite build PASSED in 27.80s (0 errors)**.
+
+---
+
+## 31. Call Entry Modal Dual Dropdown (Lead Origin & Current Source)
+
+### Implementation Summary
+- **Updated `CallEntryTab.jsx`**:
+  - Added two explicit `SearchableDropdown` controls in `CallEntryTab.jsx` for all call purposes (`SALES`, `REMINDER`, `QUERY`):
+    1. **Lead Origin**: Dropdown containing all acquisition source options (`CALL_SOURCE_OPTIONS` e.g. Facebook Ads, Instagram, Website, YouTube, Referral, Organic). Updates `original_source` / `originalSource`.
+    2. **Current Source**: Dropdown containing the lead's **current active tags** (`edited.Tags` / `edited.tags` / `row.Tags` / `row.tags` e.g. CBT Basic, CBT Advanced) combined with `CALL_SOURCE_OPTIONS`. Updates `sourceField` (`edited.Source` / `edited.source`).
+  - Added memoized `contactTags` and `currentSourceOptions` arrays for instantaneous tag parsing and option rendering.
+
+### Final Verification Results
+- **Automated Unit Test Suite (`npm test` & `node tests/presetEngine.test.js`)**: **100% PASSED** (0 failures across all 132 tests).
+- **Production Build (`npm run build`)**: **Vite build PASSED with 0 errors**.
+
+---
+
+## 32. Pipeline Tab Drilldown Modal & Lead Name Resolution Fix
+
+### Root Cause Analysis
+- **Issue**: Clicking pipeline numbers in the Pipeline & Call Analytics tab rendered a dark backdrop blur without properly displaying lead names or allowing lead detail inspection.
+- **Root Cause 1 (`utils.jsx`)**: `getContactName` returned `"Unknown"` on un-nested or non-standard contact documents, preventing fallbacks to phone numbers or ID strings and returning literal `"Unknown"`.
+- **Root Cause 2 (`PipelineCallsTab.jsx`)**: `handleStageClick` did not use dual canonical stage matching, resulting in empty/mismatched item arrays.
+- **Root Cause 3 (`PipelineCallsTab.jsx`)**: Drilldown modal rows were non-interactive and lacked an integrated `<EditModal>` handler for lead inspection.
+
+### Fixes Implemented
+1. **Enhanced `getContactName` & `getContactPhone` (`utils.jsx`)**:
+   - Un-nests `contact` / `row` object properties automatically.
+   - Evaluates `Name`, `name`, `leadName`, `contactName`, `customerName`, `studentName`, `fullName`.
+   - Returns clean empty string fallbacks so `Name || Phone || ID` chain functions reliably.
+2. **Canonical Stage Matcher (`PipelineCallsTab.jsx`)**:
+   - Updated `handleStageClick` to query contacts using `getCanonicalStage(c) === getCanonicalStage(stageValue)`.
+3. **Interactive Drilldown Table & Lead Inspection (`PipelineCallsTab.jsx`)**:
+   - Added interactive `onClick` handlers on drilldown table rows to launch `<EditModal>` directly.
+4. **Viewport-Locked Modal Portals (`createPortal`)**:
+   - Portalled `drillDownModal`, `attenderDetailModal`, `EditModal`, and `EditHistoryModal` using `React.createPortal(..., document.body)`.
+   - Resolves CSS `position: fixed` relative positioning bug caused by ancestor `transform` / `animate-tab-fade-in` containers, eliminating excessive page scrolling.
+
+---
+
+## 33. Modal Viewport Alignment & Drilldown Table Streamlining
+
+### Implementation Summary
+- **Modal Portalling (`EditModal.jsx`, `EditHistoryModal.jsx`, `PipelineCallsTab.jsx`)**:
+  - Wrapped modal container outputs in `createPortal(..., document.body)` across all lead management overlays.
+  - Guarantees modals lock directly to the browser viewport center (`fixed inset-0`) regardless of tab container height or ancestor CSS animations (`animate-tab-fade-in`), preventing offset modal positioning and unnecessary scrolling.
+- **Drilldown Action Column Clean-up (`PipelineCallsTab.jsx`)**:
+  - Removed redundant `View Lead` button column (`<th className="p-2 text-right">Action</th>`) from the drilldown table in `PipelineCallsTab.jsx`.
+  - Maintained full row clickability (`tr onClick={() => setSelectedLeadForEdit(item)}`) so clicking anywhere on a lead row instantly launches `EditModal`.
+
+---
+
+## 35. Root Cause Fix: Current Source Un-autofilling & Dynamic Tag-First Options
+
+### Implementation Summary & Root Cause Resolution
+- **Root Cause Identified (`EditModal.jsx`)**:
+  - `getNormalizedRow` was populating `normalized.Source` and `normalized.source` with `rootSource` (`row.Source` / `row.source`), which often contained imported tag strings or raw GHL CRM sources.
+  - GHL CRM search callback (`searchCRMByPhone`) was executing `if (source) updated.Source = source`, overwriting `Current Source` with GHL sources/tags on every CRM fetch.
+- **Fixes Applied (`EditModal.jsx`)**:
+  - `normalized.Source` and `normalized.source` now start **COMPLETELY EMPTY (`""`)** when opening `EditModal` (unless the attender explicitly saved a call-entry source in `attenderStates`).
+  - Removed source mapping from GHL CRM search callback (`searchCRMByPhone`), leaving **Lead Origin** and **Current Source** completely un-autofilled.
+- **Dynamic Tag-First Dropdown Options (`CallEntryTab.jsx`)**:
+  - Built `currentSourceDropdownOptions` memo combining `[...contactTagsList, ...CALL_SOURCE_OPTIONS]`.
+  - The contact's tags (`Tag1`, `Tag2`, ..., `Tag N`) appear **at the very top of the dropdown menu**, followed by all standard source options (`CALL_SOURCE_OPTIONS`).
+  - `Current Source` field displays `"Select Current Source..."` by default, allowing the attender to select a tag or any standard source upon clicking.
+
+---
+
+## 36. Disabling Lead Origin Autofill & CRM Source Sync
+
+### Implementation Summary
+- **Lead Origin Initialization (`EditModal.jsx`)**:
+  - Updated `getNormalizedRow` so `original_source` and `originalSource` do not fall back to `rootSource` / `row.Source` or `getFieldWithFallback(row, "Source")`.
+- **CRM Lookup Sync Removal (`EditModal.jsx`)**:
+  - Removed source assignment from GHL CRM lookup response callback (`searchCRMByPhone`). CRM fetches will only autofill profile fields (`Name`, `Email`, `City`, `State`, `Tags`, `GHL_ID`).
+- **Result**:
+  - Both **Lead Origin** and **Current Source** start completely unselected (`"Select Lead Origin..."` and `"Select Current Source..."`), ensuring zero unwanted autofilling.
+
+---
+
+## 37. Root Cause Fix: Lead Origin & Current Source Database Write Path Persistence
+
+### Root Cause Analysis & Solution Summary
+- **Root Cause Identified**: The UI save handlers (`EditModal.jsx` and `MobileEditModal.jsx`) did not pass explicit `leadOrigin` and `currentSource` keys in the POST payload sent to `/api/contacts/log-call` or inside the `newHist` history item. `api/_contacts/log-call.js` relied on `rootUpdates.Source` / `existingContact.Source` as fallback, causing unconnected call attempts to lose the attender's explicit Current Source selection (`Instagram`) and collapse Current Source into `Facebook` or the latest contact-level source (`YouTube`).
+- **Contextual Write Path Fixes**:
+  1. **`EditModal.jsx` & `MobileEditModal.jsx`**: Updated `handleSaveAndClose` to extract `resolvedLeadOrigin` and `resolvedCurrentSource` and attach them to `updates`, `newHist`, `attenderStates`, and `programStates`.
+  2. **`api/_contacts/log-call.js` & `api/_contacts/create-incoming.js`**: Updated serverless handlers to extract `leadOrigin` and `currentSource` explicitly and write `leadOrigin`, `original_source`, `originalSource`, `currentSource`, `source`, `callSource` into `historyItem`, `attenderStates.${cleanAttenderId}`, and `programStates.${cleanAttenderId}.${currentProgKey}` via `$set`.
+  3. **Non-Owner Shared Contact Safety**: Updated `api/_contacts/log-call.js` to strip `currentSource`, `leadOrigin`, `original_source`, `originalSource` from `rootUpdates` on `isNonOwnerSharedCall`, preventing non-owner attenders from overwriting the primary Lead Owner's root contact fields while preserving their own `attenderStates`, `programStates`, and `history` entries.
+  4. **Excel / Bulk Import Enrichment (`api/_contacts/import-bulk.js` & `src/lib/db.js`)**: Enriched bulk import handlers to populate explicit `leadOrigin` and `currentSource` fields on insert.
+  5. **Core Analytics Resolution (`src/utils/registrationEngine.js` & `src/features/attender/utils.js`)**: Updated `getContactSource`, `getContactLeadOrigin`, and `resolveCurrentAttenderContext` to inspect nested `programStates` and `attenderStates` by normalized `programKey`, ensuring accurate program-context source resolution across reloads even when history is sliced.
+
+### Database & Test Suite Verification
+- **MongoDB Database Document Verification (`6436436623` / `6a9d9f05df917acfde1a5c89`)**:
+  - `programStates.JW20HztSjMfwNbVaCpxz.tgfinfo`: `leadOrigin: "Facebook"`, `currentSource: "Instagram"`
+  - `programStates.JW20HztSjMfwNbVaCpxz.other`: `leadOrigin: "Facebook"`, `currentSource: "YouTube"`
+  - `history[0]` (`TGF Info`): `leadOrigin: "Facebook"`, `currentSource: "Instagram"`
+  - `history[1]` (`Other`): `leadOrigin: "Facebook"`, `currentSource: "YouTube"`
+- **Automated Unit Test Suite**: **134 / 134 PASSED (0 failures)** (`npm test`).
+- **Production Build Verification**: **Vite build PASSED with 0 errors** (`npm run build`).

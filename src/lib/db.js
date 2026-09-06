@@ -106,12 +106,21 @@ export const importContacts = async (arg1, arg2, arg3, arg4) => {
     contactsList = arg1 || [];
   }
 
-  const enriched = contactsList.map(c => ({
-    ...c,
-    programId: c.programId || programId,
-    source: c.source || c.Source || programName || "Excel Import",
-    tags: c.tags || tags
-  }));
+  const enriched = contactsList.map(c => {
+    const leadOrigin = c.leadOrigin || c.original_source || c.originalSource || c.source || c.Source || programName || "Excel Import";
+    const currentSource = c.currentSource || c.callSource || c.source || c.Source || programName || "Excel Import";
+    return {
+      ...c,
+      programId: c.programId || programId,
+      leadOrigin,
+      original_source: leadOrigin,
+      originalSource: leadOrigin,
+      currentSource,
+      source: currentSource,
+      Source: currentSource,
+      tags: c.tags || tags
+    };
+  });
 
   const res = await fetchAPI(`/api/contacts/import-bulk`, "POST", { contacts: enriched });
   return (res.upsertedCount || 0) + (res.matchedCount || 0);
