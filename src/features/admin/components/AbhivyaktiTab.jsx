@@ -397,14 +397,6 @@ export default function AbhivyaktiTab({
       return true;
     });
 
-    console.log("[ABHIVYAKTI FILTERED REGS TRACE]", {
-      totalInputRegistrations: registrations.length,
-      filteredRegistrationsCount: res.length,
-      attendersFound: Array.from(new Set(registrations.map(r => getRegistrationPrimaryAttender(r)))),
-      dateFrom,
-      dateTo
-    });
-
     return res;
   }, [registrations, selectedCallTypes, selectedCalledFors, selectedSources, selectedAttenders, dateFrom, dateTo]);
 

@@ -1,13 +1,17 @@
 // api/_contacts/import-bulk.js
 import clientPromise from '../lib/mongodb.js';
+import { requireAdmin } from '../lib/auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
+  const session = requireAdmin(req, res);
+  if (!session) return;
+
   try {
-    const { contacts } = req.body; // Array of raw contact objects
+    const { contacts } = req.body || {}; // Array of raw contact objects
     if (!Array.isArray(contacts) || contacts.length === 0) {
       return res.status(400).json({ error: 'contacts must be a non-empty array' });
     }

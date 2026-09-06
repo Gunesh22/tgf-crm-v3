@@ -1,20 +1,28 @@
-// api/_contacts/search.js
 import clientPromise from '../lib/mongodb.js';
+import { requireAuth, sanitizeString, isSameAttender } from '../lib/auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
+  const session = requireAuth(req, res);
+  if (!session) return;
+
   try {
-    const { 
-      attenderId, 
-      search, 
-      status, 
-      month, 
-      page = 1, 
-      limit = 10000 
-    } = req.query;
+    const rawAttenderId = sanitizeString(req.query?.attenderId);
+    const search = sanitizeString(req.query?.search);
+    const status = sanitizeString(req.query?.status);
+    const month = sanitizeString(req.query?.month);
+    const page = req.query?.page || 1;
+    const limit = req.query?.limit || 10000;
+
+    // IDOR Enforcement for non-admin users
+    if (rawAttenderId && !isSameAttender(rawAttenderId, session)) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Access denied to other attender data' });
+    }
+
+    const attenderId = rawAttenderId;
 
     const client = await clientPromise;
     const db = client.db('tgf_crm');
@@ -99,7 +107,7 @@ export default async function handler(req, res) {
 
     // Fast query execution: fetch contacts with projection
     const includeHistory = req.query.includeHistory === 'true';
-    const projection = includeHistory ? {} : { history: 0 };
+    const projection = includeHistory ? {} : { history: { $slice: -5 } };
 
     const contacts = await db.collection('contacts')
       .find(queryFilter, { projection })
@@ -119,10 +127,14 @@ export default async function handler(req, res) {
     const totalPages = Math.ceil(totalCount / limitNum);
 
     const trimmedContacts = contacts.map(c => {
-      if (Array.isArray(c.history)) {
-        return { ...c, history: c.history };
-      }
-      return c;
+      const idStr = c._id ? c._id.toString() : (c.id || '');
+      return {
+        ...c,
+        id: c.id || idStr,
+        contactId: c.contactId || idStr,
+        _id: idStr,
+        history: Array.isArray(c.history) ? c.history : []
+      };
     });
 
     return res.status(200).json({

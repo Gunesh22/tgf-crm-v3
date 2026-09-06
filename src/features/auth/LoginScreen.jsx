@@ -33,21 +33,6 @@ export default function LoginScreen() {
   const { login } = useAuth();
   
   const [error, setError] = useState('');
-  const [attendersList, setAttendersList] = useState(FALLBACK_ATTENDERS);
-
-  useEffect(() => {
-    async function loadAttenders() {
-      try {
-        const res = await fetchAPI('/api/admin/attenders');
-        if (res && Array.isArray(res.data) && res.data.length > 0) {
-          setAttendersList(res.data);
-        }
-      } catch (e) {
-        // Silently use fallback attenders list when offline or running on local dev server
-      }
-    }
-    loadAttenders();
-  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault?.();
@@ -64,64 +49,20 @@ export default function LoginScreen() {
     setIsSubmitting(true);
 
     try {
-      // 1. Database-backed Admin Authentication Check
-      if (inputId.toLowerCase().includes('admin')) {
-        try {
-          const authRes = await fetchAPI('/api/admin/admin-auth', 'POST', {
-            action: 'login',
-            password: inputPass
-          });
-          if (authRes && authRes.success) {
-            login('admin_01', 'Super Admin', 'admin');
-            return;
-          } else {
-            setError(authRes?.error || 'Invalid Admin password');
-            setIsSubmitting(false);
-            return;
-          }
-        } catch (authErr) {
-          setError(authErr.message || 'Invalid Admin password');
-          setIsSubmitting(false);
-          return;
-        }
-      }
+      // Authenticate via server authentication endpoint
+      const authRes = await fetchAPI('/api/auth/login', 'POST', {
+        attenderId: inputId,
+        password: inputPass
+      });
 
-      // 2. Attender Credentials Match (by ID or Name)
-      const inputLower = inputId.toLowerCase();
-      let matched = attendersList.find(a => 
-        String(a.id || '').toLowerCase() === inputLower ||
-        String(a.name || '').toLowerCase() === inputLower ||
-        String(a.name || '').toLowerCase().startsWith(inputLower) ||
-        String(a.name || '').toLowerCase().includes(inputLower)
-      );
-
-      // Backup check in fallback list if dynamic list had missing entry
-      if (!matched) {
-        matched = FALLBACK_ATTENDERS.find(a => 
-          String(a.id || '').toLowerCase() === inputLower ||
-          String(a.name || '').toLowerCase() === inputLower ||
-          String(a.name || '').toLowerCase().startsWith(inputLower) ||
-          String(a.name || '').toLowerCase().includes(inputLower)
-        );
-      }
-
-      if (!matched) {
-        setError('Attender not found. Check your ID or Name.');
-        setIsSubmitting(false);
+      if (authRes && authRes.success && authRes.user) {
+        login(authRes.user.id, authRes.user.name, authRes.user.role);
         return;
+      } else {
+        setError(authRes?.error || 'Authentication failed. Please check your credentials.');
       }
-
-      // Verify Attender Password strictly against registered password (NO universal bypass)
-      if (matched.password && matched.password !== inputPass) {
-        setError('Incorrect password. Please try again.');
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Login with actual Attender ID, true registered Name, and role
-      login(matched.id, matched.name, 'attender');
     } catch (err) {
-      setError('Authentication failed. Please try again.');
+      setError(err.message || 'Authentication failed. Please check your credentials.');
     } finally {
       setIsSubmitting(false);
     }

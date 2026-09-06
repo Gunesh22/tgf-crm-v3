@@ -13,30 +13,60 @@ const callGhlApiProxy = async (endpoint, method = "POST", payload = null, params
       }
       return data;
     } else {
-        throw new Error(`GHL Proxy status ${proxyRes.status}: ${proxyRes.statusText}`);
+      throw new Error(`GHL Proxy status ${proxyRes.status}: ${proxyRes.statusText}`);
     }
   } catch (e) {
-      throw e;
+    throw e;
   }
 };
 
-export const testConnection = async () => {
-  console.log(`%c[GHL CALL] %cTEST CONNECTION`, "color: #ec4899; font-weight: bold", "color: gray");
-  try {
-    const data = await callGhlApiProxy("testConnection", "GET", null, null);
-    console.log(`%c[GHL SUCCESS] %cConnection OK`, "color: #ec4899; font-weight: bold", "color: gray", data);
-    return { success: true, total: data.meta?.total || data.total || 0 };
-  } catch (e) {
-    console.warn(`[GHL NOTICE] GHL connection test info:`, e.message);
-    return { success: false, error: e.message };
+let pendingTestConnectionPromise = null;
+let lastUnconfiguredResult = null;
+let lastUnconfiguredTimestamp = 0;
+const CACHE_TTL_MS = 60000;
+
+export const testConnection = async (bypassCache = false) => {
+  const now = Date.now();
+  if (bypassCache) {
+    lastUnconfiguredResult = null;
+    lastUnconfiguredTimestamp = 0;
   }
+
+  if (!bypassCache && lastUnconfiguredResult && (now - lastUnconfiguredTimestamp < CACHE_TTL_MS)) {
+    return lastUnconfiguredResult;
+  }
+
+  if (!bypassCache && pendingTestConnectionPromise) {
+    return pendingTestConnectionPromise;
+  }
+
+  pendingTestConnectionPromise = (async () => {
+    try {
+      const data = await callGhlApiProxy("testConnection", "GET", null, null);
+      lastUnconfiguredResult = null;
+      lastUnconfiguredTimestamp = 0;
+      return { success: true, total: data.meta?.total || data.total || 0 };
+    } catch (e) {
+      if (e.message?.includes("GHL_TOKEN") || e.message?.includes("not configured")) {
+        lastUnconfiguredResult = { success: false, error: e.message };
+        lastUnconfiguredTimestamp = now;
+      }
+      return { success: false, error: e.message };
+    } finally {
+      pendingTestConnectionPromise = null;
+    }
+  })();
+
+  return pendingTestConnectionPromise;
 };
 
 export const fetchLocationTags = async () => {
-  console.log(`%c[GHL CALL] %cFETCH TAGS`, "color: #ec4899; font-weight: bold", "color: gray");
-  const data = await callGhlApiProxy("tags", "GET", null, null);
-  console.log(`%c[GHL SUCCESS] %cFetched ${data.tags?.length || 0} Tags`, "color: #ec4899; font-weight: bold", "color: gray");
-  return data.tags || [];
+  try {
+    const data = await callGhlApiProxy("tags", "GET", null, null);
+    return data.tags || [];
+  } catch {
+    return [];
+  }
 };
 
 export const searchContacts = async (page = 1, limit = 100, query = "") => {
@@ -45,10 +75,12 @@ export const searchContacts = async (page = 1, limit = 100, query = "") => {
 };
 
 export const searchCRM = async (query) => {
-  console.log(`%c[GHL CALL] %cSEARCH Contacts by Query: "${query}"`, "color: #ec4899; font-weight: bold", "color: gray");
-  const data = await searchContacts(1, 100, query);
-  console.log(`%c[GHL SUCCESS] %cFound ${data.contacts?.length || 0} Contacts`, "color: #ec4899; font-weight: bold", "color: gray", data.contacts);
-  return data.contacts || [];
+  try {
+    const data = await searchContacts(1, 100, query);
+    return data.contacts || [];
+  } catch {
+    return [];
+  }
 };
 
 export const searchCRMByPhone = async (phone) => {
@@ -56,9 +88,6 @@ export const searchCRMByPhone = async (phone) => {
   const clean = String(phone).replace(/\D/g, '');
   const digits10 = clean.length >= 10 ? clean.slice(-10) : clean;
 
-  console.log(`%c[GHL AUTOFILL LOG] %cInitiating instant GHL search for: "${phone}"`, "color: #3b82f6; font-weight: bold", "color: inherit");
-
-  // Prioritize +91 format first since Indian GHL contacts store phone as +91XXXXXXXXXX
   const searchQueries = Array.from(new Set([
     `+91${digits10}`,
     digits10,
@@ -76,11 +105,10 @@ export const searchCRMByPhone = async (phone) => {
 
       if (Array.isArray(list) && list.length > 0) {
         matchedContacts = list;
-        console.log(`%c[GHL AUTOFILL INSTANT MATCH] %cFound ${matchedContacts.length} contact(s) for query "${q}"`, "color: #10b981; font-weight: bold", "color: inherit", matchedContacts);
         break;
       }
-    } catch (err) {
-      console.warn(`[GHL AUTOFILL WARN] GHL search query term "${q}" failed:`, err.message || err);
+    } catch {
+      // SILENT FALLBACK
     }
   }
 
@@ -91,13 +119,10 @@ export const fetchContactsGroupedByTag = async (query, progressCallback, signal)
   let allContacts = [];
   let page = 1;
   const limit = 100;
-  
-  console.log(`%c[GHL BULK SYNC] %cStarting fetch loop for: "${query}"`, "color: #8b5cf6; font-weight: bold", "color: gray");
 
   while (true) {
     if (signal?.aborted) throw new Error("Aborted");
     
-    console.log(`%c[GHL FETCH PAGE] %cFetching next batch (Page ${page})...`, "color: #8b5cf6; font-weight: bold", "color: gray");
     const data = await callGhlApiProxy("searchContacts", "POST", { page, pageLimit: limit, query }, null, signal);
     
     if (data && data.contacts) {
@@ -113,8 +138,6 @@ export const fetchContactsGroupedByTag = async (query, progressCallback, signal)
     }
     page++;
   }
-  
-  console.log(`%c[GHL BULK SYNC] %cTotal Contacts Downloaded: ${allContacts.length}`, "color: #8b5cf6; font-weight: bold", "color: gray");
   
   const groups = {};
   for (const c of allContacts) {

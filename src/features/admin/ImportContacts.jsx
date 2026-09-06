@@ -66,10 +66,10 @@ export default function ImportContacts({ programs, onImportComplete }) {
     }
   }, [crmStatus]);
 
-  const checkCRMConnection = async () => {
+  const checkCRMConnection = async (bypassCache = false) => {
     setCrmStatus("checking");
     try {
-      const res = await testConnection();
+      const res = await testConnection(bypassCache);
       if (res.success) {
         setCrmStatus("connected");
         setCrmTotalCount(res.total);
@@ -461,7 +461,7 @@ export default function ImportContacts({ programs, onImportComplete }) {
           <AlertCircle size={15} className="text-rose-600 shrink-0 mt-0.5" />
           <div>
             Connection offline: {crmError}.
-            <button onClick={checkCRMConnection} className="underline text-indigo-600 ml-1 hover:text-indigo-800 font-semibold cursor-pointer">
+            <button onClick={() => checkCRMConnection(true)} className="underline text-indigo-600 ml-1 hover:text-indigo-800 font-semibold cursor-pointer">
               Retry Connection
             </button>
           </div>

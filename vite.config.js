@@ -71,6 +71,14 @@ function vercelApiPlugin() {
         }
 
         try {
+          if (req.url.startsWith('/api/auth/')) {
+            const mod = await server.ssrLoadModule('./api/auth/login.js');
+            return await mod.default(req, res);
+          }
+          if (req.url.startsWith('/api/version')) {
+            const mod = await server.ssrLoadModule('./api/version.js');
+            return await mod.default(req, res);
+          }
           if (req.url.startsWith('/api/ghl')) {
             const mod = await server.ssrLoadModule('./api/ghl.js');
             return await mod.default(req, res);

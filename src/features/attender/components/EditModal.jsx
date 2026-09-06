@@ -109,6 +109,9 @@ export const EditModal = ({
     const rootCallbackStatus = attState?.callbackStatus || row.callbackStatus || (rootCallbackDate ? "pending" : null);
 
     // Call-entry fields: restore ACTIVE attender's own saved state if present, else START COMPLETELY EMPTY
+    const rawAttStatus = attState?.status || row?.status || "";
+    const cleanAttStatus = String(rawAttStatus).toLowerCase() === "pending" ? "" : rawAttStatus;
+
     if (attState) {
       normalized["Called For"] = attState.calledFor || attState["Called For"] || "";
       normalized.calledFor = normalized["Called For"];
@@ -116,7 +119,7 @@ export const EditModal = ({
       normalized.source = normalized.Source;
       normalized.previousProgram = attState.previousProgram || row.previousProgram || rootSource;
       normalized.callPurpose = attState.callPurpose || "SALES";
-      normalized.status = attState.status || "";
+      normalized.status = cleanAttStatus;
       normalized.remark = "";
       normalized.callbackDate = rootCallbackDate;
       normalized.callbackStatus = rootCallbackStatus;
@@ -128,7 +131,7 @@ export const EditModal = ({
       normalized.source = rootSource;
       normalized.previousProgram = row.previousProgram || rootSource;
       normalized.callPurpose = "SALES";
-      normalized.status = "";
+      normalized.status = cleanAttStatus;
       normalized.remark = "";
       normalized.callbackDate = rootCallbackDate;
       normalized.callbackStatus = rootCallbackStatus;
@@ -729,20 +732,27 @@ export const EditModal = ({
         }
       });
 
-      // Map Tags specifically
+      // Map Tags specifically — combine without dropping current active program tags
+      const currentTagsList = String(updated.Tags || "").split(",").map(t => t.trim()).filter(Boolean);
       const dupTagsVal = getFieldWithFallback(dup, "tags") || getFieldWithFallback(dup, "Tags");
       if (dupTagsVal) {
-        updated.Tags = dupTagsVal;
+        const dupTagsList = String(dupTagsVal).split(",").map(t => t.trim()).filter(Boolean);
+        const combinedTags = Array.from(new Set([...currentTagsList, ...dupTagsList]));
+        updated.Tags = combinedTags.join(", ");
       }
 
-      // Map Called For & Source
+      // Map Called For & Source — ONLY fill if current attender's program/source is empty to preserve active program context!
       const dupCalledFor = getFieldWithFallback(dup, "Called For");
-      if (dupCalledFor) {
+      if (dupCalledFor && !String(updated[calledForField] || updated.calledFor || "").trim()) {
         updated[calledForField] = dupCalledFor;
+        updated.calledFor = dupCalledFor;
+        updated["Called For"] = dupCalledFor;
       }
       const dupSource = getFieldWithFallback(dup, "Source");
-      if (dupSource) {
+      if (dupSource && !String(updated[sourceField] || updated.Source || "").trim()) {
         updated[sourceField] = dupSource;
+        updated.Source = dupSource;
+        updated.source = dupSource;
       }
 
       // Set contactId and GHL_ID
@@ -1291,7 +1301,8 @@ export const EditModal = ({
 
     if (!isFromHistory) {
       const phoneVal = String(targetEdited.Phone || targetEdited.Mobile || targetEdited.phone || targetEdited.mobile || "").trim();
-      const statusVal = String(targetEdited.status || "").trim();
+      const rawStatusVal = String(targetEdited.status || "").trim();
+      const statusVal = rawStatusVal.toLowerCase() === "pending" ? "" : rawStatusVal;
       const isUnconnected = isNotConnectedStatus(targetEdited.status) || (targetEdited.callStatus && targetEdited.callStatus !== "Connected");
       const khojiVal = String(targetEdited.Khoji || targetEdited.khoji || "").trim();
       const cityVal = String(targetEdited.City || targetEdited.city || "").trim();
@@ -1311,7 +1322,7 @@ export const EditModal = ({
 
       const isQueryMode = String(targetEdited.callPurpose || "").toUpperCase() === "QUERY";
       if (isQueryMode) {
-        if (!targetEdited.status) targetEdited.status = "Query";
+        if (!targetEdited.status || targetEdited.status === "Pending") targetEdited.status = "Query";
         if (!targetEdited.queryStatus) targetEdited.queryStatus = "Pending";
       } else if (targetEdited.status !== "Query") {
         if (targetEdited.queryStatus === "Pending" && !savedRow?.queryStatus) {
@@ -1320,7 +1331,7 @@ export const EditModal = ({
       }
 
       if (!phoneVal) missingFields.push("Phone Number");
-      if (!isQueryMode && !statusVal) missingFields.push("Call Status / Outcome");
+      if (!isQueryMode && (!statusVal || statusVal.toLowerCase() === "pending")) missingFields.push("Call Status / Outcome");
       if (isQueryMode && !targetEdited.queryStatus) missingFields.push("Query Status (Pending or Solved)");
       if (allowAttenderSelection && !activeAttenderId) missingFields.push("Attender Selection");
 
@@ -2083,6 +2094,8 @@ export const EditModal = ({
                 onClick={() => {
                   setShowCalledForPrompt(false);
                   setPendingSave(false);
+                  setSaving(false);
+                  isSubmittingRef.current = false;
                 }}
                 className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-600 font-bold rounded-2xl text-xs transition"
               >

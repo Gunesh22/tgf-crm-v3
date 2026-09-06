@@ -2,6 +2,7 @@
 import clientPromise from '../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
 import { PIPELINE_STAGES, STAGE_RANKS, getEffectiveStage } from '../../src/utils/pipelineEngine.js';
+import { requireAuth, sanitizeString } from '../lib/auth.js';
 
 const VALID_STAGES = new Set([
   PIPELINE_STAGES.NEW_LEAD,
@@ -44,20 +45,23 @@ export async function executeOverrideStage(db, payload) {
     program = ""
   } = payload || {};
 
-  if (!contactId) throw new Error("contactId is required");
-  if (!changedByAttenderId) throw new Error("changedByAttenderId is required");
+  const cleanContactId = sanitizeString(contactId);
+  const cleanAttenderId = sanitizeString(changedByAttenderId);
+
+  if (!cleanContactId) throw new Error("contactId is required");
+  if (!cleanAttenderId) throw new Error("changedByAttenderId is required");
 
   const canonicalNewStage = normalizeStageInput(rawNewStage);
   if (!canonicalNewStage) {
     throw new Error(`Invalid target pipeline stage: "${rawNewStage}"`);
   }
 
-  const queryId = ObjectId.isValid(contactId) ? new ObjectId(contactId) : contactId;
+  const queryId = ObjectId.isValid(cleanContactId) ? new ObjectId(cleanContactId) : cleanContactId;
   const existingContact = await db.collection("contacts").findOne({
     $or: [
       { _id: queryId },
-      { _id: String(contactId) },
-      { id: String(contactId) }
+      { _id: String(cleanContactId) },
+      { id: String(cleanContactId) }
     ]
   });
 
@@ -66,14 +70,14 @@ export async function executeOverrideStage(db, payload) {
   }
 
   // Permission Check
-  const isAdmin = role === "admin" || String(changedByAttenderId).toLowerCase().includes("admin");
+  const isAdmin = role === "admin" || String(cleanAttenderId).toLowerCase().includes("admin");
   if (!isAdmin) {
     // Check if attender is authorized for this contact
     const assignedList = Array.isArray(existingContact.assignedTo) ? existingContact.assignedTo : [];
-    const isAssigned = assignedList.includes(changedByAttenderId) ||
-      existingContact.leadOwner === changedByAttenderId ||
-      existingContact.attenderId === changedByAttenderId ||
-      (existingContact.attenderStates && existingContact.attenderStates[changedByAttenderId]);
+    const isAssigned = assignedList.includes(cleanAttenderId) ||
+      existingContact.leadOwner === cleanAttenderId ||
+      existingContact.attenderId === cleanAttenderId ||
+      (existingContact.attenderStates && existingContact.attenderStates[cleanAttenderId]);
 
     // Attenders are authorized for assigned or accessible contacts
     if (assignedList.length > 0 && !isAssigned) {
@@ -95,10 +99,10 @@ export async function executeOverrideStage(db, payload) {
   const auditHistoryItem = {
     callId: overrideCallId,
     changeType: "MANUAL_STAGE_OVERRIDE",
-    contactId: String(existingContact._id || contactId),
+    contactId: String(existingContact._id || cleanContactId),
     changedBy: changedBy || (isAdmin ? "Admin" : "Attender"),
-    changedByAttenderId,
-    attenderId: changedByAttenderId,
+    changedByAttenderId: cleanAttenderId,
+    attenderId: cleanAttenderId,
     attenderName: changedBy || (isAdmin ? "Admin" : "Attender"),
     timestamp: nowIso,
     previousStage,
@@ -113,9 +117,9 @@ export async function executeOverrideStage(db, payload) {
     updatedAt: nowIso,
   };
 
-  if (existingContact.attenderStates && existingContact.attenderStates[changedByAttenderId]) {
-    setFields[`attenderStates.${changedByAttenderId}.pipelineStage`] = canonicalNewStage;
-    setFields[`attenderStates.${changedByAttenderId}.updatedAt`] = nowIso;
+  if (existingContact.attenderStates && existingContact.attenderStates[cleanAttenderId]) {
+    setFields[`attenderStates.${cleanAttenderId}.pipelineStage`] = canonicalNewStage;
+    setFields[`attenderStates.${cleanAttenderId}.updatedAt`] = nowIso;
   }
 
   // Clear closedReason if reopening from Closed to active
@@ -170,7 +174,7 @@ export async function executeOverrideStage(db, payload) {
 
   return {
     success: true,
-    contactId: String(existingContact._id || contactId),
+    contactId: String(existingContact._id || cleanContactId),
     previousStage,
     newStage: canonicalNewStage,
     auditHistoryItem,
@@ -182,6 +186,9 @@ export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method Not Allowed" });
   }
+
+  const session = requireAuth(req, res);
+  if (!session) return;
 
   try {
     const client = await clientPromise;

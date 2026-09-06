@@ -1,15 +1,23 @@
 // api/_contacts/get-single.js
 import clientPromise, { ensureIndexes } from '../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
+import { requireAuth, sanitizeString } from '../lib/auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
+  const session = requireAuth(req, res);
+  if (!session) return;
+
   try {
-    const { id, contactId, phone } = req.query;
-    const targetId = id || contactId;
+    const rawId = sanitizeString(req.query?.id);
+    const rawContactId = sanitizeString(req.query?.contactId);
+    const rawPhone = sanitizeString(req.query?.phone);
+
+    const targetId = rawId || rawContactId;
+    const phone = rawPhone;
 
     if (!targetId && !phone) {
       return res.status(400).json({ error: 'id or phone query parameter is required' });

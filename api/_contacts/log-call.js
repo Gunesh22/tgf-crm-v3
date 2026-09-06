@@ -4,6 +4,7 @@
 import clientPromise from '../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
 import { normalizeCalledForKey } from '../lib/calledForNormalizer.js';
+import { requireAuth, sanitizeString, isSameAttender } from '../lib/auth.js';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -228,13 +229,17 @@ export async function executeLogCall(db, payload) {
     ...rootUpdates
   } = payload;
 
-  if (!contactId || !attenderId) {
+  const cleanContactId = sanitizeString(contactId);
+  const cleanAttenderId = sanitizeString(attenderId);
+  const cleanAttenderName = sanitizeString(attenderName);
+
+  if (!cleanContactId || !cleanAttenderId) {
     throw new Error('contactId and attenderId are required');
   }
 
-  const queryId = ObjectId.isValid(contactId) ? new ObjectId(contactId) : contactId;
+  const queryId = ObjectId.isValid(cleanContactId) ? new ObjectId(cleanContactId) : cleanContactId;
   const existingContact = await db.collection('contacts').findOne({
-    $or: [{ _id: queryId }, { id: contactId }, { _id: contactId }]
+    $or: [{ _id: queryId }, { id: cleanContactId }, { _id: cleanContactId }]
   });
 
   if (!existingContact) {
@@ -301,18 +306,18 @@ export async function executeLogCall(db, payload) {
   const historyItem = {
     callId,                                    // unique call event ID
     // Call attender (person who handled THIS call)
-    attenderId,
-    attenderName: attenderName || '',
-    callAttenderId:   attenderId,
-    callAttenderName: attenderName || '',
+    attenderId: cleanAttenderId,
+    attenderName: cleanAttenderName || '',
+    callAttenderId:   cleanAttenderId,
+    callAttenderName: cleanAttenderName || '',
     // Lead owner at time of this call (snapshot for audit trail)
-    leadOwnerAtTime:      currentLeadOwner     || attenderId,
-    leadOwnerNameAtTime:  currentLeadOwnerName || attenderName || '',
+    leadOwnerAtTime:      currentLeadOwner     || cleanAttenderId,
+    leadOwnerNameAtTime:  currentLeadOwnerName || cleanAttenderName || '',
     // Call metadata
     callDirection,
     callPurpose: callPurposeClean,
     callStatus:  callStatusClean,
-    status:      status || 'Pending',
+    status:      status || callStatusClean || '',
     pipelineStage: evalResult.pipelineStage,
     queryStatus: evalResult.queryStatus || queryStatus || null,
     queryDetails: queryDetails || null,
@@ -344,7 +349,7 @@ export async function executeLogCall(db, payload) {
 
   const isNonOwnerSharedCall = !!(
     existingContact.leadOwner &&
-    existingContact.leadOwner !== attenderId &&
+    existingContact.leadOwner !== cleanAttenderId &&
     Array.isArray(existingContact.assignedTo) &&
     existingContact.assignedTo.length > 1
   );
@@ -385,9 +390,9 @@ export async function executeLogCall(db, payload) {
     updatedAt: nowIso,
     isAssigned: true,
     // Per-attender state (call-specific snapshot)
-    [`attenderStates.${attenderId}`]: {
-      attenderId,
-      attenderName:  attenderName || '',
+    [`attenderStates.${cleanAttenderId}`]: {
+      attenderId: cleanAttenderId,
+      attenderName:  cleanAttenderName || '',
       callDirection,
       callPurpose:  callPurposeClean,
       callStatus:   callStatusClean,
@@ -407,10 +412,10 @@ export async function executeLogCall(db, payload) {
   };
 
   const currentProgKey = normalizeCalledForKey(targetCalledFor || existingContact['Called For'] || '');
-  if (attenderId && currentProgKey) {
+  if (cleanAttenderId && currentProgKey) {
     const progStateObj = {
-      attenderId,
-      attenderName:  attenderName || '',
+      attenderId: cleanAttenderId,
+      attenderName:  cleanAttenderName || '',
       programKey:    currentProgKey,
       program:       targetCalledFor || existingContact['Called For'] || '',
       pipelineStage: evalResult.pipelineStage,
@@ -424,8 +429,8 @@ export async function executeLogCall(db, payload) {
       source:        currentCallSource,
       updatedAt:     nowIso
     };
-    setPayload[`programs.${currentProgKey}.${attenderId}`] = progStateObj;
-    setPayload[`programStates.${attenderId}.${currentProgKey}`] = progStateObj;
+    setPayload[`programs.${currentProgKey}.${cleanAttenderId}`] = progStateObj;
+    setPayload[`programStates.${cleanAttenderId}.${currentProgKey}`] = progStateObj;
   }
 
   if (resolvedPreviousProgram !== undefined) {
@@ -453,8 +458,8 @@ export async function executeLogCall(db, payload) {
 
   // Set leadOwner only on FIRST assignment (additive — never overwrites)
   if (isNewOwnerAssignment) {
-    setPayload.leadOwner     = attenderId;
-    setPayload.leadOwnerName = attenderName || '';
+    setPayload.leadOwner     = cleanAttenderId;
+    setPayload.leadOwnerName = cleanAttenderName || '';
   }
 
   // Conditionally update pipelineStage (only if same program OR lead owner call)
@@ -470,7 +475,7 @@ export async function executeLogCall(db, payload) {
 
   // ── programRelationships[] — ATOMIC merge strategy ────────────────────
   const calledForKey    = normalizeCalledForKey(targetCalledFor);
-  const contactStrId    = String(existingContact._id || contactId);
+  const contactStrId    = String(existingContact._id || cleanContactId);
 
   const hasProgramRelUpdate = !!(evalResult.programRelationshipUpdate && targetCalledFor);
 
@@ -488,12 +493,12 @@ export async function executeLogCall(db, payload) {
 
   const updateOps = {
     $set:      setPayload,
-    $addToSet: { assignedTo: attenderId },
+    $addToSet: { assignedTo: cleanAttenderId },
     $push:     { history: historyItem },
   };
 
   const updateResult = await db.collection('contacts').updateOne(
-    { $or: [{ _id: queryId }, { id: contactId }, { _id: contactId }] },
+    { $or: [{ _id: queryId }, { id: cleanContactId }, { _id: cleanContactId }] },
     updateOps
   );
 
@@ -507,7 +512,7 @@ export async function executeLogCall(db, payload) {
       updatedAt:      nowIso,
       evidenceCallId: callId,
     };
-    const contactQuery = { $or: [{ _id: queryId }, { id: contactId }] };
+    const contactQuery = { $or: [{ _id: queryId }, { id: cleanContactId }] };
     try {
       await db.collection('contacts').updateOne(
         contactQuery,
@@ -543,9 +548,9 @@ export async function executeLogCall(db, payload) {
             calledFor:   cleanRegCalledFor,
             name:        existingContact.Name || existingContact.name || rootUpdates.Name || '',
             phone:       existingContact.Phone || existingContact.phone || rootUpdates.Phone || '',
-            attenderId,
-            attenderName: attenderName || '',
-            leadOwner:   currentLeadOwner || attenderId,
+            attenderId:  cleanAttenderId,
+            attenderName: cleanAttenderName || '',
+            leadOwner:   currentLeadOwner || cleanAttenderId,
             original_source: originalSource,
             createdAt:   nowIso,
             updatedAt:   nowIso,
@@ -561,7 +566,7 @@ export async function executeLogCall(db, payload) {
         updatedAt: nowIso,
         evidenceCallId: callId,
       };
-      const contactQuery = { $or: [{ _id: queryId }, { id: contactId }] };
+      const contactQuery = { $or: [{ _id: queryId }, { id: cleanContactId }] };
       await db.collection('contacts').updateOne(
         contactQuery,
         { $pull: { programRelationships: { calledForKey: regCalledForKey } } }
@@ -615,14 +620,22 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
+  const session = requireAuth(req, res);
+  if (!session) return;
+
   try {
     const client = await clientPromise;
     const db     = client.db('tgf_crm');
     const { attenderId, attenderName, status } = req.body || {};
+
+    if (!isSameAttender(attenderId, session)) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Cannot log call on behalf of another attender' });
+    }
+
     const label = attenderName ? `${attenderName} (${attenderId})` : (attenderId || 'unknown');
     console.log(`[ATTENDER API REQ] /api/contacts/log-call | Attender: "${label}" | Outcome: "${status || 'Call Logged'}"`);
 
-    const result = await executeLogCall(db, req.body);
+    const result = await executeLogCall(db, req.body || {});
     return res.status(200).json(result);
   } catch (error) {
     console.error('[LOG-CALL ERROR]', error);

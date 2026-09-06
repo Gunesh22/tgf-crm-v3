@@ -1,5 +1,6 @@
 // api/_admin/attenders.js
 import clientPromise from '../lib/mongodb.js';
+import { requireAuth, requireAdmin, sanitizeString } from '../lib/auth.js';
 
 const DEFAULT_ATTENDERS = [
   { id: "9VZZnV00X63PzUSaGTgq", name: "Manisha", role: "attender", password: "629001", isActive: true },
@@ -20,9 +21,12 @@ export default async function handler(req, res) {
     const collection = db.collection('attenders');
 
     if (req.method === 'GET') {
+      const session = requireAuth(req, res);
+      if (!session) return;
+
       // ── Sub-query: Count assigned contacts for an attender ─────────────
       if (req.query.countId) {
-        const attenderId = req.query.countId;
+        const attenderId = sanitizeString(req.query.countId);
         const contactsColl = db.collection('contacts');
         const count = await contactsColl.countDocuments({
           $or: [
@@ -51,22 +55,24 @@ export default async function handler(req, res) {
       const formatted = attenders.map(a => ({
         id: a.id || a._id.toString(),
         name: a.name,
-        role: a.role || 'attender',
-        password: a.password || '123456'
+        role: a.role || 'attender'
       }));
 
       return res.status(200).json({ success: true, data: formatted });
     }
 
     if (req.method === 'POST') {
-      const { name, password } = req.body;
-      if (!name || !name.trim()) {
+      const session = requireAdmin(req, res);
+      if (!session) return;
+
+      const { name, password } = req.body || {};
+      const cleanName = sanitizeString(name);
+      if (!cleanName) {
         return res.status(400).json({ error: 'Name is required' });
       }
 
-      const cleanName = name.trim();
       const id = 'attender_' + Date.now();
-      const generatedPassword = password || Math.floor(100000 + Math.random() * 900000).toString();
+      const generatedPassword = sanitizeString(password) || Math.floor(100000 + Math.random() * 900000).toString();
 
       const newAttender = {
         id,
@@ -81,14 +87,22 @@ export default async function handler(req, res) {
 
       return res.status(200).json({
         success: true,
-        data: newAttender,
+        data: {
+          id: newAttender.id,
+          name: newAttender.name,
+          role: newAttender.role
+        },
         password: generatedPassword
       });
     }
 
     if (req.method === 'PUT') {
-      const { id, name, password, updates } = req.body;
-      if (!id) {
+      const session = requireAdmin(req, res);
+      if (!session) return;
+
+      const { id, name, password, updates } = req.body || {};
+      const cleanId = sanitizeString(id);
+      if (!cleanId) {
         return res.status(400).json({ error: 'id is required' });
       }
 
@@ -96,11 +110,11 @@ export default async function handler(req, res) {
         updatedAt: new Date().toISOString(),
         ...(updates || {})
       };
-      if (name) fieldsToSet.name = name.trim();
-      if (password) fieldsToSet.password = password.trim();
+      if (name) fieldsToSet.name = sanitizeString(name);
+      if (password) fieldsToSet.password = sanitizeString(password);
 
       await collection.updateOne(
-        { $or: [{ id }, { _id: id }] },
+        { $or: [{ id: cleanId }, { _id: cleanId }] },
         { $set: fieldsToSet }
       );
 
@@ -108,12 +122,15 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
-      const { id } = req.query;
-      if (!id) {
+      const session = requireAdmin(req, res);
+      if (!session) return;
+
+      const cleanId = sanitizeString(req.query?.id);
+      if (!cleanId) {
         return res.status(400).json({ error: 'id query parameter is required' });
       }
 
-      await collection.deleteOne({ $or: [{ id }, { _id: id }] });
+      await collection.deleteOne({ $or: [{ id: cleanId }, { _id: cleanId }] });
 
       return res.status(200).json({ success: true, message: 'Attender deleted' });
     }

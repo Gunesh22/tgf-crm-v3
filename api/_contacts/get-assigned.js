@@ -1,16 +1,31 @@
-// api/_contacts/get-assigned.js
 import clientPromise, { ensureIndexes } from '../lib/mongodb.js';
+import { requireAuth, sanitizeString, isSameAttender, ID_ALIASES } from '../lib/auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
+  const session = requireAuth(req, res);
+  if (!session) return;
+
   try {
-    const { attenderId, attenderName, purpose = 'initial_mount', device = 'desktop' } = req.query;
-    if (!attenderId) {
+    const rawAttenderId = sanitizeString(req.query?.attenderId);
+    const rawAttenderName = sanitizeString(req.query?.attenderName);
+    const purpose = sanitizeString(req.query?.purpose, 'initial_mount');
+    const device = sanitizeString(req.query?.device, 'desktop');
+
+    if (!rawAttenderId) {
       return res.status(400).json({ error: 'attenderId query parameter is required' });
     }
+
+    // IDOR Enforcement
+    if (!isSameAttender(rawAttenderId, session)) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Access denied to other attender data' });
+    }
+
+    const attenderId = rawAttenderId;
+    const attenderName = rawAttenderName;
 
     // Known attender ID aliases for seamless backwards-compatible query resolution
     const ID_ALIASES = {
@@ -50,6 +65,9 @@ export default async function handler(req, res) {
     const db = client.db('tgf_crm');
     ensureIndexes(db);
 
+    const includeHistory = req.query.includeHistory === 'true';
+    const projection = includeHistory ? {} : { history: { $slice: -5 } };
+
     // Query leads where attender is in assignedTo array, or attenderId/leadOwner matches resolvedId or input name
     const contacts = await db.collection('contacts')
       .find({
@@ -61,7 +79,7 @@ export default async function handler(req, res) {
           { leadOwner: cleanInput },
           { attenderName: cleanInput }
         ]
-      })
+      }, { projection })
       .sort({ updatedAt: -1 })
       .toArray();
 
@@ -86,7 +104,7 @@ export default async function handler(req, res) {
         City: c.City || c.city || '',
         State: c.State || c.state || '',
         Source: c.Source || c.source || c.Sourse || c.sourse || '',
-        status: attState.status || c.status || 'Pending',
+        status: attState.status || (c.status === 'Pending' ? '' : (c.status || '')),
         remark: attState.remark !== undefined ? attState.remark : (c.remark || ''),
         callbackDate: attState.callbackDate || c.callbackDate || null,
         lastCalledAt: attState.lastCalledAt || c.lastCalledAt || null,

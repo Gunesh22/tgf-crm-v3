@@ -22,15 +22,19 @@ function LoadingFallback() {
 
 // Protected Route Wrapper
 function ProtectedRoute({ children, requiredRole }) {
-  const { user, logout } = useAuth();
+  const auth = useAuth() || {};
+  const { user, logout, loading } = auth;
   
+  if (loading) {
+    return <LoadingFallback />;
+  }
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
   
   if (!user.role) {
-    // Corrupted session from old mock logic
-    logout();
+    if (typeof logout === 'function') logout();
     return <Navigate to="/login" replace />;
   }
 
@@ -42,8 +46,13 @@ function ProtectedRoute({ children, requiredRole }) {
 }
 
 function AppRoutes() {
-  const { user, logout } = useAuth();
+  const auth = useAuth() || {};
+  const { user, logout, loading } = auth;
   useAutoUpdater();
+
+  if (loading) {
+    return <LoadingFallback />;
+  }
 
   return (
     <div className="app-container">

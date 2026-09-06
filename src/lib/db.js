@@ -14,14 +14,10 @@ export const DEFAULT_CONNECTED_STATUSES = ["Info given", "Interested", "Reg.Done
 
 // API FETCH HELPERS
 export const fetchAPI = async (endpoint, method = "GET", body = null, extraOptions = {}) => {
-  console.log(`%c[API CALL] %c${method} %c${endpoint}`, "color: #3b82f6; font-weight: bold", "color: #10b981; font-weight: bold", "color: gray");
-  if (body) {
-    console.log("%c[PAYLOAD]", "color: #f59e0b; font-weight: bold", body);
-  }
-
   const options = {
     method,
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     ...extraOptions
   };
   if (body) options.body = JSON.stringify(body);
@@ -37,19 +33,26 @@ export const fetchAPI = async (endpoint, method = "GET", body = null, extraOptio
         data = { error: `Server error (${res.status})` };
       }
     }
+    if (res.status === 401) {
+      if (typeof window !== "undefined" && !endpoint.includes('/api/auth/login')) {
+        window.dispatchEvent(new CustomEvent('crm_unauthorized'));
+      }
+    }
     if (!res.ok) throw new Error(data.error || data.message || `API Error (${res.status})`);
     
-    console.log(`%c[API SUCCESS] %c${endpoint}`, "color: #10b981; font-weight: bold", "color: gray", data);
     return data;
   } catch (error) {
     if (error?.name === "AbortError" || error?.message?.includes("aborted")) {
-      console.log(`%c[API ABORTED] %c${endpoint}`, "color: #f59e0b; font-weight: bold", "color: gray");
+      // Ignore silent fetch aborts
+    } else if (error?.message?.includes("Unauthorized") || error?.message?.includes("401")) {
+      // Handled via session verification
     } else {
-      console.error(`%c[API ERROR] %c${endpoint}`, "color: #ef4444; font-weight: bold", "color: gray", error.message || error);
+      console.error(`[API ERROR] ${endpoint}:`, error.message || error);
     }
     throw error;
   }
 };
+
 
 // CONTACTS API
 export const getAssignedContacts = async (attenderId, options = {}) => {
@@ -168,7 +171,9 @@ export const getSettingsOptions = async (opts = {}) => {
         return res.data;
       }
     } catch (e) {
-      console.error("Failed to fetch settings from DB, using defaults", e);
+      if (!e?.message?.includes("Unauthorized") && !e?.message?.includes("401")) {
+        console.error("Failed to fetch settings from DB, using defaults", e);
+      }
     } finally {
       settingsFetchPromise = null;
     }
@@ -203,7 +208,9 @@ export const getAttenders = async () => {
       return res.data;
     }
   } catch (e) {
-    console.error("Failed to fetch fresh attenders, falling back to cache", e);
+    if (!e?.message?.includes("Unauthorized") && !e?.message?.includes("401")) {
+      console.error("Failed to fetch fresh attenders, falling back to cache", e);
+    }
   }
   try {
     const cached = localStorage.getItem("admin_attenders_cache");
@@ -233,7 +240,9 @@ export const getAttenderContactCount = async (attenderId) => {
     const res = await fetchAPI(`/api/admin/attenders?countId=${encodeURIComponent(attenderId)}`);
     return typeof res?.count === 'number' ? res.count : 0;
   } catch (e) {
-    console.error("Failed to fetch attender contact count", e);
+    if (!e?.message?.includes("Unauthorized") && !e?.message?.includes("401")) {
+      console.error("Failed to fetch attender contact count", e);
+    }
     return 0;
   }
 };
@@ -254,10 +263,13 @@ export const getPrograms = async () => {
     if (res.data) localStorage.setItem("admin_programs_cache", JSON.stringify(res.data));
     return res.data || [];
   } catch (e) {
-    console.error("Failed to fetch programs", e);
+    if (!e?.message?.includes("Unauthorized") && !e?.message?.includes("401")) {
+      console.error("Failed to fetch programs", e);
+    }
     return [];
   }
 };
+
 
 export const createProgram = async (name) => {
   const res = await fetchAPI(`/api/admin/programs`, "POST", { name });
@@ -339,7 +351,6 @@ export const subscribeToCallLogs = (attenderId, nameOrCb, cbOrErr, optionalErr) 
     const cachedMemory = memoryCache.get(attenderId);
     if (Array.isArray(cachedMemory) && cachedMemory.length > 0) {
       const normMem = normalizeList(cachedMemory);
-      console.log(`%c[0ms MEMORY CACHE] Loaded ${normMem.length} contacts for ${attenderName || attenderId}`, "color: #10b981; font-weight: bold");
       lastDataJson = JSON.stringify(normMem);
       callback(normMem);
       cacheLoaded = true;
@@ -353,14 +364,12 @@ export const subscribeToCallLogs = (attenderId, nameOrCb, cbOrErr, optionalErr) 
         const parsed = JSON.parse(cachedData);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const normParsed = normalizeList(parsed);
-          console.log(`%c[0ms LOCAL CACHE] Loaded ${normParsed.length} contacts from local storage`, "color: #10b981; font-weight: bold");
           lastDataJson = JSON.stringify(normParsed);
           callback(normParsed);
           cacheLoaded = true;
         }
       }
     } catch (e) {
-      console.warn("[Local Cache Read Error]", e);
     }
   }
 
@@ -368,7 +377,6 @@ export const subscribeToCallLogs = (attenderId, nameOrCb, cbOrErr, optionalErr) 
   const fetchLogs = async () => {
     if (!isSubscribed || controller.signal.aborted) return;
     if (typeof document !== "undefined" && document.hidden) return;
-    console.log(`%c[INITIAL MOUNT FETCH] Single initial network fetch for attender "${attenderName}" (${attenderId})`, "background: #059669; color: #ffffff; font-weight: bold; padding: 4px 8px; border-radius: 4px;");
     try {
       const res = await getAssignedContacts(attenderId, { signal: controller.signal, attenderName, purpose: 'initial_mount', device: 'desktop' });
       if (isSubscribed && !controller.signal.aborted) {
@@ -385,7 +393,6 @@ export const subscribeToCallLogs = (attenderId, nameOrCb, cbOrErr, optionalErr) 
       }
     } catch (e) {
       if (e?.name === "AbortError" || e?.message?.includes("aborted") || controller.signal.aborted) {
-        console.log("[subscribeToCallLogs] Initial fetch aborted cleanly");
         return;
       }
       console.error("[subscribeToCallLogs error]", e);
@@ -409,7 +416,7 @@ export const subscribeToCallLogs = (attenderId, nameOrCb, cbOrErr, optionalErr) 
   };
 };
 
-export const subscribeToAllCallLogs = (programId, month, callback) => {
+export const subscribeToAllCallLogs = (programId, month, callback, forceRefresh = false, includeHistory = false) => {
   let isSubscribed = true;
   const cacheKey = `all_call_logs_${programId || 'all'}_${month || 'all'}`;
 
@@ -418,12 +425,10 @@ export const subscribeToAllCallLogs = (programId, month, callback) => {
     if (cachedData) {
       const parsed = JSON.parse(cachedData);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        console.log(`%c[PREVIEW CACHE] Loaded ${parsed.length} admin call logs (preview)`, "color: #10b981; font-weight: bold");
         callback(parsed, false);
       }
     }
   } catch (e) {
-    console.warn("[All Logs Cache Read Error]", e);
   }
 
   const fetchAll = async () => {
@@ -431,13 +436,16 @@ export const subscribeToAllCallLogs = (programId, month, callback) => {
     if (typeof document !== "undefined" && document.hidden) return;
     try {
       const monthParam = (!month || month === 'ALL') ? '' : month;
-      const res = await fetchAPI(`/api/contacts/search?includeHistory=true&${monthParam ? `month=${monthParam}&` : ''}limit=15000`);
+      const historyParam = includeHistory ? '&includeHistory=true' : '';
+      const res = await fetchAPI(`/api/contacts/search?${monthParam ? `month=${monthParam}&` : ''}limit=10000${historyParam}`);
       if (isSubscribed && res.data) {
         safeSetLocalStorage(cacheKey, res.data);
         callback(res.data, true);
       }
     } catch (e) {
-      console.error("[subscribeToAllCallLogs polling error]", e);
+      if (!e?.message?.includes("Unauthorized") && !e?.message?.includes("401")) {
+        console.error("[subscribeToAllCallLogs polling error]", e);
+      }
     }
   };
   
@@ -478,9 +486,12 @@ export const subscribeToRegistrations = (programId, month, callback) => {
         callback(res.data);
       }
     } catch (e) {
-      console.error("[subscribeToRegistrations polling error]", e);
+      if (!e?.message?.includes("Unauthorized") && !e?.message?.includes("401")) {
+        console.error("[subscribeToRegistrations polling error]", e);
+      }
     }
   };
+
   
   fetchRegs();
   
@@ -538,7 +549,6 @@ export const checkGlobalDuplicate = async (phone, excludeId = null) => {
           return p.endsWith(last10);
         });
         if (localMatch) {
-          console.log(`%c[0ms DUP MATCH FROM LOCAL CACHE] %cFound duplicate for ${last10}`, "color: #10b981; font-weight: bold", "color: inherit", localMatch);
           return {
             count: 1,
             allTags: Array.isArray(localMatch.tags) ? localMatch.tags : (localMatch.Tags ? [localMatch.Tags] : []),
@@ -556,7 +566,6 @@ export const checkGlobalDuplicate = async (phone, excludeId = null) => {
     const url = `/api/contacts/check-duplicate?phone=${encodeURIComponent(last10)}${excludeId ? `&excludeId=${encodeURIComponent(excludeId)}` : ''}`;
     const res = await fetchAPI(url);
     if (res && res.success && res.matches && res.matches.length > 0) {
-      console.log(`%c[INSTANT GLOBAL DUP FOUND] %cMatched ${res.matches.length} contact(s) across database for ${last10}`, "color: #f59e0b; font-weight: bold", "color: inherit", res);
       return res;
     }
     return null;

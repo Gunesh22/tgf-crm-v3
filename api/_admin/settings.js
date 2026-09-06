@@ -1,5 +1,6 @@
 // api/_admin/settings.js
 import clientPromise from '../lib/mongodb.js';
+import { requireAuth, requireAdmin } from '../lib/auth.js';
 
 const DEFAULT_CONNECTED_STATUSES = [
   "Info given", "Interested", "Reg.Done", "reminder", "Query", 
@@ -95,6 +96,9 @@ export default async function handler(req, res) {
     const collection = db.collection('settings');
 
     if (req.method === 'GET') {
+      const session = requireAuth(req, res);
+      if (!session) return;
+
       let doc = await collection.findOne({ _id: 'call_center_options' });
 
       if (!doc) {
@@ -108,6 +112,9 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST' || req.method === 'PUT') {
+      const session = requireAdmin(req, res);
+      if (!session) return;
+
       const { _id, ...updates } = req.body || {};
 
       const setFields = {

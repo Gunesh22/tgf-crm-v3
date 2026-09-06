@@ -2,6 +2,7 @@
 import clientPromise, { ensureIndexes } from '../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
 import { buildPhoneDuplicateFilter } from '../lib/phoneNormalizer.js';
+import { requireAuth, sanitizeString } from '../lib/auth.js';
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -13,8 +14,15 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
+  const session = requireAuth(req, res);
+  if (!session) return;
+
   try {
-    const { phone, excludeId } = req.query;
+    const rawPhone = sanitizeString(req.query?.phone);
+    const rawExcludeId = sanitizeString(req.query?.excludeId);
+
+    const phone = rawPhone;
+    const excludeId = rawExcludeId;
 
     if (!phone) {
       return res.status(400).json({ success: false, error: 'phone query parameter is required' });
@@ -30,7 +38,7 @@ export default async function handler(req, res) {
     ensureIndexes(db);
 
     const matches = await db.collection('contacts')
-      .find(queryFilter)
+      .find(queryFilter, { projection: { history: { $slice: -1 } } })
       .limit(10)
       .toArray();
 

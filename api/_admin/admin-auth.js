@@ -1,6 +1,7 @@
 // api/_admin/admin-auth.js
 import clientPromise from '../lib/mongodb.js';
 import crypto from 'crypto';
+import { createSessionToken, setSessionCookie, requireAdmin, sanitizeString } from '../lib/auth.js';
 
 const SALT = 'tgf_crm_admin_salt_v1';
 const DEFAULT_INITIAL_PASS = '198219';
@@ -45,17 +46,22 @@ export default async function handler(req, res) {
     const adminDoc = await getOrCreateAdminAuth(collection);
 
     if (req.method === 'POST') {
-      const { action, password, currentPassword, newPassword, username } = req.body || {};
+      const { action, password, currentPassword, newPassword } = req.body || {};
 
       // ── ACTION 1: ADMIN LOGIN ───────────────────────────────────────────────
       if (action === 'login' || (!action && password && !newPassword)) {
-        const inputPass = password || '';
+        const inputPass = sanitizeString(password);
         const isValid = verifyPassword(inputPass, adminDoc.passwordHash);
 
         if (isValid) {
+          const user = { id: 'admin_01', name: 'Super Admin', role: 'admin' };
+          const token = createSessionToken(user);
+          setSessionCookie(res, token);
+
           return res.status(200).json({
             success: true,
-            user: { id: 'admin_01', name: 'Super Admin', role: 'admin' }
+            user,
+            token
           });
         } else {
           return res.status(401).json({ success: false, error: 'Invalid admin password' });
@@ -64,21 +70,26 @@ export default async function handler(req, res) {
 
       // ── ACTION 2: CHANGE ADMIN PASSWORD ──────────────────────────────────
       if (action === 'change-password' || (newPassword && currentPassword)) {
-        if (!currentPassword || !newPassword) {
+        const session = requireAdmin(req, res);
+        if (!session) return;
+
+        const cleanCurrent = sanitizeString(currentPassword);
+        const cleanNew = sanitizeString(newPassword);
+
+        if (!cleanCurrent || !cleanNew) {
           return res.status(400).json({ success: false, error: 'Current password and new password are required' });
         }
 
-        const isCurrentValid = verifyPassword(currentPassword, adminDoc.passwordHash);
+        const isCurrentValid = verifyPassword(cleanCurrent, adminDoc.passwordHash);
         if (!isCurrentValid) {
           return res.status(401).json({ success: false, error: 'Incorrect current password' });
         }
 
-        const trimmedNew = String(newPassword).trim();
-        if (trimmedNew.length < 4) {
+        if (cleanNew.length < 4) {
           return res.status(400).json({ success: false, error: 'New password must be at least 4 characters' });
         }
 
-        const newHash = hashPassword(trimmedNew);
+        const newHash = hashPassword(cleanNew);
         await collection.updateOne(
           { _id: 'admin_auth' },
           {
@@ -97,6 +108,9 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'GET') {
+      const session = requireAdmin(req, res);
+      if (!session) return;
+
       // Returns status without exposing password hash
       return res.status(200).json({
         success: true,

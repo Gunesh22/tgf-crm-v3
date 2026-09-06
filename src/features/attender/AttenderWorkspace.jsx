@@ -374,7 +374,6 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     setLoadError(null);
     if (unsubRef.current) unsubRef.current();
 
-    console.log(`[ATTENDER VIEW SUB] Subscribing for attenderId: "${attenderId}"`);
     unsubRef.current = subscribeToCallLogs(
       attenderId,
       attenderName,
@@ -416,20 +415,6 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     const isShared = Array.isArray(row.assignedTo) && row.assignedTo.length > 1;
     const leadName = row.Name || row.name || "Lead";
 
-    console.log(
-      `%c📖 [MODAL OPENED] Opening edit modal for "${leadName}" (${row.id || 'new'}) | Loading 0ms local cache & background sync...`,
-      "background: #7c3aed; color: #ffffff; font-weight: bold; padding: 3px 8px; border-radius: 4px;"
-    );
-
-    console.log(
-      `[ROW SELECTED DIAGNOSTIC] Lead "${leadName}" (${row.id || 'new'}) | _isNew: ${!!row._isNew} | currentAttender: "${attenderName}" (${attenderId}) | assignedTo:`,
-      row.assignedTo,
-      "| attenderStates keys:",
-      Object.keys(row.attenderStates || {}),
-      "| history length:",
-      Array.isArray(row.history) ? row.history.length : 0
-    );
-
     setEditingRow(row); // 0ms Instant Modal Render from local cache
     setFreshSharedLead(null);
 
@@ -437,11 +422,9 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     const contactId = row.id || row.contactId || row._id;
     if (contactId && !row._isNew) {
       setIsFetchingShared(true);
-      console.log(`[MODAL OPEN] Triggering fetchFreshSharedLead for leadId: ${contactId}`);
       try {
         const fresh = await fetchFreshSharedLead(row, attenderId, attenderName, false);
         if (fresh) {
-          console.log(`[MODAL OPEN SUCCESS] Loaded fresh lead data for SharedBanner reference: ${fresh.id || contactId}`);
           setFreshSharedLead(fresh);
           setEditingRow(fresh);
         }

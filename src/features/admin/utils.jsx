@@ -298,11 +298,6 @@ export function isStageNurtureInterested(stageOrContact) {
   return stage === PIPELINE_STAGES.NURTURE_INTERESTED;
 }
 
-export function isStageRegisteredWon(stageOrContact) {
-  const stage = getCanonicalStage(stageOrContact);
-  return stage === PIPELINE_STAGES.REGISTERED_WON;
-}
-
 export function countUniqueContacts(contacts = [], filterFn = null) {
   const uniqueIds = new Set();
   (contacts || []).forEach(c => {
@@ -315,168 +310,19 @@ export function countUniqueContacts(contacts = [], filterFn = null) {
   return uniqueIds.size;
 }
 
-/**
- * Canonical function for Program Registrations.
- * The ONLY source of truth for Program Registrations is the `registrations` collection
- * (or fallback deduplicated contact + calledForKey entries).
- * Identity: (contactId + calledForKey).
- */
-export function getCanonicalRegistrations(registrations = [], contacts = [], filters = {}) {
-  const {
-    startDate,
-    endDate,
-    selectedAttenderIds = [],
-    selectedProgramIds = [],
-    selectedSources = [],
-    selectedCalledFors = [],
-  } = filters;
+import {
+  getCanonicalRegistrations,
+  getCanonicalRegisteredPeople,
+  getCanonicalStage6People,
+  isStageRegisteredWon
+} from "../../utils/registrationEngine.js";
 
-  let startMs = null;
-  let endMs = null;
-  if (startDate) {
-    const s = parseLocalDateBoundaries(startDate, false);
-    if (s && !isNaN(s.getTime())) startMs = s.getTime();
-  }
-  if (endDate) {
-    const e = parseLocalDateBoundaries(endDate, true);
-    if (e && !isNaN(e.getTime())) endMs = e.getTime();
-  }
-
-  const seenRegKeys = new Set();
-  const result = [];
-
-  const inDateRange = (ts) => {
-    if (!ts) return true;
-    const parsed = parseTimestamp(ts);
-    if (!parsed || isNaN(parsed.getTime())) return true;
-    const ms = parsed.getTime();
-    if (startMs !== null && ms < startMs) return false;
-    if (endMs !== null && ms > endMs) return false;
-    return true;
-  };
-
-  // 1. Process explicit registrations collection records first
-  (registrations || []).forEach(reg => {
-    if (!reg || reg._deleted) return;
-    const contactId = String(reg.contactId || reg.leadId || reg.contact_id || "").trim();
-    const calledForKey = String(reg.calledForKey || reg.programKey || reg.calledFor || "").trim().toLowerCase();
-    if (!contactId || !calledForKey) return;
-
-    const regKey = `${contactId}_${calledForKey}`;
-    if (seenRegKeys.has(regKey)) return;
-
-    const regDate = reg.registeredAt || reg.createdAt || reg.timestamp || reg.date;
-    if (!inDateRange(regDate)) return;
-
-    seenRegKeys.add(regKey);
-    result.push({
-      id: reg.id || reg._id || regKey,
-      contactId,
-      calledForKey,
-      contactName: renderVal(reg.contactName || reg.name || reg.Name, "Unknown"),
-      name: renderVal(reg.contactName || reg.name || reg.Name, "Unknown"),
-      contactPhone: renderVal(reg.contactPhone || reg.phone || reg.Phone || reg.Mobile || reg.mobile || reg.normalizedMobile, "—"),
-      phone: renderVal(reg.contactPhone || reg.phone || reg.Phone || reg.Mobile || reg.mobile || reg.normalizedMobile, "—"),
-      contactCity: renderVal(reg.city || reg.City, "—"),
-      city: renderVal(reg.city || reg.City, "—"),
-      khoji: renderVal(reg.khoji || reg.Khoji, "—"),
-      calledFor: renderVal(reg.calledFor || reg.programName, calledForKey),
-      programName: renderVal(reg.calledFor || reg.programName, calledForKey),
-      attenderName: renderVal(reg.attenderName || reg.assignedTo, "Unassigned"),
-      attender: renderVal(reg.attenderName || reg.assignedTo, "Unassigned"),
-      attenderId: reg.attenderId || reg.attender_id || reg.createdBy || "",
-      source: renderVal(reg.source || reg.Source, "—"),
-      status: "Reg.Done",
-      stage: "6. Registered / Won",
-      registeredAt: regDate,
-      timestamp: regDate,
-      createdAt: regDate,
-      lastCalledAt: regDate,
-      feedback: renderVal(reg.feedback || reg.userFeedback, "—"),
-      remark: renderVal(reg.remark || reg.Remark, "—"),
-      tags: reg.tags || []
-    });
-  });
-
-  return result;
-}
-
-/**
- * Canonical Registered People (Unique contactId with at least 1 registration).
- */
-export function getCanonicalRegisteredPeople(registrations = [], contacts = [], filters = {}) {
-  const regList = getCanonicalRegistrations(registrations, contacts, filters);
-  const seenContacts = new Set();
-  const people = [];
-
-  regList.forEach(reg => {
-    if (!seenContacts.has(reg.contactId)) {
-      seenContacts.add(reg.contactId);
-      people.push(reg);
-    }
-  });
-
-  return people;
-}
-
-/**
- * Canonical Stage 6 People (Unique contacts currently in Stage 6).
- */
-export function getCanonicalStage6People(contacts = [], filters = {}) {
-  const {
-    startDate,
-    endDate
-  } = filters;
-
-  let startMs = null;
-  let endMs = null;
-  if (startDate) {
-    const s = parseLocalDateBoundaries(startDate, false);
-    if (s && !isNaN(s.getTime())) startMs = s.getTime();
-  }
-  if (endDate) {
-    const e = parseLocalDateBoundaries(endDate, true);
-    if (e && !isNaN(e.getTime())) endMs = e.getTime();
-  }
-
-  const seen = new Set();
-  const people = [];
-
-  (contacts || []).forEach(c => {
-    if (!c || c._deleted) return;
-    if (!isStageRegisteredWon(c)) return;
-
-    const contactId = String(c.id || c._id || c.Phone || c.Name || "").trim();
-    if (!contactId || seen.has(contactId)) return;
-
-    const cDate = c.updatedAt || c.lastCalledAt || c.createdAt;
-    if (cDate) {
-      const parsed = parseTimestamp(cDate);
-      if (parsed && !isNaN(parsed.getTime())) {
-        const ms = parsed.getTime();
-        if (startMs !== null && ms < startMs) return;
-        if (endMs !== null && ms > endMs) return;
-      }
-    }
-
-    seen.add(contactId);
-    people.push({
-      id: contactId,
-      contactId,
-      name: getContactName(c),
-      phone: getContactPhone(c),
-      city: getContactCity(c),
-      khoji: getContactKhoji(c),
-      calledFor: renderVal(c.calledFor || c.programName, "—"),
-      attender: renderVal(c.attenderName || c.assignedTo, "Unassigned"),
-      status: renderVal(c.status, "Reg.Done"),
-      stage: c.pipelineStage || "6. Registered / Won",
-      updatedAt: cDate
-    });
-  });
-
-  return people;
-}
+export {
+  getCanonicalRegistrations,
+  getCanonicalRegisteredPeople,
+  getCanonicalStage6People,
+  isStageRegisteredWon
+};
 
 function getContactValue(c, keysList) {
   if (!c || typeof c !== "object") return "";

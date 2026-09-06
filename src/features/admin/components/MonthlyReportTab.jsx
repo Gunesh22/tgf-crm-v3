@@ -2,10 +2,10 @@ import React, { useState, useEffect, useRef } from "react";
 import { toast } from "react-hot-toast";
 import * as XLSX from "xlsx";
 import {
-  Download, ChevronRight, ChevronDown, Calendar, TrendingUp, UserCheck, Smile, Info, Search, X, Check
+  Download, ChevronRight, ChevronDown, Calendar, TrendingUp, UserCheck, Smile, Info, Search, X, Check, Eye
 } from "lucide-react";
 import { subscribeToAllCallLogs } from "../../../lib/db";
-import { CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, parseTimestamp, getCanonicalStatus, getContactPhone, getContactName, getContactCity, getContactKhoji, renderVal, classifyCallStatus, getCanonicalPhysicalCalls, getLocalDateStr } from "../utils.jsx";
+import { CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, parseTimestamp, getCanonicalStatus, getContactPhone, getContactName, getContactCity, getContactKhoji, renderVal, classifyCallStatus, getCanonicalPhysicalCalls, getLocalDateStr, getCanonicalRegistrations } from "../utils.jsx";
 import { isKhojiAffirmative, isKhojiNegative } from "../../attender/utils.js";
 
 function MonthlySection({ title, subtitle, action, children, defaultOpen = true }) {
@@ -399,6 +399,8 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
   const [selectedKhojiStatuses, setSelectedKhojiStatuses] = useState([]);
   const [conversionSearch, setConversionSearch] = useState("");
   const [convPage, setConvPage] = useState(1);
+  const [inspectModalData, setInspectModalData] = useState(null);
+  const [inspectSearch, setInspectSearch] = useState("");
   const loading = false;
 
   const callTypeOptions = React.useMemo(() => [
@@ -538,6 +540,17 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
     return callLogs.filter(log => contactIds.has(String(log._id || log.id)));
   }, [callLogs, allAttempts]);
 
+  const programRegistrationsList = React.useMemo(() => {
+    return getCanonicalRegistrations(registrations, callLogs, {
+      startDate,
+      endDate,
+      selectedAttenderIds,
+      selectedProgramIds,
+      selectedSources,
+      selectedCalledFors
+    });
+  }, [registrations, callLogs, startDate, endDate, selectedAttenderIds, selectedProgramIds, selectedSources, selectedCalledFors]);
+
   const metrics = React.useMemo(() => {
     const stats = {
       connectedCalls: 0,
@@ -582,20 +595,6 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
         }
       }
 
-      if (c.status === "Reg.Done") {
-        const leadId = String(c.contactId || c.id || c.contactPhone || c.contactName || "").trim();
-        const cf = String(c.calledFor || c.programId || "general").toLowerCase().trim();
-        const regKey = `${leadId}_${cf}`;
-        if (!seenConversions.has(regKey)) {
-          seenConversions.add(regKey);
-          stats.totalConversions++;
-          if (isIncoming) {
-            stats.incomingConversions++;
-          } else {
-            stats.outgoingConversions++;
-          }
-        }
-      }
       if (c.status === "Query") {
         stats.queryCalls++;
       }
@@ -603,6 +602,18 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
         stats.incomingCalls++;
       } else {
         stats.outgoingCalls++;
+      }
+    });
+
+    // Populate conversions directly from canonical programRegistrationsList (Single Source of Truth)
+    programRegistrationsList.forEach(reg => {
+      stats.totalConversions++;
+      const type = String(reg.callType || reg.type || "").toLowerCase().trim();
+      const isIncoming = type === "incoming" || type === "in" || type.includes("incoming");
+      if (isIncoming) {
+        stats.incomingConversions++;
+      } else {
+        stats.outgoingConversions++;
       }
     });
 
@@ -622,7 +633,7 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
     }
 
     return stats;
-  }, [allAttempts]);
+  }, [allAttempts, programRegistrationsList]);
 
   const section1 = React.useMemo(() => {
     const list = [
@@ -636,27 +647,36 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
       { metric: "Outgoing Connected Calls", value: metrics.outgoingConnectedCalls },
       { metric: "Outgoing Not Connected Calls", value: metrics.outgoingNotConnectedCalls },
       { metric: "Query Calls", value: metrics.queryCalls },
-      { metric: "Direct Registrations / Conversions (Reg.Done)", value: metrics.totalConversions },
+      { metric: "Total Program Registrations", value: programRegistrationsList.length },
       { metric: "Incoming Conversions (Reg.Done)", value: metrics.incomingConversions },
       { metric: "Outgoing Conversions (Reg.Done)", value: metrics.outgoingConversions },
     ];
     const totalContactsInMonth = new Set(monthFiltered.map(l => l.id)).size;
     list.push({ metric: "Unique Leads Contacted", value: totalContactsInMonth });
     return list;
-  }, [allAttempts, metrics, monthFiltered]);
+  }, [allAttempts, metrics, monthFiltered, programRegistrationsList]);
 
   const attenderPerformance = React.useMemo(() => {
     const map = {};
-    const seenRegs = new Set();
     const EXCLUDED_ATTENDER_NAMES = ["admin", "super admin", "administrator", "agent"];
+
+    attenders.forEach(a => {
+      const norm = (a.name || "").toLowerCase().trim();
+      if (a.role !== 'admin' && !EXCLUDED_ATTENDER_NAMES.includes(norm)) {
+        map[a.id || norm] = { name: a.name, total: 0, connected: 0, notConnected: 0, incoming: 0, outgoing: 0, conversions: 0, incomingConversions: 0, outgoingConversions: 0, denominator: 0 };
+      }
+    });
+
     allAttempts.forEach(c => {
       const rawName = (c.attenderName || "").toLowerCase().trim();
       if (EXCLUDED_ATTENDER_NAMES.includes(rawName) || c.attenderId === "admin") return;
 
-      if (!map[c.attenderId]) {
-        map[c.attenderId] = { name: c.attenderName, total: 0, connected: 0, notConnected: 0, incoming: 0, outgoing: 0, conversions: 0, incomingConversions: 0, outgoingConversions: 0, denominator: 0 };
+      const foundAttender = attenders.find(a => (a.name || "").toLowerCase().trim() === rawName || a.id === c.attenderId);
+      const attId = foundAttender ? foundAttender.id : (c.attenderId || rawName);
+      if (!map[attId]) {
+        map[attId] = { name: foundAttender ? foundAttender.name : c.attenderName, total: 0, connected: 0, notConnected: 0, incoming: 0, outgoing: 0, conversions: 0, incomingConversions: 0, outgoingConversions: 0, denominator: 0 };
       }
-      const item = map[c.attenderId];
+      const item = map[attId];
       item.total++;
       const classification = classifyCallStatus(c.status);
       if (classification === "CONNECTED") item.connected++;
@@ -669,23 +689,27 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
       } else {
         item.outgoing++;
       }
-
-      if (c.status === "Reg.Done") {
-        const leadId = String(c.contactId || c.id || c.contactPhone || c.phone || c.contactName || c.name || "").trim();
-        const cf = (c.calledFor || "").toLowerCase().trim();
-        const regKey = `${c.attenderId}_${leadId}_${cf}`;
-        if (!seenRegs.has(regKey)) {
-          seenRegs.add(regKey);
-          item.conversions++;
-          if (isIncoming) {
-            item.incomingConversions++;
-          } else {
-            item.outgoingConversions++;
-          }
-        }
-      }
       
       item.denominator += getConversionDenominator(c.status);
+    });
+
+    // Populate conversions from canonical programRegistrationsList
+    programRegistrationsList.forEach(reg => {
+      const rawName = (reg.attenderName || reg.attender || reg.assignedTo || "").trim() || "Unknown Attender";
+      const normName = rawName.toLowerCase();
+      if (EXCLUDED_ATTENDER_NAMES.includes(normName)) return;
+
+      const foundAttender = (attenders || []).find(a =>
+        (a.name || "").toLowerCase().trim() === normName ||
+        (a.id && reg.attenderId && String(a.id) === String(reg.attenderId))
+      );
+      const attId = foundAttender ? foundAttender.id : (reg.attenderId || normName);
+      if (!attId || attId === "admin") return;
+
+      if (!map[attId]) {
+        map[attId] = { name: foundAttender ? foundAttender.name : rawName, total: 0, connected: 0, notConnected: 0, incoming: 0, outgoing: 0, conversions: 0, incomingConversions: 0, outgoingConversions: 0, denominator: 0 };
+      }
+      map[attId].conversions++;
     });
 
     return Object.values(map).map(a => ({
@@ -706,7 +730,7 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
       }
       return parseFloat(b["Conversion Rate (%)"]) - parseFloat(a["Conversion Rate (%)"]);
     });
-  }, [allAttempts]);
+  }, [allAttempts, attenders, programRegistrationsList]);
 
   const attenderPerformanceTotals = React.useMemo(() => {
     const totals = { 
@@ -783,21 +807,37 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
         } else {
           item.outgoingDenominator += denom;
         }
-
-        if (c.status === "Reg.Done") {
-          const leadId = String(c.contactId || c.id || c.contactPhone || c.phone || c.contactName || c.name || "").trim();
-          const regKey = `${key}_${leadId}_${prog.toLowerCase().trim()}`;
-          if (!seenRegs.has(regKey)) {
-            seenRegs.add(regKey);
-            item.conversions++;
-            if (isIncoming) {
-              item.incomingConversions++;
-            } else {
-              item.outgoingConversions++;
-            }
-          }
-        }
       });
+    });
+
+    // Populate conversions directly from canonical programRegistrationsList
+    programRegistrationsList.forEach(reg => {
+      const src = String(reg.source || "").trim() || "Unknown";
+      const prog = String(reg.calledFor || reg.programName || "").trim() || "Unknown";
+      const key = `${prog} &&& ${src}`;
+      if (!map[key]) {
+        map[key] = { 
+          calledFor: prog, 
+          source: src, 
+          total: 0, 
+          incoming: 0, 
+          outgoing: 0, 
+          conversions: 0, 
+          incomingConversions: 0, 
+          outgoingConversions: 0, 
+          incomingDenominator: 0, 
+          outgoingDenominator: 0 
+        };
+      }
+      const item = map[key];
+      const type = String(reg.callType || reg.type || "").toLowerCase().trim();
+      const isIncoming = type === "incoming" || type === "in" || type.includes("incoming");
+      item.conversions++;
+      if (isIncoming) {
+        item.incomingConversions++;
+      } else {
+        item.outgoingConversions++;
+      }
     });
 
     const calledForTotals = {};
@@ -842,7 +882,7 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
       
       return b["Total Calls"] - a["Total Calls"];
     });
-  }, [allAttempts, selectedCalledFors]);
+  }, [allAttempts, selectedCalledFors, programRegistrationsList]);
 
   const calledForVsSourceBreakdownTotals = React.useMemo(() => {
     const totals = { 
@@ -875,21 +915,21 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
   }, [calledForVsSourceBreakdown]);
 
   const conversionsList = React.useMemo(() => {
-    const seen = new Set();
-    const result = [];
-    allAttempts.forEach(c => {
-      if (c.status === "Reg.Done") {
-        const leadId = String(c.contactId || c.id || c.contactPhone || c.phone || c.contactName || c.name || "").trim();
-        const cf = String(c.calledFor || c.programId || "general").toLowerCase().trim();
-        const regKey = `${leadId}_${cf}`;
-        if (!seen.has(regKey)) {
-          seen.add(regKey);
-          result.push(c);
-        }
-      }
+    return programRegistrationsList.map(r => {
+      const ts = parseTimestamp(r.registeredAt || r.timestamp || r.createdAt || r.date);
+      return {
+        contactName: r.name || r.contactName || "Unnamed",
+        contactPhone: r.phone || r.contactPhone || "—",
+        attenderName: r.attenderName || r.attender || r.assignedTo || "Unassigned",
+        programName: r.programName || r.calledFor || "—",
+        source: r.source || "—",
+        calledFor: r.calledFor || r.programName || "—",
+        timestamp: ts,
+        feedback: r.feedback || "",
+        remark: r.remark || ""
+      };
     });
-    return result;
-  }, [allAttempts]);
+  }, [programRegistrationsList]);
 
   const searchedConversions = React.useMemo(() => {
     if (!conversionSearch.trim()) return conversionsList;
@@ -1199,7 +1239,8 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
       ) : (!startDate || !endDate || allAttempts.length === 0) ? (
         <div className="py-16 text-center text-slate-400 text-xs font-medium">No call history logs found for this period.</div>
       ) : (
-        <div className="space-y-5">
+        <>
+          <div className="space-y-5">
           {/* Summary KPIs */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-2xs flex flex-col justify-between">
@@ -1227,11 +1268,29 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
             </div>
 
             <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-2xs flex flex-col justify-between">
-              <div>
-                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Reg.Done Call Events</p>
-                <p className="text-2xl font-bold text-blue-600 tracking-tight mt-1">{metrics.totalConversions}</p>
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Total Registrations</p>
+                  <p className="text-2xl font-bold text-blue-600 tracking-tight mt-1">{programRegistrationsList.length}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInspectSearch("");
+                    setInspectModalData({
+                      title: "Total Program Registrations Audit",
+                      subtitle: `Detailed view of all ${programRegistrationsList.length} canonical program registrations`,
+                      items: programRegistrationsList
+                    });
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-lg border border-blue-200 transition-all shadow-2xs cursor-pointer"
+                  title="Inspect Registrations List"
+                >
+                  <Eye size={14} />
+                  <span>Inspect</span>
+                </button>
               </div>
-              <p className="text-[11px] text-blue-600 font-medium mt-2">Physical calls marked Reg.Done</p>
+              <p className="text-[11px] text-blue-600 font-medium mt-2">Total program registrations by registration ID</p>
             </div>
           </div>
 
@@ -1527,6 +1586,123 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
             </div>
           </MonthlySection>
         </div>
+
+        {/* Inspect Registrations Modal */}
+        {inspectModalData && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">{inspectModalData.title}</h3>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">{inspectModalData.subtitle}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInspectModalData(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-lg transition cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Search Filter */}
+            <div className="p-4 border-b border-slate-100 bg-white flex items-center justify-between gap-3">
+              <div className="relative flex-1 max-w-md">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Filter by name, phone, program, source, call type..."
+                  value={inspectSearch}
+                  onChange={(e) => setInspectSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition"
+                />
+              </div>
+              <span className="text-xs font-semibold text-slate-500">
+                Showing {
+                  (inspectModalData.items || []).filter(item => {
+                    if (!inspectSearch.trim()) return true;
+                    const q = inspectSearch.toLowerCase();
+                    return (
+                      String(item.contactName || "").toLowerCase().includes(q) ||
+                      String(item.contactPhone || "").toLowerCase().includes(q) ||
+                      String(item.calledFor || item.programName || "").toLowerCase().includes(q) ||
+                      String(item.source || "").toLowerCase().includes(q) ||
+                      String(item.callType || item.type || "").toLowerCase().includes(q) ||
+                      String(item.attenderName || "").toLowerCase().includes(q)
+                    );
+                  }).length
+                } of {inspectModalData.items?.length || 0} entries
+              </span>
+            </div>
+
+            {/* Table Content */}
+            <div className="flex-1 overflow-y-auto p-4">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-100/70 text-slate-600 font-bold border-b border-slate-200">
+                    <th className="py-2.5 px-3">#</th>
+                    <th className="py-2.5 px-3">Contact Name</th>
+                    <th className="py-2.5 px-3">Phone</th>
+                    <th className="py-2.5 px-3">Program (Called For)</th>
+                    <th className="py-2.5 px-3">Call Type</th>
+                    <th className="py-2.5 px-3">Source</th>
+                    <th className="py-2.5 px-3">Attender</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {(inspectModalData.items || [])
+                    .filter(item => {
+                      if (!inspectSearch.trim()) return true;
+                      const q = inspectSearch.toLowerCase();
+                      return (
+                        String(item.contactName || "").toLowerCase().includes(q) ||
+                        String(item.contactPhone || "").toLowerCase().includes(q) ||
+                        String(item.calledFor || item.programName || "").toLowerCase().includes(q) ||
+                        String(item.source || "").toLowerCase().includes(q) ||
+                        String(item.callType || item.type || "").toLowerCase().includes(q) ||
+                        String(item.attenderName || "").toLowerCase().includes(q)
+                      );
+                    })
+                    .map((item, idx) => {
+                      const cType = String(item.callType || item.type || "").toLowerCase();
+                      const isInc = cType === "incoming" || cType === "in" || cType.includes("incoming");
+                      return (
+                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                          <td className="py-2.5 px-3 font-semibold text-slate-400">{idx + 1}</td>
+                          <td className="py-2.5 px-3 font-bold text-slate-800">{item.contactName || "Unknown"}</td>
+                          <td className="py-2.5 px-3 font-mono text-slate-600">{item.contactPhone || "—"}</td>
+                          <td className="py-2.5 px-3 font-semibold text-indigo-700">{item.calledFor || item.programName || "—"}</td>
+                          <td className="py-2.5 px-3">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
+                              isInc ? "bg-emerald-100 text-emerald-800 border border-emerald-300" : "bg-blue-100 text-blue-800 border border-blue-300"
+                            }`}>
+                              {isInc ? "Incoming (Inc)" : "Outgoing (Out)"}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-600">{item.source || "—"}</td>
+                          <td className="py-2.5 px-3 font-medium text-slate-700">{item.attenderName || "Unassigned"}</td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setInspectModalData(null)}
+                className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-lg transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+        </>
       )}
     </div>
   );

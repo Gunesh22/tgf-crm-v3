@@ -5,8 +5,11 @@ import { BarChart3, Download, Search, X, ChevronDown, Check, Eye } from "lucide-
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
 import { COLORS, cleanExportRow, CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, parseTimestamp, getCanonicalStatus, getCanonicalStage, renderVal, isStageNurtureInterested, isStageRegisteredWon, getLocalDateStr, getCanonicalRegistrations, getCanonicalRegisteredPeople, getCanonicalStage6People, getContactPhone, formatDateTimeNoSeconds } from "../utils.jsx";
 import { isKhojiAffirmative, isKhojiNegative } from "../../attender/utils.js";
+import { fetchAPI } from "../../../lib/db.js";
+import { useAuth } from "../../../context/AuthContext";
 
 // ── Multi-select dropdown ──────────────────────────────────────────────────
+
 function MultiSelect({ options, selected, onChange, placeholder, allLabel = "All" }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -108,6 +111,7 @@ function MultiSelect({ options, selected, onChange, placeholder, allLabel = "All
 
 // ── Main Dashboard ─────────────────────────────────────────────────────────
 export default function DashboardTab({ programs, attenders, settingsOptions = { statusOptions: [], sourceOptions: [], calledForOptions: [] }, callLogs = [], registrations = [], callLogsLoading = false, secondsAgo = 0, nextFetchIn = 45, lastSyncedAt }) {
+  const { user } = useAuth();
   const todayStr = getLocalDateStr();
 
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -132,6 +136,37 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
   const [attenderModalSearch, setAttenderModalSearch] = useState("");
   const [inspectModal, setInspectModal] = useState(null); // { title: string, subtitle: string, items: Array, type: string }
   const [inspectSearch, setInspectSearch] = useState("");
+  const [serverStats, setServerStats] = useState(null);
+
+  useEffect(() => {
+    if (!user || user.role !== 'admin') return;
+    let isCancelled = false;
+    const fetchServerStats = async () => {
+      try {
+        const monthVal = dateFrom ? dateFrom.slice(0, 7) : 'ALL';
+        const progParam = selectedProgramIds.length === 1 ? selectedProgramIds[0] : '';
+        const attParam = selectedAttenderIds.length === 1 ? selectedAttenderIds[0] : '';
+        const queryParams = new URLSearchParams();
+        if (monthVal && monthVal !== 'ALL') queryParams.append('month', monthVal);
+        if (progParam) queryParams.append('programId', progParam);
+        if (attParam) queryParams.append('attenderId', attParam);
+        
+        const data = await fetchAPI(`/api/admin/stats?${queryParams.toString()}`);
+        if (!isCancelled && data && data.success && data.stats) {
+          setServerStats(data.stats);
+        }
+      } catch (e) {
+        if (e?.message?.includes("Unauthorized") || e?.message?.includes("401")) {
+          console.log("[DashboardTab] Stats auth required");
+        } else {
+          console.warn("[DashboardTab] Server stats fetch error:", e);
+        }
+      }
+    };
+    fetchServerStats();
+    return () => { isCancelled = true; };
+  }, [user, dateFrom, selectedProgramIds, selectedAttenderIds]);
+
 
   const callTypeOptions = useMemo(() => [
     { value: "incoming", label: "Incoming" },
@@ -473,10 +508,20 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
     return res;
   }, [flattenedLogs, selectedProgramIds, selectedAttenderIds, selectedSources, selectedCalledFors, selectedStatuses, selectedCallTypes, selectedKhojiStatuses, dateFrom, dateTo, programs, attenders]);
 
+  // CANONICAL REGISTRATION DERIVATIONS (SINGLE SOURCE OF TRUTH)
+  const programRegistrationsList = useMemo(() => {
+    return getCanonicalRegistrations(registrations, callLogs, {
+      startDate: dateFrom,
+      endDate: dateTo,
+      selectedAttenderIds,
+      selectedProgramIds,
+      selectedSources,
+      selectedCalledFors
+    });
+  }, [registrations, callLogs, dateFrom, dateTo, selectedAttenderIds, selectedProgramIds, selectedSources, selectedCalledFors]);
+
   const attenderStats = useMemo(() => {
     const map = {};
-    const seenRegsPerAttender = new Set();
-
     const EXCLUDED_ATTENDER_NAMES = ["admin", "super admin", "administrator", "agent"];
 
     filteredLogs.forEach(log => {
@@ -506,16 +551,29 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
 
       const normStatus = getCanonicalStatus(log.status);
       if (normStatus === "Interested") s.interested++;
-      if (normStatus === "Reg.Done") {
-        const leadId = log.contactId || log.Phone || log.Name;
-        const cf = (log.calledFor || log.programName || "").toLowerCase().trim();
-        const regKey = `${key}_${leadId}_${cf}`;
-        if (!seenRegsPerAttender.has(regKey)) {
-          seenRegsPerAttender.add(regKey);
-          s.regDone++;
-        }
-      }
       if (!normStatus || normStatus === "Pending") s.pending++;
+    });
+
+    // Populate canonical registrations per attender from programRegistrationsList (Single Source of Truth)
+    programRegistrationsList.forEach(reg => {
+      const rawName = (reg.attenderName || reg.attender || reg.assignedTo || "").trim() || "Unknown Attender";
+      const normName = rawName.toLowerCase();
+      if (EXCLUDED_ATTENDER_NAMES.includes(normName)) return;
+
+      const foundAttender = (attenders || []).find(a =>
+        (a.name || "").toLowerCase().trim() === normName ||
+        (a.id && reg.attenderId && String(a.id) === String(reg.attenderId))
+      );
+      const canonicalName = foundAttender ? foundAttender.name : rawName;
+      const canonicalId = foundAttender ? foundAttender.id : (reg.attenderId && reg.attenderId !== "unknown" && reg.attenderId !== "legacy" ? reg.attenderId : normName);
+
+      if (canonicalId === "admin" || EXCLUDED_ATTENDER_NAMES.includes(canonicalName.toLowerCase().trim())) return;
+
+      const key = canonicalId;
+      if (!map[key]) {
+        map[key] = { id: canonicalId, name: canonicalName, total: 0, outgoing: 0, incoming: 0, interested: 0, regDone: 0, pending: 0 };
+      }
+      map[key].regDone++;
     });
 
     // Final merge: collapse any duplicate name variants (e.g. legacy ID vs official ID for same person)
@@ -536,8 +594,8 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
       }
     });
 
-    return Object.values(byName).sort((a, b) => b.total - a.total);
-  }, [filteredLogs, attenders]);
+    return Object.values(byName).sort((a, b) => b.total - a.total || b.regDone - a.regDone);
+  }, [filteredLogs, attenders, programRegistrationsList]);
 
   const attenderModalLeads = useMemo(() => {
     if (!selectedAttenderDetails) return [];
@@ -573,18 +631,6 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
       (l.remark || "").toLowerCase().includes(q)
     );
   }, [filteredLogs, selectedAttenderDetails, attenderModalSearch]);
-
-  // CANONICAL REGISTRATION DERIVATIONS (SINGLE SOURCE OF TRUTH)
-  const programRegistrationsList = useMemo(() => {
-    return getCanonicalRegistrations(registrations, callLogs, {
-      startDate: dateFrom,
-      endDate: dateTo,
-      selectedAttenderIds,
-      selectedProgramIds,
-      selectedSources,
-      selectedCalledFors
-    });
-  }, [registrations, callLogs, dateFrom, dateTo, selectedAttenderIds, selectedProgramIds, selectedSources, selectedCalledFors]);
 
   const outcomeData = useMemo(() => {
     const map = {};
@@ -1030,7 +1076,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
                   </button>
                 )}
               </div>
-              {callLogsLoading ? (
+              {callLogsLoading && callLogs.length === 0 ? (
                 <div className="h-8 w-24 bg-slate-200 animate-pulse rounded-md mt-1" />
               ) : (
                 <p className={`text-2xl font-bold ${s.color || "text-slate-900"} mt-1`}>{s.value}</p>
@@ -1625,18 +1671,23 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
                       (item.remark || "").toLowerCase().includes(q)
                     );
                   });
-                  const ws = XLSX.utils.json_to_sheet(filteredItems.map((item, idx) => ({
-                    "#": idx + 1,
-                    "Name": item.name,
-                    "Phone": item.phone,
-                    "Date & Time": item.dateTime || "",
-                    "City": item.city,
-                    "Khoji": item.khoji,
-                    "Called For / Program": item.calledFor,
-                    "Attender": item.attender,
-                    "Stage / Status": item.status,
-                    "Remark": item.remark || ""
-                  })));
+                  const ws = XLSX.utils.json_to_sheet(filteredItems.map((item, idx) => {
+                    const cType = String(item.callType || item.type || "").toLowerCase();
+                    const isInc = cType === "incoming" || cType === "in" || cType.includes("incoming");
+                    return {
+                      "#": idx + 1,
+                      "Name": item.name,
+                      "Phone": item.phone,
+                      "Date & Time": item.dateTime || "",
+                      "City": item.city,
+                      "Khoji": item.khoji,
+                      "Called For / Program": item.calledFor,
+                      "Call Type": isInc ? "Incoming (Inc)" : "Outgoing (Out)",
+                      "Attender": item.attender,
+                      "Stage / Status": item.status,
+                      "Remark": item.remark || ""
+                    };
+                  }));
                   const wb = XLSX.utils.book_new();
                   XLSX.utils.book_append_sheet(wb, ws, "Inspected List");
                   XLSX.writeFile(wb, `${inspectModal.type}_contacts_export.xlsx`);
@@ -1660,7 +1711,8 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
                     (item.calledFor || "").toLowerCase().includes(q) ||
                     (item.attender || "").toLowerCase().includes(q) ||
                     (item.city || "").toLowerCase().includes(q) ||
-                    (item.remark || "").toLowerCase().includes(q)
+                    (item.remark || "").toLowerCase().includes(q) ||
+                    (item.callType || "").toLowerCase().includes(q)
                   );
                 });
 
@@ -1681,46 +1733,60 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
                         {inspectModal.type === "interested_calls" && <th className="py-2.5 px-3 w-36">Date & Time</th>}
                         <th className="py-2.5 px-3 w-24">City / Khoji</th>
                         <th className="py-2.5 px-3 w-28">Program / Called For</th>
+                        {inspectModal.type === "registered_programs" && <th className="py-2.5 px-3 w-24">Call Type</th>}
                         <th className="py-2.5 px-3 w-24">Attender</th>
                         <th className="py-2.5 px-3 w-28">Stage Status</th>
                         {inspectModal.type === "interested_calls" && <th className="py-2.5 px-3">Remark</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                      {filtered.map((item, idx) => (
-                        <tr key={item.id + "_" + idx} className="hover:bg-slate-50 transition-colors">
-                          <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
-                          <td className="py-2.5 px-3 font-bold text-slate-900 truncate" title={`${item.name} (${item.phone})`}>
-                            <div className="truncate">{item.name}</div>
-                            <div className="text-[11px] font-normal text-slate-500 font-mono truncate">{item.phone}</div>
-                          </td>
-                          {inspectModal.type === "interested_calls" && (
-                            <td className="py-2.5 px-3 text-slate-600 font-mono text-[11px] whitespace-nowrap">
-                              {item.dateTime}
+                      {filtered.map((item, idx) => {
+                        const cType = String(item.callType || item.type || "").toLowerCase();
+                        const isInc = cType === "incoming" || cType === "in" || cType.includes("incoming");
+                        return (
+                          <tr key={item.id + "_" + idx} className="hover:bg-slate-50 transition-colors">
+                            <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
+                            <td className="py-2.5 px-3 font-bold text-slate-900 truncate" title={`${item.name} (${item.phone})`}>
+                              <div className="truncate">{item.name}</div>
+                              <div className="text-[11px] font-normal text-slate-500 font-mono truncate">{item.phone}</div>
                             </td>
-                          )}
-                          <td className="py-2.5 px-3 text-slate-600 truncate">
-                            <div className="truncate">{item.city}</div>
-                            {item.khoji !== "—" && <span className="text-[10px] text-slate-400 block truncate">{item.khoji}</span>}
-                          </td>
-                          <td className="py-2.5 px-3 text-indigo-700 font-semibold truncate" title={item.calledFor}>{item.calledFor}</td>
-                          <td className="py-2.5 px-3 text-slate-700 font-medium truncate" title={item.attender}>{item.attender}</td>
-                          <td className="py-2.5 px-3">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
-                              inspectModal.type === "stage6"
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                : "bg-amber-50 text-amber-700 border border-amber-200"
-                            }`}>
-                              {item.status}
-                            </span>
-                          </td>
-                          {inspectModal.type === "interested_calls" && (
-                            <td className="py-2.5 px-3 text-slate-600 truncate max-w-0" title={item.remark}>
-                              {item.remark}
+                            {inspectModal.type === "interested_calls" && (
+                              <td className="py-2.5 px-3 text-slate-600 font-mono text-[11px] whitespace-nowrap">
+                                {item.dateTime}
+                              </td>
+                            )}
+                            <td className="py-2.5 px-3 text-slate-600 truncate">
+                              <div className="truncate">{item.city}</div>
+                              {item.khoji !== "—" && <span className="text-[10px] text-slate-400 block truncate">{item.khoji}</span>}
                             </td>
-                          )}
-                        </tr>
-                      ))}
+                            <td className="py-2.5 px-3 text-indigo-700 font-semibold truncate" title={item.calledFor}>{item.calledFor}</td>
+                            {inspectModal.type === "registered_programs" && (
+                              <td className="py-2.5 px-3">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider ${
+                                  isInc ? "bg-emerald-100 text-emerald-800 border border-emerald-300" : "bg-blue-100 text-blue-800 border border-blue-300"
+                                }`}>
+                                  {isInc ? "Incoming (Inc)" : "Outgoing (Out)"}
+                                </span>
+                              </td>
+                            )}
+                            <td className="py-2.5 px-3 text-slate-700 font-medium truncate" title={item.attender}>{item.attender}</td>
+                            <td className="py-2.5 px-3">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
+                                inspectModal.type === "stage6"
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                  : "bg-amber-50 text-amber-700 border border-amber-200"
+                              }`}>
+                                {item.status}
+                              </span>
+                            </td>
+                            {inspectModal.type === "interested_calls" && (
+                              <td className="py-2.5 px-3 text-slate-600 truncate max-w-0" title={item.remark}>
+                                {item.remark}
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 );

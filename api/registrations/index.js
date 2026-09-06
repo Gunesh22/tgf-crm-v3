@@ -1,13 +1,20 @@
 // api/registrations/index.js
 import clientPromise from '../lib/mongodb.js';
+import { requireAuth, sanitizeString } from '../lib/auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
+  const session = requireAuth(req, res);
+  if (!session) return;
+
   try {
-    const { month, limit = 5000 } = req.query;
+    const rawMonth = sanitizeString(req.query?.month);
+    const limit = req.query?.limit || 5000;
+
+    const month = rawMonth;
 
     const client = await clientPromise;
     const db = client.db('tgf_crm');
@@ -20,12 +27,20 @@ export default async function handler(req, res) {
         const startD = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0));
         const endD = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
         queryFilter.$or = [
+          { registeredAt: { $gte: startD, $lte: endD } },
           { createdAt: { $gte: startD, $lte: endD } },
+          { updatedAt: { $gte: startD, $lte: endD } },
           { createdAt: { $gte: `${month}-01`, $lte: `${month}-31T23:59:59.999Z` } },
-          { createdAt: { $regex: `^${month}` } }
+          { registeredAt: { $regex: `^${month}` } },
+          { createdAt: { $regex: `^${month}` } },
+          { updatedAt: { $regex: `^${month}` } }
         ];
       } else {
-        queryFilter.createdAt = { $regex: `^${month}` };
+        queryFilter.$or = [
+          { registeredAt: { $regex: `^${month}` } },
+          { createdAt: { $regex: `^${month}` } },
+          { updatedAt: { $regex: `^${month}` } }
+        ];
       }
     }
 

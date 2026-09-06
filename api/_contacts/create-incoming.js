@@ -4,20 +4,31 @@
 import clientPromise from '../lib/mongodb.js';
 import { buildPhoneDuplicateFilter } from '../lib/phoneNormalizer.js';
 import { executeLogCall } from './log-call.js';
+import { requireAuth, sanitizeString, isSameAttender } from '../lib/auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  try {
-    const { attenderId, attenderName, programId, programName, ...updates } = req.body;
+  const session = requireAuth(req, res);
+  if (!session) return;
 
-    if (!attenderId) {
+  try {
+    const { attenderId, attenderName, programId, programName, ...updates } = req.body || {};
+
+    const cleanAttenderId = sanitizeString(attenderId);
+    const cleanAttenderName = sanitizeString(attenderName);
+
+    if (!cleanAttenderId) {
       return res.status(400).json({ error: 'attenderId is required' });
     }
 
-    const label = attenderName ? `${attenderName} (${attenderId})` : attenderId;
+    if (!isSameAttender(cleanAttenderId, session)) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Cannot create incoming call for another attender' });
+    }
+
+    const label = cleanAttenderName ? `${cleanAttenderName} (${cleanAttenderId})` : cleanAttenderId;
     console.log(`[ATTENDER API REQ] /api/contacts/create-incoming | Attender: "${label}" | Action: "Create Lead"`);
 
     const client = await clientPromise;
@@ -39,8 +50,8 @@ export default async function handler(req, res) {
 
         const logRes = await executeLogCall(db, {
           contactId: existingContact._id.toString(),
-          attenderId,
-          attenderName,
+          attenderId: cleanAttenderId,
+          attenderName: cleanAttenderName,
           programId: programId || 'incoming',
           programName: programName || 'Incoming Calls',
           callType: updates.callType || 'incoming',
@@ -69,12 +80,12 @@ export default async function handler(req, res) {
 
     const historyItem = {
       callId,
-      attenderId,
-      attenderName:      attenderName || '',
-      callAttenderId:    attenderId,
-      callAttenderName:  attenderName || '',
-      leadOwnerAtTime:   attenderId,
-      leadOwnerNameAtTime: attenderName || '',
+      attenderId: cleanAttenderId,
+      attenderName:      cleanAttenderName || '',
+      callAttenderId:    cleanAttenderId,
+      callAttenderName:  cleanAttenderName || '',
+      leadOwnerAtTime:   cleanAttenderId,
+      leadOwnerNameAtTime: cleanAttenderName || '',
       callDirection:     'incoming',
       callPurpose:       (updates.callPurpose || (updates.status === 'Query' ? 'QUERY' : 'SALES')).toUpperCase(),
       callStatus:        updates.callStatus || 'Connected',
@@ -104,20 +115,20 @@ export default async function handler(req, res) {
       programId:   programId   || 'incoming',
       programName: programName || 'Incoming Calls',
       pipelineStage: '1. New Lead',
-      leadOwner:     attenderId,
-      leadOwnerName: attenderName || '',
+      leadOwner:     cleanAttenderId,
+      leadOwnerName: cleanAttenderName || '',
       ownerHistory:  [],
       programRelationships: [],
-      assignedTo:    [attenderId],
+      assignedTo:    [cleanAttenderId],
       isAssigned:    true,
-      assignedName:  attenderName || '',
+      assignedName:  cleanAttenderName || '',
       assignedAt:    nowIso,
-      attenderId,
-      attenderName:  attenderName || '',
+      attenderId: cleanAttenderId,
+      attenderName:  cleanAttenderName || '',
       attenderStates: {
-        [attenderId]: {
-          attenderId,
-          attenderName:  attenderName || '',
+        [cleanAttenderId]: {
+          attenderId: cleanAttenderId,
+          attenderName:  cleanAttenderName || '',
           callDirection: 'incoming',
           callPurpose:   (updates.callPurpose || (updates.status === 'Query' ? 'QUERY' : 'SALES')).toUpperCase(),
           callStatus:    updates.callStatus || 'Connected',
@@ -140,7 +151,7 @@ export default async function handler(req, res) {
     // 3. Concurrency self-healing check (race condition protection)
     if (queryFilter) {
       const matches = await db.collection('contacts')
-        .find(queryFilter)
+        .find(queryFilter, { projection: { _id: 1, createdAt: 1 } })
         .sort({ createdAt: 1 })
         .toArray();
 
@@ -152,8 +163,8 @@ export default async function handler(req, res) {
 
           const logRes = await executeLogCall(db, {
             contactId: earliestContact._id.toString(),
-            attenderId,
-            attenderName,
+            attenderId: cleanAttenderId,
+            attenderName: cleanAttenderName,
             programId: programId || 'incoming',
             programName: programName || 'Incoming Calls',
             callType: updates.callType || 'incoming',

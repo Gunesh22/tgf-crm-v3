@@ -4,14 +4,24 @@
 // B. PIPELINE PEOPLE — from contacts.pipelineStage (contact = unit)
 // C. REGISTRATIONS — from registrations collection (registrationId = unit)
 import clientPromise from '../lib/mongodb.js';
+import { requireAuth, sanitizeString } from '../lib/auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
+  const session = requireAuth(req, res);
+  if (!session) return;
+
   try {
-    const { programId, attenderId } = req.query;
+    const rawProgramId = sanitizeString(req.query?.programId);
+    const rawAttenderId = sanitizeString(req.query?.attenderId);
+    const rawMonth = sanitizeString(req.query?.month);
+
+    const programId = rawProgramId;
+    const attenderId = rawAttenderId;
+    const month = rawMonth;
 
     const client = await clientPromise;
     const db     = client.db('tgf_crm');
@@ -36,6 +46,36 @@ export default async function handler(req, res) {
     }
     if (attenderId && attenderId !== 'ALL') {
       regFilter.attenderId = attenderId;
+    }
+
+    if (month && month !== 'ALL') {
+      const monthRegex = new RegExp(`^${month}`);
+      const [y, m] = month.split('-').map(v => parseInt(v, 10));
+      if (y && m) {
+        const startD = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0));
+        const endD = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
+        const monthOr = [
+          { createdAt: { $gte: startD, $lte: endD } },
+          { lastCalledAt: { $gte: startD, $lte: endD } },
+          { updatedAt: { $gte: startD, $lte: endD } },
+          { createdAt: monthRegex },
+          { lastCalledAt: monthRegex }
+        ];
+        if (contactFilter.$or) {
+          contactFilter.$and = [{ $or: contactFilter.$or }, { $or: monthOr }];
+          delete contactFilter.$or;
+        } else {
+          contactFilter.$or = monthOr;
+        }
+        regFilter.$or = [
+          { registeredAt: { $gte: startD, $lte: endD } },
+          { createdAt: { $gte: startD, $lte: endD } },
+          { updatedAt: { $gte: startD, $lte: endD } },
+          { registeredAt: monthRegex },
+          { createdAt: monthRegex },
+          { updatedAt: monthRegex }
+        ];
+      }
     }
 
     // ── A: PIPELINE PEOPLE — one count per pipelineStage ───────────────────
@@ -78,23 +118,45 @@ export default async function handler(req, res) {
 
     // ── B: CALL EVENTS — from history[] arrays. Unit: one callId per event ─
     // Source: contacts.history[]. Each entry with a callId/id = one call event.
-    const callEventAgg = await db.collection('contacts').aggregate([
+    const callEventPipeline = [
       { $match: contactFilter },
-      { $unwind: '$history' },
-      { $group: {
-          _id: null,
-          totalCalls:        { $sum: 1 },
-          salesCalls:        { $sum: { $cond: [{ $eq: ['$history.callPurpose', 'SALES'] }, 1, 0] } },
-          queryCalls:        { $sum: { $cond: [{ $eq: ['$history.callPurpose', 'QUERY'] }, 1, 0] } },
-          reminderCalls:     { $sum: { $cond: [{ $eq: ['$history.callPurpose', 'REMINDER'] }, 1, 0] } },
-          incomingCalls:     { $sum: { $cond: [{ $in: [{ $ifNull: ['$history.callDirection', '$history.callType'] }, ['incoming', 'Incoming']] }, 1, 0] } },
-          outgoingCalls:     { $sum: { $cond: [{ $in: [{ $ifNull: ['$history.callDirection', '$history.callType'] }, ['outgoing', 'Outgoing']] }, 1, 0] } },
-          connectedCalls:    { $sum: { $cond: [{ $eq: ['$history.callStatus', 'Connected'] }, 1, 0] } },
-          notConnectedCalls: { $sum: { $cond: [{ $ne: ['$history.callStatus', 'Connected'] }, 1, 0] } },
-          interestedCalls:   { $sum: { $cond: [{ $in: ['$history.status', ['Interested', 'interested']] }, 1, 0] } },
-          regDoneCalls:      { $sum: { $cond: [{ $in: ['$history.status', ['Reg.Done', 'Registered', 'registered']] }, 1, 0] } },
-      }},
-    ]).toArray();
+      { $unwind: '$history' }
+    ];
+
+    if (month && month !== 'ALL') {
+      const [y, m] = month.split('-').map(v => parseInt(v, 10));
+      if (y && m) {
+        const startD = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0));
+        const endD = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
+        callEventPipeline.push({
+          $match: {
+            $or: [
+              { 'history.timestamp': { $gte: startD, $lte: endD } },
+              { 'history.date': { $gte: startD, $lte: endD } },
+              { 'history.createdAt': { $gte: startD, $lte: endD } }
+            ]
+          }
+        });
+      }
+    }
+
+    callEventPipeline.push({
+      $group: {
+        _id: null,
+        totalCalls:        { $sum: 1 },
+        salesCalls:        { $sum: { $cond: [{ $eq: ['$history.callPurpose', 'SALES'] }, 1, 0] } },
+        queryCalls:        { $sum: { $cond: [{ $eq: ['$history.callPurpose', 'QUERY'] }, 1, 0] } },
+        reminderCalls:     { $sum: { $cond: [{ $eq: ['$history.callPurpose', 'REMINDER'] }, 1, 0] } },
+        incomingCalls:     { $sum: { $cond: [{ $in: [{ $ifNull: ['$history.callDirection', '$history.callType'] }, ['incoming', 'Incoming']] }, 1, 0] } },
+        outgoingCalls:     { $sum: { $cond: [{ $in: [{ $ifNull: ['$history.callDirection', '$history.callType'] }, ['outgoing', 'Outgoing']] }, 1, 0] } },
+        connectedCalls:    { $sum: { $cond: [{ $eq: ['$history.callStatus', 'Connected'] }, 1, 0] } },
+        notConnectedCalls: { $sum: { $cond: [{ $ne: ['$history.callStatus', 'Connected'] }, 1, 0] } },
+        interestedCalls:   { $sum: { $cond: [{ $in: ['$history.status', ['Interested', 'interested']] }, 1, 0] } },
+        regDoneCalls:      { $sum: { $cond: [{ $in: ['$history.status', ['Reg.Done', 'Registered', 'registered']] }, 1, 0] } },
+      }
+    });
+
+    const callEventAgg = await db.collection('contacts').aggregate(callEventPipeline).toArray();
 
     const callEvents = callEventAgg[0] || {
       totalCalls: 0, salesCalls: 0, queryCalls: 0, reminderCalls: 0,

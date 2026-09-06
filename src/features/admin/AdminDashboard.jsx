@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { toast } from "react-hot-toast";
 import { Settings, ArrowLeft, ChevronRight, Loader, RefreshCw, Database } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
 import { getPrograms, getAttenders, getSettingsOptions, subscribeToAllCallLogs, subscribeToRegistrations, getRegistrationMonths, runAutoLockAndPurgeCheck } from "../../lib/db";
 import { updateDynamicOptions } from "../attender/utils";
 import ImportContacts from "./ImportContacts";
@@ -17,6 +18,9 @@ import LottieAnimation from "../../components/ui/LottieAnimation";
 import dataResearchAnimation from "../../assets/data_research_analysis.json";
 
 export default function AdminPanel({ onExit, onAttendersChange }) {
+  const { user } = useAuth();
+  const isAdmin = Boolean(user && user.role === 'admin');
+
   const [activeTab, setActiveTab] = useState("dashboard");
   const [programs, setPrograms] = useState([]);
   const [attenders, setAttenders] = useState([]);
@@ -40,6 +44,7 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
   const [monthOptions, setMonthOptions] = useState([]);
 
   useEffect(() => {
+    if (!isAdmin) return;
     loadAll();
     getSettingsOptions()
       .then((data) => {
@@ -49,27 +54,28 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [isAdmin]);
 
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Hoisted subscription to all call logs
   useEffect(() => {
-    if (!selectedMonth) return;
+    if (!isAdmin || !selectedMonth) return;
     setCallLogsLoading(true);
     const unsubLogs = subscribeToAllCallLogs("ALL", selectedMonth, (logs, isServerFresh) => {
       setCallLogs(logs);
-      if (isServerFresh) {
+      if (isServerFresh || (Array.isArray(logs) && logs.length > 0)) {
         setCallLogsLoading(false);
       }
     }, refreshTrigger > 0);
     return () => {
       if (unsubLogs) unsubLogs();
     };
-  }, [selectedMonth, refreshTrigger]);
+  }, [isAdmin, selectedMonth, refreshTrigger]);
 
   // Hoisted month loading logic
   useEffect(() => {
+    if (!isAdmin) return;
     const loadMonths = async () => {
       try {
         const months = await getRegistrationMonths();
@@ -87,11 +93,11 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
       }
     };
     loadMonths();
-  }, []);
+  }, [isAdmin]);
 
   // Hoisted subscription to registrations — sync with selectedMonth
   useEffect(() => {
-    if (!selectedMonth) return;
+    if (!isAdmin || !selectedMonth) return;
     setRegistrationsLoading(true);
     const unsubRegs = subscribeToRegistrations("ALL", selectedMonth, (data) => {
       setRegistrations(data);
@@ -100,7 +106,7 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
     return () => {
       if (unsubRegs) unsubRegs();
     };
-  }, [selectedMonth]);
+  }, [isAdmin, selectedMonth]);
 
   const loadAll = async () => {
     try {
@@ -200,10 +206,10 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all border cursor-pointer ${
                 activeTab === item.id
-                  ? "bg-blue-600 text-white shadow-xs"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                  : "text-slate-600 border-transparent hover:bg-slate-100 hover:text-slate-900"
               }`}
             >
               {item.icon}
@@ -238,23 +244,31 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
         </div>
 
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {TAB_ITEMS.map(item => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === item.id
-                  ? "bg-blue-50 text-blue-700 border border-blue-100 shadow-2xs"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-              }`}
-            >
-              <span className={activeTab === item.id ? "text-blue-600" : "text-slate-400"}>
-                {item.icon}
-              </span>
-              {item.label}
-              {activeTab === item.id && <ChevronRight size={13} className="ml-auto text-blue-600" />}
-            </button>
-          ))}
+          {TAB_ITEMS.map(item => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer border box-border ${
+                  isActive
+                    ? "bg-blue-50/90 text-blue-700 border-blue-200/80 shadow-2xs"
+                    : "text-slate-600 border-transparent hover:bg-slate-100/80 hover:text-slate-900"
+                }`}
+              >
+                <span className={`transition-colors duration-150 ${isActive ? "text-blue-600" : "text-slate-400"}`}>
+                  {item.icon}
+                </span>
+                <span className="truncate">{item.label}</span>
+                <ChevronRight
+                  size={13}
+                  className={`ml-auto shrink-0 transition-all duration-150 ${
+                    isActive ? "text-blue-600 opacity-100 translate-x-0" : "opacity-0 -translate-x-1"
+                  }`}
+                />
+              </button>
+            );
+          })}
         </nav>
 
         <div className="p-3 border-t border-slate-100">
@@ -274,7 +288,7 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
               <p className="text-sm font-bold text-slate-700">Syncing Admin Data Hub…</p>
             </div>
           ) : (
-            <>
+            <div key={activeTab} className="animate-tab-fade-in min-h-full">
               {activeTab === "dashboard" && (
                 <DashboardTab
                   programs={programs}
@@ -314,7 +328,7 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
                     <p className="text-slate-600 font-bold text-xs">Loading analytics database...</p>
                   </div>
                 ) : (
-                  <MonthlyReportTab programs={programs} attenders={attenders} settingsOptions={settingsOptions} callLogs={callLogs} />
+                  <MonthlyReportTab programs={programs} attenders={attenders} settingsOptions={settingsOptions} callLogs={callLogs} registrations={registrations} />
                 )
               )}
               {activeTab === "programs" && <ProgramsTab programs={programs} attenders={attenders} onReloadPrograms={refreshAll} />}
@@ -327,7 +341,7 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
                 />
               )}
               {activeTab === "settings" && <SettingsTab />}
-            </>
+            </div>
           )}
         </div>
       </main>

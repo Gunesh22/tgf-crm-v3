@@ -1,5 +1,6 @@
 // api/_admin/programs.js
 import clientPromise from '../lib/mongodb.js';
+import { requireAuth, requireAdmin, sanitizeString } from '../lib/auth.js';
 
 export default async function handler(req, res) {
   try {
@@ -8,6 +9,9 @@ export default async function handler(req, res) {
     const collection = db.collection('programs');
 
     if (req.method === 'GET') {
+      const session = requireAuth(req, res);
+      if (!session) return;
+
       // Fetch explicitly created programs from programs collection (Fast indexed query)
       const dbPrograms = await collection.find({}).sort({ name: 1 }).toArray();
 
@@ -51,12 +55,15 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      const { name } = req.body;
-      if (!name || !name.trim()) {
+      const session = requireAdmin(req, res);
+      if (!session) return;
+
+      const { name } = req.body || {};
+      const cleanName = sanitizeString(name);
+      if (!cleanName) {
         return res.status(400).json({ error: 'Program name is required' });
       }
 
-      const cleanName = name.trim();
       const id = 'prog_' + cleanName.toLowerCase().replace(/\s+/g, '_');
 
       const newProg = {
@@ -75,12 +82,15 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
-      const { id } = req.query;
-      if (!id) {
+      const session = requireAdmin(req, res);
+      if (!session) return;
+
+      const cleanId = sanitizeString(req.query?.id);
+      if (!cleanId) {
         return res.status(400).json({ error: 'id query parameter is required' });
       }
 
-      await collection.deleteOne({ $or: [{ id }, { _id: id }] });
+      await collection.deleteOne({ $or: [{ id: cleanId }, { _id: cleanId }] });
 
       return res.status(200).json({ success: true, message: 'Program deleted' });
     }

@@ -1,20 +1,31 @@
-// api/_contacts/undo-call.js
-// Bug fix: history items created by log-call.js use `callId` not `id`.
-// This handler now supports BOTH field names for backward compatibility.
 import clientPromise from '../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
+import { requireAuth, sanitizeString, isSameAttender } from '../lib/auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  try {
-    const { contactId, attenderId, historyId } = req.body;
+  const session = requireAuth(req, res);
+  if (!session) return;
 
-    if (!contactId || !attenderId || !historyId) {
+  try {
+    const rawContactId = sanitizeString(req.body?.contactId);
+    const rawAttenderId = sanitizeString(req.body?.attenderId);
+    const rawHistoryId = sanitizeString(req.body?.historyId);
+
+    if (!rawContactId || !rawAttenderId || !rawHistoryId) {
       return res.status(400).json({ error: 'contactId, attenderId, and historyId are required' });
     }
+
+    if (!isSameAttender(rawAttenderId, session)) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Cannot undo call for another attender' });
+    }
+
+    const contactId = rawContactId;
+    const attenderId = rawAttenderId;
+    const historyId = rawHistoryId;
 
     const client = await clientPromise;
     const db     = client.db('tgf_crm');
