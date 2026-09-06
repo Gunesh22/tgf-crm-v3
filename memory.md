@@ -675,3 +675,25 @@ Enable administrators to visually inspect the exact list of canonical registrati
 - **Automated Test Suite**: **171 / 171 PASSED (0 failures)** (`npm test`).
 - **Production Build**: **Vite build PASSED with 0 errors** (`npm run build`).
 - **Git Push**: Merged and pushed to `main` (`origin/main`) and `version-3.1` (`origin/version-3.1`) at commit `962c2aa`.
+
+---
+
+## 39. Date Range Filter Scoping: "All Time" Removal across Admin & Attender Dashboards
+
+### Root Cause Analysis & Solution Summary
+1. **High Vercel Bandwidth & Memory Overhead Risk**:
+   - **Root Cause**: Selecting `"All Time"` (`dateFrom=""`, `dateTo=""`) in admin and attender date filters bypassed monthly date boundary constraints, causing full contact history collections to download over API payloads.
+   - **Fix**: Removed `"All Time"` (`"all"`) buttons/options across:
+     - **Admin Dashboard** (`DashboardTab.jsx`)
+     - **Analytics Report** (`MonthlyReportTab.jsx`)
+     - **Pipeline & Calls** (`PipelineCallsTab.jsx`)
+     - **Abhivyakti Registrations** (`AbhivyaktiTab.jsx`)
+     - **My Performance** (`MyPerformanceDashboard.jsx`)
+   - Updated the `Reset` date filter action in `AbhivyaktiTab.jsx` to restore the default current-month date range rather than clearing dates to "All Time".
+   - Maintained default month-scoped filtering (`currentMonthFirstDay` to `currentMonthLastDay`) and custom date pickers across all views.
+
+### Verification & Git Release
+- **Automated Test Suite**: **171 / 171 PASSED (0 failures)** (`npm test`).
+- **Production Build**: **Vite build PASSED with 0 errors** (`npm run build`).
+- **Git Push**: Committed and pushed to `main` (`origin/main`) and `version-3.1` (`origin/version-3.1`) at commit `ace0dbc`.
+
