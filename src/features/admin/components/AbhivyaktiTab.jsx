@@ -4,7 +4,7 @@ import * as XLSX from "xlsx";
 import {
   Download, Calendar, TrendingUp, UserCheck, Smile, Info, Search, X, ChevronDown, Check, ChevronRight, RotateCw
 } from "lucide-react";
-import { CONNECTED_STATUSES, getContactKhoji, renderVal, getContactLeadOrigin, getContactSource } from "../utils.jsx";
+import { CONNECTED_STATUSES, getContactKhoji, renderVal, getContactLeadOrigin, getContactSource, getCanonicalRegistrations } from "../utils.jsx";
 
 function ReportSection({ title, subtitle, badge, action, children, defaultOpen = true }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -228,7 +228,8 @@ const parseDate = (val) => {
     if (trimmed.includes("/")) {
       const parts = trimmed.split(/[/ :]/);
       if (parts.length >= 3) {
-        const [d, m, y] = parts.map(Number);
+        let [d, m, y] = parts.map(Number);
+        if (y < 100) y = y < 50 ? 2000 + y : 1900 + y;
         if (y && m && d) return new Date(y, m - 1, d);
       }
     }
@@ -289,6 +290,7 @@ export const getRegistrationLeadOwner = (r) => {
 // ── Main AbhivyaktiTab Component ──────────────────────────────────────────────
 export default function AbhivyaktiTab({
   registrations = [],
+  callLogs = [],
   loading = false
 }) {
   // Local filter states
@@ -313,109 +315,75 @@ export default function AbhivyaktiTab({
     return `${yr}-${mnStr}-${lastDay}`;
   });
 
-  // Derived filter options from registrations data
+  // Single Source of Truth for Program Registrations via Canonical Engine
+  const canonicalRegistrations = useMemo(() => {
+    return getCanonicalRegistrations(registrations, callLogs, {
+      startDate: dateFrom,
+      endDate: dateTo,
+      selectedAttenderIds: selectedAttenders,
+      selectedSources,
+      selectedLeadOrigins,
+      selectedCalledFors
+    });
+  }, [registrations, callLogs, dateFrom, dateTo, selectedAttenders, selectedSources, selectedLeadOrigins, selectedCalledFors]);
+
+  const filteredRegistrations = useMemo(() => {
+    if (selectedCallTypes.length === 0) return canonicalRegistrations;
+    return canonicalRegistrations.filter(r => {
+      const cType = (r.callType || "").toLowerCase();
+      return selectedCallTypes.some(t => cType.includes(t.toLowerCase()));
+    });
+  }, [canonicalRegistrations, selectedCallTypes]);
+
+  // Derived filter options from canonical registrations dataset
   const callTypeOptions = useMemo(() => {
     const set = new Set();
-    registrations.forEach(r => {
+    canonicalRegistrations.forEach(r => {
       if (r.callType) set.add(r.callType);
     });
     return Array.from(set).sort().map(val => ({
       value: val,
       label: val.charAt(0).toUpperCase() + val.slice(1)
     }));
-  }, [registrations]);
+  }, [canonicalRegistrations]);
 
   const calledForOptions = useMemo(() => {
     const set = new Set();
-    registrations.forEach(r => {
-      const val = r.calledFor || r["Called For"];
+    canonicalRegistrations.forEach(r => {
+      const val = r.calledFor || r["Called For"] || r.programName;
       if (val) {
         String(val).split(",").map(s => s.trim()).filter(Boolean).forEach(v => set.add(v));
       }
     });
     return Array.from(set).sort().map(val => ({ value: val, label: val }));
-  }, [registrations]);
+  }, [canonicalRegistrations]);
 
   const sourceOptions = useMemo(() => {
     const set = new Set();
-    registrations.forEach(r => {
+    canonicalRegistrations.forEach(r => {
       const val = r.conversionSource || r.Source || r.source || getContactSource(r) || "Online/Direct";
       if (val) set.add(String(val).trim());
     });
     return Array.from(set).sort().map(val => ({ value: val, label: val }));
-  }, [registrations]);
+  }, [canonicalRegistrations]);
 
   const leadOriginOptions = useMemo(() => {
     const set = new Set();
-    registrations.forEach(r => {
+    canonicalRegistrations.forEach(r => {
       const val = r.leadOrigin || getContactLeadOrigin(r) || "Direct / Organic";
       if (val) set.add(String(val).trim());
     });
     return Array.from(set).sort().map(val => ({ value: val, label: val }));
-  }, [registrations]);
+  }, [canonicalRegistrations]);
 
   const attenderOptions = useMemo(() => {
     const set = new Set();
-    registrations.forEach(r => {
+    canonicalRegistrations.forEach(r => {
       const val = getRegistrationPrimaryAttender(r);
       set.add(String(val).trim());
     });
     return Array.from(set).sort().map(val => ({ value: val, label: val }));
-  }, [registrations]);
-
-  // Apply filters to calculate filteredRegistrations
-  const filteredRegistrations = useMemo(() => {
-    const res = registrations.filter(r => {
-      if (r._deleted) return false;
-
-      // 1. Call Type Filter
-      if (selectedCallTypes.length > 0 && !selectedCallTypes.includes(r.callType)) {
-        return false;
-      }
-
-      // 2. Called For Filter
-      if (selectedCalledFors.length > 0) {
-        const rCalledFor = r.calledFor || r["Called For"];
-        const rCalledFors = rCalledFor ? String(rCalledFor).split(",").map(s => s.trim()).filter(Boolean) : [];
-        if (!rCalledFors.some(cf => selectedCalledFors.includes(cf))) return false;
-      }
-
-      // 3. Current Source Filter
-      const rSource = r.conversionSource || r.Source || r.source;
-      if (selectedSources.length > 0 && (!rSource || !selectedSources.includes(String(rSource).trim()))) {
-        return false;
-      }
-
-      // 3b. Lead Origin Filter (AND logic)
-      const rLeadOrigin = r.leadOrigin || getContactLeadOrigin(r);
-      if (selectedLeadOrigins.length > 0 && (!rLeadOrigin || !selectedLeadOrigins.includes(String(rLeadOrigin).trim()))) {
-        return false;
-      }
-
-      // 4. Attender Filter (Assigned Lead Owner Priority)
-      const rAttender = getRegistrationPrimaryAttender(r);
-      if (selectedAttenders.length > 0 && !selectedAttenders.includes(String(rAttender).trim())) {
-        return false;
-      }
-
-      // 5. Date Range Filter
-      if (dateFrom || dateTo) {
-        const d = parseDate(r.registeredAt) || parseDate(r.createdAt);
-        if (!d || isNaN(d.getTime())) return false;
-        
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, "0");
-        const day = String(d.getDate()).padStart(2, "0");
-        const dStr = `${y}-${m}-${day}`;
-        if (dateFrom && dStr < dateFrom) return false;
-        if (dateTo && dStr > dateTo) return false;
-      }
-
-      return true;
-    });
-
-    return res;
-  }, [registrations, selectedCallTypes, selectedCalledFors, selectedSources, selectedLeadOrigins, selectedAttenders, dateFrom, dateTo]);
+  }, [canonicalRegistrations]);
 
   // Active filters count
   const activeFilters = selectedCallTypes.length + selectedCalledFors.length + selectedSources.length + selectedLeadOrigins.length + selectedAttenders.length + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0);
@@ -483,36 +451,26 @@ export default function AbhivyaktiTab({
     filteredRegistrations.forEach(r => {
       const d = parseDate(r.registeredAt) || parseDate(r.createdAt);
       if (!d) return;
-      const dStr = d.toLocaleDateString("en-IN");
-      if (!map[dStr]) {
-        map[dStr] = { date: dStr, total: 0, assisted: 0, direct: 0 };
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      if (!map[key]) {
+        const displayDate = d.toLocaleDateString("en-IN");
+        const ts = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        map[key] = { date: displayDate, ts, total: 0, assisted: 0, direct: 0 };
       }
-      map[dStr].total++;
+      map[key].total++;
       const hasRealAttender = (r.convertedBy && r.convertedBy !== "Unknown") || (r.attenderName && r.attenderName !== "Unknown");
-      if (hasRealAttender) map[dStr].assisted++;
-      else map[dStr].direct++;
+      if (hasRealAttender) map[key].assisted++;
+      else map[key].direct++;
     });
 
-    const allDates = Array.from(new Set(filteredRegistrations.map(r => {
-      const d = parseDate(r.registeredAt) || parseDate(r.createdAt);
-      return d ? d.toLocaleDateString("en-IN") : null;
-    }).filter(Boolean))).sort((a, b) => {
-      const [da, ma, ya] = a.split("/").map(Number);
-      const [db, mb, yb] = b.split("/").map(Number);
-      return new Date(ya, ma - 1, da) - new Date(yb, mb - 1, db);
-    });
-
-    const list = [];
-    allDates.forEach(dStr => {
-      const data = map[dStr] || { date: dStr, total: 0, assisted: 0, direct: 0 };
-      list.push({
-        "Date": dStr,
+    return Object.values(map)
+      .sort((a, b) => a.ts - b.ts)
+      .map(data => ({
+        "Date": data.date,
         "Total Registrations": data.total,
         "Attender Assisted": data.assisted,
         "Direct Online": data.direct
-      });
-    });
-    return list;
+      }));
   }, [filteredRegistrations]);
 
   const dayWiseTotals = useMemo(() => {

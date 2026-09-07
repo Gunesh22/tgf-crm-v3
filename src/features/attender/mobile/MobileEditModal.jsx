@@ -27,8 +27,10 @@ import HistoryTimeline from "../components/edit-modal/HistoryTimeline";
 import CityAutofillInput from "../components/edit-modal/CityAutofillInput";
 import EditHistoryModal from "../components/edit-modal/EditHistoryModal";
 import ProgramContextSelector from "../components/edit-modal/ProgramContextSelector";
+import { formatFollowupTime12h } from "../components/edit-modal/EasyTimePicker";
+import { CustomDateTimePicker } from "../components/edit-modal/CustomDateTimePicker";
 import { extractProgramsList, getProgramContext } from "../utils/programContextHelper";
-import { getEffectiveStage, PIPELINE_STAGES, getProgramSpecificStatus } from "../../../utils/pipelineEngine";
+import { getEffectiveStage, PIPELINE_STAGES } from "../../../utils/pipelineEngine";
 
 function parseTimestamp(t) {
   if (!t) return null;
@@ -982,27 +984,21 @@ export default function MobileEditModal({
                               Rescheduling Follow-up
                             </div>
                             <div className="text-[10px] text-sky-700 font-medium">
-                              Current: {formatFollowupDateStr(edited.callbackDate)} {edited.callbackTime ? `· ${edited.callbackTime}` : ""}
+                              Current: {formatFollowupDateStr(edited.callbackDate)} {edited.callbackTime ? `· ${formatFollowupTime12h(edited.callbackTime)}` : ""}
                             </div>
                           </div>
                         </div>
 
-                        <div className="pt-2 border-t border-sky-200/80 space-y-1.5">
-                          <label className="text-[10px] font-bold text-sky-900 block">Choose new date & time:</label>
-                          <div className="flex gap-2">
-                            <input
-                              type="date"
-                              value={tempDate}
-                              onChange={e => setTempDate(e.target.value)}
-                              className="flex-1 px-3 py-1.5 bg-white border border-sky-300 text-sky-950 font-bold rounded-lg text-xs"
-                            />
-                            <input
-                              type="time"
-                              value={tempTime}
-                              onChange={e => setTempTime(e.target.value)}
-                              className="w-24 px-2 py-1.5 bg-white border border-sky-300 text-sky-950 font-bold rounded-lg text-xs"
-                            />
-                          </div>
+                        <div className="pt-2 border-t border-sky-200/80">
+                          <CustomDateTimePicker
+                            dateValue={tempDate}
+                            timeValue={tempTime}
+                            onDateChange={setTempDate}
+                            onTimeChange={setTempTime}
+                            dateLabel="Follow-up Date"
+                            timeLabel="Follow-up Time (Optional)"
+                            themeColor="sky"
+                          />
                         </div>
 
                         <div className="pt-2 border-t border-sky-200/80 flex justify-end items-center gap-2">
@@ -1043,7 +1039,7 @@ export default function MobileEditModal({
                           <div>
                             <div className="text-xs font-extrabold text-amber-950 flex items-center gap-1.5">
                               <span>📅 {formatFollowupDateStr(edited.callbackDate)}</span>
-                              {edited.callbackTime && <span className="text-amber-800">· 🕒 {edited.callbackTime}</span>}
+                              {edited.callbackTime && <span className="text-amber-800">· 🕒 {formatFollowupTime12h(edited.callbackTime)}</span>}
                             </div>
                             <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded border border-amber-300/60">
                               ⏳ {edited.callbackStatus === "rescheduled" ? "Rescheduled" : "Pending"}
@@ -1115,22 +1111,16 @@ export default function MobileEditModal({
                     </div>
 
                     {isAddingNext ? (
-                      <div className="pt-2 border-t border-emerald-200/80 space-y-2">
-                        <div className="text-[10px] font-bold text-emerald-900">Choose date & time for next follow-up:</div>
-                        <div className="flex gap-2">
-                          <input
-                            type="date"
-                            value={tempDate}
-                            onChange={e => setTempDate(e.target.value)}
-                            className="flex-1 px-3 py-1.5 bg-white border border-emerald-300 text-emerald-950 font-bold rounded-lg text-xs"
-                          />
-                          <input
-                            type="time"
-                            value={tempTime}
-                            onChange={e => setTempTime(e.target.value)}
-                            className="w-24 px-2 py-1.5 bg-white border border-emerald-300 text-emerald-950 font-bold rounded-lg text-xs"
-                          />
-                        </div>
+                      <div className="pt-2 border-t border-emerald-200/80 space-y-2 animate-fade-in">
+                        <CustomDateTimePicker
+                          dateValue={tempDate}
+                          timeValue={tempTime}
+                          onDateChange={setTempDate}
+                          onTimeChange={setTempTime}
+                          dateLabel="Follow-up Date"
+                          timeLabel="Follow-up Time (Optional)"
+                          themeColor="emerald"
+                        />
                         <div className="flex justify-end items-center gap-2">
                           <button
                             type="button"
@@ -1195,22 +1185,16 @@ export default function MobileEditModal({
                     </div>
 
                     {isAddingNext ? (
-                      <div className="pt-2 border-t border-slate-200 space-y-2">
-                        <div className="text-[10px] font-bold text-slate-700">Choose date & time for new follow-up:</div>
-                        <div className="flex gap-2">
-                          <input
-                            type="date"
-                            value={tempDate}
-                            onChange={e => setTempDate(e.target.value)}
-                            className="flex-1 px-3 py-1.5 bg-white border border-slate-300 text-slate-900 font-bold rounded-lg text-xs"
-                          />
-                          <input
-                            type="time"
-                            value={tempTime}
-                            onChange={e => setTempTime(e.target.value)}
-                            className="w-24 px-2 py-1.5 bg-white border border-slate-300 text-slate-900 font-bold rounded-lg text-xs"
-                          />
-                        </div>
+                      <div className="pt-2 border-t border-slate-200 space-y-2 animate-fade-in">
+                        <CustomDateTimePicker
+                          dateValue={tempDate}
+                          timeValue={tempTime}
+                          onDateChange={setTempDate}
+                          onTimeChange={setTempTime}
+                          dateLabel="Follow-up Date"
+                          timeLabel="Follow-up Time (Optional)"
+                          themeColor="blue"
+                        />
                         <div className="flex justify-end items-center gap-2">
                           <button
                             type="button"
@@ -1270,22 +1254,17 @@ export default function MobileEditModal({
                 {!edited.callbackDate && !isFollowupCompleted && !isFollowupCancelled && (
                   <>
                     {isAddingNext ? (
-                      <div className="space-y-2.5 p-3 bg-indigo-50/80 border border-indigo-200 rounded-xl">
+                      <div className="space-y-2.5 p-3 bg-indigo-50/80 border border-indigo-200 rounded-xl animate-fade-in">
                         <div className="text-xs font-extrabold text-indigo-950">Schedule Follow-up</div>
-                        <div className="flex gap-2">
-                          <input
-                            type="date"
-                            value={tempDate}
-                            onChange={e => setTempDate(e.target.value)}
-                            className="flex-1 px-3 py-1.5 bg-white border border-indigo-300 text-indigo-950 font-bold rounded-lg text-xs"
-                          />
-                          <input
-                            type="time"
-                            value={tempTime}
-                            onChange={e => setTempTime(e.target.value)}
-                            className="w-24 px-2 py-1.5 bg-white border border-indigo-300 text-indigo-950 font-bold rounded-lg text-xs"
-                          />
-                        </div>
+                        <CustomDateTimePicker
+                          dateValue={tempDate}
+                          timeValue={tempTime}
+                          onDateChange={setTempDate}
+                          onTimeChange={setTempTime}
+                          dateLabel="Follow-up Date"
+                          timeLabel="Follow-up Time (Optional)"
+                          themeColor="indigo"
+                        />
                         <div className="flex justify-end items-center gap-2">
                           <button
                             type="button"

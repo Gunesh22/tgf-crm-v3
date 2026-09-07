@@ -8,6 +8,8 @@ import SearchableDropdown from "./SearchableDropdown";
 import HistoryTimeline from "./HistoryTimeline";
 import StageInfoModal from "./StageInfoModal";
 import ProgramContextSelector from "./ProgramContextSelector";
+import { formatFollowupTime12h } from "./EasyTimePicker";
+import { CustomDateTimePicker } from "./CustomDateTimePicker";
 import {
   CALL_DIRECTION_OPTIONS,
   CALL_PURPOSE_OPTIONS,
@@ -1191,28 +1193,21 @@ export const CallEntryTab = ({
                       Rescheduling Follow-up
                     </div>
                     <div className="text-[10px] text-sky-700 font-medium">
-                      Current: {formatFollowupDateStr(edited.callbackDate)} {edited.callbackTime ? `· ${edited.callbackTime}` : ""}
+                      Current: {formatFollowupDateStr(edited.callbackDate)} {edited.callbackTime ? `· ${formatFollowupTime12h(edited.callbackTime)}` : ""}
                     </div>
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-sky-200/80 space-y-1.5">
-                  <label className="text-[11px] font-extrabold text-sky-900 block">Choose new date & time:</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="date"
-                      value={tempDate}
-                      onChange={e => setTempDate(e.target.value)}
-                      className="flex-1 px-3 py-1.5 bg-white border border-sky-300 text-sky-950 font-bold rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-sky-500"
-                    />
-                    <input
-                      type="time"
-                      value={tempTime}
-                      onChange={e => setTempTime(e.target.value)}
-                      className="w-28 px-3 py-1.5 bg-white border border-sky-300 text-sky-950 font-bold rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-sky-500"
-                      placeholder="HH:MM"
-                    />
-                  </div>
+                <div className="pt-2 border-t border-sky-200/80">
+                  <CustomDateTimePicker
+                    dateValue={tempDate}
+                    timeValue={tempTime}
+                    onDateChange={setTempDate}
+                    onTimeChange={setTempTime}
+                    dateLabel="Follow-up Date"
+                    timeLabel="Follow-up Time (Optional)"
+                    themeColor="sky"
+                  />
                 </div>
 
                 <div className="pt-2 border-t border-sky-200/80 flex justify-end items-center gap-2">
@@ -1254,7 +1249,7 @@ export const CallEntryTab = ({
                     <div>
                       <div className="text-xs font-extrabold text-amber-950 flex items-center gap-1.5">
                         <span>📅 {formatFollowupDateStr(edited.callbackDate)}</span>
-                        {edited.callbackTime && <span className="text-amber-800">· 🕒 {edited.callbackTime}</span>}
+                        {edited.callbackTime && <span className="text-amber-800">· 🕒 {formatFollowupTime12h(edited.callbackTime)}</span>}
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-300/60">
@@ -1341,22 +1336,15 @@ export const CallEntryTab = ({
 
             {isAddingNext ? (
               <div className="pt-2 border-t border-emerald-200/80 space-y-2.5 animate-fade-in">
-                <div className="text-[11px] font-bold text-emerald-900">Choose date & time for next follow-up:</div>
-                <div className="flex gap-2">
-                  <input
-                    type="date"
-                    value={tempDate}
-                    onChange={e => setTempDate(e.target.value)}
-                    className="flex-1 px-3 py-1.5 bg-white border border-emerald-300 text-emerald-950 font-bold rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                  <input
-                    type="time"
-                    value={tempTime}
-                    onChange={e => setTempTime(e.target.value)}
-                    className="w-28 px-3 py-1.5 bg-white border border-emerald-300 text-emerald-950 font-bold rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    placeholder="HH:MM"
-                  />
-                </div>
+                <CustomDateTimePicker
+                  dateValue={tempDate}
+                  timeValue={tempTime}
+                  onDateChange={setTempDate}
+                  onTimeChange={setTempTime}
+                  dateLabel="Follow-up Date"
+                  timeLabel="Follow-up Time (Optional)"
+                  themeColor="emerald"
+                />
                 <div className="flex justify-end items-center gap-2">
                   <button
                     type="button"
@@ -1433,22 +1421,15 @@ export const CallEntryTab = ({
 
             {isAddingNext ? (
               <div className="pt-2 border-t border-slate-200 space-y-2.5 animate-fade-in">
-                <div className="text-[11px] font-bold text-slate-700">Choose date & time for new follow-up:</div>
-                <div className="flex gap-2">
-                  <input
-                    type="date"
-                    value={tempDate}
-                    onChange={e => setTempDate(e.target.value)}
-                    className="flex-1 px-3 py-1.5 bg-white border border-slate-300 text-slate-900 font-bold rounded-lg text-xs"
-                  />
-                  <input
-                    type="time"
-                    value={tempTime}
-                    onChange={e => setTempTime(e.target.value)}
-                    className="w-28 px-3 py-1.5 bg-white border border-slate-300 text-slate-900 font-bold rounded-lg text-xs"
-                    placeholder="HH:MM"
-                  />
-                </div>
+                <CustomDateTimePicker
+                  dateValue={tempDate}
+                  timeValue={tempTime}
+                  onDateChange={setTempDate}
+                  onTimeChange={setTempTime}
+                  dateLabel="Follow-up Date"
+                  timeLabel="Follow-up Time (Optional)"
+                  themeColor="blue"
+                />
                 <div className="flex justify-end items-center gap-2">
                   <button
                     type="button"
@@ -1510,21 +1491,15 @@ export const CallEntryTab = ({
             {isAddingNext ? (
               <div className="space-y-3 p-3.5 bg-indigo-50/80 border border-indigo-200 rounded-xl animate-fade-in">
                 <div className="text-xs font-extrabold text-indigo-950">Schedule Follow-up</div>
-                <div className="flex gap-2">
-                  <input
-                    type="date"
-                    value={tempDate}
-                    onChange={e => setTempDate(e.target.value)}
-                    className="flex-1 px-3 py-1.5 bg-white border border-indigo-300 text-indigo-950 font-bold rounded-lg text-xs"
-                  />
-                  <input
-                    type="time"
-                    value={tempTime}
-                    onChange={e => setTempTime(e.target.value)}
-                    className="w-28 px-3 py-1.5 bg-white border border-indigo-300 text-indigo-950 font-bold rounded-lg text-xs"
-                    placeholder="HH:MM"
-                  />
-                </div>
+                <CustomDateTimePicker
+                  dateValue={tempDate}
+                  timeValue={tempTime}
+                  onDateChange={setTempDate}
+                  onTimeChange={setTempTime}
+                  dateLabel="Follow-up Date"
+                  timeLabel="Follow-up Time (Optional)"
+                  themeColor="indigo"
+                />
                 <div className="flex justify-end items-center gap-2">
                   <button
                     type="button"

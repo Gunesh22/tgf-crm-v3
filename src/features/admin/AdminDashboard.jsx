@@ -346,6 +346,7 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
               {activeTab === "abhivyakti" && (
                 <AbhivyaktiTab
                   registrations={registrations}
+                  callLogs={callLogs}
                   loading={registrationsLoading}
                 />
               )}
