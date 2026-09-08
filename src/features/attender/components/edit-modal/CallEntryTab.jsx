@@ -236,7 +236,7 @@ export const CallEntryTab = ({
     // Top N tags first, followed by all standard source options
     const combined = new Set([...contactTagsList, ...CALL_SOURCE_OPTIONS]);
     return Array.from(combined);
-  }, [contactTagsList]);
+  }, [contactTagsList, CALL_SOURCE_OPTIONS.length, CALL_SOURCE_OPTIONS.join(",")]);
 
   const selectedProgram = String(activeProgram || edited[calledForField] || "").trim();
 
@@ -752,8 +752,9 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={CALL_SOURCE_OPTIONS}
-              selected={String(edited.original_source || edited.originalSource || row?.original_source || row?.originalSource || "")}
+              selected={String(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || "")}
               onChange={val => {
+                handleChange("leadOrigin", val);
                 handleChange("original_source", val);
                 handleChange("originalSource", val);
               }}
@@ -819,8 +820,9 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={CALL_SOURCE_OPTIONS}
-              selected={String(edited.original_source || edited.originalSource || row?.original_source || row?.originalSource || "")}
+              selected={String(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || "")}
               onChange={val => {
+                handleChange("leadOrigin", val);
                 handleChange("original_source", val);
                 handleChange("originalSource", val);
               }}
@@ -872,8 +874,9 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={CALL_SOURCE_OPTIONS}
-              selected={String(edited.original_source || edited.originalSource || row?.original_source || row?.originalSource || "")}
+              selected={String(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || "")}
               onChange={val => {
+                handleChange("leadOrigin", val);
                 handleChange("original_source", val);
                 handleChange("originalSource", val);
               }}

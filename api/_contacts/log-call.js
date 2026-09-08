@@ -288,12 +288,11 @@ export async function executeLogCall(db, payload) {
   // ── original_source & currentSource — contextual persistence ───────────────
   const originalSource = payload.leadOrigin || payload.original_source || payload.originalSource ||
     rootUpdates.leadOrigin || rootUpdates.original_source || rootUpdates.originalSource ||
-    existingContact.leadOrigin || existingContact.original_source || existingContact.originalSource ||
-    existingContact.Source || existingContact.source || "Direct Entry";
+    existingContact.leadOrigin || existingContact.original_source || existingContact.originalSource || "";
 
   const currentCallSource = payload.currentSource || payload.callSource || payload.source || payload.Source ||
     rootUpdates.currentSource || rootUpdates.callSource || rootUpdates.source || rootUpdates.Source ||
-    existingContact.currentSource || existingContact.Source || existingContact.source || originalSource;
+    existingContact.currentSource || existingContact.Source || existingContact.source || "";
 
   const resolvedPreviousProgram = previousProgram !== undefined
     ? previousProgram

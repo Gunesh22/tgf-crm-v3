@@ -107,8 +107,8 @@ export const importContacts = async (arg1, arg2, arg3, arg4) => {
   }
 
   const enriched = contactsList.map(c => {
-    const leadOrigin = c.leadOrigin || c.original_source || c.originalSource || c.source || c.Source || programName || "Excel Import";
-    const currentSource = c.currentSource || c.callSource || c.source || c.Source || programName || "Excel Import";
+    const leadOrigin = c.leadOrigin || c.original_source || c.originalSource || "";
+    const currentSource = c.currentSource || c.callSource || c.source || c.Source || "";
     return {
       ...c,
       programId: c.programId || programId,
@@ -147,8 +147,17 @@ export const getProgramContactStats = async (programId) => {
 // ============================================
 // ATTENDERS & PROGRAMS BACKEND INTEGRATION
 // ============================================
+const SETTINGS_CACHE_KEY = "crm_settings_options_cache";
 let settingsCache = null;
 let settingsFetchPromise = null;
+
+// Initialize settingsCache immediately from persistent local cache if present
+try {
+  const localSettings = typeof window !== "undefined" ? localStorage.getItem(SETTINGS_CACHE_KEY) : null;
+  if (localSettings) {
+    settingsCache = JSON.parse(localSettings);
+  }
+} catch (e) {}
 
 const applyDynamicOptions = async (data) => {
   if (!data) return;
@@ -160,12 +169,30 @@ const applyDynamicOptions = async (data) => {
   } catch (e) {}
 };
 
+// Immediately apply local cached settings on startup for instant 0ms availability
+if (settingsCache) {
+  applyDynamicOptions(settingsCache);
+}
+
 export const getSettingsOptions = async (opts = {}) => {
   const forceRefresh = Boolean(opts && opts.forceRefresh);
 
   if (settingsCache && !forceRefresh) {
+    applyDynamicOptions(settingsCache);
     return settingsCache;
   }
+
+  try {
+    const cachedStr = typeof window !== "undefined" ? localStorage.getItem(SETTINGS_CACHE_KEY) : null;
+    if (cachedStr && !forceRefresh) {
+      const parsed = JSON.parse(cachedStr);
+      if (parsed && typeof parsed === "object") {
+        settingsCache = parsed;
+        applyDynamicOptions(parsed);
+        return parsed;
+      }
+    }
+  } catch (e) {}
 
   if (settingsFetchPromise && !forceRefresh) {
     return settingsFetchPromise;
@@ -176,16 +203,23 @@ export const getSettingsOptions = async (opts = {}) => {
       const res = await fetchAPI(`/api/admin/settings`);
       if (res && res.data) {
         settingsCache = res.data;
+        try {
+          if (typeof window !== "undefined") {
+            localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(res.data));
+          }
+        } catch (e) {}
         applyDynamicOptions(res.data);
         return res.data;
       }
     } catch (e) {
       if (!e?.message?.includes("Unauthorized") && !e?.message?.includes("401")) {
-        console.error("Failed to fetch settings from DB, using defaults", e);
+        console.error("Failed to fetch settings from DB, using fallback/cache", e);
       }
     } finally {
       settingsFetchPromise = null;
     }
+
+    if (settingsCache) return settingsCache;
 
     const fallback = {
       statusOptions: [...DEFAULT_CONNECTED_STATUSES, ...DEFAULT_NOT_CONNECTED_STATUSES],
@@ -194,6 +228,7 @@ export const getSettingsOptions = async (opts = {}) => {
       whatsappTemplates: DEFAULT_WHATSAPP_TEMPLATES
     };
     settingsCache = fallback;
+    applyDynamicOptions(fallback);
     return fallback;
   })();
 
@@ -201,9 +236,27 @@ export const getSettingsOptions = async (opts = {}) => {
 };
 
 export const updateCallCenterOptions = async (options) => {
+  // Update memory and local cache immediately before API call so UI updates with 0ms delay!
+  if (settingsCache) {
+    settingsCache = { ...settingsCache, ...options };
+  } else {
+    settingsCache = { ...options };
+  }
+  try {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(settingsCache));
+    }
+  } catch (e) {}
+  applyDynamicOptions(settingsCache);
+
   const res = await fetchAPI(`/api/admin/settings`, "POST", options);
   if (res && res.data) {
     settingsCache = res.data;
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(res.data));
+      }
+    } catch (e) {}
     applyDynamicOptions(res.data);
   }
   return res;
@@ -580,6 +633,25 @@ export const checkGlobalDuplicate = async (phone, excludeId = null) => {
     return null;
   } catch (err) {
     console.error("[checkGlobalDuplicate error]", err);
+    return null;
+  }
+};
+
+export const syncGhlTagsForLead = async (contactId, phone, ghlTags = null) => {
+  if (!contactId && !phone) return null;
+  const cleanPhone = String(phone || "").replace(/\D/g, "");
+  const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+  if (!contactId && (!last10 || last10.length < 10)) return null;
+
+  try {
+    const res = await fetchAPI('/api/contacts/sync-ghl-tags', 'POST', {
+      contactId: contactId || null,
+      phone: last10 || phone,
+      ghlTags: Array.isArray(ghlTags) ? ghlTags : null
+    });
+    return res;
+  } catch (err) {
+    console.warn('[syncGhlTagsForLead error]', err);
     return null;
   }
 };

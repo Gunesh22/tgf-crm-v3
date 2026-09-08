@@ -8,6 +8,7 @@ import checkDuplicateHandler from '../_contacts/check-duplicate.js';
 import createIncomingHandler from '../_contacts/create-incoming.js';
 import importBulkHandler from '../_contacts/import-bulk.js';
 import overrideStageHandler from '../_contacts/override-stage.js';
+import syncGhlTagsHandler from '../_contacts/sync-ghl-tags.js';
 
 const handlers = {
   'search': searchHandler,
@@ -18,7 +19,8 @@ const handlers = {
   'check-duplicate': checkDuplicateHandler,
   'create-incoming': createIncomingHandler,
   'import-bulk': importBulkHandler,
-  'override-stage': overrideStageHandler
+  'override-stage': overrideStageHandler,
+  'sync-ghl-tags': syncGhlTagsHandler
 };
 
 export default async function handler(req, res) {

@@ -697,3 +697,56 @@ Enable administrators to visually inspect the exact list of canonical registrati
 - **Production Build**: **Vite build PASSED with 0 errors** (`npm run build`).
 - **Git Push**: Committed and pushed to `main` (`origin/main`) and `version-3.1` (`origin/version-3.1`) at commit `ace0dbc`.
 
+---
+
+## 40. Tag-Only GHL Synchronization on Lead Edit Modal Open
+
+### Root Cause Analysis & Solution Summary
+1. **Isolated Tag Synchronization**:
+   - **Requirement**: Whenever the Edit Modal opens for a lead (or when phone duplicate check runs), fetch current tags for that lead from GoHighLevel (GHL) and sync missing tags to MongoDB.
+   - **Data Restriction**: Consumes **ONLY** GHL tags. Strictly ignores name, email, phone, custom fields, pipeline, stage, status, history, attenderStates, etc.
+   - **Atomic MongoDB Update**: Created `POST /api/contacts/sync-ghl-tags` (`api/_contacts/sync-ghl-tags.js` & `api/contacts/[...slug].js`). Uses `$addToSet: { tags: { $each: missingTags } }` and updates `Tags` string representation. Existing CRM tags are **NEVER** removed or overwritten.
+   - **Phone Normalization**: Extracts digits reading backward 10 digits (`cleanPhone.slice(-10)`) and searches GHL by phone variations (`+91`, `91`, `0`, 10-digit). Includes `locationId` support for GHL v2 API (`services.leadconnectorhq.com`).
+   - **Error Handling**: Non-blocking; network or GHL token errors are caught silently, allowing modal and duplicate check to continue.
+   - **UI & Shared Lead Integration**: Added `syncGhlTagsForLead` helper to `src/lib/db.js`. Integrated into `EditModal.jsx` and `MobileEditModal.jsx` (mount effect & parallel duplicate check). Updates `edited.Tags` state in real-time. Works 100% for shared leads by updating the canonical MongoDB document.
+
+### Verification
+- **Automated Test Suite**: **9 / 9 PASSED (0 failures)** (`test_tag_sync.js`). Verified exact match, new tags, tag preservation, empty tags, missing GHL contact, case-insensitive deduplication, and backward 10-digit phone normalization.
+
+---
+
+## 41. Complete Lead Origin & Current Source Field Decoupling & Persistent Settings Caching Architecture
+
+### Root Cause Analysis & Solution Summary
+1. **Lead Origin & Current Source Decoupling**:
+   - **Root Cause**: Write-time fallback logic in `api/_contacts/log-call.js` (line 292), `api/_contacts/create-incoming.js` (line 81), `api/_contacts/import-bulk.js` (line 27), and `src/lib/db.js` (line 110) fell back to `existingContact.Source` or `c.source` when `leadOrigin` was empty, causing saving any call log to copy Current Source into Lead Origin in MongoDB.
+   - **Fix**: Completely removed `Source` / `source` fallbacks from write-side `leadOrigin` resolution. If `leadOrigin` is empty, it remains `""` in MongoDB without taking the value of `currentSource`. Kept read-time display fallbacks in analytics (`registrationEngine.js`) for reporting without document mutation.
+
+2. **Persistent Settings Options Local Cache Architecture**:
+   - **Root Cause**: Options added in Settings (such as `"Direct Call"`) saved to MongoDB `settings` collection (`sourceOptions`), but `updateDynamicOptions()` in `src/features/attender/utils.js` did not update `CALL_SOURCE_OPTIONS` in memory. Furthermore, `db.js` relied on in-memory `settingsCache`, re-fetching `/api/admin/settings` on reloads or using static defaults.
+   - **Fix**: 
+     - Updated `updateDynamicOptions()` in `src/features/attender/utils.js` to dynamically recalculate and splice `CALL_SOURCE_OPTIONS` whenever options update.
+     - Implemented persistent local storage caching (`crm_settings_options_cache`) in `src/lib/db.js` (`getSettingsOptions` & `updateCallCenterOptions`). On app load, options are read from persistent local cache instantly (0ms delay) with zero network wait. On option add/edit, local cache, in-memory state, and dropdown arrays update simultaneously.
+
+### Verification
+- **Automated Test Suite**: **5 / 5 PASSED (0 failures)** (`test_decoupling.js`) & **3 / 3 PASSED (0 failures)** (`test_settings_caching.js`).
+
+---
+
+## 42. Current Source Mandatory Field Validation & Lead Origin Dropdown State Resolution
+
+### Root Cause Analysis & Solution Summary
+1. **Current Source Mandatory Field Validation Decoupling**:
+   - **Root Cause (`EditModal.jsx` line 1372)**: `sourceVal` evaluated with fallbacks to `targetEdited.original_source || savedRow.original_source` (Lead Origin). If an attender left Current Source blank, `sourceVal` took the value of Lead Origin (e.g. `"Facebook"`), bypassing `if (!sourceVal) missingFields.push("Source")` and allowing calls to be logged with an unselected Current Source.
+   - **Fix (`EditModal.jsx`)**: Removed `original_source` / `savedRow.original_source` fallbacks from `sourceVal`. It now strictly checks Current Source fields (`targetEdited[sourceField]`, `Source`, `source`, `currentSource`). An empty Current Source properly triggers the validation message *"Please fill required field(s) before saving: Source"*.
+
+2. **Lead Origin Dropdown Selection & State Binding**:
+   - **Root Cause (`CallEntryTab.jsx`)**: The Lead Origin `selected` prop checked `edited.original_source` / `edited.originalSource` / `row?.original_source` / `row?.originalSource` without checking `edited.leadOrigin` or `row?.leadOrigin`. Furthermore, `onChange` did not update `leadOrigin` in React state.
+   - **Fix (`CallEntryTab.jsx`)**: Updated `selected` prop across Sales, Reminder, and Query modes to evaluate `edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || ""`. Updated `onChange` to execute `handleChange("leadOrigin", val)` alongside `original_source` and `originalSource`.
+   - **Memoization Dependency Fix (`CallEntryTab.jsx`)**: Updated `useMemo` dependency array for `currentSourceDropdownOptions` to `[contactTagsList, CALL_SOURCE_OPTIONS.length, CALL_SOURCE_OPTIONS.join(",")]` to react instantly when `CALL_SOURCE_OPTIONS` is updated in-place.
+
+### Verification
+- **Automated Test Suite**: **4 / 4 PASSED (0 failures)** (`test_fixes_2_and_4.js`). Verified empty Current Source validation failure, valid Current Source pass, `edited.leadOrigin` dropdown selection evaluation, and `row.leadOrigin` fallback evaluation.
+
+
+

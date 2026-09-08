@@ -6,7 +6,7 @@ import {
   CalendarDays, Loader, Flame, Edit3, ArrowLeft, Users, RotateCw, Undo2, Info
 } from "lucide-react";
 import {
-  addIncomingCallLog, updateCallLog, checkGlobalDuplicate, findMatchingAttenderState
+  addIncomingCallLog, updateCallLog, checkGlobalDuplicate, findMatchingAttenderState, syncGhlTagsForLead
 } from "../../../lib/db";
 import { searchCRMByPhone } from "../../../lib/ghl";
 import {
@@ -305,6 +305,40 @@ export default function MobileEditModal({
   const phoneVal = useMemo(() => String(edited.Phone || "").trim(), [edited.Phone]);
   const mobileVal = useMemo(() => String(edited.Mobile || "").trim(), [edited.Mobile]);
   const dupTimerRef = useRef(null);
+  const tagSyncTriggeredRef = useRef(false);
+
+  useEffect(() => {
+    tagSyncTriggeredRef.current = false;
+  }, [row?.id, row?._id, row?.Phone, row?.Mobile]);
+
+  useEffect(() => {
+    const targetId = row?._isNew ? null : (edited?.contactId || row?.id || row?._id);
+    const targetPhone = phoneVal || mobileVal || getFieldWithFallback(row, "Phone") || getFieldWithFallback(row, "Mobile");
+
+    if (!tagSyncTriggeredRef.current && targetPhone) {
+      const cleanP = String(targetPhone).replace(/\D/g, "");
+      if (cleanP.length >= 10 || targetId) {
+        tagSyncTriggeredRef.current = true;
+        syncGhlTagsForLead(targetId, targetPhone).then(res => {
+          if (res && res.success && res.updated && Array.isArray(res.addedTags) && res.addedTags.length > 0) {
+            setEdited(prev => {
+              const curTags = prev.Tags ? String(prev.Tags).split(',').map(t => t.trim()).filter(Boolean) : [];
+              const merged = Array.from(new Set([...curTags, ...res.addedTags]));
+              return {
+                ...prev,
+                Tags: merged.join(', ')
+              };
+            });
+            if (typeof onRefreshLead === "function") {
+              onRefreshLead();
+            }
+          }
+        }).catch(err => {
+          console.warn("[Mobile GHL Tag Sync Error]", err);
+        });
+      }
+    }
+  }, [row, phoneVal, mobileVal, onRefreshLead]);
 
   useEffect(() => {
     const searchVal = phoneVal || mobileVal;
@@ -321,11 +355,27 @@ export default function MobileEditModal({
         setIsCheckingDuplicate(true);
         const alreadyFetched = !!(edited.GHL_ID || row.GHL_ID || edited.ghl_id || row.ghl_id);
         const shouldQueryCRM = (row._isNew || !edited.Name) && !alreadyFetched;
+        const targetId = row._isNew ? null : (row.id || row._id);
 
-        const [dupRes, crmRes] = await Promise.all([
+        const [dupRes, crmRes, tagSyncRes] = await Promise.all([
           checkGlobalDuplicate(searchVal, row.id).catch(() => null),
-          shouldQueryCRM ? searchCRMByPhone(searchVal).catch(() => []) : Promise.resolve([])
+          shouldQueryCRM ? searchCRMByPhone(searchVal).catch(() => []) : Promise.resolve([]),
+          searchVal ? syncGhlTagsForLead(targetId, searchVal).catch(() => null) : Promise.resolve(null)
         ]);
+
+        if (tagSyncRes && tagSyncRes.success && tagSyncRes.updated && Array.isArray(tagSyncRes.addedTags) && tagSyncRes.addedTags.length > 0) {
+          setEdited(prev => {
+            const curTags = prev.Tags ? String(prev.Tags).split(',').map(t => t.trim()).filter(Boolean) : [];
+            const merged = Array.from(new Set([...curTags, ...tagSyncRes.addedTags]));
+            return {
+              ...prev,
+              Tags: merged.join(', ')
+            };
+          });
+          if (typeof onRefreshLead === "function") {
+            onRefreshLead();
+          }
+        }
 
         if (dupRes && dupRes.matches && dupRes.matches.length > 0) {
           setGlobalDup(dupRes);

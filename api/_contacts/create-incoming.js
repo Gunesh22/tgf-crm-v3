@@ -78,8 +78,8 @@ export default async function handler(req, res) {
     // 2. Genuinely new contact creation
     const callId = 'call_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
 
-    const leadOriginVal = updates.leadOrigin || updates.original_source || updates.originalSource || updates['Lead Origin'] || updates.Source || updates.source || 'Incoming';
-    const currentSourceVal = updates.currentSource || updates.callSource || updates['Current Source'] || updates.Source || updates.source || leadOriginVal;
+    const leadOriginVal = updates.leadOrigin || updates.original_source || updates.originalSource || updates['Lead Origin'] || '';
+    const currentSourceVal = updates.currentSource || updates.callSource || updates['Current Source'] || updates.Source || updates.source || '';
     const targetCalledForVal = updates.calledFor || updates['Called For'] || '';
 
     const historyItem = {

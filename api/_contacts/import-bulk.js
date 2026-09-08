@@ -24,8 +24,8 @@ export default async function handler(req, res) {
       const cleanPhone = String(c.phone || c.Phone || c.Mobile || c.mobile || '').replace(/\D/g, '');
       const contactPhone = cleanPhone || `no_phone_${Date.now()}_${Math.random().toString(36).slice(-5)}`;
 
-      const importedLeadOrigin = c.leadOrigin || c.original_source || c.originalSource || c.source || c.Source || 'Excel Import';
-      const importedCurrentSource = c.currentSource || c.callSource || c.source || c.Source || 'Excel Import';
+      const importedLeadOrigin = c.leadOrigin || c.original_source || c.originalSource || '';
+      const importedCurrentSource = c.currentSource || c.callSource || c.source || c.Source || '';
 
       const setOnInsertObj = {
         phone: contactPhone,

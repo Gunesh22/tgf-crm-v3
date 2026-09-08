@@ -830,6 +830,12 @@ export const updateDynamicOptions = (data) => {
     if (Array.isArray(data.optionalCompulsoryStatuses)) {
       OPTIONAL_COMPULSORY_STATUSES.splice(0, OPTIONAL_COMPULSORY_STATUSES.length, ...data.optionalCompulsoryStatuses);
     }
+
+    const freshCallSources = Array.from(new Set([
+      ...SOURCE_OPTIONS,
+      ...CALLED_FOR_OPTIONS.filter(o => o !== "Reminder" && o !== "Query")
+    ]));
+    CALL_SOURCE_OPTIONS.splice(0, CALL_SOURCE_OPTIONS.length, ...freshCallSources);
   }
 };
 
