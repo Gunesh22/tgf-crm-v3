@@ -318,7 +318,7 @@ export default function SettingsTab() {
 
   const sectionTitles = {
     security: { title: "Security & Master Password", desc: "Manage administrative access, authentication credentials, and security settings." },
-    "call-center": { title: "Call Center Options", desc: "Configure global dropdown options and status lists." },
+    "call-center": { title: "Call Center Options", desc: "Configure global dropdown options for Call Outcome, Source, and Called For." },
     "whatsapp-templates": { title: "WhatsApp Message Templates", desc: "Customize quick message templates used by attenders when sending WhatsApp messages." },
     "status-rules": { title: "Status Rules & Compulsory Fields", desc: "Configure which fields are required when an attender logs a specific call status." },
     "status-stage-mapping": { title: "Status to Pipeline Stage Mapping", desc: "Configure which pipeline stage each call status maps to. Stored in MongoDB." },
@@ -355,7 +355,7 @@ export default function SettingsTab() {
         {/* Section 1: Security */}
         <div 
           id="security" 
-          className="relative isolate overflow-hidden bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-4"
+          className="relative bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-4"
         >
           <AdminPasswordCard highlighted={false} />
         </div>
@@ -363,7 +363,7 @@ export default function SettingsTab() {
         {/* Section 2: Call Center Options */}
         <div 
           id="call-center" 
-          className="relative isolate overflow-hidden bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-5"
+          className="relative bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-5"
         >
           <div className="flex items-center gap-3 border-b border-[#E4E7EC] pb-4">
             <div className="w-8 h-8 rounded-md bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center shrink-0 shadow-2xs">
@@ -371,13 +371,13 @@ export default function SettingsTab() {
             </div>
             <div>
               <h3 className="text-sm font-semibold text-[#172033]">Call Center Options</h3>
-              <p className="text-xs text-[#667085] mt-0.5">Configure dropdown values for Status, Source, and Called For globally.</p>
+              <p className="text-xs text-[#667085] mt-0.5">Configure dropdown values for Call Outcome, Source, and Called For globally.</p>
             </div>
           </div>
 
           <div className="grid md:grid-cols-3 gap-4">
             <OptionsManagerCard
-              title="Status Options"
+              title="Call Outcome Options"
               icon={ShieldCheck}
               options={options?.statusOptions || []}
               onAdd={(val) => handleOptionChange("status", "add", val)}
@@ -406,7 +406,7 @@ export default function SettingsTab() {
         {/* Section 3: WhatsApp Message Templates */}
         <div 
           id="whatsapp-templates" 
-          className="relative isolate overflow-hidden bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-4"
+          className="relative bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-4"
         >
           <WhatsAppTemplatesCard
             templates={options?.whatsappTemplates || DEFAULT_WHATSAPP_TEMPLATES}
@@ -417,7 +417,7 @@ export default function SettingsTab() {
         {/* Section 4: Status Rules */}
         <div 
           id="status-rules" 
-          className="relative isolate overflow-hidden bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-4"
+          className="relative bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-4"
         >
           <CompulsoryFieldBypassCard
             options={options}
@@ -428,7 +428,7 @@ export default function SettingsTab() {
         {/* Section 4b: Status to Pipeline Stage Mapping */}
         <div 
           id="status-stage-mapping" 
-          className="relative isolate overflow-hidden bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-4"
+          className="relative bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-4"
         >
           <StatusStageMappingCard
             options={options}
@@ -444,7 +444,7 @@ export default function SettingsTab() {
         {/* Section 5: Drag & Drop Status Classification */}
         <div 
           id="call-classification" 
-          className="relative isolate overflow-hidden bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-4"
+          className="relative bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-4"
         >
           <StatusClassificationCard
             classificationSearch={classificationSearch}
@@ -466,7 +466,7 @@ export default function SettingsTab() {
         {/* Section 6: Data Management */}
         <div 
           id="data-management" 
-          className="relative isolate overflow-hidden bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-5"
+          className="relative bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-5"
         >
           <div className="flex items-center gap-3 border-b border-[#E4E7EC] pb-4">
             <div className="w-8 h-8 rounded-md bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center shrink-0 shadow-2xs">

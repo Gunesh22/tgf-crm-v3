@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   Layers,
   Plus,
@@ -718,7 +719,7 @@ export function StatusStageMappingCard({ options, onSaveMapping }) {
       )}
 
       {/* Confirmation Modal: Delete Stage */}
-      {stageToDelete && (
+      {stageToDelete && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-fade-in">
           <div className="bg-white border border-slate-200 rounded-2xl p-5 max-w-md w-full shadow-2xl space-y-4 animate-scale-up">
             <div className="flex items-start gap-3">
@@ -754,7 +755,8 @@ export function StatusStageMappingCard({ options, onSaveMapping }) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

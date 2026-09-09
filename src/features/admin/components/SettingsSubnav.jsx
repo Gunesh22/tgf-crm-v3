@@ -9,7 +9,7 @@ export function SettingsSubnav({ activeSection, onSelectSection }) {
     { id: "security", label: "Security", icon: ShieldCheck },
     { id: "call-center", label: "Call Center", icon: PhoneCall },
     { id: "whatsapp-templates", label: "WhatsApp", icon: MessageSquare },
-    { id: "status-rules", label: "Status Rules", icon: ListChecks },
+    { id: "status-rules", label: "Call Outcome Rules", icon: ListChecks },
     { id: "status-stage-mapping", label: "Stage Mapping", icon: Layers },
     { id: "call-classification", label: "Classification", icon: SlidersHorizontal },
     { id: "data-management", label: "Data Management", icon: Database },

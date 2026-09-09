@@ -29,7 +29,7 @@ export function StatusClassificationCard({
               Call Classification & Reporting Rules
             </h3>
             <p className="text-xs text-[#667085] mt-0.5">
-              Drag & drop statuses across columns to categorize calls into Connected, Not Connected, or Unassigned.
+              Drag & drop call outcomes across columns to categorize calls into Connected, Not Connected, or Unassigned.
             </p>
           </div>
         </div>
@@ -41,7 +41,7 @@ export function StatusClassificationCard({
             type="text"
             value={classificationSearch}
             onChange={e => setClassificationSearch(e.target.value)}
-            placeholder="Search classification statuses..."
+            placeholder="Search call outcomes..."
             className="w-full h-9 pl-9 pr-8 bg-white border border-[#DDE2EA] rounded-[7px] text-xs font-medium text-[#172033] placeholder:text-[#98A2B3] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all duration-150 shadow-[0_1px_2px_rgba(16,24,40,0.02)]"
           />
           {classificationSearch && (

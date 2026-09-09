@@ -74,10 +74,10 @@ export default function CompulsoryFieldBypassCard({ options, setOptions }) {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-[#172033] tracking-tight">
-              Status Rules & Compulsory Fields
+              Call Outcome Rules & Compulsory Fields
             </h3>
             <p className="text-xs text-[#667085] mt-0.5">
-              Configure which fields are required when an attender logs a specific call status.
+              Configure which fields are required when an attender logs a specific call outcome.
             </p>
           </div>
         </div>
@@ -107,7 +107,7 @@ export default function CompulsoryFieldBypassCard({ options, setOptions }) {
             type="text"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            placeholder="Search status rules..."
+            placeholder="Search call outcome rules..."
             className="w-full h-9 pl-9 pr-8 bg-white border border-[#DDE2EA] rounded-[7px] text-xs font-medium text-[#172033] placeholder:text-[#98A2B3] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all duration-150 shadow-[0_1px_2px_rgba(16,24,40,0.02)]"
           />
           {searchTerm && (

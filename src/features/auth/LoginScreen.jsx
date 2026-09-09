@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { LogIn, Shield, Loader2 } from 'lucide-react';
+import { LogIn, Shield, Loader2, Eye, EyeOff } from 'lucide-react';
 import { fetchAPI } from '../../lib/db';
 import LottieAnimation from '../../components/ui/LottieAnimation';
 import customerServiceAnimation from '../../assets/customer_service.json';
@@ -29,10 +29,18 @@ const FALLBACK_ATTENDERS = [
 export default function LoginScreen() {
   const [attenderId, setAttenderId] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { login } = useAuth();
   
   const [error, setError] = useState('');
+  const attenderInputRef = useRef(null);
+  const passwordInputRef = useRef(null);
+
+  useEffect(() => {
+    // Auto-focus Attender ID field on page load
+    attenderInputRef.current?.focus();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault?.();
@@ -98,12 +106,19 @@ export default function LoginScreen() {
                 Attender ID or Name
               </label>
               <input
+                ref={attenderInputRef}
                 id="attenderId"
                 name="attenderId"
                 type="text"
                 required
                 value={attenderId}
                 onChange={(e) => setAttenderId(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && attenderId.trim()) {
+                    e.preventDefault();
+                    passwordInputRef.current?.focus();
+                  }
+                }}
                 className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-lg text-sm font-medium text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-150"
                 placeholder="e.g. Manisha, Sheetal, Priyanka, or admin"
               />
@@ -113,16 +128,27 @@ export default function LoginScreen() {
               <label htmlFor="password" className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
                 Password
               </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-lg text-sm font-medium text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-150"
-                placeholder="••••••••"
-              />
+              <div className="relative">
+                <input
+                  ref={passwordInputRef}
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-3.5 pr-10 py-2.5 bg-slate-900 border border-slate-800 rounded-lg text-sm font-medium text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-150"
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 rounded focus:outline-none transition cursor-pointer"
+                  title={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
 
             <div className="pt-1">

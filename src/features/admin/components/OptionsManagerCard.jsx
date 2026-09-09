@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 import { Search, X, Trash2, Plus, Edit2, Check, AlertTriangle, Layers } from "lucide-react";
 
 export function OptionsManagerCard({ title, icon: Icon, options, onAdd, onDelete, onRename }) {
@@ -173,7 +174,7 @@ export function OptionsManagerCard({ title, icon: Icon, options, onAdd, onDelete
       </div>
 
       {/* Delete Confirmation Modal */}
-      {deleteConfirmOpt && (
+      {deleteConfirmOpt && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-sm rounded-[10px] shadow-xl overflow-hidden border border-[#E4E7EC] p-5 space-y-4">
             <div className="flex items-center gap-3">
@@ -208,7 +209,8 @@ export function OptionsManagerCard({ title, icon: Icon, options, onAdd, onDelete
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

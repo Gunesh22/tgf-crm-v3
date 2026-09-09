@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 import { MessageSquare, Plus, Edit2, Trash2, Save, X, Sparkles, User, HelpCircle } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { DEFAULT_WHATSAPP_TEMPLATES } from "../../../lib/db";
@@ -178,7 +179,7 @@ export function WhatsAppTemplatesCard({ templates = DEFAULT_WHATSAPP_TEMPLATES, 
       </div>
 
       {/* Edit / Add Modal */}
-      {isModalOpen && (
+      {isModalOpen && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in" onClick={() => setIsModalOpen(false)}>
           <div
             className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-5 shadow-2xl animate-scale-up border border-gray-100"
@@ -211,8 +212,8 @@ export function WhatsAppTemplatesCard({ templates = DEFAULT_WHATSAPP_TEMPLATES, 
                     type="text"
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="e.g. Shivir Follow-up"
-                    className="w-full px-3 py-2 text-xs font-semibold bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                    placeholder="e.g. Follow-up Intro"
+                    className="w-full px-3 py-2 text-xs font-bold bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
                   />
                 </div>
 
@@ -224,14 +225,15 @@ export function WhatsAppTemplatesCard({ templates = DEFAULT_WHATSAPP_TEMPLATES, 
                     type="text"
                     value={formData.emoji}
                     onChange={(e) => setFormData({ ...formData, emoji: e.target.value })}
-                    className="w-full px-3 py-2 text-center text-sm font-bold bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                    maxLength={2}
+                    className="w-full px-3 py-2 text-xs font-bold text-center bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
                   />
                 </div>
               </div>
 
-              {/* Quick Emojis Selector */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[10px] font-bold text-gray-400 mr-1">Quick Emojis:</span>
+              {/* Quick Emoji Bar */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                <span className="text-[10px] font-bold text-gray-400 shrink-0">Quick Emoji:</span>
                 {QUICK_EMOJIS.map((em) => (
                   <button
                     key={em}
@@ -312,7 +314,8 @@ export function WhatsAppTemplatesCard({ templates = DEFAULT_WHATSAPP_TEMPLATES, 
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

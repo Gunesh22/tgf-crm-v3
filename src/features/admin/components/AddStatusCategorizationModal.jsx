@@ -1,10 +1,11 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import { Sliders, ShieldCheck, PhoneCall, PhoneOff, CheckCircle2, Archive } from "lucide-react";
 
 export function AddStatusCategorizationModal({ addStatusModal, confirmAddStatus }) {
   if (!addStatusModal) return null;
 
-  return (
+  const modalContent = (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
       <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-gray-100 p-6 space-y-6">
         <div className="flex items-center gap-3">
@@ -12,15 +13,15 @@ export function AddStatusCategorizationModal({ addStatusModal, confirmAddStatus 
             <Sliders size={22} />
           </div>
           <div>
-            <h3 className="font-black text-gray-900 text-lg">Categorize New Status</h3>
-            <p className="text-xs text-gray-500 font-medium mt-0.5">Select how this status should be classified in analytics.</p>
+            <h3 className="font-black text-gray-900 text-lg">Categorize New Call Outcome</h3>
+            <p className="text-xs text-gray-500 font-medium mt-0.5">Select how this call outcome should be classified in analytics.</p>
           </div>
         </div>
 
         <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 flex items-center gap-3">
           <ShieldCheck size={20} className="text-indigo-600 shrink-0" />
           <div>
-            <span className="text-xs text-indigo-700 font-semibold block">New Status Name:</span>
+            <span className="text-xs text-indigo-700 font-semibold block">New Call Outcome:</span>
             <span className="text-sm font-black text-indigo-950">{addStatusModal}</span>
           </div>
         </div>
@@ -79,4 +80,6 @@ export function AddStatusCategorizationModal({ addStatusModal, confirmAddStatus 
       </div>
     </div>
   );
+
+  return typeof document !== "undefined" ? createPortal(modalContent, document.body) : modalContent;
 }
