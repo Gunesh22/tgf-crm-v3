@@ -15,11 +15,16 @@ export default async function handler(req, res) {
     const rawAttenderId = sanitizeString(req.body?.attenderId);
     const rawHistoryId = sanitizeString(req.body?.historyId);
 
-    if (!rawContactId || !rawAttenderId || !rawHistoryId) {
-      return res.status(400).json({ error: 'contactId, attenderId, and historyId are required' });
+    if (!rawContactId || !rawHistoryId) {
+      return res.status(400).json({ error: 'contactId and historyId are required' });
     }
 
-    if (!isSameAttender(rawAttenderId, session)) {
+    if (session.role !== 'admin' && !(session.id && session.id.toLowerCase().includes('admin'))) {
+      if (!isSameAttender(rawAttenderId, session)) {
+        console.log(`[UNDO-CALL AUTOCORRECT] Overriding requested attender "${rawAttenderId}" with logged-in attender "${session.name} (${session.id})"`);
+        rawAttenderId = session.id;
+      }
+    } else if (!isSameAttender(rawAttenderId, session)) {
       return res.status(403).json({ success: false, error: 'Forbidden: Cannot undo call for another attender' });
     }
 

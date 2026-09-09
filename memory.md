@@ -748,5 +748,50 @@ Enable administrators to visually inspect the exact list of canonical registrati
 ### Verification
 - **Automated Test Suite**: **4 / 4 PASSED (0 failures)** (`test_fixes_2_and_4.js`). Verified empty Current Source validation failure, valid Current Source pass, `edited.leadOrigin` dropdown selection evaluation, and `row.leadOrigin` fallback evaluation.
 
+---
 
+## 43. Multi-Attender Shared Lead Resolution & Backend Session Alignment
 
+### Root Cause Analysis & Solution Summary
+1. **Save Error: Forbidden: Cannot log call on behalf of another attender**:
+   - **Root Cause**: When a logged-in attender (**Geeta**) opened a shared lead originally assigned to another attender (**Manisha**), `EditModal.jsx` initialized `activeAttenderId` using `row.attenderId` (**Manisha**). Upon clicking **SAVE & CLOSE**, the frontend sent a log-call payload specifying `attenderId: "Manisha"`. The server's IDOR check (`isSameAttender`) compared `session.id` (**Geeta**) against the payload `attenderId` (**Manisha**) and returned a `403 Forbidden` error.
+   - **Frontend Fix (`EditModal.jsx` & `MobileEditModal.jsx`)**: Updated modal attender resolution. When `allowAttenderSelection` is false (normal attender workspace), `activeAttenderId` strictly prioritizes the authenticated session user (`attenderId` prop) over `row.attenderId`.
+   - **Backend Safeguard (`api/_contacts/log-call.js`, `api/_contacts/create-incoming.js`, `api/_contacts/undo-call.js`)**: Implemented server-side session alignment. When a non-admin attender submits a call or creates an incoming lead, the server automatically maps `attenderId` and `attenderName` to the active authenticated session user, eliminating `403 Forbidden` lockouts on shared leads.
+
+2. **Multi-Program Registration Credit Attribution**:
+   - **Verification**: Verified that registration credit for multi-program leads is completely decoupled per program (`registrationId = reg_<contactId>_<calledForKey>`).
+   - **Attribution**: When Manisha previously registered a lead for **SHSH**, and Geeta later registers the same lead for **Pitrupaksh Shivir**, Manisha's credit for **SHSH** is retained, while Geeta receives 100% of the credit for **Pitrupaksh Shivir**.
+
+### Verification
+- **Automated Test Suite**: **161 / 161 PASSED (0 failures)** (`npm test`).
+- **Production Build**: **Vite build PASSED with 0 errors** (`npm run build`).
+
+---
+
+## 44. Program Chip Context Stage Recalculation & Shared Banner Attribution Fix
+
+### Root Cause Analysis & Solution Summary
+1. **Program Chip Context Stage Recalculation**:
+   - **Root Cause**: When an attender clicked a program chip (e.g., `Pitrupaksh Shivir`) beside the call entry tab, `handleSelectProgram` in `EditModal.jsx` and `MobileEditModal.jsx` updated `calledFor`, `status`, and `Source`, but omitted updating `pipelineStage`. Consequently, `displayStage` remained stuck on the previous program's stage (e.g. `6. Registered / Won` from Manisha's `SHSH` registration) instead of recalculating the stage for the selected target program.
+   - **Fix**: Updated `handleSelectProgram` in `EditModal.jsx` and `MobileEditModal.jsx` to calculate `targetStage = getEffectiveStage(savedRow || row || edited, targetProg, attId) || PIPELINE_STAGES.NEW_LEAD` and update `pipelineStage` in React state upon program chip selection.
+
+2. **Shared Contact Notification Banner Attribution**:
+   - **Root Cause**: `SharedBanner.jsx` previously rendered the stage badge as `Current stage: 6. Registered / Won`. When displayed on shared leads, users misidentified this as the current active call's stage.
+   - **Fix**: Updated `SharedBanner.jsx` stage badge label to `<span>{otherName ? `${otherName}'s stage:` : "Previous stage:"}</span>` (e.g. `Manisha's stage: 6. Registered / Won`). Passed `currentAttenderId={activeAttenderId}` and `currentAttenderName={activeAttenderName}` from `MobileEditModal.jsx`.
+
+### Verification
+- **Automated Test Suite**: **161 / 161 PASSED (0 failures)** (`npm test`).
+- **Production Build**: **Vite build PASSED with 0 errors** (`npm run build`).
+
+---
+
+## 45. Team Assisted Registrations Notification Calculation Fix
+
+### Root Cause Analysis & Solution Summary
+1. **Team Assisted Registrations Mismatched Program Display**:
+   - **Root Cause**: In `AttenderWorkspace.jsx`, `assistedNotifications` previously evaluated `log["Called For"]` to display the program name for team-assisted registrations. When a shared lead (e.g. Vijay Kshtriye) had a previous registration for `SHSH` by Manisha, and Geeta later changed the lead's active `Called For` field to `Pitrupaksh Shivir`, the notification builder read `convertedBy = "Manisha"` alongside `log["Called For"] = "Pitrupaksh Shivir"`, incorrectly outputting *"Registered by Manisha on your behalf. Pitrupaksh Shivir"*.
+   - **Fix**: Re-architected `assistedNotifications` calculation in `AttenderWorkspace.jsx`. It now extracts exact `regEvents` directly from `log.history` and `log.attenderStates`, binding the exact program registered in that event (`h.calledFor || h.program`) to `convertedBy`. Excludes registration events performed by the active logged-in user (`isMe(attenderName)` / `isMe(attenderId)`).
+
+### Verification
+- **Automated Test Suite**: **161 / 161 PASSED (0 failures)** (`npm test`).
+- **Production Build**: **Vite build PASSED with 0 errors** (`npm run build`).

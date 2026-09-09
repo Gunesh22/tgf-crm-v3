@@ -276,44 +276,82 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     if (!attenderName || !callLogs || callLogs.length === 0) return [];
     
     const currentAttenderLower = String(attenderName).trim().toLowerCase();
+    const currentAttenderIdLower = String(attenderId || "").trim().toLowerCase();
     const notifications = [];
+
+    const isMe = (nameOrId) => {
+      if (!nameOrId) return false;
+      const cleanVal = String(nameOrId).trim().toLowerCase();
+      if (currentAttenderLower && cleanVal === currentAttenderLower) return true;
+      if (currentAttenderIdLower && cleanVal === currentAttenderIdLower) return true;
+      return false;
+    };
 
     callLogs.forEach(log => {
       if (log._deleted) return;
 
-      const status = getCanonicalStatus(log.status || "");
-      if (status !== "Reg.Done") return;
+      const regEvents = [];
 
-      let convertedBy = log.convertedBy || "";
-
-      if (!convertedBy && Array.isArray(log.history)) {
-        const regHist = log.history.find(h => getCanonicalStatus(h.status || "") === "Reg.Done");
-        if (regHist && regHist.attenderName) {
-          convertedBy = regHist.attenderName;
-        }
-      }
-      if (!convertedBy && log.attenderStates) {
-        Object.values(log.attenderStates).forEach(st => {
-          if (st && getCanonicalStatus(st.status || "") === "Reg.Done" && st.attenderName) {
-            convertedBy = st.attenderName;
+      if (Array.isArray(log.history)) {
+        log.history.forEach(h => {
+          if (!h) return;
+          const status = getCanonicalStatus(h.status || "");
+          if (status === "Reg.Done" && h.attenderName && !isMe(h.attenderName) && !isMe(h.attenderId)) {
+            regEvents.push({
+              convertedBy: h.attenderName,
+              program: h.calledFor || h.called_for || h["Called For"] || h.program || "",
+              timestamp: h.timestamp || log.updatedAt
+            });
           }
         });
       }
 
-      if (convertedBy && String(convertedBy).trim().toLowerCase() !== currentAttenderLower) {
+      if (regEvents.length === 0 && log.attenderStates) {
+        Object.values(log.attenderStates).forEach(st => {
+          if (!st) return;
+          const status = getCanonicalStatus(st.status || "");
+          if (status === "Reg.Done" && st.attenderName && !isMe(st.attenderName) && !isMe(st.attenderId)) {
+            regEvents.push({
+              convertedBy: st.attenderName,
+              program: st.calledFor || st["Called For"] || st.program || "",
+              timestamp: st.updatedAt || log.updatedAt
+            });
+          }
+        });
+      }
+
+      if (regEvents.length === 0) {
+        const rootStatus = getCanonicalStatus(log.status || "");
+        let convertedBy = log.convertedBy || "";
+        if (rootStatus === "Reg.Done" && convertedBy && !isMe(convertedBy)) {
+          regEvents.push({
+            convertedBy: convertedBy,
+            program: log["Called For"] || log["Sub Program"] || log.programName || "Program",
+            timestamp: log.registeredAt || log.lastCalledAt || log.updatedAt
+          });
+        }
+      }
+
+      const seenProgs = new Set();
+      regEvents.forEach(ev => {
+        const progName = ev.program || log["Called For"] || "Program";
+        const progKey = progName.toLowerCase().trim();
+        if (seenProgs.has(progKey)) return;
+        seenProgs.add(progKey);
+
         const nameKey = Object.keys(log).find(k => ["name", "lead name", "caller name", "lead"].includes(k.toLowerCase())) || "Name";
         const leadName = log[nameKey] || "Lead";
 
         notifications.push({
-          id: log.id,
+          id: `${log.id}_${progKey}_${ev.convertedBy}`,
           leadName: leadName,
           phone: log.Phone || log.phone || log.Mobile || log.mobile || "",
-          convertedBy: convertedBy,
-          program: log["Called For"] || log["Sub Program"] || log.programName || "Program",
-          registeredAt: log.registeredAt || log.lastCalledAt || log.updatedAt || log.createdAt,
+          convertedBy: ev.convertedBy,
+          program: progName,
+          registeredAt: ev.timestamp || log.updatedAt || log.createdAt,
           log: log
         });
-      }
+      });
     });
 
     return notifications.sort((a, b) => {
@@ -321,7 +359,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
       const db = parseTimestamp(b.registeredAt) || new Date(0);
       return db - da;
     });
-  }, [callLogs, attenderName]);
+  }, [callLogs, attenderName, attenderId]);
 
   const unreadNotifCount = useMemo(() => {
     return assistedNotifications.filter(n => !readNotifIds.includes(n.id)).length;

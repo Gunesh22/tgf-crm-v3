@@ -17,14 +17,18 @@ export default async function handler(req, res) {
   try {
     const { attenderId, attenderName, programId, programName, ...updates } = req.body || {};
 
-    const cleanAttenderId = sanitizeString(attenderId);
-    const cleanAttenderName = sanitizeString(attenderName);
+    let cleanAttenderId = sanitizeString(attenderId);
+    let cleanAttenderName = sanitizeString(attenderName);
 
-    if (!cleanAttenderId) {
-      return res.status(400).json({ error: 'attenderId is required' });
-    }
-
-    if (!isSameAttender(cleanAttenderId, session)) {
+    if (session.role !== 'admin' && !(session.id && session.id.toLowerCase().includes('admin'))) {
+      if (!isSameAttender(cleanAttenderId, session)) {
+        console.log(`[CREATE-INCOMING AUTOCORRECT] Overriding requested attender "${cleanAttenderId}" with logged-in attender "${session.name} (${session.id})"`);
+        cleanAttenderId = session.id;
+        cleanAttenderName = session.name;
+        req.body.attenderId = session.id;
+        req.body.attenderName = session.name;
+      }
+    } else if (!isSameAttender(cleanAttenderId, session)) {
       return res.status(403).json({ success: false, error: 'Forbidden: Cannot create incoming call for another attender' });
     }
 

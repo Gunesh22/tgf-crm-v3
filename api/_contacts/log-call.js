@@ -648,9 +648,17 @@ export default async function handler(req, res) {
   try {
     const client = await clientPromise;
     const db     = client.db('tgf_crm');
-    const { attenderId, attenderName, status } = req.body || {};
+    let { attenderId, attenderName, status } = req.body || {};
 
-    if (!isSameAttender(attenderId, session)) {
+    if (session.role !== 'admin' && !(session.id && session.id.toLowerCase().includes('admin'))) {
+      if (!isSameAttender(attenderId, session)) {
+        console.log(`[LOG-CALL AUTOCORRECT] Overriding requested attender "${attenderId}" with logged-in attender "${session.name} (${session.id})"`);
+        attenderId = session.id;
+        attenderName = session.name;
+        req.body.attenderId = session.id;
+        req.body.attenderName = session.name;
+      }
+    } else if (!isSameAttender(attenderId, session)) {
       return res.status(403).json({ success: false, error: 'Forbidden: Cannot log call on behalf of another attender' });
     }
 

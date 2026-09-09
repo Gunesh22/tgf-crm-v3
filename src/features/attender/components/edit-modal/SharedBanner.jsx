@@ -164,7 +164,7 @@ export const SharedBanner = ({
               {displayProgram && <span>for {displayProgram}</span>}
             </span>
             <span key="stage-badge-wrapper" className="text-[11px] font-semibold text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-200 inline-flex items-center gap-1">
-              <span>Current stage:</span>
+              <span>{otherName ? `${otherName}'s stage:` : "Previous stage:"}</span>
               <span>{prevStageDisplay}</span>
               <button
                 type="button"

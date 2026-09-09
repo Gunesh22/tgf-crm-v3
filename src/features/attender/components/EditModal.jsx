@@ -62,16 +62,16 @@ export const EditModal = ({
   isFetchingShared = false,
   freshSharedLead = null
 }) => {
-  const [selectedAttenderId, setSelectedAttenderId] = useState(() => (attenderId || row?.attenderId || ""));
-  const [selectedAttenderName, setSelectedAttenderName] = useState(() => (attenderName || row?.attenderName || ""));
+  const [selectedAttenderId, setSelectedAttenderId] = useState(() => (allowAttenderSelection ? (row?.attenderId || attenderId || "") : (attenderId || row?.attenderId || "")));
+  const [selectedAttenderName, setSelectedAttenderName] = useState(() => (allowAttenderSelection ? (row?.attenderName || attenderName || "") : (attenderName || row?.attenderName || "")));
 
   useEffect(() => {
     if (attenderId) setSelectedAttenderId(attenderId);
     if (attenderName) setSelectedAttenderName(attenderName);
   }, [attenderId, attenderName]);
 
-  const activeAttenderId = selectedAttenderId || attenderId || row?.attenderId || "";
-  const activeAttenderName = selectedAttenderName || attenderName || row?.attenderName || "";
+  const activeAttenderId = (!allowAttenderSelection && attenderId) ? attenderId : (selectedAttenderId || attenderId || row?.attenderId || "");
+  const activeAttenderName = (!allowAttenderSelection && attenderName) ? attenderName : (selectedAttenderName || attenderName || row?.attenderName || "");
 
   const getNormalizedRow = () => {
     const normalized = { ...row };
@@ -223,6 +223,7 @@ export const EditModal = ({
     const attId = activeAttenderId || edited.attenderId || row?.attenderId || null;
     const targetStatus = getProgramSpecificStatus(savedRow || row || edited, targetProg, attId);
     const targetSource = getContactSource(savedRow || row || edited, targetProg);
+    const targetStage = getEffectiveStage(savedRow || row || edited, targetProg, attId) || PIPELINE_STAGES.NEW_LEAD;
 
     setEdited(prev => ({
       ...prev,
@@ -230,6 +231,7 @@ export const EditModal = ({
       "Called For": targetProg,
       called_for: targetProg,
       status: targetStatus,
+      pipelineStage: targetStage,
       Source: targetSource || "",
       source: targetSource || ""
     }));

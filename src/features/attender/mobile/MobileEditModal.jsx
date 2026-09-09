@@ -54,6 +54,9 @@ export default function MobileEditModal({
   isFetchingShared = false,
   freshSharedLead = null
 }) {
+  const activeAttenderId = attenderId || row?.attenderId || "";
+  const activeAttenderName = attenderName || row?.attenderName || "";
+
   const getNormalizedRow = () => {
     const normalized = { ...row };
     if (normalized.callType) {
@@ -255,6 +258,7 @@ export default function MobileEditModal({
     const attId = activeAttenderId || edited.attenderId || row?.attenderId || null;
     const targetStatus = getProgramSpecificStatus(savedRow || row || edited, targetProg, attId);
     const targetSource = getContactSource(savedRow || row || edited, targetProg);
+    const targetStage = getEffectiveStage(savedRow || row || edited, targetProg, attId) || PIPELINE_STAGES.NEW_LEAD;
 
     setEdited(prev => ({
       ...prev,
@@ -263,6 +267,7 @@ export default function MobileEditModal({
       "Called For": targetProg,
       called_for: targetProg,
       status: targetStatus,
+      pipelineStage: targetStage,
       Source: targetSource || "",
       source: targetSource || ""
     }));
@@ -841,7 +846,8 @@ export default function MobileEditModal({
             row={row}
             globalDup={globalDup}
             freshSharedLead={freshSharedLead}
-            currentAttenderName={attenderName}
+            currentAttenderId={activeAttenderId}
+            currentAttenderName={activeAttenderName}
             onRefreshLead={onRefreshLead}
             isFetchingShared={isFetchingShared}
           />
