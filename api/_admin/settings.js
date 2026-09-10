@@ -124,6 +124,14 @@ export default async function handler(req, res) {
       const { _id, ...cleanData } = doc;
       if (!cleanData.salesOutcomeOptions) {
         cleanData.salesOutcomeOptions = DEFAULT_SALES_OUTCOME_OPTIONS;
+      } else {
+        cleanData.salesOutcomeOptions = Array.from(new Set([...cleanData.salesOutcomeOptions, "Already Reg.d", "Shivir done"]));
+      }
+      if (Array.isArray(cleanData.sourceOptions)) {
+        cleanData.sourceOptions = Array.from(new Set([...cleanData.sourceOptions, "Fail Payment"]));
+      }
+      if (Array.isArray(cleanData.statusOptions)) {
+        cleanData.statusOptions = Array.from(new Set([...cleanData.statusOptions, "Shivir done", "Already Reg.d"]));
       }
       return res.status(200).json({ success: true, data: cleanData });
     }

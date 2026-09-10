@@ -127,12 +127,45 @@ export const getCanonicalStage = (stageOrContact) => {
     const rawStatus = String(contact.status || latestAttenderState?.status || "").trim();
     const rawQueryStatus = String(contact.queryStatus || latestAttenderState?.queryStatus || "").trim();
 
+    const statusLower = rawStatus.toLowerCase();
+    const lastHistStatus = Array.isArray(contact.history) && contact.history.length > 0
+      ? String(contact.history[contact.history.length - 1]?.status || "").trim().toLowerCase()
+      : "";
+
+    // 0a. Existing Alumni Check (Already Reg.d / Already Registered / Shivir done)
+    const isAlumniStatus =
+      statusLower === "already reg.d" ||
+      statusLower === "already registered" ||
+      statusLower === "already reg done" ||
+      statusLower === "already reg. done" ||
+      statusLower === "shivir done" ||
+      statusLower === "shivir already done" ||
+      statusLower.includes("already reg") ||
+      statusLower.includes("shivir done") ||
+      statusLower === "existing alumni" ||
+      statusLower === "alumni" ||
+      String(contact.pipelineStage || "").trim().toLowerCase() === "existing alumni" ||
+      String(contact.pipelineStage || "").trim().toLowerCase() === "alumni" ||
+      lastHistStatus.includes("already reg") ||
+      lastHistStatus.includes("shivir done");
+
+    if (isAlumniStatus) {
+      return "Existing Alumni";
+    }
+
     // 0. Registered / Won Check (Top Priority: Once registered, Sales pipeline stage remains Registered / Won)
+    const isTrueReg = (str) => {
+      if (!str) return false;
+      const s = String(str).toLowerCase().trim();
+      if (s.includes("already reg") || s.includes("shivir done") || s.includes("alumni")) return false;
+      return s.includes("reg.done") || s.includes("registered") || s.includes("won");
+    };
+
     const hasRegHistory =
-      String(contact.status || "").toLowerCase().includes("reg.done") ||
-      String(contact.pipelineStage || "").toLowerCase().includes("registered") ||
-      (Array.isArray(contact.history) && contact.history.some(h => String(h.status || "").toLowerCase().includes("reg.done") || String(h.status || "").toLowerCase().includes("registered"))) ||
-      (contact.attenderStates && typeof contact.attenderStates === "object" && Object.values(contact.attenderStates).some(st => String(st?.status || "").toLowerCase().includes("reg.done") || String(st?.status || "").toLowerCase().includes("registered")));
+      isTrueReg(contact.status) ||
+      isTrueReg(contact.pipelineStage) ||
+      (Array.isArray(contact.history) && contact.history.some(h => isTrueReg(h.status) || isTrueReg(h.pipelineStage))) ||
+      (contact.attenderStates && typeof contact.attenderStates === "object" && Object.values(contact.attenderStates).some(st => isTrueReg(st?.status) || isTrueReg(st?.pipelineStage)));
 
     if (hasRegHistory) {
       return PIPELINE_STAGES.REGISTERED_WON;
@@ -154,13 +187,7 @@ export const getCanonicalStage = (stageOrContact) => {
       return STATUS_STAGE_MAPPING[rawStatus];
     }
 
-    const statusLower = rawStatus.toLowerCase();
-
     // 1c. Previous Program Pending Check
-    const lastHistStatus = Array.isArray(contact.history) && contact.history.length > 0
-      ? String(contact.history[contact.history.length - 1]?.status || "").trim().toLowerCase()
-      : "";
-
     if (statusLower === "previous program pending" || statusLower.includes("previous program pending") || lastHistStatus === "previous program pending" || lastHistStatus.includes("previous program pending")) {
       return PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING;
     }
@@ -208,7 +235,7 @@ export const getCanonicalStage = (stageOrContact) => {
       if (s === PIPELINE_STAGES.REGISTERED_WON || s === "Registered / Won" || s === "Reg.Done" || s === "6. Registered / Won" || s === "Registered") return PIPELINE_STAGES.REGISTERED_WON;
       if (s === PIPELINE_STAGES.CLOSED_LOST || s === "Closed / Lost" || s === "Closed Lost" || s === "7. Closed / Lost" || s === "Not Interested") return PIPELINE_STAGES.CLOSED_LOST;
       if (s === PIPELINE_STAGES.CLOSED_INVALID || s === "Closed / Invalid" || s === "Invalid") return PIPELINE_STAGES.CLOSED_INVALID;
-      if (s === "Existing Alumni" || s === "Alumni") return "Existing Alumni";
+      if (s === "Existing Alumni" || s === "Alumni" || s.toLowerCase() === "existing alumni" || s.toLowerCase() === "alumni" || s.toLowerCase().includes("already reg") || s.toLowerCase().includes("shivir done")) return "Existing Alumni";
     }
 
     return PIPELINE_STAGES.NEW_LEAD;
@@ -221,6 +248,7 @@ export const getCanonicalStage = (stageOrContact) => {
   if (s === PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING || s === "Previous Program Pending") return PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING;
   if (s === PIPELINE_STAGES.NURTURE_INTERESTED || s === "Nurture / Interested" || s === "Interested" || s === "4. Nurture / Interested") return PIPELINE_STAGES.NURTURE_INTERESTED;
   if (s === PIPELINE_STAGES.FUTURE_POOL || s === "Future Pool" || s === "Next Time" || s === "5. Future Pool") return PIPELINE_STAGES.FUTURE_POOL;
+  if (s === "Existing Alumni" || s === "Alumni" || s.toLowerCase() === "existing alumni" || s.toLowerCase() === "alumni" || s.toLowerCase().includes("already reg") || s.toLowerCase().includes("shivir done")) return "Existing Alumni";
   if (s === PIPELINE_STAGES.REGISTERED_WON || s === "Registered / Won" || s === "Reg.Done" || s === "6. Registered / Won" || s === "Registered") return PIPELINE_STAGES.REGISTERED_WON;
   if (s === PIPELINE_STAGES.CLOSED_LOST || s === "Closed / Lost" || s === "Closed Lost" || s === "7. Closed / Lost" || s === "Not Interested") return PIPELINE_STAGES.CLOSED_LOST;
   if (s === PIPELINE_STAGES.CLOSED_INVALID || s === "Closed / Invalid" || s === "Invalid") return PIPELINE_STAGES.CLOSED_INVALID;
@@ -605,7 +633,7 @@ export function getCanonicalStatus(status) {
   if (sLower === "switched off") return "switched off";
   if (sLower === "invalid no" || sLower === "invalid number" || sLower === "invalid") return "Invalid Number";
   if (sLower === "not connected") return "Not Connected";
-  if (sLower === "already reg.d" || sLower === "already registered") return "Already Reg.d";
+  if (sLower === "already reg.d" || sLower === "already registered" || sLower === "already reg done" || sLower === "already reg. done" || sLower.includes("already reg")) return "Already Reg.d";
   if (sLower === "info given" || sLower === "information given") return "Info Given";
   if (sLower === "next time") return "Next Time";
   if (sLower === "reminder" || sLower === "reminder given") return "Reminder Given";
@@ -613,7 +641,7 @@ export function getCanonicalStatus(status) {
   if (sLower === "query") return "Query";
   if (sLower === "called by mistake") return "Called by mistake";
   if (sLower === "not possible") return "Not possible";
-  if (sLower === "shivir done") return "Shivir done";
+  if (sLower === "shivir done" || sLower === "shivir already done" || sLower.includes("shivir done")) return "Shivir done";
   if (sLower === "no answer") return "no answer";
   if (sLower === "not attended") return "Not Attended";
   if (sLower === "call log added") return "Call Log Added";

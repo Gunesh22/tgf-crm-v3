@@ -19,6 +19,7 @@ export const PIPELINE_STAGES = {
   NURTURE_INTERESTED:       "4. Nurture / Interested",
   FUTURE_POOL:              "5. Future Pool",
   REGISTERED_WON:           "6. Registered / Won",
+  EXISTING_ALUMNI:          "Existing Alumni",
   CLOSED_LOST:              "Closed / Lost",
   CLOSED_INVALID:           "Closed / Invalid",
 };
@@ -84,6 +85,10 @@ export function canTransition(fromStage, toStage, event = {}) {
   if (fromStage === PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING || fromStage === "Previous Program Pending" ||
       toStage === PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING || toStage === "Previous Program Pending") return true;
 
+  // Existing Alumni transitions are always allowed (both to and from)
+  if (fromStage === "Existing Alumni" || fromStage === PIPELINE_STAGES.EXISTING_ALUMNI ||
+      toStage === "Existing Alumni" || toStage === PIPELINE_STAGES.EXISTING_ALUMNI) return true;
+
   // Legacy non-pipeline stages: allow any Sales forward movement
   if (LEGACY_NON_PIPELINE_STAGES.has(fromStage)) return true;
 
@@ -113,6 +118,17 @@ export function normalizeStageStr(s) {
   if (str === PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING || lower === "previous program pending") return PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING;
   if (str === PIPELINE_STAGES.NURTURE_INTERESTED || lower === "nurture / interested" || lower === "interested" || lower === "4. nurture / interested") return PIPELINE_STAGES.NURTURE_INTERESTED;
   if (str === PIPELINE_STAGES.FUTURE_POOL || lower === "future pool" || lower === "next time" || lower === "5. future pool") return PIPELINE_STAGES.FUTURE_POOL;
+  if (
+    str === "Existing Alumni" ||
+    lower === "existing alumni" ||
+    lower === "alumni" ||
+    lower.includes("already reg") ||
+    lower.includes("already registered") ||
+    (lower.includes("already") && lower.includes("reg")) ||
+    lower.includes("shivir done") ||
+    lower.includes("shivir already done") ||
+    (lower.includes("shivir") && lower.includes("done"))
+  ) return "Existing Alumni";
   if (str === PIPELINE_STAGES.REGISTERED_WON || lower === "registered / won" || lower === "reg.done" || lower === "6. registered / won" || lower === "registered") return PIPELINE_STAGES.REGISTERED_WON;
   if (str === PIPELINE_STAGES.CLOSED_LOST || lower === "closed / lost" || lower === "closed lost" || lower === "7. closed / lost" || lower === "not interested") return PIPELINE_STAGES.CLOSED_LOST;
   if (str === PIPELINE_STAGES.CLOSED_INVALID || lower === "closed / invalid" || lower === "invalid") return PIPELINE_STAGES.CLOSED_INVALID;
@@ -199,6 +215,8 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null, attender
   const EFFECTIVE_PRIORITY = {
     [PIPELINE_STAGES.REGISTERED_WON]: 10,
     "Registered / Won": 10, "Reg.Done": 10, "Registered": 10,
+    [PIPELINE_STAGES.EXISTING_ALUMNI]: 9,
+    "Existing Alumni": 9, "Alumni": 9,
     [PIPELINE_STAGES.NURTURE_INTERESTED]: 8,
     "Nurture / Interested": 8, "Interested": 8,
     [PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING]: 7,
@@ -234,7 +252,7 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null, attender
     }
   });
 
-  return highestStage || normalizeStageStr(contact.pipelineStage);
+  return highestStage || (LEGACY_NON_PIPELINE_STAGES.has(contact.pipelineStage) ? null : normalizeStageStr(contact.pipelineStage));
 }
 
 /**
@@ -300,9 +318,8 @@ export function evaluatePipeline(contact = {}, callEvent = {}) {
     isAttenderCreditEligible = true;
     wasConnected             = true;
   }
-  else if (["already reg.d", "already registered", "shivir done", "shivir already done"].includes(sLower)) {
-    // Alumni evidence → programRelationships[] ONLY, pipelineStage unchanged
-    targetStage               = currentStage || null;
+  else if (["already reg.d", "already registered", "already reg done", "already reg. done", "shivir done", "shivir already done"].includes(sLower) || sLower.includes("already reg") || sLower.includes("shivir done") || sLower === "existing alumni") {
+    targetStage               = PIPELINE_STAGES.EXISTING_ALUMNI;
     wasConnected              = true;
     programRelationshipUpdate = { status: "Existing Alumni" };
   }
@@ -455,16 +472,16 @@ export function getPipelineStageConfig(stage) {
     case "Closed / Invalid":
     case "Invalid":
       return { label: "Closed / Invalid", bg: "bg-gray-200", border: "border-gray-400", text: "text-gray-900", badge: "bg-gray-200 text-gray-900 border-gray-400 font-semibold" };
-    // Legacy display-only
+    // Auxiliary & special stages
     case "Query Desk":
     case "Query":
-      return { label: "Query Desk (Legacy)", bg: "bg-orange-50", border: "border-orange-300", text: "text-orange-800", badge: "bg-orange-100 text-orange-900 border-orange-300 font-semibold" };
+      return { label: "Query Desk", bg: "bg-orange-50", border: "border-orange-300", text: "text-orange-800", badge: "bg-orange-100 text-orange-900 border-orange-300 font-semibold" };
     case "Reminder Desk":
     case "Reminder":
-      return { label: "Reminder Desk (Legacy)", bg: "bg-sky-50", border: "border-sky-300", text: "text-sky-800", badge: "bg-sky-100 text-sky-900 border-sky-300 font-semibold" };
+      return { label: "Reminder Desk", bg: "bg-sky-50", border: "border-sky-300", text: "text-sky-800", badge: "bg-sky-100 text-sky-900 border-sky-300 font-semibold" };
     case "Existing Alumni":
     case "Alumni":
-      return { label: "Existing Alumni (Legacy)", bg: "bg-cyan-50", border: "border-cyan-300", text: "text-cyan-800", badge: "bg-cyan-100 text-cyan-900 border-cyan-300" };
+      return { label: "Existing Alumni", bg: "bg-cyan-50", border: "border-cyan-300", text: "text-cyan-800", badge: "bg-cyan-100 text-cyan-900 border-cyan-300 font-semibold" };
     default:
       return { label: stage || "", bg: "bg-gray-100", border: "border-gray-200", text: "text-gray-700", badge: "bg-gray-100 text-gray-700 border-gray-200" };
   }

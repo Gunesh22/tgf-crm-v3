@@ -36,7 +36,7 @@ import {
   classifyCallStatus,
   isUnansweredCallback
 } from "./utils";
-import { normalizeProgramStates } from "../../utils/pipelineEngine";
+import { normalizeProgramStates, normalizeStageStr } from "../../utils/pipelineEngine";
 import { EditModal } from "./components/EditModal";
 import { MyPerformanceDashboard } from "./components/MyPerformanceDashboard";
 import { ColumnsSelector } from "./components/ColumnsSelector";
@@ -1306,15 +1306,24 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
         if (!match) return false;
       }
 
-      // 10b. General Result Status Filter
+      // 10b. General Pipeline & Status Filter
       if (filterGeneralStatus.length > 0) {
-        const logStatus = activeAttenderStatus;
-        const logQueryStatus = log.queryStatus || "Pending";
+        const activeView = getContactView(log, attenderId || attenderName);
+        const logStatus = activeAttenderStatus || activeView.status || log.status || "";
+        const logStage = activeView.pipelineStage || log.pipelineStage || "";
+        const logQueryStatus = activeView.queryStatus || log.queryStatus || "Pending";
 
         const matched = filterGeneralStatus.some(f => {
-          if (f === "Query Pending") return logStatus === "Query" && logQueryStatus === "Pending";
-          if (f === "Query Solved")  return logStatus === "Query" && logQueryStatus === "Solved";
-          return f === logStatus;
+          if (f === "Query Pending") return (logStatus === "Query" || logStage === "Query Desk") && logQueryStatus === "Pending";
+          if (f === "Query Solved")  return (logStatus === "Query" || logStage === "Query Desk") && logQueryStatus === "Solved";
+
+          // Match by status (raw or canonical)
+          if (f === logStatus || (logStatus && getCanonicalStatus(f) === getCanonicalStatus(logStatus))) return true;
+
+          // Match by pipeline stage (raw or normalized)
+          if (logStage && (f === logStage || normalizeStageStr(f) === normalizeStageStr(logStage))) return true;
+
+          return false;
         });
         if (!matched) return false;
       }

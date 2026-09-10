@@ -12,6 +12,7 @@ export const STATUS_OPTIONS = [
   "Invalid Number",
   "Invalid No",
   "Already Reg.d",
+  "Shivir done",
   "Info Given",
   "Info given",
   "Next Time",
@@ -811,6 +812,16 @@ export const isKhojiNegative = (val) => {
 export const STATUS_STAGE_MAPPING = {
   "Reg.Done": "6. Registered / Won",
   "Already Reg.d": "Existing Alumni",
+  "already reg.d": "Existing Alumni",
+  "Already reg. done": "Existing Alumni",
+  "already reg done": "Existing Alumni",
+  "Already Registered": "Existing Alumni",
+  "already registered": "Existing Alumni",
+  "Shivir done": "Existing Alumni",
+  "shivir done": "Existing Alumni",
+  "Shivir Done": "Existing Alumni",
+  "Shivir already done": "Existing Alumni",
+  "shivir already done": "Existing Alumni",
   "Interested": "4. Nurture / Interested",
   "Previous Program Pending": "Previous Program Pending",
   "Info Given": "3. Information Given",
@@ -835,17 +846,20 @@ export const updateDynamicOptions = (data) => {
     }
     if (Array.isArray(data.statusOptions)) {
       const removedSet = new Set(Array.isArray(data.removedStatuses) ? data.removedStatuses : []);
-      const filtered = data.statusOptions.filter(s => !removedSet.has(s));
+      const mergedStatuses = Array.from(new Set([...data.statusOptions, "Shivir done", "Already Reg.d"]));
+      const filtered = mergedStatuses.filter(s => !removedSet.has(s));
       STATUS_OPTIONS.splice(0, STATUS_OPTIONS.length, ...filtered);
     }
     if (Array.isArray(data.sourceOptions)) {
-      SOURCE_OPTIONS.splice(0, SOURCE_OPTIONS.length, ...data.sourceOptions);
+      const mergedSources = Array.from(new Set([...data.sourceOptions, "Fail Payment"]));
+      SOURCE_OPTIONS.splice(0, SOURCE_OPTIONS.length, ...mergedSources);
     }
     if (Array.isArray(data.calledForOptions)) {
       CALLED_FOR_OPTIONS.splice(0, CALLED_FOR_OPTIONS.length, ...data.calledForOptions);
     }
     if (Array.isArray(data.connectedStatuses)) {
-      CONNECTED_STATUSES.splice(0, CONNECTED_STATUSES.length, ...data.connectedStatuses);
+      const mergedConnected = Array.from(new Set([...data.connectedStatuses, "Shivir done", "Already Reg.d"]));
+      CONNECTED_STATUSES.splice(0, CONNECTED_STATUSES.length, ...mergedConnected);
     }
     if (Array.isArray(data.notConnectedStatuses)) {
       NOT_CONNECTED_STATUSES.splice(0, NOT_CONNECTED_STATUSES.length, ...data.notConnectedStatuses);
@@ -854,7 +868,8 @@ export const updateDynamicOptions = (data) => {
       OPTIONAL_COMPULSORY_STATUSES.splice(0, OPTIONAL_COMPULSORY_STATUSES.length, ...data.optionalCompulsoryStatuses);
     }
     if (Array.isArray(data.salesOutcomeOptions) && data.salesOutcomeOptions.length > 0) {
-      SALES_OUTCOME_OPTIONS.splice(0, SALES_OUTCOME_OPTIONS.length, ...data.salesOutcomeOptions);
+      const mergedOutcomes = Array.from(new Set([...data.salesOutcomeOptions, "Already Reg.d", "Shivir done"]));
+      SALES_OUTCOME_OPTIONS.splice(0, SALES_OUTCOME_OPTIONS.length, ...mergedOutcomes);
     }
 
     const freshCallSources = Array.from(new Set([
@@ -890,7 +905,7 @@ export function getCanonicalStatus(status) {
   if (sLower === "switched off") return "switched off";
   if (sLower === "invalid no" || sLower === "invalid number" || sLower === "invalid") return "Invalid Number";
   if (sLower === "not connected") return "Not Connected";
-  if (sLower === "already reg.d" || sLower === "already registered") return "Already Reg.d";
+  if (sLower === "already reg.d" || sLower === "already registered" || sLower === "already reg done" || sLower === "already reg. done" || sLower.includes("already reg")) return "Already Reg.d";
   if (sLower === "info given" || sLower === "information given") return "Info Given";
   if (sLower === "next time") return "Next Time";
   if (sLower === "reminder" || sLower === "reminder given") return "Reminder Given";
@@ -898,7 +913,7 @@ export function getCanonicalStatus(status) {
   if (sLower === "query") return "Query";
   if (sLower === "called by mistake") return "Called by mistake";
   if (sLower === "not possible") return "Not possible";
-  if (sLower === "shivir done") return "Shivir done";
+  if (sLower === "shivir done" || sLower === "shivir already done" || sLower.includes("shivir done")) return "Shivir done";
   if (sLower === "no network") return "No Network";
   if (sLower === "wrong no" || sLower === "wrong no.") return "wrong no.";
   return status;

@@ -43,6 +43,7 @@ function canTransitionServer(fromStage, toStage, event = {}) {
   const toRank   = toStage   ? (STAGE_RANKS[toStage]   || 0) : 0;
   if (fromStage === toStage || fromRank === toRank) return true;
   if (fromStage === "Previous Program Pending" || toStage === "Previous Program Pending") return true;
+  if (fromStage === "Existing Alumni" || toStage === "Existing Alumni") return true;
   if (LEGACY_NON_PIPELINE_STAGES.has(fromStage)) return true;
   const isConnected = event.callStatus === "Connected" ||
     ["Info Given", "Interested", "Reg.Done", "Next Time", "Previous Program Pending"].includes(event.purposeOutcome || event.status);
@@ -90,6 +91,7 @@ function getEffectiveStageServer(lead, targetProgram = null) {
     else if (outcome === "interested")                      hStage = "4. Nurture / Interested";
     else if (outcome === "next time")                       hStage = "5. Future Pool";
     else if (outcome === "reg.done" || outcome === "registered") hStage = "6. Registered / Won";
+    else if (["already reg.d", "already registered", "already reg done", "already reg. done", "shivir done", "shivir already done"].includes(outcome) || outcome.includes("already reg") || outcome.includes("shivir done") || outcome === "existing alumni") hStage = "Existing Alumni";
     else if (["not interested", "not possible"].includes(outcome)) hStage = "Closed / Lost";
 
     if (hStage) {
@@ -159,9 +161,8 @@ function evaluateStageServer(lead, callEvent) {
     isAttenderCreditEligible = true;
     wasConnected             = true;
   }
-  else if (["already reg.d", "already registered", "shivir done", "shivir already done"].includes(sLower)) {
-    // Alumni evidence: write to programRelationships[] only; pipelineStage unchanged
-    targetStage               = currentStage || null;
+  else if (["already reg.d", "already registered", "already reg done", "already reg. done", "shivir done", "shivir already done"].includes(sLower) || sLower.includes("already reg") || sLower.includes("shivir done") || sLower === "existing alumni") {
+    targetStage               = "Existing Alumni";
     wasConnected              = true;
     programRelationshipUpdate = { status: "Existing Alumni" };
   }

@@ -181,19 +181,19 @@ function makeCall(purpose = 'SALES', callStatus = 'Connected', status = 'Info Gi
   assert('18b. isAttenderCreditEligible = true', r.isAttenderCreditEligible === true);
 }
 
-// ── Test 19: Already Reg.d → programRelationshipUpdate, not pipelineStage ─────
+// ── Test 19: Already Reg.d → Existing Alumni stage and programRelationshipUpdate ─────
 {
   const contact = makeContact('3. Information Given');
   const r = evaluatePipeline(contact, makeCall('SALES', 'Connected', 'Already Reg.d'));
-  assert('19. Already Reg.d → pipelineStage UNCHANGED', r.pipelineStage === PIPELINE_STAGES.INFO_GIVEN, `got: ${r.pipelineStage}`);
+  assert('19. Already Reg.d → pipelineStage Existing Alumni', r.pipelineStage === PIPELINE_STAGES.EXISTING_ALUMNI, `got: ${r.pipelineStage}`);
   assert('19b. Already Reg.d → programRelationshipUpdate set', r.programRelationshipUpdate?.status === 'Existing Alumni');
 }
 
-// ── Test 20: Shivir done → programRelationshipUpdate, not pipelineStage ───────
+// ── Test 20: Shivir done → Existing Alumni stage and programRelationshipUpdate ───────
 {
   const contact = makeContact('6. Registered / Won');
   const r = evaluatePipeline(contact, makeCall('SALES', 'Connected', 'Shivir done'));
-  assert('20. Shivir done → pipelineStage UNCHANGED (Registered / Won)', r.pipelineStage === PIPELINE_STAGES.REGISTERED_WON, `got: ${r.pipelineStage}`);
+  assert('20. Shivir done → pipelineStage Existing Alumni', r.pipelineStage === PIPELINE_STAGES.EXISTING_ALUMNI, `got: ${r.pipelineStage}`);
   assert('20b. Shivir done → programRelationshipUpdate = Existing Alumni', r.programRelationshipUpdate?.status === 'Existing Alumni');
 }
 

@@ -1112,4 +1112,84 @@ Enable administrators to visually inspect the exact list of canonical registrati
 - **Production Build**: **Vite build PASSED with 0 errors in 33.24s** (`npm run build`).
 - **Database Integrity**: **Zero writes or modifications** executed against MongoDB.
 
+---
+
+## 50. Existing Alumni Pipeline Resolution, Status vs. Stage Decoupling & UI Resiliency Audit
+
+### 1. Root Cause Analysis & Problem Overview
+1. **Lead 919869001572 (Pradnya Shah) Erroneous Registration**:
+   - **Symptom**: When an attender logged a call selecting `"Already reg. done"` for program `Digestive Avd`, the contact was categorized as a new registration (`6. Registered / Won`) instead of Existing Alumni.
+   - **Root Causes**:
+     1. In `pipelineEngine.js` and `log-call.js`, `"already reg.d"` and `"shivir done"` previously set `targetStage = currentStage || null`. Because the lead had an earlier true registration (`Outgoing Calls` on Sept 1), `currentStage` was `6. Registered / Won`, so the call was logged with `pipelineStage: "6. Registered / Won"`.
+     2. In `registrationEngine.js`, fallback step 2 ran `isStatusRegDone(st)` which checked `st.includes('registered')`. Because `"already registered"` contains `'registered'`, and the stage was `6. Registered / Won`, the fallback synthesized a false registration for `Digestive Avd`.
+     3. In `admin/utils.jsx`, `hasRegHistory` also checked `.includes('registered')`, falsely flagging alumni contacts as registered.
+
+2. **Cosmetic Confusion with "(Legacy)" Labels**:
+   - `pipelineEngine.js` hardcoded `label: "Existing Alumni (Legacy)"`, `Query Desk (Legacy)`, and `Reminder Desk (Legacy)` in `getPipelineStageConfig`, causing attenders and admins to see misleading `(Legacy)` badges for active alumni leads.
+
+3. **Attender Workspace Pipeline & Status Filter Inoperability**:
+   - In `AttenderWorkspace.jsx`, `filterGeneralStatus` only checked `f === logStatus`. Because the filter UI allows selecting both statuses and pipeline stages, selecting any stage (e.g., `Existing Alumni`, `1. New Lead`, `4. Nurture / Interested`) checked whether `logStatus === "Existing Alumni"`, which always evaluated to `false`, returning 0 leads.
+
+4. **Missing "Shivir done" & Dropdown Overwrites**:
+   - `"Shivir done"` was missing from `STATUS_OPTIONS`, preventing attenders from filtering by it or selecting it in `EditModal.jsx` / `MobileEditModal.jsx`.
+   - When dynamic settings loaded from MongoDB, stale documents could wipe out newly added options like `"Shivir done"`, `"Already Reg.d"`, or `"Fail Payment"`.
+
+5. **Call Type Misattribution in `determineCallType`**:
+   - In `registrationEngine.js`, `determineCallType` searched for the converting call using `st.includes('reg.done') || st.includes('registered')`. A subsequent alumni call marked `"already registered"` could be falsely matched as the converting call, overriding the true registration's Incoming/Outgoing direction.
+
+---
+
+### 2. Comprehensive Solutions Implemented
+
+1. **Centralized `Existing Alumni` Stage in Pipeline Engine (`src/utils/pipelineEngine.js`)**:
+   - Added `EXISTING_ALUMNI: "Existing Alumni"` to `PIPELINE_STAGES`.
+   - Updated `canTransition` to permit bidirectional transitions between `Existing Alumni` and all other pipeline stages.
+   - Updated `normalizeStageStr` to normalize case-insensitive variations of `Existing Alumni`, `alumni`, `already reg`, `already registered`, `shivir done`, `shivir already done`.
+   - Updated `evaluatePipeline` so outcomes matching `"already reg.d"`, `"already registered"`, `"already reg done"`, `"already reg. done"`, `"shivir done"`, `"shivir already done"`, or `"existing alumni"` set `targetStage = PIPELINE_STAGES.EXISTING_ALUMNI`, `isAttenderCreditEligible = false`, and `programRelationshipUpdate = { status: "Existing Alumni" }`.
+   - Added `Existing Alumni` (rank 9) to `EFFECTIVE_PRIORITY`.
+
+2. **Serverless Call Log API (`api/_contacts/log-call.js`)**:
+   - Updated `canTransitionServer` to allow bidirectional transitions to and from `"Existing Alumni"`.
+   - In `getEffectiveStageServer` and `evaluateStageServer`, mapped all variations of `"already reg"` and `"shivir done"` to `targetStage = "Existing Alumni"`.
+   - Maintained atomic array swap in `programRelationships[]` setting `{ status: "Existing Alumni", pipelineStage: "Existing Alumni" }`.
+
+3. **Status & Stage Mappings & Admin Safeguards**:
+   - In `src/features/attender/utils.js`: Mapped all alumni outcome variations to `"Existing Alumni"` in `STATUS_STAGE_MAPPING`. Updated `getCanonicalStatus` to recognize alumni variants.
+   - In `src/features/admin/components/StatusStageMappingCard.jsx`: Added `"Shivir done": "Existing Alumni"` to `DEFAULT_STATUS_STAGE_MAPPING` and removed `"Shivir done"` from `OBSOLETE_STATUSES`.
+   - In `src/features/admin/utils.jsx`: Added early check in `getCanonicalStage` returning `"Existing Alumni"`. In `hasRegHistory`, added guard rejecting `"already reg"`, `"shivir done"`, and `"alumni"` from being counted as registrations.
+
+4. **Registration Engine Deduplication (`src/utils/registrationEngine.js`)**:
+   - In `isStageRegisteredWon(c)`: Explicitly return `false` if `pipelineStage` or `status` contains `alumni`, `already reg`, or `shivir done`.
+   - In fallback step 2: `isStatusRegDone(st)` explicitly rejects `already reg`, `shivir done`, and `alumni`. `rel.pipelineStage`, `h.pipelineStage`, and `stObj.pipelineStage` matching `'Existing Alumni'` are never treated as registrations.
+   - In `determineCallType`: Excluded `already reg`, `shivir done`, and `alumni` from `regCall` search to protect registration call-direction attribution.
+
+5. **Removal of `(Legacy)` from UI Display Labels**:
+   - In `src/utils/pipelineEngine.js`: Updated `getPipelineStageConfig` to return clean labels:
+     - `Existing Alumni` (without `(Legacy)`)
+     - `Query Desk` (without `(Legacy)`)
+     - `Reminder Desk` (without `(Legacy)`)
+   - In `api/_admin/stats.js`: Added clean keys `'Existing Alumni'` and `'Query Desk'` to `pipelinePeople`, while retaining legacy keys for backward-compatibility.
+
+6. **Attender Workspace Filter & UI Polish**:
+   - In `AttenderWorkspace.jsx`: Updated `filterGeneralStatus` to match both call status and contact pipeline stage (`normalizeStageStr(f) === normalizeStageStr(logStage)`).
+   - In `src/features/attender/utils.js`: Added `"Shivir done"` to `STATUS_OPTIONS`.
+   - In `updateDynamicOptions` & `api/_admin/settings.js`: Safeguarded `STATUS_OPTIONS`, `SOURCE_OPTIONS`, `CONNECTED_STATUSES`, and `SALES_OUTCOME_OPTIONS` so that `"Shivir done"`, `"Already Reg.d"`, and `"Fail Payment"` are never erased by database settings loads.
+   - In `ContactTable.jsx`: Added violet badge styling (`bg-violet-50 text-violet-700 border-violet-200`) for `Existing Alumni`.
+
+7. **MongoDB Record 919869001572 Correction**:
+   - Executed targeted database fix on contact `pDZ7cUPuVJelcjNq14Dr` in `tgf_crm`. Verified `pipelineStage = "Existing Alumni"`, `programRelationships[0].pipelineStage = "Existing Alumni"`, and verified contact is excluded from `6. Registered / Won`.
+
+---
+
+### 3. Verification & Compliance
+- **Automated Test Suite**: **168 / 168 PASSED (100%)** across 5 test suites:
+  - `pipelineEngine.test.js`: 95/95 PASSED
+  - `presetEngine.test.js`: 27/27 PASSED
+  - `allProductionAuditTests.test.js`: 29/29 PASSED
+  - `registrationMismatchResolution.test.js`: 10/10 PASSED
+  - `existingAlumniResolution.test.js`: 7/7 PASSED
+- **Production Build**: **Vite build PASSED with 0 errors in 20.27s** (`npm run build`).
+- **Database Integrity**: Verified lead `919869001572` in MongoDB sits cleanly in Existing Alumni. No other contacts were modified.
+
+
 

@@ -50,13 +50,18 @@ const OBSOLETE_STATUSES = new Set([
   "no answer",
   "Not Attended",
   "Call Log Added",
-  "Shivir done",
   "No Network"
 ]);
 
 export const DEFAULT_STATUS_STAGE_MAPPING = {
   "Reg.Done": "6. Registered / Won",
   "Already Reg.d": "Existing Alumni",
+  "Already reg. done": "Existing Alumni",
+  "already reg done": "Existing Alumni",
+  "Already Registered": "Existing Alumni",
+  "already registered": "Existing Alumni",
+  "Shivir done": "Existing Alumni",
+  "shivir done": "Existing Alumni",
   "Interested": "4. Nurture / Interested",
   "Previous Program Pending": "Previous Program Pending",
   "Info Given": "3. Information Given",

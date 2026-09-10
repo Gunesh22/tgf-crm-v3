@@ -48,6 +48,7 @@ export function determineCallType(obj, linkedContact = null) {
     // Look for the call item where registration actually happened (Reg.Done / Registered)
     const regCall = [...historyArr].reverse().find(h => {
       const st = String(h?.status || '').toLowerCase();
+      if (st.includes('already reg') || st.includes('shivir done') || st.includes('alumni')) return false;
       return st.includes('reg.done') || st.includes('registered');
     });
 
@@ -386,13 +387,25 @@ export function getContactSource(log, attempt) {
 
 export function isStageRegisteredWon(c) {
   if (!c) return false;
-  const stage = String(c.pipelineStage || '').toLowerCase();
-  const status = String(c.status || '').toLowerCase();
+  const stage = String(c.pipelineStage || '').toLowerCase().trim();
+  const status = String(c.status || '').toLowerCase().trim();
+  if (stage === 'existing alumni' || stage === 'alumni') return false;
+  if (status.includes('already reg') || status.includes('shivir done') || status.includes('alumni')) {
+    return false;
+  }
   if (stage.includes('registered') || stage.includes('won') || stage === '6. registered / won') return true;
-  if (status.includes('reg.done') || status.includes('registered')) return true;
-  if (Array.isArray(c.history) && c.history.some(h => String(h.status || '').toLowerCase().includes('reg.done') || String(h.status || '').toLowerCase().includes('registered'))) return true;
+  if ((status.includes('reg.done') || status.includes('registered')) && !status.includes('already reg')) return true;
+  if (Array.isArray(c.history) && c.history.some(h => {
+    const hs = String(h.status || '').toLowerCase().trim();
+    if (hs.includes('already reg') || hs.includes('shivir done') || hs.includes('alumni')) return false;
+    return hs.includes('reg.done') || hs.includes('registered');
+  })) return true;
   if (c.attenderStates && typeof c.attenderStates === 'object') {
-    return Object.values(c.attenderStates).some(st => String(st?.status || '').toLowerCase().includes('reg.done') || String(st?.status || '').toLowerCase().includes('registered'));
+    return Object.values(c.attenderStates).some(st => {
+      const ss = String(st?.status || '').toLowerCase().trim();
+      if (ss.includes('already reg') || ss.includes('shivir done') || ss.includes('alumni')) return false;
+      return ss.includes('reg.done') || ss.includes('registered');
+    });
   }
   return false;
 }
@@ -592,6 +605,7 @@ export function getCanonicalRegistrations(registrations = [], contacts = [], fil
 
     const isStatusRegDone = (st) => {
       const s = String(st || '').toLowerCase().trim();
+      if (s.includes('already reg') || s.includes('shivir done') || s.includes('alumni')) return false;
       return s.includes('reg.done') || s.includes('registered') || s.includes('won');
     };
 
@@ -602,7 +616,7 @@ export function getCanonicalRegistrations(registrations = [], contacts = [], fil
       c.programRelationships.forEach(rel => {
         if (!rel) return;
         const relProg = typeof rel === 'string' ? rel : (rel.program || rel.calledFor || rel.calledForKey || rel['Called For'] || '');
-        const relStatus = typeof rel === 'string' ? 'Registered' : (rel.status || rel.pipelineStage || '');
+        const relStatus = typeof rel === 'string' ? 'Registered' : (rel.status || (rel.pipelineStage !== 'Existing Alumni' ? rel.pipelineStage : '') || '');
         if (relProg && isStatusRegDone(relStatus) && !isRawIdString(relProg)) {
           const k = String(relProg).trim().toLowerCase().replace(/[\s_-]+/g, '');
           if (k) {
@@ -619,7 +633,7 @@ export function getCanonicalRegistrations(registrations = [], contacts = [], fil
       c.history.forEach(h => {
         if (!h) return;
         const hProg = String(h.calledFor || h.programName || h.calledForKey || '').trim();
-        const hStatus = String(h.status || h.callStatus || h.purposeOutcome || h.pipelineStage || '').trim();
+        const hStatus = String(h.status || h.callStatus || h.purposeOutcome || (h.pipelineStage !== 'Existing Alumni' ? h.pipelineStage : '') || '').trim();
         if (hProg && isStatusRegDone(hStatus) && !isRawIdString(hProg)) {
           const k = hProg.toLowerCase().replace(/[\s_-]+/g, '');
           if (k && !programMap.has(k)) {
@@ -636,7 +650,7 @@ export function getCanonicalRegistrations(registrations = [], contacts = [], fil
       Object.values(c.attenderStates).forEach(stObj => {
         if (stObj && typeof stObj === 'object') {
           const stProg = String(stObj.calledFor || stObj.called_for || stObj.calledForKey || stObj.program || stObj.programName || stObj.programId || '').trim();
-          const stStatus = String(stObj.status || stObj.pipelineStage || stObj.purposeOutcome || '').trim();
+          const stStatus = String(stObj.status || (stObj.pipelineStage !== 'Existing Alumni' ? stObj.pipelineStage : '') || stObj.purposeOutcome || '').trim();
           if (stProg && isStatusRegDone(stStatus) && !isRawIdString(stProg)) {
             const k = stProg.toLowerCase().replace(/[\s_-]+/g, '');
             if (k && !programMap.has(k)) {

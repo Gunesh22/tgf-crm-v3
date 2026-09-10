@@ -94,6 +94,8 @@ export default async function handler(req, res) {
       'Registered / Won': 0,
       'Closed / Lost': 0,
       'Closed / Invalid': 0,
+      'Query Desk': 0,
+      'Existing Alumni': 0,
       'Query Desk (Legacy)': 0,
       'Existing Alumni (Legacy)': 0,
       'Unknown / Legacy': 0,
@@ -111,8 +113,14 @@ export default async function handler(req, res) {
       else if (s.includes('Registered') || s === '6. Registered / Won') pipelinePeople['Registered / Won'] += row.count;
       else if (s === 'Closed / Lost') pipelinePeople['Closed / Lost'] += row.count;
       else if (s === 'Closed / Invalid') pipelinePeople['Closed / Invalid'] += row.count;
-      else if (s === 'Query Desk' || s === 'Query') pipelinePeople['Query Desk (Legacy)'] += row.count;
-      else if (s === 'Existing Alumni' || s === 'Alumni') pipelinePeople['Existing Alumni (Legacy)'] += row.count;
+      else if (s === 'Query Desk' || s === 'Query') {
+        pipelinePeople['Query Desk'] += row.count;
+        pipelinePeople['Query Desk (Legacy)'] += row.count;
+      }
+      else if (s === 'Existing Alumni' || s === 'Alumni') {
+        pipelinePeople['Existing Alumni'] += row.count;
+        pipelinePeople['Existing Alumni (Legacy)'] += row.count;
+      }
       else pipelinePeople['Unknown / Legacy'] += row.count;
     }
 
