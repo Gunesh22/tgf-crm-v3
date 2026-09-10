@@ -14,7 +14,7 @@ import {
   INCOMING_PROGRAM_ID, INCOMING_PROGRAM_NAME, ensureIncomingProgram,
   OUTGOING_PROGRAM_ID, OUTGOING_PROGRAM_NAME, ensureOutgoingProgram,
   globalSearchContacts, searchAttenderContacts, claimContact, removeAttenderFromContact, claimCRMContact,
-  fetchFreshSharedLead
+  fetchFreshSharedLead, getSettingsOptions, subscribeToSettingsOptions
 } from "../../lib/db";
 import { searchCRM } from "../../lib/ghl";
 import {
@@ -109,6 +109,18 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  const [settingsVersion, setSettingsVersion] = useState(0);
+
+  useEffect(() => {
+    getSettingsOptions().catch(() => {});
+    const unsub = subscribeToSettingsOptions(() => {
+      setSettingsVersion(v => v + 1);
+    });
+    return () => unsub();
+  }, []);
+
+  const effectiveOptionsVersion = (optionsVersion || 0) + settingsVersion;
   const [programs, setPrograms] = useState([]);
   const [selectedProgramId, setSelectedProgramId] = useState("");
   const [selectedProgramName, setSelectedProgramName] = useState("");
@@ -1037,7 +1049,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
       if (srcVal) set.add(srcVal);
     });
     return Array.from(set).sort();
-  }, [tagFilteredLogs, optionsVersion, attenderId, attenderName]);
+  }, [tagFilteredLogs, effectiveOptionsVersion, attenderId, attenderName]);
 
   const uniqueCities = useMemo(() => {
     const set = new Set();
@@ -1046,7 +1058,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
       if (cityVal) set.add(cityVal);
     });
     return Array.from(set).sort();
-  }, [tagFilteredLogs, optionsVersion, attenderId, attenderName]);
+  }, [tagFilteredLogs, effectiveOptionsVersion, attenderId, attenderName]);
 
   const uniqueCalledFor = useMemo(() => {
     const set = new Set(CALLED_FOR_OPTIONS);
@@ -1057,7 +1069,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
       }
     });
     return Array.from(set).sort();
-  }, [tagFilteredLogs, optionsVersion, attenderId, attenderName]);
+  }, [tagFilteredLogs, effectiveOptionsVersion, attenderId, attenderName]);
 
   const uniqueSubPrograms = useMemo(() => {
     const set = new Set();
@@ -1637,7 +1649,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
       {/* Mobile-Only Dedicated Layout (< 768px) */}
       <div className="block md:hidden h-screen overflow-hidden">
         <MobileAttenderView
-          optionsVersion={optionsVersion}
+          optionsVersion={effectiveOptionsVersion}
           attenderId={attenderId}
           attenderName={attenderName}
           isLoadingProgram={isLoadingProgram}
@@ -2056,7 +2068,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
           handleRebuildCache={handleRebuildCache}
           isRebuildingCache={isRebuildingCache}
           isLoadingProgram={isLoadingProgram}
-          optionsVersion={optionsVersion}
+          optionsVersion={effectiveOptionsVersion}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           sortBy={sortBy}
@@ -2231,7 +2243,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
       isMobileScreen ? (
         <MobileEditModal
           key={editingRow.id || (editingRow._isNew ? `new-${editingRow._timestamp || Date.now()}` : "entry")}
-          optionsVersion={optionsVersion}
+          optionsVersion={effectiveOptionsVersion}
           row={editingRow}
           attenderId={attenderId}
           attenderName={attenderName}
@@ -2261,7 +2273,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
       ) : (
         <EditModal
           key={editingRow.id || (editingRow._isNew ? `new-${editingRow._timestamp || Date.now()}` : "entry")}
-          optionsVersion={optionsVersion}
+          optionsVersion={effectiveOptionsVersion}
           row={editingRow}
           attenderId={attenderId}
           attenderName={attenderName}

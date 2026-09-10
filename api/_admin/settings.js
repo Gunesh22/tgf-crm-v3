@@ -38,7 +38,9 @@ const DEFAULT_SOURCE_OPTIONS = [
   "Other",
   "NA",
   "SHSH",
-  "CBT Basic"
+  "CBT Basic",
+  "Direct Call",
+  "Fail Payment"
 ];
 
 const DEFAULT_CALLED_FOR_OPTIONS = [

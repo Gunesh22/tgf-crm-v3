@@ -38,7 +38,9 @@ export const SOURCE_OPTIONS = [
   "Other",
   "NA",
   "SHSH",
-  "CBT Basic"
+  "CBT Basic",
+  "Direct Call",
+  "Fail Payment"
 ];
 
 export const CALLED_FOR_OPTIONS = [

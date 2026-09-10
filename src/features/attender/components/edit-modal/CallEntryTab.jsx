@@ -20,7 +20,7 @@ import {
   CALL_SOURCE_OPTIONS
 } from "../../utils";
 import { evaluatePipeline, getPipelineStageConfig, getEffectiveStage, normalizeStageStr, shouldShowConvertToSales, PIPELINE_STAGES } from "../../../../utils/pipelineEngine";
-import { overridePipelineStage } from "../../../../lib/db";
+import { overridePipelineStage, subscribeToSettingsOptions } from "../../../../lib/db";
 import { getContactLeadOrigin, getContactSource } from "../../../../utils/registrationEngine";
 import { extractProgramsList } from "../../utils/programContextHelper";
 
@@ -37,6 +37,7 @@ const CORE_OVERRIDE_STAGES = [
 ];
 
 export const CallEntryTab = ({
+  optionsVersion = 0,
   edited,
   row,
   callTheme,
@@ -62,6 +63,15 @@ export const CallEntryTab = ({
   activeProgram = "",
   onSelectProgram = () => {}
 }) => {
+  const [localSettingsVer, setLocalSettingsVer] = useState(0);
+
+  useEffect(() => {
+    const unsub = subscribeToSettingsOptions(() => {
+      setLocalSettingsVer(v => v + 1);
+    });
+    return () => unsub();
+  }, []);
+
   const newNoteRef = useRef(null);
 
   // Stage Override states
@@ -233,11 +243,15 @@ export const CallEntryTab = ({
     ));
   }, [edited.Tags, edited.tags, row?.Tags, row?.tags]);
 
+  const callSourceOptionsList = useMemo(() => {
+    return [...CALL_SOURCE_OPTIONS];
+  }, [optionsVersion, localSettingsVer, CALL_SOURCE_OPTIONS.length, CALL_SOURCE_OPTIONS.join(",")]);
+
   const currentSourceDropdownOptions = useMemo(() => {
     // Top N tags first, followed by all standard source options
-    const combined = new Set([...contactTagsList, ...CALL_SOURCE_OPTIONS]);
+    const combined = new Set([...contactTagsList, ...callSourceOptionsList]);
     return Array.from(combined);
-  }, [contactTagsList, CALL_SOURCE_OPTIONS.length, CALL_SOURCE_OPTIONS.join(",")]);
+  }, [contactTagsList, callSourceOptionsList]);
 
   const fallbackProgFromCtx = (extractProgramsList(row || edited || {})[0]) || "";
   const selectedProgram = String(activeProgram || edited[calledForField] || row?.[calledForField] || fallbackProgFromCtx || "").split(",")[0].trim();
@@ -769,7 +783,7 @@ export const CallEntryTab = ({
               Lead Origin
             </label>
             <SearchableDropdown
-              options={CALL_SOURCE_OPTIONS}
+              options={callSourceOptionsList}
               selected={String(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || getContactLeadOrigin(edited, selectedProgram) || getContactLeadOrigin(row, selectedProgram) || "")}
               onChange={val => {
                 handleChange("leadOrigin", val);
@@ -835,7 +849,7 @@ export const CallEntryTab = ({
               Lead Origin
             </label>
             <SearchableDropdown
-              options={CALL_SOURCE_OPTIONS}
+              options={callSourceOptionsList}
               selected={String(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || getContactLeadOrigin(edited, selectedProgram) || getContactLeadOrigin(row, selectedProgram) || "")}
               onChange={val => {
                 handleChange("leadOrigin", val);
@@ -887,7 +901,7 @@ export const CallEntryTab = ({
               Lead Origin
             </label>
             <SearchableDropdown
-              options={CALL_SOURCE_OPTIONS}
+              options={callSourceOptionsList}
               selected={String(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || getContactLeadOrigin(edited, selectedProgram) || getContactLeadOrigin(row, selectedProgram) || "")}
               onChange={val => {
                 handleChange("leadOrigin", val);
@@ -1000,7 +1014,7 @@ export const CallEntryTab = ({
                       )}
                     </div>
                     <SearchableDropdown
-                      options={CALL_SOURCE_OPTIONS}
+                      options={callSourceOptionsList}
                       selected={edited.previousProgram || ""}
                       onChange={val => handleChange("previousProgram", val || "")}
                       placeholder="Select pending program / source..."

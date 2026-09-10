@@ -6,7 +6,8 @@ import {
   CalendarDays, Loader, Flame, Edit3, ArrowLeft, Users, RotateCw, Undo2, Info
 } from "lucide-react";
 import {
-  addIncomingCallLog, updateCallLog, checkGlobalDuplicate, findMatchingAttenderState, syncGhlTagsForLead
+  addIncomingCallLog, updateCallLog, checkGlobalDuplicate, findMatchingAttenderState, syncGhlTagsForLead,
+  getSettingsOptions, subscribeToSettingsOptions
 } from "../../../lib/db";
 import { searchCRMByPhone } from "../../../lib/ghl";
 import { CONTACT_FIELDS } from "../../../lib/fieldSchema";
@@ -47,6 +48,7 @@ function parseTimestamp(t) {
 
 export default function MobileEditModal({
   row,
+  optionsVersion = 0,
   attenderId,
   attenderName = "Unknown",
   programs = [],
@@ -57,6 +59,16 @@ export default function MobileEditModal({
   isFetchingShared = false,
   freshSharedLead = null
 }) {
+  const [localSettingsVer, setLocalSettingsVer] = useState(0);
+
+  useEffect(() => {
+    getSettingsOptions().catch(() => {});
+    const unsub = subscribeToSettingsOptions(() => {
+      setLocalSettingsVer(v => v + 1);
+    });
+    return () => unsub();
+  }, []);
+
   const activeAttenderId = attenderId || row?.attenderId || "";
   const activeAttenderName = attenderName || row?.attenderName || "";
 
@@ -241,9 +253,13 @@ export default function MobileEditModal({
     ));
   }, [edited.Tags, edited.tags, row?.Tags, row?.tags]);
 
+  const callSourceOptionsList = useMemo(() => {
+    return [...CALL_SOURCE_OPTIONS];
+  }, [optionsVersion, localSettingsVer, CALL_SOURCE_OPTIONS.length, CALL_SOURCE_OPTIONS.join(",")]);
+
   const currentSourceDropdownOptions = useMemo(() => {
-    return Array.from(new Set([...contactTagsList, ...CALL_SOURCE_OPTIONS]));
-  }, [contactTagsList]);
+    return Array.from(new Set([...contactTagsList, ...callSourceOptionsList]));
+  }, [contactTagsList, callSourceOptionsList]);
 
   const [activeProgram, setActiveProgram] = useState(() => {
     const list = extractProgramsList(row || {});
@@ -923,7 +939,7 @@ export default function MobileEditModal({
                   <Tag size={13} className="text-indigo-500" /> LEAD ORIGIN
                 </label>
                 <SearchableDropdown
-                  options={CALL_SOURCE_OPTIONS}
+                  options={callSourceOptionsList}
                   selected={String(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || getContactLeadOrigin(edited, activeProgram) || getContactLeadOrigin(row, activeProgram) || "")}
                   onChange={val => handleChange("leadOrigin", val)}
                   placeholder="Search & select origin..."

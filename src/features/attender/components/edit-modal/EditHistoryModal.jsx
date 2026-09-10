@@ -1,10 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { X, Trash2, Save } from "lucide-react";
 const doc = () => {};
 import { db } from "../../../../lib/firebase";
 import { toast } from "react-hot-toast";
-import { updateCallLog } from "../../../../lib/db";
+import { updateCallLog, subscribeToSettingsOptions } from "../../../../lib/db";
 import SearchableDropdown from "./SearchableDropdown";
 import {
   STATUS_OPTIONS,
@@ -41,6 +41,19 @@ export default function EditHistoryModal({
   mergedHistory
 }) {
   if (!isOpen) return null;
+
+  const [localSettingsVer, setLocalSettingsVer] = useState(0);
+
+  useEffect(() => {
+    const unsub = subscribeToSettingsOptions(() => {
+      setLocalSettingsVer(v => v + 1);
+    });
+    return () => unsub();
+  }, []);
+
+  const sourceOptionsList = useMemo(() => [...SOURCE_OPTIONS], [localSettingsVer, SOURCE_OPTIONS.length, SOURCE_OPTIONS.join(",")]);
+  const statusOptionsList = useMemo(() => [...STATUS_OPTIONS], [localSettingsVer, STATUS_OPTIONS.length, STATUS_OPTIONS.join(",")]);
+  const calledForOptionsList = useMemo(() => [...CALLED_FOR_OPTIONS], [localSettingsVer, CALLED_FOR_OPTIONS.length, CALLED_FOR_OPTIONS.join(",")]);
 
   const [historyList, setHistoryList] = useState(() => {
     const sourceArr = Array.isArray(mergedHistory) && mergedHistory.length > 0
@@ -309,7 +322,7 @@ export default function EditHistoryModal({
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Called For</label>
                       <SearchableDropdown
-                        options={CALLED_FOR_OPTIONS}
+                        options={calledForOptionsList}
                         selected={String(h.calledFor || "")}
                         onChange={(val) => handleChange(h.id, "calledFor", val)}
                         placeholder="Search & select program..."
@@ -322,7 +335,7 @@ export default function EditHistoryModal({
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Source</label>
                       <SearchableDropdown
-                        options={SOURCE_OPTIONS}
+                        options={sourceOptionsList}
                         selected={String(h.source || "")}
                         onChange={(val) => handleChange(h.id, "source", val)}
                         placeholder="Search & select source..."
@@ -334,7 +347,7 @@ export default function EditHistoryModal({
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Result Status</label>
                       <SearchableDropdown
-                        options={STATUS_OPTIONS}
+                        options={statusOptionsList}
                         selected={h.status || ""}
                         onChange={(val) => handleChange(h.id, "status", val)}
                         placeholder="Search & select status..."

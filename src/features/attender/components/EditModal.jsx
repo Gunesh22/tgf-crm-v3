@@ -8,7 +8,8 @@ import {
   ChevronDown, Check, Search, Users, RotateCw, History, Edit3
 } from "lucide-react";
 import {
-  addIncomingCallLog, updateCallLog, createProgram, checkGlobalDuplicate, findMatchingAttenderState, combineContactHistories, isLeadShared, syncGhlTagsForLead
+  addIncomingCallLog, updateCallLog, createProgram, checkGlobalDuplicate, findMatchingAttenderState, combineContactHistories, isLeadShared, syncGhlTagsForLead,
+  getSettingsOptions, subscribeToSettingsOptions
 } from "../../../lib/db";
 import { searchCRMByPhone } from "../../../lib/ghl";
 import { CONTACT_FIELDS } from "../../../lib/fieldSchema";
@@ -51,6 +52,7 @@ import { extractProgramsList, getProgramContext, getProgramRegistrationInfo } fr
 
 export const EditModal = ({
   row,
+  optionsVersion = 0,
   attenderId,
   attenderName = "Unknown",
   attenders = [],
@@ -63,6 +65,16 @@ export const EditModal = ({
   isFetchingShared = false,
   freshSharedLead = null
 }) => {
+  const [localSettingsVer, setLocalSettingsVer] = useState(0);
+
+  useEffect(() => {
+    getSettingsOptions().catch(() => {});
+    const unsub = subscribeToSettingsOptions(() => {
+      setLocalSettingsVer(v => v + 1);
+    });
+    return () => unsub();
+  }, []);
+
   const [selectedAttenderId, setSelectedAttenderId] = useState(() => (allowAttenderSelection ? (row?.attenderId || attenderId || "") : (attenderId || row?.attenderId || "")));
   const [selectedAttenderName, setSelectedAttenderName] = useState(() => (allowAttenderSelection ? (row?.attenderName || attenderName || "") : (attenderName || row?.attenderName || "")));
 
@@ -2087,6 +2099,7 @@ export const EditModal = ({
 
           {activeTab === "call" ? (
             <CallEntryTab
+              optionsVersion={(optionsVersion || 0) + localSettingsVer}
               edited={edited}
               row={row}
               callTheme={callTheme}
