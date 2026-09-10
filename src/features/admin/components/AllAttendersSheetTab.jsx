@@ -42,7 +42,7 @@ import {
   CALL_TYPE_OPTIONS,
   isUnansweredCallback
 } from "../../attender/utils.js";
-import { parseTimestamp, cleanExportRow, getAllCallEntries, getCallsDoneCount, getContactPhone, renderVal } from "../utils.jsx";
+import { parseTimestamp, cleanExportRow, getAllCallEntries, getCallsDoneCount, getContactPhone, getContactName, getContactCity, getContactKhoji, renderVal } from "../utils.jsx";
 import { normalizePhone, addIncomingCallLog } from "../../../lib/db";
 
 const getLocalDateStr = (d = new Date()) => {
@@ -523,13 +523,13 @@ export default function AllAttendersSheetTab({
       // Global Search
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase().trim();
-        const name = (log.Name || "").toLowerCase();
-        const phone = (log.Phone || log.Mobile || getContactPhone(log) || "").toLowerCase();
+        const name = (getContactName(log) || log.Name || log.name || "").toLowerCase();
+        const phone = (getContactPhone(log) || log.Phone || log.Mobile || log.phone || log.mobile || "").toLowerCase();
         const phoneClean = phone.replace(/\D/g, "");
         const queryClean = query.replace(/\D/g, "");
-        const email = (log.Email || "").toLowerCase();
-        const city = (log.City || "").toLowerCase();
-        const state = (log.State || "").toLowerCase();
+        const email = (log.Email || log.email || "").toLowerCase();
+        const city = (getContactCity(log) || log.City || log.city || "").toLowerCase();
+        const state = (log.State || log.state || "").toLowerCase();
         const remark = (log.remark || "").toLowerCase();
         const attender = (log.attenderName || "").toLowerCase();
         const source = (log.Source || log.source || "").toLowerCase();
@@ -795,13 +795,13 @@ export default function AllAttendersSheetTab({
         row["Attended By"] = call.attenderName || log.attenderName || "Unassigned";
 
         // 2. Contact Details
-        row["Name"] = baseCleaned["Name"] || log.Name || "";
-        row["Phone"] = baseCleaned["Phone"] || log.Phone || "";
-        row["Mobile"] = getFieldWithFallback(log, "Mobile") || baseCleaned["Mobile"] || "";
-        row["Email"] = baseCleaned["Email"] || "";
-        row["City"] = baseCleaned["City"] || "";
-        row["State"] = baseCleaned["State"] || log.State || "";
-        row["Khoji"] = baseCleaned["Khoji"] || log.Khoji || "";
+        row["Name"] = baseCleaned["Name"] || getContactName(log) || log.Name || log.name || "";
+        row["Phone"] = baseCleaned["Phone"] || getContactPhone(log) || log.Phone || log.phone || "";
+        row["Mobile"] = getFieldWithFallback(log, "Mobile") || baseCleaned["Mobile"] || log.Mobile || log.mobile || "";
+        row["Email"] = baseCleaned["Email"] || log.Email || log.email || "";
+        row["City"] = baseCleaned["City"] || getContactCity(log) || log.City || log.city || "";
+        row["State"] = baseCleaned["State"] || log.State || log.state || "";
+        row["Khoji"] = baseCleaned["Khoji"] || getContactKhoji(log) || log.Khoji || log.khoji || "";
 
         // 3. Call Activity Details
         row["Total Calls Done"] = totalCallsCount;
@@ -860,10 +860,11 @@ export default function AllAttendersSheetTab({
       return { bg: "bg-amber-100 border-amber-300", text: "text-amber-800 font-extrabold", label: status || "Unanswered Callback" };
     }
     if (status) {
-      if (status === "Reg.Done") return { bg: "bg-emerald-100", text: "text-emerald-700 border-emerald-200", label: status };
-      if (status === "Interested") return { bg: "bg-blue-100", text: "text-blue-700 border-blue-200", label: status };
-      if (status === "Info given") return { bg: "bg-purple-100", text: "text-purple-700 border-purple-200", label: status };
-      if (["NA", "Busy", "Call Cut", "switched off", "Not interested", "Invalid No"].includes(status)) {
+      const sLower = status.toLowerCase().trim();
+      if (status === "Reg.Done" || sLower === "registered") return { bg: "bg-emerald-100", text: "text-emerald-700 border-emerald-200", label: status };
+      if (sLower === "interested") return { bg: "bg-blue-100", text: "text-blue-700 border-blue-200", label: status };
+      if (sLower === "info given" || sLower === "information given") return { bg: "bg-purple-100", text: "text-purple-700 border-purple-200", label: status };
+      if (["na", "busy", "call cut", "switched off", "not interested", "invalid no", "invalid number", "not connected", "not picked up", "no answer"].includes(sLower)) {
         return { bg: "bg-rose-100", text: "text-rose-700 border-rose-200", label: status };
       }
       return { bg: "bg-indigo-100", text: "text-indigo-700 border-indigo-200", label: status };
@@ -958,7 +959,10 @@ export default function AllAttendersSheetTab({
                   status: "",
                   callType: "incoming",
                   "Called For": "",
+                  calledFor: "",
                   Source: "",
+                  source: "",
+                  leadOrigin: "",
                   remark: ""
                 });
               }}
@@ -1351,7 +1355,7 @@ export default function AllAttendersSheetTab({
                     {!hiddenColumns.includes("Name") && (
                       <td className="py-2.5 px-4 border-r border-slate-100 font-semibold text-slate-900 align-top">
                         {isHot && <Flame size={14} className="text-orange-500 shrink-0 inline mr-1" fill="currentColor" />}
-                        {renderVal(log.Name, "—")}
+                        {renderVal(getContactName(log) || log.Name || log.name, "—")}
                       </td>
                     )}
 
@@ -1369,19 +1373,19 @@ export default function AllAttendersSheetTab({
 
                     {!hiddenColumns.includes("Email") && (
                       <td className="py-2.5 px-4 border-r border-slate-100 text-slate-600 align-top">
-                        {renderVal(log.Email, "—")}
+                        {renderVal(log.Email || log.email, "—")}
                       </td>
                     )}
 
                     {!hiddenColumns.includes("City") && (
                       <td className="py-2.5 px-4 border-r border-slate-100 text-slate-700 align-top">
-                        {renderVal(log.City, "—")}
+                        {renderVal(getContactCity(log) || log.City || log.city, "—")}
                       </td>
                     )}
 
                     {!hiddenColumns.includes("State") && (
                       <td className="py-2.5 px-4 border-r border-slate-100 text-slate-600 align-top">
-                        {renderVal(log.State, "—")}
+                        {renderVal(log.State || log.state, "—")}
                       </td>
                     )}
 

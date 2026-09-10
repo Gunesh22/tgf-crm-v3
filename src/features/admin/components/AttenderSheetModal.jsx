@@ -81,22 +81,23 @@ export function AttenderSheetModal({
               <tbody className="divide-y divide-gray-50">
                 {sortedViewLogs.map((log, idx) => {
                   const logName = Object.keys(log).find(k => k.toLowerCase().includes("name") || k.toLowerCase().includes("lead"));
-                  const contactName = logName ? log[logName] : "Unknown";
+                  const contactName = logName ? log[logName] : (log.Name || log.name || "Unknown");
+                  const sLower = String(log.status || "").trim().toLowerCase();
                   return (
                     <tr key={`${log.id || 'log'}_${idx}`} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-6 py-4">
                         <p className="font-bold text-sm text-gray-800">{contactName}</p>
-                        <p className="text-gray-400 mt-0.5">{log.Phone || log.Mobile || "No Phone"}</p>
+                        <p className="text-gray-400 mt-0.5">{log.Phone || log.Mobile || log.phone || log.mobile || "No Phone"}</p>
                       </td>
                       <td className="px-6 py-4 text-gray-600">
-                        <p>{log.City || "—"}</p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">{log.State || "—"}</p>
+                        <p>{log.City || log.city || "—"}</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{log.State || log.state || "—"}</p>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-0.5 rounded-lg font-black uppercase text-[10px] ${log.status === "Reg.Done" ? "bg-emerald-100 text-emerald-700" :
-                          log.status === "Interested" ? "bg-blue-100 text-blue-700" :
-                            log.status === "Info given" ? "bg-purple-100 text-purple-700" :
-                              !log.status || log.status === "Pending" ? "bg-amber-100 text-amber-700" :
+                        <span className={`px-2 py-0.5 rounded-lg font-black uppercase text-[10px] ${log.status === "Reg.Done" || sLower === "registered" ? "bg-emerald-100 text-emerald-700" :
+                          sLower === "interested" ? "bg-blue-100 text-blue-700" :
+                            sLower === "info given" || sLower === "information given" ? "bg-purple-100 text-purple-700" :
+                              !log.status || sLower === "pending" ? "bg-amber-100 text-amber-700" :
                                 "bg-gray-100 text-gray-600"
                           }`}>{log.status || "Pending"}</span>
                       </td>

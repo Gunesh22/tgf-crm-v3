@@ -238,7 +238,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
   }, [programs, callLogs]);
   const attenderOptions = attenders
     .filter(a => a.role !== 'admin' && !EXCLUDED_ATTENDER_NAMES.includes((a.name || "").toLowerCase().trim()))
-    .map(a => ({ value: a.id, label: a.name }));
+    .map(a => ({ value: a.id || a._id, label: a.name }));
 
   const leadOriginOptions = useMemo(() => {
     const origins = new Set();
@@ -355,6 +355,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
               pipelineStage: log.pipelineStage || "",
               remark: h.remark || "",
               callType: h.callType || h.callDirection || log.callType || log.callDirection || "outgoing",
+              callDirection: h.callDirection || h.callType || log.callDirection || log.callType || "outgoing",
               history: log.history || [],
               callbackDate: log.callbackDate || null,
               createdAt: parseTimestamp(log.createdAt) || attemptDate,
@@ -405,6 +406,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
               pipelineStage: log.pipelineStage || "",
               remark: state.remark || "",
               callType: callDir,
+              callDirection: callDir,
               history: [],
               callbackDate: state.callbackDate || null,
               createdAt: parseTimestamp(log.createdAt) || attemptDate,
@@ -436,7 +438,8 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
             status: canonicalStatus,
             pipelineStage: log.pipelineStage || "",
             remark: log.remark || "",
-            callType: log.callType || "outgoing",
+            callType: log.callType || log.callDirection || "outgoing",
+            callDirection: log.callDirection || log.callType || "outgoing",
             history: [],
             callbackDate: log.callbackDate || null,
             createdAt: parseTimestamp(log.createdAt) || attemptDate,
@@ -476,7 +479,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
       if (selectedAttenderIds.length > 0) {
         const matchesId = log.attenderId && selectedAttenderIds.includes(log.attenderId);
         const selectedAttenderNames = selectedAttenderIds.map(id => {
-          const a = attenders.find(x => x.id === id);
+          const a = attenders.find(x => x.id === id || x._id === id);
           return a ? a.name.toLowerCase().trim() : "";
         }).filter(Boolean);
         const matchesName = selectedAttenderNames.includes((log.attenderName || "").toLowerCase().trim());
@@ -499,11 +502,14 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
       }
 
       // Status filter
-      if (selectedStatuses.length > 0 && !selectedStatuses.includes(log.status || "Pending")) return false;
+      if (selectedStatuses.length > 0) {
+        const logSt = String(log.status || "Pending").trim().toLowerCase();
+        if (!selectedStatuses.some(st => String(st).trim().toLowerCase() === logSt)) return false;
+      }
 
       // Call Type filter
       if (selectedCallTypes.length > 0) {
-        const cType = (log.callType || "outgoing").toLowerCase();
+        const cType = (log.callType || log.callDirection || "outgoing").toLowerCase();
         const matches = selectedCallTypes.some(t => {
           if (t === "incoming") return cType.startsWith("incoming");
           if (t === "outgoing") return cType.startsWith("outgoing");
@@ -578,7 +584,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
       }
       const s = map[key];
       s.total++;
-      const cType = (log.callType || "").toLowerCase();
+      const cType = (log.callType || log.callDirection || "").toLowerCase();
       if (cType.startsWith("in")) s.incoming++; else s.outgoing++;
 
       const normStatus = getCanonicalStatus(log.status);
@@ -833,7 +839,8 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
   const objectionReasonData = useMemo(() => {
     const map = {};
     filteredLogs.forEach(l => {
-      if (getCanonicalStatus(l.status) === "Not Interested" || l.objectionReason) {
+      const cStat = String(getCanonicalStatus(l.status) || l.status || "").trim().toLowerCase();
+      if (cStat === "not interested" || l.objectionReason) {
         const reason = l.objectionReason || l["Reason for Not Interested"] || "Unspecified";
         map[reason] = (map[reason] || 0) + 1;
       }

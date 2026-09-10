@@ -33,6 +33,7 @@ import {
   isKhojiNegative,
   isIgnoredField,
   getCanonicalStatus,
+  classifyCallStatus,
   isUnansweredCallback
 } from "./utils";
 import { normalizeProgramStates } from "../../utils/pipelineEngine";
@@ -1477,8 +1478,8 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     });
     const regDone = regDoneSet.size;
     const callbacks = active.filter(l => l._callbackDue).length;
-    const incoming = active.filter(l => getContactView(l, attenderId || attenderName).callType === "incoming").length;
-    const outgoing = active.filter(l => getContactView(l, attenderId || attenderName).callType !== "incoming").length;
+    const incoming = active.filter(l => String(getContactView(l, attenderId || attenderName).callType || "").toLowerCase().includes("incoming")).length;
+    const outgoing = active.filter(l => !String(getContactView(l, attenderId || attenderName).callType || "").toLowerCase().includes("incoming")).length;
     const hotLeads = active.filter(l => l.isHotLead).length;
     const shared = active.filter(l => getSharedAttenders(l).length > 1).length;
     return { total, called, interested, regDone, callbacks, incoming, outgoing, hotLeads, shared };
@@ -1529,16 +1530,20 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
 
       if (status) {
         statusCounts[status] = (statusCounts[status] || 0) + 1;
-        if (CONNECTED_STATUSES.includes(status)) {
+        const isConn = classifyCallStatus(status) === "CONNECTED" || CONNECTED_STATUSES.includes(status);
+        const isNotConn = classifyCallStatus(status) === "NOT_CONNECTED" || NOT_CONNECTED_STATUSES.includes(status);
+        const sLower = status.toLowerCase().trim();
+
+        if (isConn) {
           connectedContacts++;
-          if (status === "Reg.Done") {
+          if (status === "Reg.Done" || sLower === "registered") {
             const cId = String(log.id || log._id || log.Phone || log.Name || "").trim();
             const prog = String(log.calledFor || log.programName || "general").trim().toLowerCase();
             if (cId) uniqueRegSet.add(`${cId}_${prog}`);
           }
-          else if (status === "Info given") infoGiven++;
-          else if (status === "Interested") interested++;
-        } else if (NOT_CONNECTED_STATUSES.includes(status)) {
+          else if (sLower === "info given" || sLower === "information given") infoGiven++;
+          else if (sLower === "interested") interested++;
+        } else if (isNotConn) {
           notConnectedContacts++;
         }
       }
@@ -1613,10 +1618,11 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
 
   const getStatusBadge = (status) => {
     if (!status) return { bg: "bg-gray-100", text: "text-gray-400", label: "Pending" };
-    if (status === "Reg.Done") return { bg: "bg-emerald-100", text: "text-emerald-700", label: status };
-    if (status === "Interested") return { bg: "bg-blue-100", text: "text-blue-700", label: status };
-    if (status === "Info given") return { bg: "bg-purple-100", text: "text-purple-700", label: status };
-    if (["NA", "Busy", "Call Cut", "switched off", "Not interested", "Invalid No"].includes(status)) return { bg: "bg-red-100", text: "text-red-600", label: status };
+    const sLower = String(status).trim().toLowerCase();
+    if (status === "Reg.Done" || sLower === "registered") return { bg: "bg-emerald-100", text: "text-emerald-700", label: status };
+    if (sLower === "interested") return { bg: "bg-blue-100", text: "text-blue-700", label: status };
+    if (sLower === "info given" || sLower === "information given") return { bg: "bg-purple-100", text: "text-purple-700", label: status };
+    if (["na", "busy", "call cut", "switched off", "not interested", "invalid no", "invalid number", "not connected", "not picked up", "no answer"].includes(sLower)) return { bg: "bg-red-100", text: "text-red-600", label: status };
     return { bg: "bg-indigo-100", text: "text-indigo-700", label: status };
   };
 

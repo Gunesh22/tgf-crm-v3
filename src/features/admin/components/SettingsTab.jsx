@@ -18,9 +18,14 @@ import {
   getLockedMonthlyReports,
   DEFAULT_CONNECTED_STATUSES,
   DEFAULT_NOT_CONNECTED_STATUSES,
+  DEFAULT_SALES_OUTCOME_OPTIONS,
   DEFAULT_WHATSAPP_TEMPLATES
 } from "../../../lib/db";
-import { updateDynamicOptions } from "../../attender/utils";
+import { 
+  updateDynamicOptions,
+  CALLED_FOR_OPTIONS,
+  SOURCE_OPTIONS
+} from "../../attender/utils";
 
 export default function SettingsTab() {
   const [options, setOptions] = useState(null);
@@ -107,12 +112,28 @@ export default function SettingsTab() {
   };
 
   const handleOptionChange = async (type, action, val, newVal) => {
-    const key = type === "status" ? "statusOptions" : type === "source" ? "sourceOptions" : "calledForOptions";
-    const current = options[key] || [];
+    const key =
+      type === "salesOutcome"
+        ? "salesOutcomeOptions"
+        : type === "status"
+        ? "statusOptions"
+        : type === "source"
+        ? "sourceOptions"
+        : "calledForOptions";
+
+    const current =
+      options?.[key] ||
+      (type === "salesOutcome"
+        ? DEFAULT_SALES_OUTCOME_OPTIONS
+        : type === "source"
+        ? SOURCE_OPTIONS
+        : type === "calledFor"
+        ? CALLED_FOR_OPTIONS
+        : []);
     
     let updated;
     if (action === "delete") {
-      if (type === "status" && ["Reg.Done", "NA"].includes(val)) {
+      if ((type === "status" || type === "salesOutcome") && ["Reg.Done", "NA"].includes(val)) {
         toast.error(`Cannot delete required status: ${val}`);
         return;
       }
@@ -128,7 +149,7 @@ export default function SettingsTab() {
         toast.error("Option name already exists!");
         return;
       }
-      if (type === "status" && ["Reg.Done", "NA"].includes(val)) {
+      if ((type === "status" || type === "salesOutcome") && ["Reg.Done", "NA"].includes(val)) {
         toast.error(`Cannot rename required status: ${val}`);
         return;
       }
@@ -149,7 +170,33 @@ export default function SettingsTab() {
 
     let updatePayload = { [key]: updated };
 
-    if (type === "status") {
+    if (type === "salesOutcome") {
+      const currentConn = options?.connectedStatuses || DEFAULT_CONNECTED_STATUSES;
+      const currentStatusOpts = options?.statusOptions || [];
+      const currentNotConn = options?.notConnectedStatuses || DEFAULT_NOT_CONNECTED_STATUSES;
+      const currentOptComp = options?.optionalCompulsoryStatuses || currentNotConn;
+
+      if (action === "delete") {
+        updatePayload.connectedStatuses = currentConn.filter(s => s !== val);
+        updatePayload.statusOptions = currentStatusOpts.filter(s => s !== val);
+        updatePayload.optionalCompulsoryStatuses = currentOptComp.filter(s => s !== val);
+      } else if (action === "rename") {
+        const trimmedNew = newVal.trim();
+        updatePayload.connectedStatuses = currentConn.map(s => (s === val ? trimmedNew : s));
+        updatePayload.statusOptions = currentStatusOpts.map(s => (s === val ? trimmedNew : s));
+        updatePayload.optionalCompulsoryStatuses = currentOptComp.map(s => (s === val ? trimmedNew : s));
+        if (options?.statusStageMapping && options.statusStageMapping[val]) {
+          const nextMapping = { ...options.statusStageMapping };
+          nextMapping[trimmedNew] = nextMapping[val];
+          delete nextMapping[val];
+          updatePayload.statusStageMapping = nextMapping;
+        }
+      } else {
+        const trimmedVal = val.trim();
+        updatePayload.connectedStatuses = Array.from(new Set([...currentConn, trimmedVal]));
+        updatePayload.statusOptions = Array.from(new Set([...currentStatusOpts, trimmedVal]));
+      }
+    } else if (type === "status") {
       const currentConn = options?.connectedStatuses || DEFAULT_CONNECTED_STATUSES;
       const currentNotConn = options?.notConnectedStatuses || DEFAULT_NOT_CONNECTED_STATUSES;
       const currentOptComp = options?.optionalCompulsoryStatuses || currentNotConn;
@@ -268,7 +315,9 @@ export default function SettingsTab() {
     );
   }
 
-  const statusOptionsSet = new Set(options?.statusOptions || []);
+  const allDefaultStatuses = [...DEFAULT_CONNECTED_STATUSES, ...DEFAULT_NOT_CONNECTED_STATUSES];
+  const currentStatusOptions = options?.statusOptions || allDefaultStatuses;
+  const statusOptionsSet = new Set(currentStatusOptions);
   const rawConn = options?.connectedStatuses || DEFAULT_CONNECTED_STATUSES;
   const rawNotConn = options?.notConnectedStatuses || DEFAULT_NOT_CONNECTED_STATUSES;
 
@@ -278,7 +327,7 @@ export default function SettingsTab() {
   const connectedSet = new Set(connectedList);
   const notConnectedSet = new Set(notConnectedList);
 
-  const unassignedList = (options?.statusOptions || []).filter(
+  const unassignedList = currentStatusOptions.filter(
     s => !connectedSet.has(s) && !notConnectedSet.has(s)
   );
 
@@ -318,7 +367,7 @@ export default function SettingsTab() {
 
   const sectionTitles = {
     security: { title: "Security & Master Password", desc: "Manage administrative access, authentication credentials, and security settings." },
-    "call-center": { title: "Call Center Options", desc: "Configure global dropdown options for Call Outcome, Source, and Called For." },
+    "call-center": { title: "Call Center Options", desc: "Configure global dropdown options for Program (Called For), Source (Lead Origin / Current Source), and Connected Outcome." },
     "whatsapp-templates": { title: "WhatsApp Message Templates", desc: "Customize quick message templates used by attenders when sending WhatsApp messages." },
     "status-rules": { title: "Status Rules & Compulsory Fields", desc: "Configure which fields are required when an attender logs a specific call status." },
     "status-stage-mapping": { title: "Status to Pipeline Stage Mapping", desc: "Configure which pipeline stage each call status maps to. Stored in MongoDB." },
@@ -371,34 +420,37 @@ export default function SettingsTab() {
             </div>
             <div>
               <h3 className="text-sm font-semibold text-[#172033]">Call Center Options</h3>
-              <p className="text-xs text-[#667085] mt-0.5">Configure dropdown values for Call Outcome, Source, and Called For globally.</p>
+              <p className="text-xs text-[#667085] mt-0.5">Configure global dropdown options matching the Edit Modal: Program (Called For), Source (Lead Origin & Current Source), and Connected Outcome.</p>
             </div>
           </div>
 
           <div className="grid md:grid-cols-3 gap-4">
             <OptionsManagerCard
-              title="Call Outcome Options"
-              icon={ShieldCheck}
-              options={options?.statusOptions || []}
-              onAdd={(val) => handleOptionChange("status", "add", val)}
-              onDelete={(val) => handleOptionChange("status", "delete", val)}
-              onRename={(oldVal, newVal) => handleOptionChange("status", "rename", oldVal, newVal)}
+              title="Program (Called For)"
+              subtitle="Modal: PROGRAM (CALLED FOR)"
+              icon={HelpCircle}
+              options={options?.calledForOptions || CALLED_FOR_OPTIONS}
+              onAdd={(val) => handleOptionChange("calledFor", "add", val)}
+              onDelete={(val) => handleOptionChange("calledFor", "delete", val)}
+              onRename={(oldVal, newVal) => handleOptionChange("calledFor", "rename", oldVal, newVal)}
             />
             <OptionsManagerCard
               title="Source Options"
+              subtitle="Modal: LEAD ORIGIN & CURRENT SOURCE"
               icon={Tag}
-              options={options?.sourceOptions || []}
+              options={options?.sourceOptions || SOURCE_OPTIONS}
               onAdd={(val) => handleOptionChange("source", "add", val)}
               onDelete={(val) => handleOptionChange("source", "delete", val)}
               onRename={(oldVal, newVal) => handleOptionChange("source", "rename", oldVal, newVal)}
             />
             <OptionsManagerCard
-              title="Called For Options"
-              icon={HelpCircle}
-              options={options?.calledForOptions || []}
-              onAdd={(val) => handleOptionChange("calledFor", "add", val)}
-              onDelete={(val) => handleOptionChange("calledFor", "delete", val)}
-              onRename={(oldVal, newVal) => handleOptionChange("calledFor", "rename", oldVal, newVal)}
+              title="Connected Outcome"
+              subtitle="Modal: CONNECTED OUTCOME"
+              icon={ShieldCheck}
+              options={options?.salesOutcomeOptions || DEFAULT_SALES_OUTCOME_OPTIONS}
+              onAdd={(val) => handleOptionChange("salesOutcome", "add", val)}
+              onDelete={(val) => handleOptionChange("salesOutcome", "delete", val)}
+              onRename={(oldVal, newVal) => handleOptionChange("salesOutcome", "rename", oldVal, newVal)}
             />
           </div>
         </div>

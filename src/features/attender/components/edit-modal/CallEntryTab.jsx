@@ -15,13 +15,14 @@ import {
   CALL_PURPOSE_OPTIONS,
   CALL_STATUS_OPTIONS,
   SALES_OUTCOME_OPTIONS,
-  QUERY_STATUS_OPTIONS,
   CALLED_FOR_OPTIONS,
   SOURCE_OPTIONS,
   CALL_SOURCE_OPTIONS
 } from "../../utils";
-import { evaluatePipeline, getPipelineStageConfig, getEffectiveStage, shouldShowConvertToSales, PIPELINE_STAGES } from "../../../../utils/pipelineEngine";
+import { evaluatePipeline, getPipelineStageConfig, getEffectiveStage, normalizeStageStr, shouldShowConvertToSales, PIPELINE_STAGES } from "../../../../utils/pipelineEngine";
 import { overridePipelineStage } from "../../../../lib/db";
+import { getContactLeadOrigin, getContactSource } from "../../../../utils/registrationEngine";
+import { extractProgramsList } from "../../utils/programContextHelper";
 
 const CORE_OVERRIDE_STAGES = [
   PIPELINE_STAGES.NEW_LEAD,
@@ -41,7 +42,7 @@ export const CallEntryTab = ({
   callTheme,
   calledForField,
   sourceField,
-  getEditable,
+  getEditable = () => true,
   handleChange,
   handleCallTypeChange,
   getOtherValuesForField,
@@ -238,9 +239,10 @@ export const CallEntryTab = ({
     return Array.from(combined);
   }, [contactTagsList, CALL_SOURCE_OPTIONS.length, CALL_SOURCE_OPTIONS.join(",")]);
 
-  const selectedProgram = String(activeProgram || edited[calledForField] || "").trim();
+  const fallbackProgFromCtx = (extractProgramsList(row || edited || {})[0]) || "";
+  const selectedProgram = String(activeProgram || edited[calledForField] || row?.[calledForField] || fallbackProgFromCtx || "").split(",")[0].trim();
 
-  const stageSource = row || edited;
+  const stageSource = edited || row;
 
   console.log("[PROGRAM STAGE TRACE]", {
     activeProgram,
@@ -279,7 +281,13 @@ export const CallEntryTab = ({
     }
   );
 
-  const dbStage = getEffectiveStage(stageSource, selectedProgram, activeAttenderId) || PIPELINE_STAGES.NEW_LEAD;
+  const dbStage = getEffectiveStage(stageSource, selectedProgram, activeAttenderId)
+    || getEffectiveStage(stageSource, selectedProgram)
+    || getEffectiveStage(stageSource)
+    || normalizeStageStr(stageSource?.pipelineStage)
+    || normalizeStageStr(edited?.pipelineStage)
+    || normalizeStageStr(row?.pipelineStage)
+    || PIPELINE_STAGES.NEW_LEAD;
   const isFormDirtyCall = Boolean(activeCallStatus && edited.status);
   const displayStage = isFormDirtyCall ? evalResult.pipelineStage : dbStage;
   const stageConfig = getPipelineStageConfig(displayStage);
@@ -407,7 +415,17 @@ export const CallEntryTab = ({
     setEdited(prev => {
       const next = { ...prev, callStatus: res };
       if (res === "Connected") {
-        if (isUnconnectedReason || prev.status === "Invalid Number" || prev.status === "Invalid No") {
+        const curPurpose = String(prev.callPurpose || "SALES").toUpperCase();
+        if (curPurpose === "REMINDER") {
+          next.status = (prev.status && ["Reminder Given", "Reminder Confirmed", "Next Time", "Not Interested"].includes(prev.status))
+            ? prev.status
+            : "Reminder Given";
+        } else if (curPurpose === "QUERY") {
+          next.status = "Query";
+          if (!next.queryStatus || next.queryStatus === "Attempting Query") {
+            next.queryStatus = "Query Pending";
+          }
+        } else if (isUnconnectedReason || prev.status === "Invalid Number" || prev.status === "Invalid No") {
           next.status = "";
         }
       } else if (res === "Not Connected") {
@@ -715,8 +733,8 @@ export const CallEntryTab = ({
             Call Purpose <span className="text-rose-500 font-bold">*</span>
           </label>
           <SearchableDropdown
-            options={["Sales", "Query", "Reminder"]}
-            selected={activePurpose === "QUERY" ? "Query" : activePurpose === "REMINDER" ? "Reminder" : activePurpose === "SALES" ? "Sales" : ""}
+            options={CALL_PURPOSE_OPTIONS}
+            selected={activePurpose}
             onChange={val => {
               setCallPurpose(val ? val.toUpperCase() : "");
             }}
@@ -736,7 +754,7 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={salesCalledForOptions}
-              selected={String(activeProgram || (edited[calledForField] ? String(edited[calledForField]).split(",")[0].trim() : ""))}
+              selected={String(activeProgram || (edited[calledForField] ? String(edited[calledForField]).split(",")[0].trim() : "") || (row?.[calledForField] ? String(row[calledForField]).split(",")[0].trim() : "") || fallbackProgFromCtx || "")}
               onChange={val => handleChange(calledForField, val)}
               placeholder="Select program..."
               isMulti={false}
@@ -752,11 +770,9 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={CALL_SOURCE_OPTIONS}
-              selected={String(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || "")}
+              selected={String(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || getContactLeadOrigin(edited, selectedProgram) || getContactLeadOrigin(row, selectedProgram) || "")}
               onChange={val => {
                 handleChange("leadOrigin", val);
-                handleChange("original_source", val);
-                handleChange("originalSource", val);
               }}
               placeholder="Select Lead Origin..."
               colorClass="indigo"
@@ -771,7 +787,7 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={currentSourceDropdownOptions}
-              selected={String(edited[sourceField] || edited.Source || edited.source || "")}
+              selected={String(edited[sourceField] || edited.Source || edited.source || getContactSource(edited, selectedProgram) || getContactSource(row, selectedProgram) || "")}
               onChange={val => handleChange(sourceField, val)}
               placeholder="Select Current Source..."
               colorClass="amber"
@@ -804,7 +820,7 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={salesCalledForOptions}
-              selected={String(activeProgram || (edited[calledForField] ? String(edited[calledForField]).split(",")[0].trim() : ""))}
+              selected={String(activeProgram || (edited[calledForField] ? String(edited[calledForField]).split(",")[0].trim() : "") || (row?.[calledForField] ? String(row[calledForField]).split(",")[0].trim() : "") || fallbackProgFromCtx || "")}
               onChange={val => handleChange(calledForField, val)}
               placeholder="Which program is this reminder for?"
               isMulti={false}
@@ -820,11 +836,9 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={CALL_SOURCE_OPTIONS}
-              selected={String(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || "")}
+              selected={String(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || getContactLeadOrigin(edited, selectedProgram) || getContactLeadOrigin(row, selectedProgram) || "")}
               onChange={val => {
                 handleChange("leadOrigin", val);
-                handleChange("original_source", val);
-                handleChange("originalSource", val);
               }}
               placeholder="Select Lead Origin..."
               colorClass="sky"
@@ -839,7 +853,7 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={currentSourceDropdownOptions}
-              selected={String(edited[sourceField] || edited.Source || edited.source || "")}
+              selected={String(edited[sourceField] || edited.Source || edited.source || getContactSource(edited, selectedProgram) || getContactSource(row, selectedProgram) || "")}
               onChange={val => handleChange(sourceField, val)}
               placeholder="Select Current Source..."
               colorClass="amber"
@@ -859,7 +873,7 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={salesCalledForOptions}
-              selected={String(activeProgram || (edited[calledForField] ? String(edited[calledForField]).split(",")[0].trim() : ""))}
+              selected={String(activeProgram || (edited[calledForField] ? String(edited[calledForField]).split(",")[0].trim() : "") || (row?.[calledForField] ? String(row[calledForField]).split(",")[0].trim() : "") || fallbackProgFromCtx || "")}
               onChange={val => handleChange(calledForField, val)}
               placeholder="Which program is this query about?"
               colorClass="orange"
@@ -874,11 +888,9 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={CALL_SOURCE_OPTIONS}
-              selected={String(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || "")}
+              selected={String(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || getContactLeadOrigin(edited, selectedProgram) || getContactLeadOrigin(row, selectedProgram) || "")}
               onChange={val => {
                 handleChange("leadOrigin", val);
-                handleChange("original_source", val);
-                handleChange("originalSource", val);
               }}
               placeholder="Select Lead Origin..."
               colorClass="orange"
@@ -893,7 +905,7 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={currentSourceDropdownOptions}
-              selected={String(edited[sourceField] || edited.Source || edited.source || "")}
+              selected={String(edited[sourceField] || edited.Source || edited.source || getContactSource(edited, selectedProgram) || getContactSource(row, selectedProgram) || "")}
               onChange={val => handleChange(sourceField, val)}
               placeholder="Select Current Source..."
               colorClass="amber"
@@ -911,7 +923,7 @@ export const CallEntryTab = ({
             Call Result <span className="text-rose-500 font-bold">*</span>
           </label>
           <SearchableDropdown
-            options={["Connected", "Not Connected", "Invalid Number"]}
+            options={CALL_STATUS_OPTIONS}
             selected={activePrimaryResult || ""}
             onChange={val => {
               if (val) handlePrimaryResultChange(val);
@@ -1093,6 +1105,44 @@ export const CallEntryTab = ({
                     </button>
                   </div>
                 )}
+              </div>
+            );
+          })()}
+
+          {/* CONNECTED REMINDER OUTCOME */}
+          {activePrimaryResult === "Connected" && activePurpose === "REMINDER" && (() => {
+            const rVal = String(edited.status || "Reminder Given").trim();
+            const reminderOptions = [
+              { key: "Reminder Given", label: "🔔 Reminder Given", color: "bg-sky-600 text-white border-sky-600 shadow-2xs" },
+              { key: "Reminder Confirmed", label: "✓ Confirmed / Attending", color: "bg-emerald-600 text-white border-emerald-600 shadow-2xs" },
+              { key: "Next Time", label: "📅 Next Time", color: "bg-amber-500 text-white border-amber-500 shadow-2xs" },
+              { key: "Not Interested", label: "✕ Not Attending", color: "bg-rose-500 text-white border-rose-500 shadow-2xs" }
+            ];
+
+            return (
+              <div className="space-y-2 animate-fade-in p-3 rounded-xl border bg-sky-50/80 border-sky-200/90">
+                <label className="text-[11px] font-extrabold uppercase tracking-wider flex items-center gap-1 text-sky-950">
+                  Reminder Outcome <span className="text-rose-500 font-bold">*</span>
+                </label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {reminderOptions.map(opt => {
+                    const isSelected = rVal === opt.key;
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => handleChange("status", opt.key)}
+                        className={`py-2 px-2.5 rounded-lg text-xs font-bold border transition-all cursor-pointer truncate ${
+                          isSelected
+                            ? opt.color + " font-extrabold"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             );
           })()}

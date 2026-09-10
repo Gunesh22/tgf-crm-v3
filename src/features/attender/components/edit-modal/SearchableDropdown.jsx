@@ -72,10 +72,12 @@ const SearchableDropdown = ({
 
   const isSelected = (opt) => {
     if (!selected || typeof opt === 'object') return false;
+    const val = typeof opt === 'object' ? (opt.value || opt.label) : opt;
     if (isMulti) {
-      return selected.split(",").map(x => x.trim()).filter(Boolean).includes(opt);
+      const selectedArr = selected.split(",").map(x => x.trim().toLowerCase()).filter(Boolean);
+      return selectedArr.includes(String(val).trim().toLowerCase());
     }
-    return selected === opt;
+    return String(selected).trim().toLowerCase() === String(val).trim().toLowerCase();
   };
 
   const handleSelect = (opt) => {
@@ -112,6 +114,15 @@ const SearchableDropdown = ({
       const selectedArr = selected.split(",").map(x => x.trim()).filter(Boolean);
       if (selectedArr.length === 0) return placeholder;
       return selectedArr.join(", ");
+    }
+    if (Array.isArray(options)) {
+      const matchedOpt = options.find(o => {
+        if (typeof o === 'object') return o && String(o.value || o.label || '').toLowerCase() === String(selected).toLowerCase();
+        return String(o).toLowerCase() === String(selected).toLowerCase();
+      });
+      if (matchedOpt) {
+        return typeof matchedOpt === 'object' ? (matchedOpt.label || matchedOpt.value) : matchedOpt;
+      }
     }
     return selected;
   };

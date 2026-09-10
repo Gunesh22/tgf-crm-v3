@@ -80,12 +80,16 @@ export default async function handler(req, res) {
           { mobile: { $in: variations } },
           { Mobile: { $in: variations } },
           { name: { $regex: cleanSearch, $options: 'i' } },
-          { city: { $regex: cleanSearch, $options: 'i' } }
+          { Name: { $regex: cleanSearch, $options: 'i' } },
+          { city: { $regex: cleanSearch, $options: 'i' } },
+          { City: { $regex: cleanSearch, $options: 'i' } }
         ];
       } else {
         searchOr = [
           { name: { $regex: cleanSearch, $options: 'i' } },
-          { city: { $regex: cleanSearch, $options: 'i' } }
+          { Name: { $regex: cleanSearch, $options: 'i' } },
+          { city: { $regex: cleanSearch, $options: 'i' } },
+          { City: { $regex: cleanSearch, $options: 'i' } }
         ];
       }
 
@@ -133,6 +137,17 @@ export default async function handler(req, res) {
         id: c.id || idStr,
         contactId: c.contactId || idStr,
         _id: idStr,
+        Name: c.Name || c.name || '',
+        name: c.Name || c.name || '',
+        Phone: c.Phone || c.phone || c.Mobile || c.mobile || '',
+        phone: c.Phone || c.phone || c.Mobile || c.mobile || '',
+        City: c.City || c.city || '',
+        State: c.State || c.state || '',
+        Khoji: c.Khoji || c.khoji || '',
+        calledFor: c.calledFor || c['Called For'] || c.called_for || '',
+        leadOrigin: c.leadOrigin || c.original_source || c.originalSource || c['Lead Origin'] || '',
+        source: c.source || c.Source || c.Sourse || c.sourse || '',
+        Source: c.Source || c.source || c.Sourse || c.sourse || '',
         history: Array.isArray(c.history) ? c.history : []
       };
     });

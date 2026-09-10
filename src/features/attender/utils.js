@@ -7,10 +7,14 @@ export const STATUS_OPTIONS = [
   "Reg.Done",
   "Previous Program Pending",
   "Not Connected",
+  "Not Interested",
   "Not interested",
+  "Invalid Number",
   "Invalid No",
   "Already Reg.d",
+  "Info Given",
   "Info given",
+  "Next Time",
   "Next time",
   "reminder",
   "Reminder Given",
@@ -88,15 +92,11 @@ export const CALL_PURPOSE_OPTIONS = ["SALES", "QUERY", "REMINDER"];
 
 export const CALL_STATUS_OPTIONS = [
   "Connected",
-  "Not Picked Up",
-  "Busy",
-  "Call Cut",
-  "Switched Off",
-  "No Network",
+  "Not Connected",
   "Invalid Number"
 ];
 
-export const SALES_OUTCOME_OPTIONS = [
+export const DEFAULT_SALES_OUTCOME_OPTIONS = [
   "Info Given",
   "Interested",
   "Previous Program Pending",
@@ -107,9 +107,11 @@ export const SALES_OUTCOME_OPTIONS = [
   "Shivir done"
 ];
 
+export const SALES_OUTCOME_OPTIONS = [...DEFAULT_SALES_OUTCOME_OPTIONS];
+
 export const QUERY_STATUS_OPTIONS = [
-  "Pending",
-  "Solved"
+  "Query Pending",
+  "Query Solved"
 ];
 
 export const REMINDER_OUTCOME_OPTIONS = [
@@ -120,6 +122,7 @@ export const REMINDER_OUTCOME_OPTIONS = [
 export const CALL_TYPE_OPTIONS = ["outgoing", "incoming"];
 
 export const CONNECTED_STATUSES = [
+  "Info Given",
   "Info given",
   "Interested",
   "Previous Program Pending",
@@ -129,10 +132,12 @@ export const CONNECTED_STATUSES = [
   "Reminder Pending",
   "Query",
   "Already Reg.d",
+  "Next Time",
   "Next time",
   "Shivir done",
   "Not possible",
   "Pending",
+  "Not Interested",
   "Not interested",
   "Not Attended",
   "Call Log Added"
@@ -485,6 +490,18 @@ export function resolveCurrentAttenderContext(log, fieldName, currentAttenderId,
     candidateKeys.push("leadOrigin", "lead_origin", "Lead Origin", "original_source", "originalSource");
   } else if (cleanField === "status") {
     candidateKeys.push("status", "Status", "callStatus");
+  } else if (cleanField === "city") {
+    candidateKeys.push("City", "city", "location", "Khoji City", "City Name", "place", "town", "district");
+  } else if (cleanField === "state") {
+    candidateKeys.push("State", "state", "province", "region");
+  } else if (cleanField === "name") {
+    candidateKeys.push("Name", "name", "leadName", "Lead Name", "Full Name", "caller", "fullName", "contactName");
+  } else if (cleanField === "phone" || cleanField === "mobile") {
+    candidateKeys.push("Phone", "phone", "Mobile", "mobile", "contactPhone", "normalizedPhone", "Mobile Number", "Phone Number", "Contact Number");
+  } else if (cleanField === "khoji") {
+    candidateKeys.push("Khoji", "khoji", "Khoji Type", "Khoji Status");
+  } else if (cleanField === "calltype" || cleanField === "calldirection" || cleanField === "call type" || cleanField === "call direction") {
+    candidateKeys.push("callType", "callDirection", "call_type", "call_direction", "type");
   } else {
     candidateKeys.push(cleanField, fieldName);
   }
@@ -794,13 +811,17 @@ export const STATUS_STAGE_MAPPING = {
   "Already Reg.d": "Existing Alumni",
   "Interested": "4. Nurture / Interested",
   "Previous Program Pending": "Previous Program Pending",
+  "Info Given": "3. Information Given",
   "Info given": "3. Information Given",
+  "Next Time": "5. Future Pool",
   "Next time": "5. Future Pool",
   "reminder": "Reminder Desk",
   "Reminder Given": "Reminder Desk",
   "Reminder Pending": "Reminder Desk",
   "Query": "Query Desk",
+  "Not Interested": "Closed / Lost",
   "Not interested": "Closed / Lost",
+  "Invalid Number": "Closed / Invalid",
   "Invalid No": "Closed / Invalid",
   "Not Connected": "2. Attempting Contact"
 };
@@ -830,6 +851,9 @@ export const updateDynamicOptions = (data) => {
     if (Array.isArray(data.optionalCompulsoryStatuses)) {
       OPTIONAL_COMPULSORY_STATUSES.splice(0, OPTIONAL_COMPULSORY_STATUSES.length, ...data.optionalCompulsoryStatuses);
     }
+    if (Array.isArray(data.salesOutcomeOptions) && data.salesOutcomeOptions.length > 0) {
+      SALES_OUTCOME_OPTIONS.splice(0, SALES_OUTCOME_OPTIONS.length, ...data.salesOutcomeOptions);
+    }
 
     const freshCallSources = Array.from(new Set([
       ...SOURCE_OPTIONS,
@@ -857,16 +881,18 @@ export function getCanonicalStatus(status) {
   if (sLower === "interested") return "Interested";
   if (sLower === "reg.done" || sLower === "registered") return "Reg.Done";
   if (sLower === "previous program pending") return "Previous Program Pending";
-  if (sLower === "not interested" || sLower === "not intrested") return "Not interested";
+  if (sLower === "not interested" || sLower === "not intrested") return "Not Interested";
   if (sLower === "na") return "NA";
   if (sLower === "busy") return "Busy";
   if (sLower === "call cut") return "Call Cut";
   if (sLower === "switched off") return "switched off";
-  if (sLower === "invalid no") return "Invalid No";
+  if (sLower === "invalid no" || sLower === "invalid number" || sLower === "invalid") return "Invalid Number";
+  if (sLower === "not connected") return "Not Connected";
   if (sLower === "already reg.d" || sLower === "already registered") return "Already Reg.d";
-  if (sLower === "info given") return "Info given";
-  if (sLower === "next time") return "Next time";
-  if (sLower === "reminder") return "reminder";
+  if (sLower === "info given" || sLower === "information given") return "Info Given";
+  if (sLower === "next time") return "Next Time";
+  if (sLower === "reminder" || sLower === "reminder given") return "Reminder Given";
+  if (sLower === "reminder pending") return "Reminder Pending";
   if (sLower === "query") return "Query";
   if (sLower === "called by mistake") return "Called by mistake";
   if (sLower === "not possible") return "Not possible";

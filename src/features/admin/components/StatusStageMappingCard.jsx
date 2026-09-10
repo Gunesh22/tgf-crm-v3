@@ -59,13 +59,17 @@ export const DEFAULT_STATUS_STAGE_MAPPING = {
   "Already Reg.d": "Existing Alumni",
   "Interested": "4. Nurture / Interested",
   "Previous Program Pending": "Previous Program Pending",
+  "Info Given": "3. Information Given",
   "Info given": "3. Information Given",
+  "Next Time": "5. Future Pool",
   "Next time": "5. Future Pool",
   "reminder": "Reminder Desk",
   "Reminder Given": "Reminder Desk",
   "Reminder Pending": "Reminder Desk",
   "Query": "Query Desk",
+  "Not Interested": "Closed / Lost",
   "Not interested": "Closed / Lost",
+  "Invalid Number": "Closed / Invalid",
   "Invalid No": "Closed / Invalid",
   "Not Connected": "2. Attempting Contact"
 };

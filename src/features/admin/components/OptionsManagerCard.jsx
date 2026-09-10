@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import { Search, X, Trash2, Plus, Edit2, Check, AlertTriangle, Layers } from "lucide-react";
 
-export function OptionsManagerCard({ title, icon: Icon, options, onAdd, onDelete, onRename }) {
+export function OptionsManagerCard({ title, subtitle, icon: Icon, options, onAdd, onDelete, onRename }) {
   const [search, setSearch] = useState("");
   const [editingOpt, setEditingOpt] = useState(null);
   const [editValue, setEditValue] = useState("");
@@ -50,13 +50,16 @@ export function OptionsManagerCard({ title, icon: Icon, options, onAdd, onDelete
       <div className="bg-white rounded-[10px] border border-[#E4E7EC] shadow-[0_1px_3px_rgba(16,24,40,0.04),0_1px_2px_rgba(16,24,40,0.02)] overflow-hidden flex flex-col h-[460px] transition-all duration-150 ease-out hover:shadow-[0_4px_12px_rgba(16,24,40,0.06)]">
         {/* Header Section */}
         <div className="px-4 py-3 bg-[#FAFBFD] border-b border-[#E4E7EC] flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 bg-blue-50 border border-blue-100 rounded-md flex items-center justify-center text-blue-600 shadow-2xs">
+          <div className="flex items-center gap-2.5 min-w-0 mr-2">
+            <div className="w-7 h-7 bg-blue-50 border border-blue-100 rounded-md flex items-center justify-center text-blue-600 shadow-2xs shrink-0">
               <Icon size={14} />
             </div>
-            <h3 className="font-semibold text-xs text-[#172033] tracking-wider uppercase">{title}</h3>
+            <div className="min-w-0">
+              <h3 className="font-semibold text-xs text-[#172033] tracking-wider uppercase truncate">{title}</h3>
+              {subtitle && <p className="text-[10.5px] text-[#667085] font-medium leading-tight mt-0.5 truncate">{subtitle}</p>}
+            </div>
           </div>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-[#667085] border border-slate-200">
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-[#667085] border border-slate-200 shrink-0">
             {options.length} items
           </span>
         </div>

@@ -785,6 +785,200 @@ Enable administrators to visually inspect the exact list of canonical registrati
 
 ---
 
+## 33. Modal Viewport Alignment & Drilldown Table Streamlining
+
+### Implementation Summary
+- **Modal Portalling (`EditModal.jsx`, `EditHistoryModal.jsx`, `PipelineCallsTab.jsx`)**:
+  - Wrapped modal container outputs in `createPortal(..., document.body)` across all lead management overlays.
+  - Guarantees modals lock directly to the browser viewport center (`fixed inset-0`) regardless of tab container height or ancestor CSS animations (`animate-tab-fade-in`), preventing offset modal positioning and unnecessary scrolling.
+- **Drilldown Action Column Clean-up (`PipelineCallsTab.jsx`)**:
+  - Removed redundant `View Lead` button column (`<th className="p-2 text-right">Action</th>`) from the drilldown table in `PipelineCallsTab.jsx`.
+  - Maintained full row clickability (`tr onClick={() => setSelectedLeadForEdit(item)}`) so clicking anywhere on a lead row instantly launches `EditModal`.
+
+---
+
+## 35. Root Cause Fix: Current Source Un-autofilling & Dynamic Tag-First Options
+
+### Implementation Summary & Root Cause Resolution
+- **Root Cause Identified (`EditModal.jsx`)**:
+  - `getNormalizedRow` was populating `normalized.Source` and `normalized.source` with `rootSource` (`row.Source` / `row.source`), which often contained imported tag strings or raw GHL CRM sources.
+  - GHL CRM search callback (`searchCRMByPhone`) was executing `if (source) updated.Source = source`, overwriting `Current Source` with GHL sources/tags on every CRM fetch.
+- **Fixes Applied (`EditModal.jsx`)**:
+  - `normalized.Source` and `normalized.source` now start **COMPLETELY EMPTY (`""`)** when opening `EditModal` (unless the attender explicitly saved a call-entry source in `attenderStates`).
+  - Removed source mapping from GHL CRM search callback (`searchCRMByPhone`), leaving **Lead Origin** and **Current Source** completely un-autofilled.
+- **Dynamic Tag-First Dropdown Options (`CallEntryTab.jsx`)**:
+  - Built `currentSourceDropdownOptions` memo combining `[...contactTagsList, ...CALL_SOURCE_OPTIONS]`.
+  - The contact's tags (`Tag1`, `Tag2`, ..., `Tag N`) appear **at the very top of the dropdown menu**, followed by all standard source options (`CALL_SOURCE_OPTIONS`).
+  - `Current Source` field displays `"Select Current Source..."` by default, allowing the attender to select a tag or any standard source upon clicking.
+
+---
+
+## 36. Disabling Lead Origin Autofill & CRM Source Sync
+
+### Implementation Summary
+- **Lead Origin Initialization (`EditModal.jsx`)**:
+  - Updated `getNormalizedRow` so `original_source` and `originalSource` do not fall back to `rootSource` / `row.Source` or `getFieldWithFallback(row, "Source")`.
+- **CRM Lookup Sync Removal (`EditModal.jsx`)**:
+  - Removed source assignment from GHL CRM lookup response callback (`searchCRMByPhone`). CRM fetches will only autofill profile fields (`Name`, `Email`, `City`, `State`, `Tags`, `GHL_ID`).
+- **Result**:
+  - Both **Lead Origin** and **Current Source** start completely unselected (`"Select Lead Origin..."` and `"Select Current Source..."`), ensuring zero unwanted autofilling.
+
+---
+
+## 37. Root Cause Fix: Lead Origin & Current Source Database Write Path Persistence
+
+### Root Cause Analysis & Solution Summary
+- **Root Cause Identified**: The UI save handlers (`EditModal.jsx` and `MobileEditModal.jsx`) did not pass explicit `leadOrigin` and `currentSource` keys in the POST payload sent to `/api/contacts/log-call` or inside the `newHist` history item. `api/_contacts/log-call.js` relied on `rootUpdates.Source` / `existingContact.Source` as fallback, causing unconnected call attempts to lose the attender's explicit Current Source selection (`Instagram`) and collapse Current Source into `Facebook` or the latest contact-level source (`YouTube`).
+- **Contextual Write Path Fixes**:
+  1. **`EditModal.jsx` & `MobileEditModal.jsx`**: Updated `handleSaveAndClose` to extract `resolvedLeadOrigin` and `resolvedCurrentSource` and attach them to `updates`, `newHist`, `attenderStates`, and `programStates`.
+  2. **`api/_contacts/log-call.js` & `api/_contacts/create-incoming.js`**: Updated serverless handlers to extract `leadOrigin` and `currentSource` explicitly and write `leadOrigin`, `original_source`, `originalSource`, `currentSource`, `source`, `callSource` into `historyItem`, `attenderStates.${cleanAttenderId}`, and `programStates.${cleanAttenderId}.${currentProgKey}` via `$set`.
+  3. **Non-Owner Shared Contact Safety**: Updated `api/_contacts/log-call.js` to strip `currentSource`, `leadOrigin`, `original_source`, `originalSource` from `rootUpdates` on `isNonOwnerSharedCall`, preventing non-owner attenders from overwriting the primary Lead Owner's root contact fields while preserving their own `attenderStates`, `programStates`, and `history` entries.
+  4. **Excel / Bulk Import Enrichment (`api/_contacts/import-bulk.js` & `src/lib/db.js`)**: Enriched bulk import handlers to populate explicit `leadOrigin` and `currentSource` fields on insert.
+  5. **Core Analytics Resolution (`src/utils/registrationEngine.js` & `src/features/attender/utils.js`)**: Updated `getContactSource`, `getContactLeadOrigin`, and `resolveCurrentAttenderContext` to inspect nested `programStates` and `attenderStates` by normalized `programKey`, ensuring accurate program-context source resolution across reloads even when history is sliced.
+
+### Database & Test Suite Verification
+- **MongoDB Database Document Verification (`6436436623` / `6a9d9f05df917acfde1a5c89`)**:
+  - `programStates.JW20HztSjMfwNbVaCpxz.tgfinfo`: `leadOrigin: "Facebook"`, `currentSource: "Instagram"`
+  - `programStates.JW20HztSjMfwNbVaCpxz.other`: `leadOrigin: "Facebook"`, `currentSource: "YouTube"`
+  - `history[0]` (`TGF Info`): `leadOrigin: "Facebook"`, `currentSource: "Instagram"`
+  - `history[1]` (`Other`): `leadOrigin: "Facebook"`, `currentSource: "YouTube"`
+- **Automated Unit Test Suite**: **134 / 134 PASSED (0 failures)** (`npm test`).
+- **Production Build Verification**: **Vite build PASSED with 0 errors** (`npm run build`).
+
+---
+
+## 38. Root Cause Fix: Registration Synthesis, Duplicate ID Guard & City Resolution
+
+### Root Cause Analysis & Solution Summary
+1. **Duplicate Rows & Raw ID Strings in Total Registrations Modal**:
+   - **Root Cause**: `getCanonicalRegistrations` fallback step 2 iterated over `Object.keys(c.attenderStates)`. Since `attenderStates` is keyed by `attenderId` (e.g. `JW20HztSjMfwNbVaCpxz`, `lrAgizMZzxqzUbJjHIBI`), `stKey` was treated as `rawCalledFor`, injecting raw attender ID strings as program names and failing deduplication against explicit registration keys `${contactId}_${calledForKey}`.
+   - **Fix**: Added `isRawIdString` helper in `src/utils/registrationEngine.js` to detect and filter 15–32 char hex/alphanumeric MongoDB and attender IDs. Updated fallback step 2 to iterate over `Object.values(c.attenderStates)` and extract `stObj.calledFor || stObj.program`, defaulting unresolvable ID strings to `"Other"`.
+
+2. **False Program Registration Filtering**:
+   - **Root Cause**: Fallback step 2 in `getCanonicalRegistrations` was adding every program found in `c.history` to `programMap` regardless of call status (e.g. Amit Shah's 1st call for `TGF Info` at status `Interested` generated a false `TGF Info` registration row).
+   - **Fix**: Added `isStatusRegDone(st)` helper requiring explicit `Reg.Done`, `Registered`, `Won`, or `Registered / Won` status on `h.status` / `rel.status` / `stObj.status` before adding a program to `programMap`.
+
+3. **City & Khoji Resolution for Explicit Registrations**:
+   - **Root Cause**: Explicit registration documents in `registrations` collection do not store `city` directly. `getCanonicalRegistrations` in `registrationEngine.js` line 550 was reading `reg.city` (which returned `undefined`) and defaulting to `"—"` instead of looking up `getContactCity(contact)`.
+   - **Fix**: Enhanced contact lookup in `getCanonicalRegistrations` Step 1 to match across `_id`, `Phone`, `Mobile`, `normalizedPhone`, and `normalizedMobile`. Set `contactCity`/`city` via `getContactCity(contact) || getContactCity(reg)`. Updated `getContactCity()` to ignore `'—'` string fallbacks.
+
+4. **Monthly Report Tab Import Fix**:
+   - **Fix**: Added `getContactSource` to named imports in `MonthlyReportTab.jsx`.
+
+### Verification & Git Release
+- **Automated Test Suite**: **171 / 171 PASSED (0 failures)** (`npm test`).
+- **Production Build**: **Vite build PASSED with 0 errors** (`npm run build`).
+- **Git Push**: Merged and pushed to `main` (`origin/main`) and `version-3.1` (`origin/version-3.1`) at commit `962c2aa`.
+
+---
+
+## 39. Date Range Filter Scoping: "All Time" Removal across Admin & Attender Dashboards
+
+### Root Cause Analysis & Solution Summary
+1. **High Vercel Bandwidth & Memory Overhead Risk**:
+   - **Root Cause**: Selecting `"All Time"` (`dateFrom=""`, `dateTo=""`) in admin and attender date filters bypassed monthly date boundary constraints, causing full contact history collections to download over API payloads.
+   - **Fix**: Removed `"All Time"` (`"all"`) buttons/options across:
+     - **Admin Dashboard** (`DashboardTab.jsx`)
+     - **Analytics Report** (`MonthlyReportTab.jsx`)
+     - **Pipeline & Calls** (`PipelineCallsTab.jsx`)
+     - **Abhivyakti Registrations** (`AbhivyaktiTab.jsx`)
+     - **My Performance** (`MyPerformanceDashboard.jsx`)
+   - Updated the `Reset` date filter action in `AbhivyaktiTab.jsx` to restore the default current-month date range rather than clearing dates to "All Time".
+   - Maintained default month-scoped filtering (`currentMonthFirstDay` to `currentMonthLastDay`) and custom date pickers across all views.
+
+### Verification & Git Release
+- **Automated Test Suite**: **171 / 171 PASSED (0 failures)** (`npm test`).
+- **Production Build**: **Vite build PASSED with 0 errors** (`npm run build`).
+- **Git Push**: Committed and pushed to `main` (`origin/main`) and `version-3.1` (`origin/version-3.1`) at commit `ace0dbc`.
+
+---
+
+## 40. Tag-Only GHL Synchronization on Lead Edit Modal Open
+
+### Root Cause Analysis & Solution Summary
+1. **Isolated Tag Synchronization**:
+   - **Requirement**: Whenever the Edit Modal opens for a lead (or when phone duplicate check runs), fetch current tags for that lead from GoHighLevel (GHL) and sync missing tags to MongoDB.
+   - **Data Restriction**: Consumes **ONLY** GHL tags. Strictly ignores name, email, phone, custom fields, pipeline, stage, status, history, attenderStates, etc.
+   - **Atomic MongoDB Update**: Created `POST /api/contacts/sync-ghl-tags` (`api/_contacts/sync-ghl-tags.js` & `api/contacts/[...slug].js`). Uses `$addToSet: { tags: { $each: missingTags } }` and updates `Tags` string representation. Existing CRM tags are **NEVER** removed or overwritten.
+   - **Phone Normalization**: Extracts digits reading backward 10 digits (`cleanPhone.slice(-10)`) and searches GHL by phone variations (`+91`, `91`, `0`, 10-digit). Includes `locationId` support for GHL v2 API (`services.leadconnectorhq.com`).
+   - **Error Handling**: Non-blocking; network or GHL token errors are caught silently, allowing modal and duplicate check to continue.
+   - **UI & Shared Lead Integration**: Added `syncGhlTagsForLead` helper to `src/lib/db.js`. Integrated into `EditModal.jsx` and `MobileEditModal.jsx` (mount effect & parallel duplicate check). Updates `edited.Tags` state in real-time. Works 100% for shared leads by updating the canonical MongoDB document.
+
+### Verification
+- **Automated Test Suite**: **9 / 9 PASSED (0 failures)** (`test_tag_sync.js`). Verified exact match, new tags, tag preservation, empty tags, missing GHL contact, case-insensitive deduplication, and backward 10-digit phone normalization.
+
+---
+
+## 41. Complete Lead Origin & Current Source Field Decoupling & Persistent Settings Caching Architecture
+
+### Root Cause Analysis & Solution Summary
+1. **Lead Origin & Current Source Decoupling**:
+   - **Root Cause**: Write-time fallback logic in `api/_contacts/log-call.js` (line 292), `api/_contacts/create-incoming.js` (line 81), `api/_contacts/import-bulk.js` (line 27), and `src/lib/db.js` (line 110) fell back to `existingContact.Source` or `c.source` when `leadOrigin` was empty, causing saving any call log to copy Current Source into Lead Origin in MongoDB.
+   - **Fix**: Completely removed `Source` / `source` fallbacks from write-side `leadOrigin` resolution. If `leadOrigin` is empty, it remains `""` in MongoDB without taking the value of `currentSource`. Kept read-time display fallbacks in analytics (`registrationEngine.js`) for reporting without document mutation.
+
+2. **Persistent Settings Options Local Cache Architecture**:
+   - **Root Cause**: Options added in Settings (such as `"Direct Call"`) saved to MongoDB `settings` collection (`sourceOptions`), but `updateDynamicOptions()` in `src/features/attender/utils.js` did not update `CALL_SOURCE_OPTIONS` in memory. Furthermore, `db.js` relied on in-memory `settingsCache`, re-fetching `/api/admin/settings` on reloads or using static defaults.
+   - **Fix**: 
+     - Updated `updateDynamicOptions()` in `src/features/attender/utils.js` to dynamically recalculate and splice `CALL_SOURCE_OPTIONS` whenever options update.
+     - Implemented persistent local storage caching (`crm_settings_options_cache`) in `src/lib/db.js` (`getSettingsOptions` & `updateCallCenterOptions`). On app load, options are read from persistent local cache instantly (0ms delay) with zero network wait. On option add/edit, local cache, in-memory state, and dropdown arrays update simultaneously.
+
+### Verification
+- **Automated Test Suite**: **5 / 5 PASSED (0 failures)** (`test_decoupling.js`) & **3 / 3 PASSED (0 failures)** (`test_settings_caching.js`).
+
+---
+
+## 42. Current Source Mandatory Field Validation & Lead Origin Dropdown State Resolution
+
+### Root Cause Analysis & Solution Summary
+1. **Current Source Mandatory Field Validation Decoupling**:
+   - **Root Cause (`EditModal.jsx` line 1372)**: `sourceVal` evaluated with fallbacks to `targetEdited.original_source || savedRow.original_source` (Lead Origin). If an attender left Current Source blank, `sourceVal` took the value of Lead Origin (e.g. `"Facebook"`), bypassing `if (!sourceVal) missingFields.push("Source")` and allowing calls to be logged with an unselected Current Source.
+   - **Fix (`EditModal.jsx`)**: Removed `original_source` / `savedRow.original_source` fallbacks from `sourceVal`. It now strictly checks Current Source fields (`targetEdited[sourceField]`, `Source`, `source`, `currentSource`). An empty Current Source properly triggers the validation message *"Please fill required field(s) before saving: Source"*.
+
+2. **Lead Origin Dropdown Selection & State Binding**:
+   - **Root Cause (`CallEntryTab.jsx`)**: The Lead Origin `selected` prop checked `edited.original_source` / `edited.originalSource` / `row?.original_source` / `row?.originalSource` without checking `edited.leadOrigin` or `row?.leadOrigin`. Furthermore, `onChange` did not update `leadOrigin` in React state.
+   - **Fix (`CallEntryTab.jsx`)**: Updated `selected` prop across Sales, Reminder, and Query modes to evaluate `edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || ""`. Updated `onChange` to execute `handleChange("leadOrigin", val)` alongside `original_source` and `originalSource`.
+   - **Memoization Dependency Fix (`CallEntryTab.jsx`)**: Updated `useMemo` dependency array for `currentSourceDropdownOptions` to `[contactTagsList, CALL_SOURCE_OPTIONS.length, CALL_SOURCE_OPTIONS.join(",")]` to react instantly when `CALL_SOURCE_OPTIONS` is updated in-place.
+
+### Verification
+- **Automated Test Suite**: **4 / 4 PASSED (0 failures)** (`test_fixes_2_and_4.js`). Verified empty Current Source validation failure, valid Current Source pass, `edited.leadOrigin` dropdown selection evaluation, and `row.leadOrigin` fallback evaluation.
+
+---
+
+## 43. Multi-Attender Shared Lead Resolution & Backend Session Alignment
+
+### Root Cause Analysis & Solution Summary
+1. **Save Error: Forbidden: Cannot log call on behalf of another attender**:
+   - **Root Cause**: When a logged-in attender (**Geeta**) opened a shared lead originally assigned to another attender (**Manisha**), `EditModal.jsx` initialized `activeAttenderId` using `row.attenderId` (**Manisha**). Upon clicking **SAVE & CLOSE**, the frontend sent a log-call payload specifying `attenderId: "Manisha"`. The server's IDOR check (`isSameAttender`) compared `session.id` (**Geeta**) against the payload `attenderId` (**Manisha**) and returned a `403 Forbidden` error.
+   - **Frontend Fix (`EditModal.jsx` & `MobileEditModal.jsx`)**: Updated modal attender resolution. When `allowAttenderSelection` is false (normal attender workspace), `activeAttenderId` strictly prioritizes the authenticated session user (`attenderId` prop) over `row.attenderId`.
+   - **Backend Safeguard (`api/_contacts/log-call.js`, `api/_contacts/create-incoming.js`, `api/_contacts/undo-call.js`)**: Implemented server-side session alignment. When a non-admin attender submits a call or creates an incoming lead, the server automatically maps `attenderId` and `attenderName` to the active authenticated session user, eliminating `403 Forbidden` lockouts on shared leads.
+
+2. **Multi-Program Registration Credit Attribution**:
+   - **Verification**: Verified that registration credit for multi-program leads is completely decoupled per program (`registrationId = reg_<contactId>_<calledForKey>`).
+   - **Attribution**: When Manisha previously registered a lead for **SHSH**, and Geeta later registers the same lead for **Pitrupaksh Shivir**, Manisha's credit for **SHSH** is retained, while Geeta receives 100% of the credit for **Pitrupaksh Shivir**.
+
+### Verification
+- **Automated Test Suite**: **161 / 161 PASSED (0 failures)** (`npm test`).
+- **Production Build**: **Vite build PASSED with 0 errors** (`npm run build`).
+
+---
+
+## 44. Program Chip Context Stage Recalculation & Shared Banner Attribution Fix
+
+### Root Cause Analysis & Solution Summary
+1. **Program Chip Context Stage Recalculation**:
+   - **Root Cause**: When an attender clicked a program chip (e.g., `Pitrupaksh Shivir`) beside the call entry tab, `handleSelectProgram` in `EditModal.jsx` and `MobileEditModal.jsx` updated `calledFor`, `status`, and `Source`, but omitted updating `pipelineStage`. Consequently, `displayStage` remained stuck on the previous program's stage (e.g. `6. Registered / Won` from Manisha's `SHSH` registration) instead of recalculating the stage for the selected target program.
+   - **Fix**: Updated `handleSelectProgram` in `EditModal.jsx` and `MobileEditModal.jsx` to calculate `targetStage = getEffectiveStage(savedRow || row || edited, targetProg, attId) || PIPELINE_STAGES.NEW_LEAD` and update `pipelineStage` in React state upon program chip selection.
+
+2. **Shared Contact Notification Banner Attribution**:
+   - **Root Cause**: `SharedBanner.jsx` previously rendered the stage badge as `Current stage: 6. Registered / Won`. When displayed on shared leads, users misidentified this as the current active call's stage.
+   - **Fix**: Updated `SharedBanner.jsx` stage badge label to `<span>{otherName ? `${otherName}'s stage:` : "Previous stage:"}</span>` (e.g. `Manisha's stage: 6. Registered / Won`). Passed `currentAttenderId={activeAttenderId}` and `currentAttenderName={activeAttenderName}` from `MobileEditModal.jsx`.
+
+### Verification
+- **Automated Test Suite**: **161 / 161 PASSED (0 failures)** (`npm test`).
+- **Production Build**: **Vite build PASSED with 0 errors** (`npm run build`).
+
+---
+
 ## 45. Team Assisted Registrations Notification Calculation Fix
 
 ### Root Cause Analysis & Solution Summary
@@ -795,3 +989,127 @@ Enable administrators to visually inspect the exact list of canonical registrati
 ### Verification
 - **Automated Test Suite**: **161 / 161 PASSED (0 failures)** (`npm test`).
 - **Production Build**: **Vite build PASSED with 0 errors** (`npm run build`).
+
+---
+
+## 46. Single Canonical Field Schema & Case Normalization Architecture
+
+### Root Cause Analysis & Solution Summary
+1. **Multi-Key Inconsistent Writes**:
+   - **Root Cause**: The data model had no single canonical field naming standard. Writes across forms and API endpoints wrote the same value across duplicate keys simultaneously (`City` / `city`, `calledFor` / `"Called For"` / `called_for`, `source` / `Source` / `original_source` / `originalSource` / `currentSource`). Consequently, readers used 10–18 fallback chains and `.includes()` substring loops to find values.
+   - **Fix**: Created `src/lib/fieldSchema.js` exporting `CONTACT_FIELDS` with canonical keys (`City`, `State`, `Name`, `Phone`, `Mobile`, `Email`, `Khoji`, `Tags`, `calledFor`, `source`, `leadOrigin`).
+   - **Forms Cleanup**: Standardized `EditModal.jsx`, `MobileEditModal.jsx`, and `CallEntryTab.jsx` to write only to canonical keys, eliminating duplicate key writes.
+   - **API & DB Cleanup**: Standardized `src/lib/db.js`, `api/_contacts/create-incoming.js`, and `api/_contacts/log-call.js` to write strictly canonical attributes without redundant snake_case/lowercase mirrors.
+   - **Readers Streamlining**: Replaced expensive fallback chains in `registrationEngine.js` and `admin/utils.jsx` with direct canonical access, retaining clean 1-line fallbacks for legacy MongoDB records.
+   - **Zero DB Writes**: The MongoDB database remained 100% untouched.
+
+### Verification
+- **Automated Test Suite**: **161 / 161 PASSED (0 failures)** (`npm test`).
+- **Production Build**: **Vite build PASSED with 0 errors** (`npm run build`).
+
+---
+
+## 47. Settings Card Alignment, Dynamic Connected Outcomes & System Audit
+
+### Root Cause Analysis & Solution Summary
+1. **Settings Dropdown Alignment with Edit Modal**:
+   - **Requirement**: Align the 3 cards in Settings under "Call Center Options" with the Edit Modal screenshot labels so that admins have direct dynamic control over the dropdown lists.
+   - **Card 1: Program (Called For)** (`calledForOptions` / `CALLED_FOR_OPTIONS`): Controls the `PROGRAM (CALLED FOR)` dropdown in the Edit Modal and program tracking across the CRM.
+   - **Card 2: Source Options** (`sourceOptions` / `SOURCE_OPTIONS`, `CALL_SOURCE_OPTIONS`): Controls base sources for `LEAD ORIGIN` and `CURRENT SOURCE` in the Edit Modal.
+   - **Card 3: Connected Outcome** (`salesOutcomeOptions` / `SALES_OUTCOME_OPTIONS`): Controls the `CONNECTED OUTCOME` dropdown when Call Result is "Connected".
+   - **Core Controls Preserved**: Structural controls (**Call Direction**: Outgoing/Incoming, **Call Purpose**: Sales/Query/Reminder, and **Call Result**: Connected/Not Connected/Invalid Number) remain fixed core controls.
+
+2. **In-Memory 0ms Dynamic Synchronization**:
+   - Exported `DEFAULT_SALES_OUTCOME_OPTIONS` and initialized `SALES_OUTCOME_OPTIONS` in `src/features/attender/utils.js`.
+   - Updated `updateDynamicOptions(data)` to splice `salesOutcomeOptions` in memory on settings update.
+   - In `SettingsTab.jsx`, updated `handleOptionChange` for `salesOutcome` to synchronize `salesOutcomeOptions`, `connectedStatuses`, `statusOptions`, and `statusStageMapping`, keeping Compulsory Field Rules and Pipeline Stage Mapping completely aligned.
+   - Added safety protections to prevent deleting or renaming required statuses (`Reg.Done`, `NA`).
+
+3. **System Audit & Bug Resolutions**:
+   - **Stale LocalStorage Cache**: Added fallback in `src/lib/db.js` so parsing cached settings from `localStorage` immediately attaches `DEFAULT_SALES_OUTCOME_OPTIONS` if missing from older sessions.
+   - **Status-to-Stage Mapping Casing**: Mapped both canonical Title Case and legacy lowercase entries (`"Info Given"` & `"Info given"`, `"Next Time"` & `"Next time"`, `"Not Interested"` & `"Not interested"`, `"Invalid Number"` & `"Invalid No"`) across `STATUS_STAGE_MAPPING`, `DEFAULT_STATUS_STAGE_MAPPING`, and `DEFAULT_CONNECTED_STATUSES`.
+   - **Case-Insensitive `normalizeStageStr`**: Updated `normalizeStageStr` in `pipelineEngine.js` to lowercased comparison.
+   - **Compulsory Field Count Fix**: Filtered `statusOptions` against `optionalCompulsoryStatuses` and used `Math.max(0, ...)` to prevent negative count display.
+   - **EditModal Validation Key Fallback**: Checked `targetEdited[calledForField] || targetEdited["Called For"] || targetEdited.calledFor`.
+   - **Cleaned History Session Collapse**: Removed undefined `currentSource` assignment from `mergedEntry`.
+   - **Classification Columns Fallback**: Fallback to `allDefaultStatuses` if `options.statusOptions` is uninitialized.
+
+### Verification
+- **Automated Test Suite**: **161 / 161 PASSED (0 failures)** (`npm test`).
+- **Production Build**: **Vite build PASSED with 0 errors** (`npm run build`).
+- **Database Integrity**: **Zero writes or modifications** were executed against MongoDB.
+
+---
+
+## 48. Comprehensive Name & Casing Resiliency Audit Across System
+
+### Root Cause Analysis & Solution Summary
+1. **Unconnected Status Counting & List Inconsistencies**:
+   - **Root Cause**: `NOT_CONNECTED_STATUSES` and `DEFAULT_NOT_CONNECTED_STATUSES` (in `db.js` and `admin/utils.jsx`) were missing `"Not Connected"` and `"Invalid Number"`. In `AttenderWorkspace.jsx`, `notConnectedContacts++` did strict `.includes()`, meaning calls logged with "Not Connected" or "Invalid Number" failed to increment the unconnected counters.
+   - **Fix**: Added `"Not Connected"`, `"Invalid Number"`, and `"Not Picked Up"` to `NOT_CONNECTED_STATUSES` across `db.js`, `admin/utils.jsx`, and `attender/utils.js`. In `AttenderWorkspace.jsx`, used `classifyCallStatus(status)` and case-insensitive checks for `infoGiven++` and `notConnectedContacts++`.
+
+2. **Status Badge Color Casing Mismatches**:
+   - **Root Cause**: In `AttenderWorkspace.jsx`, `ContactTable.jsx`, `AllAttendersSheetTab.jsx`, and `MobileAttenderView.jsx`, badge renderers strictly compared `status === "Info given"` or `status === "Not interested"`. Records saved with canonical Title Case `"Info Given"` or `"Not Interested"` fell through to generic grey styling.
+   - **Fix**: Updated all badge renderers to check statuses case-insensitively (`sLower === "info given"`, `sLower === "not interested"`, `sLower === "invalid number"`, `sLower === "not connected"`), ensuring badges render correctly across desktop and mobile.
+
+3. **Contact Name, Phone, City Fallbacks in Admin Sheets & Search**:
+   - **Root Cause**: In `AllAttendersSheetTab.jsx`, the search filter only checked `log.Name`, `log.City`, `log.Email`, and `log.State`. Documents in MongoDB with lowercase `name`, `city`, or `email` failed search matching and rendered blank `"—"` in table cells and exports.
+   - **Fix**: Integrated `getContactName(log)`, `getContactCity(log)`, `getContactPhone(log)`, and `log.Name || log.name` fallbacks into the search filter, table cells, and Excel export rows.
+
+4. **Dropdown Selection & Label Casing (`SearchableDropdown`)**:
+   - **Root Cause**: `SearchableDropdown.jsx` evaluated `selected === opt` strictly, failing to display the selection checkmark if a database record had lowercase `"info given"` while options had Title Case `"Info Given"`.
+   - **Fix**: Made `isSelected` case-insensitive. In `getButtonText()`, added case-insensitive matching against `options` so lowercase database values display with the clean canonical casing of the dropdown options.
+
+5. **Attender Sheet & Admin Filter Casing**:
+   - **Root Cause**: In `AttendersTab.jsx`, filtering by `viewStatus` used strict equality `log.status !== viewStatus`. Selecting `"Info given"` failed to show records stored as `"Info Given"`.
+   - **Fix**: Updated `viewStatus` filter and search filters in `AttendersTab.jsx` and row rendering in `AttenderSheetModal.jsx` to be case-insensitive.
+
+6. **Mobile Edit Modal Alignment**:
+   - **Fix**: Added `LEAD ORIGIN` dropdown to `MobileEditModal.jsx`, connected `CURRENT SOURCE` to `currentSourceDropdownOptions` (tags + sources), and aligned modal labels with desktop (`PROGRAM (CALLED FOR)`, `LEAD ORIGIN`, `CURRENT SOURCE`).
+
+7. **Attender Object ID Fallback**:
+   - **Fix**: Used `a.id || a._id` in `DashboardTab.jsx` and `MonthlyReportTab.jsx` for `attenderOptions` to prevent undefined values if attenders are loaded with MongoDB `_id`.
+
+### Verification
+- **Automated Test Suite**: **161 / 161 PASSED (0 failures)** (`npm test`).
+- **Production Build**: **Vite build PASSED with 0 errors in 29.93s** (`npm run build`).
+- **Database Integrity**: **Zero writes or modifications** were executed against MongoDB.
+
+---
+
+## 49. Program (Called For) Clickability & Call Type (Incoming vs Outgoing) Alignment
+
+### 1. Root Cause Analysis: Program (Called For) Unclickable in Record Call Entry Modal
+- **Symptom**: In `EditModal.jsx`, clicking `PROGRAM (CALLED FOR)` did not open the dropdown and the button appeared greyed out with `cursor-not-allowed`.
+- **Root Cause**:
+  1. In `EditModal.jsx`, `calledForField` was `CONTACT_FIELDS.CALLED_FOR` which evaluates to `"calledFor"` (camelCase, no space).
+  2. `getEditable(field)` checked:
+     `return ["source", "called for", "khoji", "city", "state"].includes(field.toLowerCase())`.
+     Because `"calledFor".toLowerCase()` is `"calledfor"` (no space), it failed to match `"called for"` (with space) and returned `false` on non-incoming calls.
+  3. In `CallEntryTab.jsx`, `disabled={!getEditable(calledForField)}` evaluated to `disabled={true}`, disabling the dropdown button.
+- **Fix**:
+  1. Updated `getEditable` in `EditModal.jsx` to normalize field strings:
+     `const fClean = String(field || "").toLowerCase().replace(/[\s_-]/g, "");`
+     and included `"calledfor"`, `"source"`, `"leadorigin"`, `"currentsource"`, `"khoji"`, `"city"`, `"state"`.
+  2. In `CallEntryTab.jsx`, provided safe default `getEditable = () => true`.
+
+### 2. Root Cause Analysis: Call Type (Incoming vs Outgoing) Displayed Incorrectly in My Performance & Logs
+- **Symptom**: Calls logged as "Incoming" displayed as "Outgoing" in the My Performance Dashboard and call logs.
+- **Root Cause**:
+  1. **UI Save Handler Omission**: In `EditModal.jsx` (lines 1621–1633) and `MobileEditModal.jsx` (lines 505–519), `updates.callType` and `updates.callDirection` were never attached to the `updates` object sent to `/api/contacts/log-call` or stored in `currentAttStates[activeAttenderId]`.
+  2. **Serverless Default Fallback**: In `api/_contacts/log-call.js` (line 250), `const rawType = String(rootUpdates.callType || "outgoing").toLowerCase();` defaulted to `"outgoing"` because `rootUpdates.callType` was undefined in the incoming payload.
+  3. **Key Name Asymmetry in MongoDB**: In `api/_contacts/log-call.js`, `historyItem` only saved `callDirection: callDirection` without `callType`. In `create-incoming.js`, `historyItem` also only saved `callDirection: 'incoming'`.
+  4. **MyPerformanceDashboard Extraction Gap**: In `MyPerformanceDashboard.jsx` (lines 160, 176, 200), `extractAttenderAttempts` checked `h.callType || state.callType`. Since MongoDB history records stored `callDirection`, `h.callType` was undefined and defaulted to `"outgoing"`.
+- **Fix**:
+  1. **`MyPerformanceDashboard.jsx`**: Added `resolveCallDirection(item, stateObj)` helper checking `callType`, `callDirection`, `call_type`, `type` across history item, `attenderStates`, and contact document root, plus program name and source clues. Set both `callType` and `callDirection` on attempt records. Added `matchCallType` to table search. Rendered clear colored badges (emerald for Incoming, blue for Outgoing).
+  2. **`EditModal.jsx` & `MobileEditModal.jsx`**: Explicitly set `updates.callType = resolvedCallType`, `updates.callDirection = resolvedCallType`, `newHist.callType = resolvedCallType`, and `newHist.callDirection = resolvedCallType` during call log saves, and synchronized `attenderStates`.
+  3. **`api/_contacts/log-call.js` & `api/_contacts/create-incoming.js`**: Extracted direction from `rootUpdates.callType || rootUpdates.callDirection || payload.callType || payload.callDirection`. Wrote both `callDirection` and `callType` to `historyItem`, `attenderStates`, and `setPayload`.
+  4. **`src/features/attender/utils.js`**: Added `"callType"` and `"callDirection"` candidate keys to `resolveCurrentAttenderContext`.
+  5. **`ContactTable.jsx` & `AttenderWorkspace.jsx`**: Made incoming/outgoing checks case-insensitive.
+
+### Verification
+- **Automated Test Suite**: **161 / 161 PASSED (0 failures)** (`npm test`).
+- **Production Build**: **Vite build PASSED with 0 errors in 33.24s** (`npm run build`).
+- **Database Integrity**: **Zero writes or modifications** executed against MongoDB.
+
+

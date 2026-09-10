@@ -937,7 +937,7 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => exportCSV("Pipeline_Contacts", ["Contact Name", "Phone", "Pipeline Stage", "Attender", "Called For"], filteredContacts.map(c => [getContactName(c), getContactPhone(c), getCanonicalStage(c), c.attenderName || "Unassigned", c.calledFor || ""]))}
+            onClick={() => exportCSV("Pipeline_Contacts", ["Contact Name", "Phone", "Pipeline Stage", "Attender", "Called For"], filteredContacts.map(c => [getContactName(c), getContactPhone(c), getCanonicalStage(c), c.attenderName || "Unassigned", c.calledFor || c["Called For"] || c.programName || ""]))}
             className="flex items-center gap-1.5 h-8 px-3 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
           >
             <Download size={13} /> Export Contacts

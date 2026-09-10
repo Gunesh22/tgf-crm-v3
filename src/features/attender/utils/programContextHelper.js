@@ -25,52 +25,56 @@ export function extractProgramsList(contact = {}) {
   if (!contact) return [];
   const programMap = new Map(); // key -> formatted display name
 
+  const NON_PROGRAM_LABELS = new Set([
+    "incoming", "incoming call", "incoming calls", "incoming-calls",
+    "outgoing", "outgoing call", "outgoing calls", "outgoing-calls",
+    "reminder", "query", "na", "none", "null", "undefined", "[object object]"
+  ]);
+
   const addProgram = (rawProg) => {
     if (!rawProg) return;
     const str = String(rawProg).trim();
-    if (!str) return;
+    if (!str || str === "[object Object]") return;
 
     // Handle comma-separated strings
     const parts = str.split(",").map(p => p.trim()).filter(Boolean);
     parts.forEach(p => {
-      // Exclude generic non-program labels if any
+      const lower = p.toLowerCase().trim();
       const key = normalizeProgramKey(p);
-      if (key && !programMap.has(key)) {
+      if (key && !NON_PROGRAM_LABELS.has(lower) && !NON_PROGRAM_LABELS.has(key) && !programMap.has(key)) {
         programMap.set(key, p);
       }
     });
   };
 
+  const checkObjPrograms = (obj) => {
+    if (!obj || typeof obj !== "object") return;
+    addProgram(obj["Called For"]);
+    addProgram(obj.calledFor);
+    addProgram(obj.called_for);
+    addProgram(obj.calledForKey);
+    addProgram(obj.program);
+    addProgram(obj.programName);
+    addProgram(obj.subProgram);
+    addProgram(obj["Sub Program"]);
+  };
+
   // 1. Root Called For field(s)
-  addProgram(contact["Called For"]);
-  addProgram(contact.calledFor);
-  addProgram(contact.called_for);
+  checkObjPrograms(contact);
 
   // 2. programRelationships array
   if (Array.isArray(contact.programRelationships)) {
-    contact.programRelationships.forEach(rel => {
-      if (rel) {
-        addProgram(rel.program || rel.calledFor || rel["Called For"]);
-      }
-    });
+    contact.programRelationships.forEach(rel => checkObjPrograms(rel));
   }
 
   // 3. attenderStates per attender
   if (contact.attenderStates && typeof contact.attenderStates === "object") {
-    Object.values(contact.attenderStates).forEach(st => {
-      if (st) {
-        addProgram(st["Called For"] || st.calledFor);
-      }
-    });
+    Object.values(contact.attenderStates).forEach(st => checkObjPrograms(st));
   }
 
   // 4. History log entries
   if (Array.isArray(contact.history)) {
-    contact.history.forEach(h => {
-      if (h) {
-        addProgram(h.calledFor || h["Called For"] || h.called_for);
-      }
-    });
+    contact.history.forEach(h => checkObjPrograms(h));
   }
 
   return Array.from(programMap.values());
@@ -166,7 +170,7 @@ export function getProgramContext(contact = {}, programName = "", attenderId = n
   const callCount = getProgramCallCount(contact, targetProg);
 
   // Source attribution (program-specific or global)
-  let source = contact.original_source || contact.originalSource || contact.Source || contact.source || "Direct Entry";
+  let source = contact.leadOrigin || contact.original_source || contact.originalSource || contact.Source || contact.source || "Direct Entry";
   
   if (attenderId && contact.attenderStates?.[attenderId]) {
     const attSt = contact.attenderStates[attenderId];

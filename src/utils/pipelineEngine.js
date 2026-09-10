@@ -103,6 +103,27 @@ export function canTransition(fromStage, toStage, event = {}) {
   return true;
 }
 
+export function normalizeStageStr(s) {
+  if (!s) return null;
+  const str = String(s).trim();
+  const lower = str.toLowerCase();
+  if (str === PIPELINE_STAGES.NEW_LEAD || lower === "new lead" || lower === "1. new lead") return PIPELINE_STAGES.NEW_LEAD;
+  if (str === PIPELINE_STAGES.ATTEMPTING || lower === "attempting contact" || lower === "attempting" || lower === "2. attempting contact") return PIPELINE_STAGES.ATTEMPTING;
+  if (str === PIPELINE_STAGES.INFO_GIVEN || lower === "information given" || lower === "info given" || lower === "3. information given") return PIPELINE_STAGES.INFO_GIVEN;
+  if (str === PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING || lower === "previous program pending") return PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING;
+  if (str === PIPELINE_STAGES.NURTURE_INTERESTED || lower === "nurture / interested" || lower === "interested" || lower === "4. nurture / interested") return PIPELINE_STAGES.NURTURE_INTERESTED;
+  if (str === PIPELINE_STAGES.FUTURE_POOL || lower === "future pool" || lower === "next time" || lower === "5. future pool") return PIPELINE_STAGES.FUTURE_POOL;
+  if (str === PIPELINE_STAGES.REGISTERED_WON || lower === "registered / won" || lower === "reg.done" || lower === "6. registered / won" || lower === "registered") return PIPELINE_STAGES.REGISTERED_WON;
+  if (str === PIPELINE_STAGES.CLOSED_LOST || lower === "closed / lost" || lower === "closed lost" || lower === "7. closed / lost" || lower === "not interested") return PIPELINE_STAGES.CLOSED_LOST;
+  if (str === PIPELINE_STAGES.CLOSED_INVALID || lower === "closed / invalid" || lower === "invalid") return PIPELINE_STAGES.CLOSED_INVALID;
+  return null;
+}
+
+export function normalizeKey(str) {
+  if (!str || typeof str !== "string") return "";
+  return str.trim().toLowerCase().replace(/[\s_-]+/g, "");
+}
+
 /**
  * Derives the highest SALES pipeline stage achieved by a contact.
  *
@@ -115,26 +136,6 @@ export function canTransition(fromStage, toStage, event = {}) {
  */
 export function getEffectiveStage(contact = {}, targetCalledFor = null, attenderId = null) {
   if (!contact || typeof contact !== "object") return null;
-
-  const normalizeStageStr = (s) => {
-    if (!s) return null;
-    const str = String(s).trim();
-    if (str === PIPELINE_STAGES.NEW_LEAD || str === "New Lead" || str === "1. New Lead") return PIPELINE_STAGES.NEW_LEAD;
-    if (str === PIPELINE_STAGES.ATTEMPTING || str === "Attempting Contact" || str === "Attempting" || str === "2. Attempting Contact") return PIPELINE_STAGES.ATTEMPTING;
-    if (str === PIPELINE_STAGES.INFO_GIVEN || str === "Information Given" || str === "Info Given" || str === "3. Information Given") return PIPELINE_STAGES.INFO_GIVEN;
-    if (str === PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING || str === "Previous Program Pending") return PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING;
-    if (str === PIPELINE_STAGES.NURTURE_INTERESTED || str === "Nurture / Interested" || str === "Interested" || str === "4. Nurture / Interested") return PIPELINE_STAGES.NURTURE_INTERESTED;
-    if (str === PIPELINE_STAGES.FUTURE_POOL || str === "Future Pool" || str === "Next Time" || str === "5. Future Pool") return PIPELINE_STAGES.FUTURE_POOL;
-    if (str === PIPELINE_STAGES.REGISTERED_WON || str === "Registered / Won" || str === "Reg.Done" || str === "6. Registered / Won" || str === "Registered") return PIPELINE_STAGES.REGISTERED_WON;
-    if (str === PIPELINE_STAGES.CLOSED_LOST || str === "Closed / Lost" || str === "Closed Lost" || str === "7. Closed / Lost" || str === "Not Interested") return PIPELINE_STAGES.CLOSED_LOST;
-    if (str === PIPELINE_STAGES.CLOSED_INVALID || str === "Closed / Invalid" || str === "Invalid") return PIPELINE_STAGES.CLOSED_INVALID;
-    return null;
-  };
-
-  const normalizeKey = (str) => {
-    if (!str || typeof str !== "string") return "";
-    return str.trim().toLowerCase().replace(/[\s_-]+/g, "");
-  };
 
   const targetKey = targetCalledFor ? normalizeKey(targetCalledFor) : "";
   const normContact = normalizeProgramStates(contact);
@@ -250,7 +251,7 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null, attender
 export function evaluatePipeline(contact = {}, callEvent = {}) {
   const calledFor = callEvent.calledFor || callEvent["Called For"] || contact["Called For"] || contact.calledFor || null;
   const attenderId = callEvent.attenderId || callEvent.callAttenderId || contact.attenderId || contact.leadOwner || null;
-  const currentStage = getEffectiveStage(contact, calledFor, attenderId);
+  const currentStage = getEffectiveStage(contact, calledFor, attenderId) || normalizeStageStr(contact.pipelineStage);
   const currentRank  = currentStage ? (STAGE_RANKS[currentStage] || 0) : 0;
 
   const purpose    = (callEvent.callPurpose || "SALES").toUpperCase();

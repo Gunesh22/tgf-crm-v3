@@ -8,7 +8,7 @@ export function determineCallType(obj, linkedContact = null) {
     if (!target || typeof target !== 'object') return false;
     if (target.isIncoming === true) return true;
     
-    const ct = String(target.callType || target.type || target.call_type || '').toLowerCase().trim();
+    const ct = String(target.callType || target.callDirection || target.type || target.call_type || target.call_direction || '').toLowerCase().trim();
     if (ct === 'incoming' || ct === 'in' || ct === 'incoming call' || ct === 'incoming calls' || ct.includes('incoming')) return true;
 
     const pid = String(target.programId || target.program_id || '').toLowerCase().trim();
@@ -27,7 +27,7 @@ export function determineCallType(obj, linkedContact = null) {
     if (!target || typeof target !== 'object') return false;
     if (target.isIncoming === false) return true;
 
-    const ct = String(target.callType || target.type || target.call_type || '').toLowerCase().trim();
+    const ct = String(target.callType || target.callDirection || target.type || target.call_type || target.call_direction || '').toLowerCase().trim();
     if (ct === 'outgoing' || ct === 'out' || ct === 'outgoing call' || ct === 'outgoing calls' || ct.includes('outgoing')) return true;
 
     const cp = String(target.callPurpose || target.call_purpose || '').toLowerCase().trim();
@@ -36,8 +36,8 @@ export function determineCallType(obj, linkedContact = null) {
     return false;
   };
 
-  // 1. Direct explicit call type on the registration record / object itself (only check callType/isIncoming, NOT source)
-  const directType = String(obj?.callType || obj?.type || obj?.call_type || '').toLowerCase().trim();
+  // 1. Direct explicit call type on the registration record / object itself (only check callType/callDirection/isIncoming, NOT source)
+  const directType = String(obj?.callType || obj?.callDirection || obj?.type || obj?.call_type || obj?.call_direction || '').toLowerCase().trim();
   if (directType === 'outgoing' || directType === 'out' || obj?.isIncoming === false) return 'outgoing';
   if (directType === 'incoming' || directType === 'in' || obj?.isIncoming === true) return 'incoming';
 
@@ -77,7 +77,7 @@ export function determineCallType(obj, linkedContact = null) {
       const histResult = evalHistory(linkedContact.history);
       if (histResult) return histResult;
     }
-    const linkedType = String(linkedContact.callType || linkedContact.type || linkedContact.call_type || '').toLowerCase().trim();
+    const linkedType = String(linkedContact.callType || linkedContact.callDirection || linkedContact.type || linkedContact.call_type || linkedContact.call_direction || '').toLowerCase().trim();
     if (linkedType === 'outgoing' || linkedContact.isIncoming === false) return 'outgoing';
     if (linkedType === 'incoming' || linkedContact.isIncoming === true) return 'incoming';
   }
@@ -148,75 +148,54 @@ export function renderVal(val, fallback = '—') {
 }
 
 export function getContactName(log, attempt) {
-  if (attempt?.contactName && String(attempt.contactName).trim()) return String(attempt.contactName).trim();
-  if (attempt?.name && String(attempt.name).trim()) return String(attempt.name).trim();
+  const attName = attempt?.Name || attempt?.contactName || attempt?.name;
+  if (attName && String(attName).trim()) return String(attName).trim();
   if (!log || typeof log !== 'object') return 'Unknown';
 
-  const candidates = [
-    log.Name, log.name, log.leadName, log['Lead Name'], log['Full Name'],
-    log.caller, log['Caller Name'], log['Name of Caller'], log.fullName
-  ];
-  for (const c of candidates) {
-    if (c !== undefined && c !== null && String(c).trim() !== '') return String(c).trim();
-  }
+  const val = log.Name || log.name || log.leadName || log['Lead Name'] || log['Full Name'] || log.caller || log.fullName;
+  if (val !== undefined && val !== null && String(val).trim() !== '') return String(val).trim();
   return 'Unknown';
 }
 
 export function getContactPhone(log, attempt) {
-  if (attempt?.contactPhone && String(attempt.contactPhone).trim()) return String(attempt.contactPhone).trim();
-  if (attempt?.phone && String(attempt.phone).trim()) return String(attempt.phone).trim();
-  if (attempt?.mobile && String(attempt.mobile).trim()) return String(attempt.mobile).trim();
+  const attPhone = attempt?.Phone || attempt?.contactPhone || attempt?.phone || attempt?.Mobile || attempt?.mobile;
+  if (attPhone && String(attPhone).trim()) return String(attPhone).trim();
   if (!log || typeof log !== 'object') return '';
 
-  const candidates = [
-    log.Phone, log.Mobile, log.phone, log.mobile, log.contactPhone,
-    log.normalizedPhone, log.normalizedMobile, log['Mobile Number'],
-    log['Phone Number'], log['Whatsapp Number'], log['WhatsApp Number'],
-    log['Contact Number'], log['Contact No'], log['Phone No'], log['Mobile No']
-  ];
-  for (const c of candidates) {
-    if (c !== undefined && c !== null && String(c).trim() !== '') return String(c).trim();
-  }
+  const val = log.Phone || log.Mobile || log.phone || log.mobile || log.contactPhone || log.normalizedPhone || log['Mobile Number'] || log['Phone Number'];
+  if (val !== undefined && val !== null && String(val).trim() !== '') return String(val).trim();
   return '';
 }
 
 export function getContactCity(log, attempt) {
-  if (attempt?.contactCity && String(attempt.contactCity).trim() && String(attempt.contactCity).trim() !== '—') return String(attempt.contactCity).trim();
-  if (attempt?.city && String(attempt.city).trim() && String(attempt.city).trim() !== '—') return String(attempt.city).trim();
-  if (attempt?.City && String(attempt.City).trim() && String(attempt.City).trim() !== '—') return String(attempt.City).trim();
+  const attCity = attempt?.City || attempt?.city || attempt?.contactCity;
+  if (attCity && String(attCity).trim() && String(attCity).trim() !== '—') return String(attCity).trim();
   if (!log || typeof log !== 'object') return '';
 
-  const candidates = [
-    log.City, log.city, log.location, log.Location, log['Khoji City'],
-    log['City Name'], log.place, log.town, log.district, log.address
-  ];
-  for (const c of candidates) {
-    if (c !== undefined && c !== null && String(c).trim() !== '' && String(c).trim() !== '—') return String(c).trim();
-  }
+  const val = log.City || log.city || log.location || log['Khoji City'];
+  if (val !== undefined && val !== null && String(val).trim() !== '' && String(val).trim() !== '—') return String(val).trim();
   return '';
 }
 
 export function getContactLeadOrigin(log, attempt) {
-  const extractFromObj = (obj) => {
+  const extractFromObj = (obj, allowFallbackSource = true) => {
     if (!obj || typeof obj !== 'object') return '';
-    const directVal = obj.original_source || obj.originalSource || obj['Lead Origin'] || obj.lead_origin || obj.leadOrigin;
+    const directVal = obj.leadOrigin || obj.original_source || obj.originalSource || obj['Lead Origin'] || obj.lead_origin;
     if (directVal && String(directVal).trim() && String(directVal).trim() !== '—') {
       return String(directVal).trim();
     }
-    const keys = Object.keys(obj);
-    const matchedKey = keys.find(k => {
-      const lk = k.toLowerCase().trim();
-      return ['original source', 'original_source', 'lead origin', 'lead_origin'].includes(lk);
-    });
-    if (matchedKey && obj[matchedKey] && String(obj[matchedKey]).trim() && String(obj[matchedKey]).trim() !== '—') {
-      return String(obj[matchedKey]).trim();
+    if (allowFallbackSource) {
+      const srcVal = obj.source || obj.Source || obj.currentSource;
+      if (srcVal && String(srcVal).trim() && String(srcVal).trim() !== '—') {
+        return String(srcVal).trim();
+      }
     }
     return '';
   };
 
-  // 1. Direct check on attempt object
+  // 1. Direct check on attempt object (only explicit original_source / leadOrigin)
   if (attempt && typeof attempt === 'object') {
-    const attOrigin = extractFromObj(attempt);
+    const attOrigin = extractFromObj(attempt, false);
     if (attOrigin) return attOrigin;
   }
 
@@ -299,17 +278,9 @@ export function getContactLeadOrigin(log, attempt) {
 export function getContactSource(log, attempt) {
   const extractFromObj = (obj) => {
     if (!obj || typeof obj !== 'object') return '';
-    const directVal = obj.conversionSource || obj.currentSource || obj.source || obj.Source || obj.sourse || obj.Sourse || obj.leadSource || obj.lead_source;
+    const directVal = obj.source || obj.Source || obj.currentSource || obj.conversionSource || obj.callSource;
     if (directVal && String(directVal).trim() && String(directVal).trim() !== '—') {
       return String(directVal).trim();
-    }
-    const keys = Object.keys(obj);
-    const matchedKey = keys.find(k => {
-      const lk = k.toLowerCase().trim();
-      return ['currentsource', 'current_source', 'source', 'sourse', 'source of information', 'source of informiton', 'lead source', 'lead_source', 'conversionsource'].includes(lk);
-    });
-    if (matchedKey && obj[matchedKey] && String(obj[matchedKey]).trim() && String(obj[matchedKey]).trim() !== '—') {
-      return String(obj[matchedKey]).trim();
     }
     return '';
   };

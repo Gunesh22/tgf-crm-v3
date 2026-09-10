@@ -97,7 +97,7 @@ function getEffectiveStageServer(lead, targetProgram = null) {
       if (hRank > highestRank) { highestRank = hRank; stage = hStage; }
     }
   }
-  return stage;
+  return stage || lead.pipelineStage || lead.status || null;
 }
 
 function evaluateStageServer(lead, callEvent) {
@@ -247,7 +247,7 @@ export async function executeLogCall(db, payload) {
   }
 
   // ── Direction ──────────────────────────────────────────────────────────
-  const rawType      = String(rootUpdates.callType || "outgoing").toLowerCase();
+  const rawType      = String(rootUpdates.callType || rootUpdates.callDirection || payload.callType || payload.callDirection || "outgoing").toLowerCase();
   const callDirection = rawType.includes("incoming") ? "incoming" : "outgoing";
 
   // ── Purpose ────────────────────────────────────────────────────────────
@@ -313,6 +313,7 @@ export async function executeLogCall(db, payload) {
     leadOwnerNameAtTime:  currentLeadOwnerName || cleanAttenderName || '',
     // Call metadata
     callDirection,
+    callType: callDirection,
     callPurpose: callPurposeClean,
     callStatus:  callStatusClean,
     status:      status || callStatusClean || '',
@@ -324,12 +325,8 @@ export async function executeLogCall(db, payload) {
     callbackTime: callbackTime || null,
     calledFor:    targetCalledFor || '',
     calledForKey: normalizeCalledForKey(targetCalledFor || ''),
-    currentSource: currentCallSource,
     source:       currentCallSource,
-    callSource:   currentCallSource,
     leadOrigin:   originalSource,
-    original_source: originalSource,
-    originalSource: originalSource,
     previousProgram: resolvedPreviousProgram,
     timestamp: nowIso,
   };
@@ -384,21 +381,17 @@ export async function executeLogCall(db, payload) {
   // ── $set payload ───────────────────────────────────────────────────────
   const setPayload = {
     ...rootUpdates,
-    pipelineStage: evalResult.pipelineStage,
     queryStatus:   evalResult.queryStatus || queryStatus || null,
     callPurpose:   callPurposeClean,
     status:        status || callStatusClean || 'Connected',
     callType:      callDirection,
+    callDirection: callDirection,
     attemptCount:  evalResult.attemptCount,
     isAttenderCreditEligible: evalResult.isAttenderCreditEligible,
     closedReason: evalResult.closedReason,
     wasConnected: evalResult.wasConnected || existingContact.wasConnected || false,
-    original_source: originalSource,
-    originalSource:  originalSource,
     leadOrigin:      originalSource,
-    currentSource:   currentCallSource,
     source:          currentCallSource,
-    Source:          currentCallSource,
     updatedAt: nowIso,
     isAssigned: true,
     // Per-attender state (call-specific snapshot)
@@ -406,6 +399,7 @@ export async function executeLogCall(db, payload) {
       attenderId: cleanAttenderId,
       attenderName:  cleanAttenderName || '',
       callDirection,
+      callType: callDirection,
       callPurpose:  callPurposeClean,
       callStatus:   callStatusClean,
       status:       status || callStatusClean || 'Connected',
@@ -416,37 +410,33 @@ export async function executeLogCall(db, payload) {
       callbackDate: callbackDate || null,
       callbackTime: callbackTime || null,
       lastCalledAt: nowIso,
-      calledFor:    targetCalledFor || existingContact['Called For'] || '',
+      calledFor:    targetCalledFor || existingContact.calledFor || existingContact['Called For'] || '',
       calledForKey: normalizeCalledForKey(targetCalledFor || ''),
-      currentSource: currentCallSource,
       source:       currentCallSource,
       leadOrigin:   originalSource,
-      original_source: originalSource,
-      originalSource: originalSource,
       previousProgram: resolvedPreviousProgram,
     },
   };
 
-  const currentProgKey = normalizeCalledForKey(targetCalledFor || existingContact['Called For'] || '');
+  const currentProgKey = normalizeCalledForKey(targetCalledFor || existingContact.calledFor || existingContact['Called For'] || '');
   if (cleanAttenderId && currentProgKey) {
     const progStateObj = {
       attenderId: cleanAttenderId,
       attenderName:  cleanAttenderName || '',
       programKey:    currentProgKey,
-      program:       targetCalledFor || existingContact['Called For'] || '',
+      program:       targetCalledFor || existingContact.calledFor || existingContact['Called For'] || '',
       pipelineStage: evalResult.pipelineStage,
       status:        status || callStatusClean || 'Connected',
+      callDirection,
+      callType:      callDirection,
       callPurpose:   callPurposeClean,
       callStatus:    callStatusClean,
       queryStatus:   evalResult.queryStatus || queryStatus || null,
       remark:        remark || queryDetails || '',
       callbackDate:  callbackDate || null,
       callbackTime:  callbackTime || null,
-      currentSource: currentCallSource,
       source:        currentCallSource,
       leadOrigin:    originalSource,
-      original_source: originalSource,
-      originalSource: originalSource,
       updatedAt:     nowIso
     };
     setPayload[`programs.${currentProgKey}.${cleanAttenderId}`] = progStateObj;
@@ -463,11 +453,10 @@ export async function executeLogCall(db, payload) {
     setPayload.status = status || existingContact.status || 'Pending';
     setPayload.queryStatus = evalResult.queryStatus || queryStatus || existingContact.queryStatus || null;
     setPayload.queryDetails = queryDetails || existingContact.queryDetails || null;
-    setPayload.Source = currentCallSource;
     setPayload.source = currentCallSource;
-    if (calledFor || rootUpdates['Called For']) {
-      setPayload['Called For'] = calledFor || rootUpdates['Called For'];
-      setPayload.calledFor = calledFor || rootUpdates['Called For'];
+    const resolvedCalledFor = calledFor || rootUpdates.calledFor || rootUpdates['Called For'];
+    if (resolvedCalledFor) {
+      setPayload.calledFor = resolvedCalledFor;
     }
   } else if (isSameCalledFor) {
     // If working on the SAME program, update status/callPurpose on root for visibility
@@ -482,10 +471,11 @@ export async function executeLogCall(db, payload) {
     setPayload.leadOwnerName = cleanAttenderName || '';
   }
 
-  // Conditionally update pipelineStage (only if same program OR lead owner call)
-  const stageChanged = evalResult.pipelineStage !== currentStageInDb;
+  // Conditionally update root pipelineStage ONLY for SALES calls (never QUERY or REMINDER)
+  const isSalesCall = callPurposeClean === 'SALES';
+  const stageChanged = evalResult.pipelineStage && evalResult.pipelineStage !== currentStageInDb;
   const shouldUpdateRootStage = !isNonOwnerSharedCall || isSameCalledFor;
-  if (shouldUpdateRootStage && stageChanged && canTransitionServer(currentStageInDb, evalResult.pipelineStage, {
+  if (isSalesCall && shouldUpdateRootStage && stageChanged && canTransitionServer(currentStageInDb, evalResult.pipelineStage, {
     callStatus: callStatusClean,
     status,
     closedReason: evalResult.closedReason,
@@ -574,8 +564,13 @@ export async function executeLogCall(db, payload) {
             original_source: originalSource,
             source:      currentCallSource,
             conversionSource: currentCallSource,
-            createdAt:   nowIso,
             updatedAt:   nowIso,
+          },
+          $setOnInsert: {
+            createdAt:   nowIso,
+          },
+          $addToSet: {
+            assistingAttenders: cleanAttenderId,
           },
         },
         { upsert: true }

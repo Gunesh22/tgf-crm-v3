@@ -173,13 +173,13 @@ export default function AttendersTab({ programs, attenders, onReloadAttenders })
   const sortedViewLogs = React.useMemo(() => {
     return viewLogs.filter(log => {
       if (log._deleted) return false;
-      if (viewStatus && log.status !== viewStatus) return false;
+      if (viewStatus && String(log.status || "").trim().toLowerCase() !== String(viewStatus).trim().toLowerCase()) return false;
       if (viewSearch) {
         const query = viewSearch.toLowerCase();
         const contactName = Object.keys(log).find(k => k.toLowerCase().includes("name") || k.toLowerCase().includes("lead"));
-        const nameVal = contactName ? String(log[contactName]).toLowerCase() : "";
-        const phoneVal = String(log.Phone || log.Mobile || "").toLowerCase();
-        const cityVal = String(log.City || "").toLowerCase();
+        const nameVal = contactName ? String(log[contactName]).toLowerCase() : String(log.Name || log.name || "").toLowerCase();
+        const phoneVal = String(log.Phone || log.Mobile || log.phone || log.mobile || "").toLowerCase();
+        const cityVal = String(log.City || log.city || "").toLowerCase();
         const remarkVal = String(log.remark || "").toLowerCase();
         return nameVal.includes(query) || phoneVal.includes(query) || cityVal.includes(query) || remarkVal.includes(query);
       }

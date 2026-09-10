@@ -127,10 +127,11 @@ export function ContactTable({
       return { bg: "bg-amber-50 border border-amber-200", text: "text-amber-700 font-semibold", label: status || "Unanswered Callback" };
     }
     if (status && status !== "Pending" && status !== "Call Log Added") {
-      if (status === "Reg.Done") return { bg: "bg-emerald-50 border border-emerald-200", text: "text-emerald-700 font-semibold", label: status };
-      if (status === "Interested") return { bg: "bg-purple-50 border border-purple-200", text: "text-purple-700 font-semibold", label: status };
-      if (status === "Info given") return { bg: "bg-indigo-50 border border-indigo-200", text: "text-indigo-700 font-semibold", label: status };
-      if (["NA", "Busy", "Call Cut", "switched off", "Not interested", "Invalid No", "no answer", "Not Attended"].includes(status)) {
+      const sLower = status.toLowerCase().trim();
+      if (status === "Reg.Done" || sLower === "registered") return { bg: "bg-emerald-50 border border-emerald-200", text: "text-emerald-700 font-semibold", label: status };
+      if (sLower === "interested") return { bg: "bg-purple-50 border border-purple-200", text: "text-purple-700 font-semibold", label: status };
+      if (sLower === "info given" || sLower === "information given") return { bg: "bg-indigo-50 border border-indigo-200", text: "text-indigo-700 font-semibold", label: status };
+      if (["na", "busy", "call cut", "switched off", "not interested", "invalid no", "invalid number", "no answer", "not attended", "not connected", "not picked up"].includes(sLower)) {
         return { bg: "bg-rose-50 border border-rose-200", text: "text-rose-700 font-semibold", label: status };
       }
       return { bg: "bg-slate-100 border border-slate-200", text: "text-slate-700 font-semibold", label: status };
@@ -331,7 +332,7 @@ export function ContactTable({
                   {!hiddenColumns.includes("Type") && (
                     <td className="py-2.5 px-3 align-top whitespace-nowrap">
                       <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500">
-                        {view.callType === "incoming" ? (
+                        {String(view.callType || "").toLowerCase().includes("incoming") ? (
                           <>
                             <ArrowDownLeft size={13} className="text-emerald-600 shrink-0" />
                             <span>Incoming</span>
@@ -373,12 +374,12 @@ export function ContactTable({
                               </span>
                               {isQueryActive && (
                                 <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-                                  ❓ Query Pending
+                                  Query Pending
                                 </span>
                               )}
                               {isQuerySolved && (
                                 <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                  ✓ Query Solved
+                                  Query Solved
                                 </span>
                               )}
                               {view.status && !isQueryActive && !isQuerySolved && (
@@ -394,7 +395,7 @@ export function ContactTable({
                           return (
                             <div className="flex flex-col gap-0.5 items-start">
                               <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-sky-50 text-sky-700 border border-sky-200">
-                                ❓ Query Pending
+                                Query Pending
                               </span>
                               {view.status && (
                                 <span className="text-[10px] text-slate-500 font-medium ml-0.5">
@@ -409,7 +410,7 @@ export function ContactTable({
                           return (
                             <div className="flex flex-col gap-0.5 items-start">
                               <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-sky-50 text-sky-700 border border-sky-200">
-                                ⏰ Reminder
+                                Reminder
                               </span>
                               {view.status && (
                                 <span className="text-[10px] text-slate-500 font-medium ml-0.5">

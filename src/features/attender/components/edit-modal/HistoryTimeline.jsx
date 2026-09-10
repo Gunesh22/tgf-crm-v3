@@ -13,7 +13,7 @@ export const HistoryTimeline = ({
         const origIdx = h.originalIndex;
         const calledForStr = h.calledFor || h.called_for || h["Called For"] || "";
         const sourceStr = h.callSource || h.source || h.sourse || h.Source || "";
-        const callTypeStr = h.callType || "";
+        const callTypeStr = h.callType || h.callDirection || "";
 
         return (
           <div key={revIdx} className="bg-white/80 rounded-lg p-2 border border-slate-100 text-xs space-y-1 shadow-2xs">
@@ -27,7 +27,7 @@ export const HistoryTimeline = ({
                   })()}
                 </span>
                 {(() => {
-                  const isQueryCall = h.callPurpose === "QUERY" || h.status === "Query" || String(h.callType || "").toUpperCase() === "QUERY";
+                  const isQueryCall = h.callPurpose === "QUERY" || h.status === "Query" || String(h.callType || h.callDirection || "").toUpperCase() === "QUERY";
                   if (!isQueryCall) {
                     if (!h.status) return null;
                     return (

@@ -3,14 +3,25 @@ import clientPromise from '../lib/mongodb.js';
 import { requireAuth, requireAdmin } from '../lib/auth.js';
 
 const DEFAULT_CONNECTED_STATUSES = [
-  "Info given", "Interested", "Reg.Done", "reminder", "Query", 
-  "Already Reg.d", "Next time", "Shivir done", "Not possible", 
-  "Pending", "Not interested", "Not Attended", "Call Log Added"
+  "Info Given", "Info given", "Interested", "Previous Program Pending", "Reg.Done", "reminder", "Query", 
+  "Already Reg.d", "Next Time", "Next time", "Shivir done", "Not possible", 
+  "Pending", "Not Interested", "Not interested", "Not Attended", "Call Log Added"
 ];
 
 const DEFAULT_NOT_CONNECTED_STATUSES = [
   "NA", "Busy", "Call Cut", "switched off", "Invalid No", 
   "Called by mistake", "No Network", "wrong no.", "no answer"
+];
+
+const DEFAULT_SALES_OUTCOME_OPTIONS = [
+  "Info Given",
+  "Interested",
+  "Previous Program Pending",
+  "Next Time",
+  "Not Interested",
+  "Reg.Done",
+  "Already Reg.d",
+  "Shivir done"
 ];
 
 const DEFAULT_SOURCE_OPTIONS = [
@@ -80,6 +91,7 @@ const DEFAULT_WHATSAPP_TEMPLATES = [
 export const DEFAULT_SETTINGS = {
   _id: "call_center_options",
   statusOptions: [...DEFAULT_CONNECTED_STATUSES, ...DEFAULT_NOT_CONNECTED_STATUSES],
+  salesOutcomeOptions: DEFAULT_SALES_OUTCOME_OPTIONS,
   connectedStatuses: DEFAULT_CONNECTED_STATUSES,
   notConnectedStatuses: DEFAULT_NOT_CONNECTED_STATUSES,
   sourceOptions: DEFAULT_SOURCE_OPTIONS,
@@ -108,6 +120,9 @@ export default async function handler(req, res) {
 
       // Return clean settings object (omit _id) — STRICTLY READ-ONLY
       const { _id, ...cleanData } = doc;
+      if (!cleanData.salesOutcomeOptions) {
+        cleanData.salesOutcomeOptions = DEFAULT_SALES_OUTCOME_OPTIONS;
+      }
       return res.status(200).json({ success: true, data: cleanData });
     }
 

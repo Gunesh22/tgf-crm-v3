@@ -511,7 +511,7 @@ export default function AbhivyaktiTab({
       map[primaryName].count++;
 
       const rStatus = r.status || r.callStatus || "Reg.Done";
-      const isRConnected = CONNECTED_STATUSES.includes(rStatus);
+      const isRConnected = CONNECTED_STATUSES.includes(rStatus) || CONNECTED_STATUSES.some(cs => cs.toLowerCase() === String(rStatus).trim().toLowerCase());
 
       let historyIncConn = 0;
       let historyOutConn = 0;
@@ -519,7 +519,7 @@ export default function AbhivyaktiTab({
         r.history.forEach(h => {
           const hType = (h.callType || h.type || callType).toLowerCase();
           const hStatus = h.status || h.callStatus || rStatus;
-          if (CONNECTED_STATUSES.includes(hStatus)) {
+          if (CONNECTED_STATUSES.includes(hStatus) || CONNECTED_STATUSES.some(cs => cs.toLowerCase() === String(hStatus).trim().toLowerCase())) {
             if (hType.startsWith("incoming")) historyIncConn++;
             else historyOutConn++;
           }

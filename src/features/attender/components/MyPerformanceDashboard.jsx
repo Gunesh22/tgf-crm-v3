@@ -13,11 +13,17 @@ const STATUS_THEMES = {
   "Reg.Done": { bg: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500", bar: "bg-emerald-500", color: "#10b981" },
   "Interested": { bg: "bg-blue-50 text-blue-700 border-blue-200", dot: "bg-blue-500", bar: "bg-blue-500", color: "#3b82f6" },
   "Info Given": { bg: "bg-indigo-50 text-indigo-700 border-indigo-200", dot: "bg-indigo-500", bar: "bg-indigo-500", color: "#6366f1" },
+  "Info given": { bg: "bg-indigo-50 text-indigo-700 border-indigo-200", dot: "bg-indigo-500", bar: "bg-indigo-500", color: "#6366f1" },
   "Next Time": { bg: "bg-sky-50 text-sky-700 border-sky-200", dot: "bg-sky-500", bar: "bg-sky-500", color: "#0284c7" },
+  "Next time": { bg: "bg-sky-50 text-sky-700 border-sky-200", dot: "bg-sky-500", bar: "bg-sky-500", color: "#0284c7" },
   "Busy": { bg: "bg-slate-100 text-slate-700 border-slate-200", dot: "bg-slate-400", bar: "bg-slate-400", color: "#94a3b8" },
   "No Answer": { bg: "bg-slate-100 text-slate-700 border-slate-200", dot: "bg-slate-400", bar: "bg-slate-400", color: "#94a3b8" },
+  "no answer": { bg: "bg-slate-100 text-slate-700 border-slate-200", dot: "bg-slate-400", bar: "bg-slate-400", color: "#94a3b8" },
   "Not Connected": { bg: "bg-slate-100 text-slate-700 border-slate-200", dot: "bg-slate-400", bar: "bg-slate-400", color: "#94a3b8" },
   "Not Interested": { bg: "bg-rose-50 text-rose-700 border-rose-200", dot: "bg-rose-400", bar: "bg-rose-400", color: "#f43f5e" },
+  "Not interested": { bg: "bg-rose-50 text-rose-700 border-rose-200", dot: "bg-rose-400", bar: "bg-rose-400", color: "#f43f5e" },
+  "Invalid Number": { bg: "bg-slate-100 text-slate-700 border-slate-200", dot: "bg-slate-400", bar: "bg-slate-400", color: "#94a3b8" },
+  "Invalid No": { bg: "bg-slate-100 text-slate-700 border-slate-200", dot: "bg-slate-400", bar: "bg-slate-400", color: "#94a3b8" },
   "Reminder Given": { bg: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-500", bar: "bg-amber-500", color: "#f59e0b" },
   "Previous Program Pending": { bg: "bg-amber-50 text-amber-800 border-amber-200", dot: "bg-amber-600", bar: "bg-amber-600", color: "#d97706" },
   "Query": { bg: "bg-slate-100 text-slate-700 border-slate-200", dot: "bg-slate-500", bar: "bg-slate-500", color: "#64748b" },
@@ -78,10 +84,43 @@ function getAttenderAttempts(logs, attenderName, attenderId) {
     const calledForKey = Object.keys(log).find(k => ["called for", "called_for", "calledfor"].includes(k.toLowerCase()));
     const calledForVal = calledForKey ? String(log[calledForKey] || "").trim() : "";
 
+    const resolveCallDirection = (item, stateObj) => {
+      // 1. Direct explicit field on history attempt item
+      if (item && typeof item === "object") {
+        const itemVal = item.callType || item.callDirection || item.call_type || item.call_direction || item.type;
+        if (itemVal) {
+          return String(itemVal).toLowerCase().includes("incoming") ? "incoming" : "outgoing";
+        }
+      }
+      // 2. State object on the attender state
+      if (stateObj && typeof stateObj === "object") {
+        const stateVal = stateObj.callType || stateObj.callDirection || stateObj.call_type || stateObj.call_direction || stateObj.type;
+        if (stateVal) {
+          return String(stateVal).toLowerCase().includes("incoming") ? "incoming" : "outgoing";
+        }
+      }
+      // 3. Contact document root fields
+      const docVal = log.callType || log.callDirection || log.call_type || log.call_direction || log.type;
+      if (docVal) {
+        return String(docVal).toLowerCase().includes("incoming") ? "incoming" : "outgoing";
+      }
+      // 4. Inherent incoming context (programId / name / source)
+      const pid = String(log.programId || "").toLowerCase();
+      if (pid === "incoming-calls" || pid.includes("incoming")) return "incoming";
+      const pName = String(log.programName || "").toLowerCase();
+      if (pName.includes("incoming")) return "incoming";
+      const src = String(log.source || log.Source || "").toLowerCase();
+      if (src === "incoming" || src === "incoming calls" || src === "incoming call") return "incoming";
+
+      return "outgoing";
+    };
+
     const createAttemptObj = (status, dateVal, remark, callType, source, calledFor, attId, attName, isHistory, index) => {
       const canonicalStatus = getCanonicalStatus(status || "Pending");
       const attemptDate = parseTimestamp(dateVal) || parseTimestamp(log.createdAt);
       if (!attemptDate) return null;
+
+      const resolvedDir = callType || "outgoing";
 
       return {
         ...log,
@@ -96,7 +135,8 @@ function getAttenderAttempts(logs, attenderName, attenderId) {
         attenderName: attName,
         status: canonicalStatus,
         remark: remark || "",
-        callType: callType || "outgoing",
+        callType: resolvedDir,
+        callDirection: resolvedDir,
         createdAt: parseTimestamp(log.createdAt) || attemptDate,
         timestamp: attemptDate,
         updatedAt: attemptDate,
@@ -151,7 +191,7 @@ function getAttenderAttempts(logs, attenderName, attenderId) {
               h.status,
               dateVal,
               h.remark,
-              h.callType || state.callType,
+              resolveCallDirection(h, state),
               h.source || state.Source || state.source,
               h.calledFor || state["Called For"] || state.calledFor,
               attId,
@@ -167,7 +207,7 @@ function getAttenderAttempts(logs, attenderName, attenderId) {
             state.status,
             dateVal,
             state.remark,
-            state.callType,
+            resolveCallDirection(null, state),
             state.Source || state.source,
             state["Called For"] || state.calledFor,
             attId,
@@ -191,7 +231,7 @@ function getAttenderAttempts(logs, attenderName, attenderId) {
             h.status,
             dateVal,
             h.remark,
-            h.callType,
+            resolveCallDirection(h, null),
             h.source,
             h.calledFor,
             itemAttId || "legacy",
@@ -212,7 +252,7 @@ function getAttenderAttempts(logs, attenderName, attenderId) {
             log.status,
             dateVal,
             log.remark,
-            log.callType,
+            resolveCallDirection(null, null),
             log.Source || log.source,
             log["Called For"] || log.calledFor,
             log.attenderId || "legacy",
@@ -565,7 +605,8 @@ export function MyPerformanceDashboard({
         const matchPhone = String(att.Phone || "").toLowerCase().includes(q);
         const matchRemark = String(att.remark || "").toLowerCase().includes(q);
         const matchProg = String(att.calledFor || att.programName || "").toLowerCase().includes(q);
-        return matchName || matchPhone || matchRemark || matchProg;
+        const matchCallType = String(att.callType || "").toLowerCase().includes(q);
+        return matchName || matchPhone || matchRemark || matchProg || matchCallType;
       }
       return true;
     });
@@ -992,8 +1033,12 @@ export function MyPerformanceDashboard({
                       </td>
 
                       {/* Call Type */}
-                      <td className="py-3 px-3 capitalize">
-                        <span className="text-slate-500 font-medium text-[11px]">
+                      <td className="py-3 px-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold capitalize ${
+                          String(att.callType || "").toLowerCase().includes("incoming")
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200/80"
+                            : "bg-blue-50 text-blue-700 border border-blue-200/80"
+                        }`}>
                           {att.callType || "outgoing"}
                         </span>
                       </td>

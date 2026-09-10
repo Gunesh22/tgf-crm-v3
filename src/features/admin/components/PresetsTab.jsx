@@ -91,8 +91,8 @@ export default function PresetsTab({ callLogs = [] }) {
       list = list.filter(c => {
         const name = (c.Name || c.name || "").toLowerCase();
         const phone = (c.Phone || c.phone || "").toLowerCase();
-        const src = (c.original_source || c.Source || "").toLowerCase();
-        const prog = (c["Called For"] || c.calledFor || "").toLowerCase();
+        const src = (c.leadOrigin || c.original_source || c.originalSource || c.Source || c.source || "").toLowerCase();
+        const prog = (c.calledFor || c["Called For"] || c.programName || "").toLowerCase();
         return name.includes(q) || phone.includes(q) || src.includes(q) || prog.includes(q);
       });
     }
@@ -109,7 +109,7 @@ export default function PresetsTab({ callLogs = [] }) {
         "S.No": idx + 1,
         "Lead Name": c.Name || c.name || "N/A",
         "Phone": c.Phone || c.phone || "N/A",
-        "Original Source": c.original_source || c.Source || "N/A",
+        "Original Source": c.leadOrigin || c.original_source || c.originalSource || c.Source || c.source || "N/A",
         "Target Program": c["Called For"] || c.calledFor || c.programName || "N/A",
         "Pipeline Stage": c.status || c.pipelineStage || "N/A",
         "Call Attempts": c.attemptCount || (c.history ? c.history.length : 0),
@@ -404,7 +404,7 @@ export default function PresetsTab({ callLogs = [] }) {
                           </td>
                           <td className="py-2.5 px-4 text-slate-600">
                             <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[11px] font-medium border border-slate-200">
-                              {c.original_source || c.Source || "Direct"}
+                              {c.leadOrigin || c.original_source || c.originalSource || c.Source || c.source || "Direct"}
                             </span>
                           </td>
                           <td className="py-2.5 px-4 font-medium text-slate-700">

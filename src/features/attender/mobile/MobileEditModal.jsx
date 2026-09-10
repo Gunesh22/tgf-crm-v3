@@ -9,10 +9,12 @@ import {
   addIncomingCallLog, updateCallLog, checkGlobalDuplicate, findMatchingAttenderState, syncGhlTagsForLead
 } from "../../../lib/db";
 import { searchCRMByPhone } from "../../../lib/ghl";
+import { CONTACT_FIELDS } from "../../../lib/fieldSchema";
 import {
   STATUS_OPTIONS,
   SOURCE_OPTIONS,
   CALLED_FOR_OPTIONS,
+  CALL_SOURCE_OPTIONS,
   isKhojiField,
   getFieldWithFallback,
   formatContactName,
@@ -31,6 +33,7 @@ import { formatFollowupTime12h } from "../components/edit-modal/EasyTimePicker";
 import { CustomDateTimePicker } from "../components/edit-modal/CustomDateTimePicker";
 import { extractProgramsList, getProgramContext } from "../utils/programContextHelper";
 import { getEffectiveStage, PIPELINE_STAGES } from "../../../utils/pipelineEngine";
+import { getContactLeadOrigin } from "../../../utils/registrationEngine";
 
 function parseTimestamp(t) {
   if (!t) return null;
@@ -59,8 +62,10 @@ export default function MobileEditModal({
 
   const getNormalizedRow = () => {
     const normalized = { ...row };
-    if (normalized.callType) {
-      normalized.callType = String(normalized.callType).toLowerCase();
+    const rawInitType = row?.callType || row?.callDirection || "";
+    if (rawInitType) {
+      normalized.callType = String(rawInitType).toLowerCase();
+      normalized.callDirection = normalized.callType;
     }
     
     const profileFields = ["Name", "Phone", "Mobile", "Email", "City", "State", "Khoji", "Tags", "Source"];
@@ -71,6 +76,9 @@ export default function MobileEditModal({
     const rootSource = normalized.Source || getFieldWithFallback(row, "Source", attenderId, attenderName) || "";
     normalized.Source = rootSource;
     normalized.source = rootSource;
+
+    const rootOriginalSource = getContactLeadOrigin(row) || row?.original_source || row?.originalSource || row?.leadOrigin || row?.["Lead Origin"] || "";
+    normalized.leadOrigin = rootOriginalSource;
 
     if (row._isNew && !normalized.Khoji) {
       normalized.Khoji = "No";
@@ -168,16 +176,8 @@ export default function MobileEditModal({
     setPrevFollowupState(null);
   }, [row]);
 
-  const calledForField = useMemo(() => {
-    if (edited["Called For"] !== undefined) return "Called For";
-    return "calledFor";
-  }, [edited]);
-
-  const sourceField = useMemo(() => {
-    if (edited.Source !== undefined) return "Source";
-    if (edited.Sourse !== undefined) return "Sourse";
-    return "source";
-  }, [edited]);
+  const calledForField = CONTACT_FIELDS.CALLED_FOR;
+  const sourceField = CONTACT_FIELDS.SOURCE;
 
   const programRegInfo = useMemo(() => {
     const rawProgram = String(edited[calledForField] || "").trim();
@@ -224,6 +224,27 @@ export default function MobileEditModal({
   const [pendingSave, setPendingSave] = useState(false);
   const programsList = useMemo(() => extractProgramsList(edited), [edited]);
 
+  const contactTagsList = useMemo(() => {
+    const rawTags = edited.Tags || edited.tags || row?.Tags || row?.tags || "";
+    let tagsArr = [];
+    if (Array.isArray(rawTags)) {
+      tagsArr = rawTags.map(t => typeof t === "object" ? (t?.name || t?.label || t?.tag || "") : String(t));
+    } else if (typeof rawTags === "string") {
+      tagsArr = rawTags.split(",");
+    } else if (typeof rawTags === "object" && rawTags !== null) {
+      tagsArr = [rawTags.name || rawTags.label || rawTags.tag || ""];
+    }
+    return Array.from(new Set(
+      tagsArr
+        .map(t => String(t || "").trim().replace(/^#+/, ""))
+        .filter(t => t.length > 0 && t !== "[object Object]")
+    ));
+  }, [edited.Tags, edited.tags, row?.Tags, row?.tags]);
+
+  const currentSourceDropdownOptions = useMemo(() => {
+    return Array.from(new Set([...contactTagsList, ...CALL_SOURCE_OPTIONS]));
+  }, [contactTagsList]);
+
   const [activeProgram, setActiveProgram] = useState(() => {
     const list = extractProgramsList(row || {});
     return list[0] || row[calledForField] || row["Called For"] || row.calledFor || "";
@@ -235,10 +256,7 @@ export default function MobileEditModal({
     const firstProg = list[0] || freshNorm[calledForField] || freshNorm["Called For"] || freshNorm.calledFor || "";
     if (firstProg) {
       const attId = activeAttenderId || freshNorm.attenderId || row?.attenderId || null;
-      freshNorm[calledForField] = firstProg;
       freshNorm.calledFor = firstProg;
-      freshNorm["Called For"] = firstProg;
-      freshNorm.called_for = firstProg;
       freshNorm.status = getProgramSpecificStatus(freshNorm, firstProg, attId);
       freshNorm.pipelineStage = getEffectiveStage(freshNorm, firstProg, attId) || PIPELINE_STAGES.NEW_LEAD;
     }
@@ -262,13 +280,9 @@ export default function MobileEditModal({
 
     setEdited(prev => ({
       ...prev,
-      [calledForField]: targetProg,
       calledFor: targetProg,
-      "Called For": targetProg,
-      called_for: targetProg,
       status: targetStatus,
       pipelineStage: targetStage,
-      Source: targetSource || "",
       source: targetSource || ""
     }));
   };
@@ -286,9 +300,7 @@ export default function MobileEditModal({
       const isCalledFor = field === calledForField ||
         ["called for", "called_for", "calledfor"].includes(String(field || "").toLowerCase());
       if (isCalledFor) {
-        next["Called For"] = val;
         next.calledFor = val;
-        next.called_for = val;
         if (val) {
           setActiveProgram(val);
           const attId = activeAttenderId || prev.attenderId || row?.attenderId || null;
@@ -489,15 +501,14 @@ export default function MobileEditModal({
 
       const isCallAttemptUpdated = statusChanged || remarkChanged || purposeChanged || callStatusChanged;
       if (isCallAttemptUpdated) {
-        const resolvedLeadOrigin = targetEdited.original_source || targetEdited.originalSource || targetEdited.leadOrigin || targetEdited["Lead Origin"] || savedRow.original_source || "";
-        const resolvedCurrentSource = targetEdited[sourceField] || targetEdited.Source || targetEdited.source || targetEdited.currentSource || "";
+        const resolvedLeadOrigin = targetEdited.leadOrigin || targetEdited.original_source || targetEdited.originalSource || targetEdited["Lead Origin"] || savedRow.leadOrigin || savedRow.original_source || "";
+        const resolvedCurrentSource = targetEdited.source || targetEdited[sourceField] || targetEdited.Source || targetEdited.currentSource || "";
+        const resolvedCallType = String(targetEdited.callType || "outgoing").toLowerCase().startsWith("incoming") ? "incoming" : "outgoing";
 
         updates.leadOrigin = resolvedLeadOrigin;
-        updates.original_source = resolvedLeadOrigin;
-        updates.originalSource = resolvedLeadOrigin;
-        updates.currentSource = resolvedCurrentSource;
         updates.source = resolvedCurrentSource;
-        updates.Source = resolvedCurrentSource;
+        updates.callType = resolvedCallType;
+        updates.callDirection = resolvedCallType;
 
         const newHist = {
           callPurpose: targetEdited.callPurpose || "SALES",
@@ -507,11 +518,11 @@ export default function MobileEditModal({
           remark: targetEdited.remark || "",
           attenderName: attenderName || "Unknown",
           timestamp: new Date().toISOString(),
-          calledFor: targetEdited[calledForField] || targetEdited["Called For"] || targetEdited.calledFor || "",
+          calledFor: targetEdited.calledFor || targetEdited[calledForField] || targetEdited["Called For"] || "",
           leadOrigin: resolvedLeadOrigin,
-          currentSource: resolvedCurrentSource,
           source: resolvedCurrentSource,
-          callType: targetEdited.callType || "outgoing"
+          callType: resolvedCallType,
+          callDirection: resolvedCallType
         };
         updates.history = [...baseHistory, newHist];
       } else {
@@ -602,7 +613,7 @@ export default function MobileEditModal({
         remark: h.remark || "",
         calledFor: h.calledFor || h.called_for || h["Called For"] || "",
         source: h.source || h.sourse || h.Source || "",
-        callType: h.callType || "outgoing",
+        callType: h.callType || h.callDirection || "outgoing",
         attenderName: h.attenderName || "Unknown",
         timestamp: h.timestamp || new Date().toISOString(),
         isCurrentDoc: true,
@@ -621,7 +632,7 @@ export default function MobileEditModal({
           remark: remarkStr,
           calledFor: savedRow["Called For"] || savedRow.calledFor || "",
           source: savedRow.Source || savedRow.source || "",
-          callType: savedRow.callType || "outgoing",
+          callType: savedRow.callType || savedRow.callDirection || "outgoing",
           attenderName: savedRow.attenderName || savedRow.assignedName || "Unknown",
           timestamp: savedRow.updatedAt?.toDate?.()?.toISOString?.() || savedRow.updatedAt || savedRow.createdAt?.toDate?.()?.toISOString?.() || savedRow.createdAt || new Date().toISOString(),
           isCurrentDoc: true,
@@ -648,7 +659,7 @@ export default function MobileEditModal({
                 remark: h.remark || "",
                 calledFor: h.calledFor || h.called_for || h["Called For"] || state["Called For"] || state.calledFor || "",
                 source: h.source || h.sourse || h.Source || state.Source || state.source || "",
-                callType: h.callType || state.callType || "outgoing",
+                callType: h.callType || h.callDirection || state.callType || state.callDirection || "outgoing",
                 attenderName: h.attenderName || state.attenderName || "Unknown",
                 timestamp: h.timestamp || new Date().toISOString(),
                 isCurrentDoc: false,
@@ -665,7 +676,7 @@ export default function MobileEditModal({
                 remark: attRemark,
                 calledFor: state["Called For"] || state.calledFor || "",
                 source: state.Source || state.source || "",
-                callType: state.callType || "outgoing",
+                callType: state.callType || state.callDirection || "outgoing",
                 attenderName: state.attenderName || "Unknown",
                 timestamp: state.updatedAt || new Date().toISOString(),
                 isCurrentDoc: false,
@@ -890,32 +901,47 @@ export default function MobileEditModal({
                 disabled={!getEditable(calledForField)}
               />
 
-              {/* Called For */}
+              {/* Program (Called For) */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <Phone size={13} className="text-blue-500" /> CALLED FOR <span className="text-red-500 font-bold ml-0.5">*</span>
+                  <Phone size={13} className="text-blue-500" /> PROGRAM (CALLED FOR) <span className="text-red-500 font-bold ml-0.5">*</span>
                 </label>
                 <SearchableDropdown
                   options={CALLED_FOR_OPTIONS}
                   selected={String(activeProgram || (edited[calledForField] ? String(edited[calledForField]).split(",")[0].trim() : ""))}
                   onChange={val => handleChange(calledForField, val)}
-                  placeholder="Search & select..."
+                  placeholder="Search & select program..."
                   isMulti={false}
                   colorClass="blue"
                   disabled={!getEditable(calledForField)}
                 />
               </div>
 
-              {/* Source */}
+              {/* Lead Origin */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <Tag size={13} className="text-amber-500" /> SOURCE <span className="text-red-500 font-bold ml-0.5">*</span>
+                  <Tag size={13} className="text-indigo-500" /> LEAD ORIGIN
                 </label>
                 <SearchableDropdown
-                  options={SOURCE_OPTIONS}
-                  selected={String(edited[sourceField] || "")}
+                  options={CALL_SOURCE_OPTIONS}
+                  selected={String(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || getContactLeadOrigin(edited, activeProgram) || getContactLeadOrigin(row, activeProgram) || "")}
+                  onChange={val => handleChange("leadOrigin", val)}
+                  placeholder="Search & select origin..."
+                  colorClass="indigo"
+                  disabled={!getEditable("Source")}
+                />
+              </div>
+
+              {/* Current Source */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <Tag size={13} className="text-amber-500" /> CURRENT SOURCE <span className="text-red-500 font-bold ml-0.5">*</span>
+                </label>
+                <SearchableDropdown
+                  options={currentSourceDropdownOptions}
+                  selected={String(edited[sourceField] || edited.Source || edited.source || "")}
                   onChange={val => handleChange(sourceField, val)}
-                  placeholder="Search & select source..."
+                  placeholder="Search & select current source..."
                   colorClass="amber"
                   disabled={!getEditable(sourceField)}
                 />

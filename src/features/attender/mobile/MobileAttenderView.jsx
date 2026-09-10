@@ -338,14 +338,14 @@ export default function MobileAttenderView({
                   <CheckCircle2 size={10} /> Reg.Done
                 </span>
               );
-            } else if (status === "Interested" || status === "Info given") {
+            } else if (status.toLowerCase() === "interested" || status.toLowerCase() === "info given" || status.toLowerCase() === "information given") {
               cardBg = "bg-blue-50/90 border-blue-200 text-blue-950";
               statusBadge = (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-600 text-white shrink-0">
                   {status}
                 </span>
               );
-            } else if (["NA", "Busy", "Call Cut", "switched off", "Not interested", "Invalid No"].includes(status)) {
+            } else if (["na", "busy", "call cut", "switched off", "not interested", "invalid no", "invalid number", "not connected", "not picked up", "no answer"].includes(status.toLowerCase())) {
               cardBg = "bg-rose-50/80 border-rose-200 text-rose-950";
               statusBadge = (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500 text-white shrink-0">

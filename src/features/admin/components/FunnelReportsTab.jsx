@@ -67,8 +67,8 @@ export default function FunnelReportsTab({
       list = list.filter(c => {
         const name = (c.Name || c.name || "").toLowerCase();
         const phone = (c.Phone || c.phone || "").toLowerCase();
-        const src = (c.original_source || c.Source || "").toLowerCase();
-        const prog = (c["Called For"] || c.calledFor || "").toLowerCase();
+        const src = (c.leadOrigin || c.original_source || c.originalSource || c.Source || c.source || "").toLowerCase();
+        const prog = (c.calledFor || c["Called For"] || c.programName || "").toLowerCase();
         return name.includes(q) || phone.includes(q) || src.includes(q) || prog.includes(q);
       });
     }
@@ -86,7 +86,7 @@ export default function FunnelReportsTab({
         "S.No": idx + 1,
         "Lead Name": c.Name || c.name || "N/A",
         "Phone": c.Phone || c.phone || "N/A",
-        "Lead Origin": c.original_source || c.originalSource || c.Source || c.source || "N/A",
+        "Lead Origin": c.leadOrigin || c.original_source || c.originalSource || c.Source || c.source || "N/A",
         "Current Source": tagsStr,
         "Target Program": c["Called For"] || c.calledFor || c.programName || "N/A",
         "Pipeline Stage": c.status || c.pipelineStage || "N/A",
@@ -360,7 +360,7 @@ export default function FunnelReportsTab({
                           </td>
                           <td className="py-2.5 px-4 text-slate-600">
                             <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[11px] font-medium border border-slate-200">
-                              {c.original_source || c.originalSource || c.Source || c.source || "Direct"}
+                              {c.leadOrigin || c.original_source || c.originalSource || c.Source || c.source || "Direct"}
                             </span>
                           </td>
                           <td className="py-2.5 px-4 text-slate-600 font-medium">

@@ -54,7 +54,8 @@ export default function EditHistoryModal({
       attenderName: h.attenderName || edited.attenderName || "Unknown",
       calledFor: h.calledFor || edited["Called For"] || edited.calledFor || "",
       source: h.source || edited.Source || edited.source || "",
-      callType: h.callType || edited.callType || "outgoing"
+      callType: h.callType || h.callDirection || edited.callType || edited.callDirection || "outgoing",
+      callDirection: h.callDirection || h.callType || edited.callDirection || edited.callType || "outgoing"
     }));
   });
 
@@ -71,7 +72,8 @@ export default function EditHistoryModal({
         attenderName: h.attenderName,
         calledFor: h.calledFor,
         source: h.source,
-        callType: h.callType,
+        callType: h.callType || h.callDirection || "outgoing",
+        callDirection: h.callDirection || h.callType || "outgoing",
       }));
       setEdited(prevEdited => {
         const next = { ...prevEdited, history: cleanedHistory };
@@ -111,7 +113,8 @@ export default function EditHistoryModal({
         attenderName: h.attenderName || "Unknown",
         calledFor: h.calledFor || "",
         source: h.source || "",
-        callType: h.callType || "outgoing"
+        callType: h.callType || h.callDirection || "outgoing",
+        callDirection: h.callDirection || h.callType || "outgoing"
       }));
 
       const latest = cleanedHistory[cleanedHistory.length - 1] || null;
@@ -119,14 +122,15 @@ export default function EditHistoryModal({
       const latestRemark = latest ? latest.remark : "";
       const latestCalledFor = latest ? latest.calledFor : "";
       const latestSource = latest ? latest.source : "";
-      const latestCallType = latest ? latest.callType : "outgoing";
+      const latestCallType = latest ? (latest.callType || latest.callDirection || "outgoing") : "outgoing";
 
       if (onSaveAll) {
         const updates = {
           history: cleanedHistory,
           status: latestStatus,
           remark: latestRemark,
-          callType: latestCallType
+          callType: latestCallType,
+          callDirection: latestCallType
         };
         if (calledForField) {
           updates[calledForField] = latestCalledFor;
@@ -142,7 +146,8 @@ export default function EditHistoryModal({
             history: cleanedHistory,
             status: latestStatus,
             remark: latestRemark,
-            callType: latestCallType
+            callType: latestCallType,
+            callDirection: latestCallType
           };
           if (calledForField) next[calledForField] = latestCalledFor;
           if (sourceField) next[sourceField] = latestSource;
@@ -161,7 +166,8 @@ export default function EditHistoryModal({
           history: cleanedHistory,
           status: latestStatus,
           remark: latestRemark,
-          callType: latestCallType
+          callType: latestCallType,
+          callDirection: latestCallType
         };
         if (calledForField) next[calledForField] = latestCalledFor;
         if (sourceField) next[sourceField] = latestSource;

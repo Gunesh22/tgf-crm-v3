@@ -47,7 +47,7 @@ export function PresetSummaryCards({
       list = list.filter(c => {
         const name = (c.Name || c.name || "").toLowerCase();
         const phone = (c.Phone || c.phone || "").toLowerCase();
-        const src = (c.original_source || c.Source || "").toLowerCase();
+        const src = (c.leadOrigin || c.original_source || c.originalSource || c.Source || c.source || "").toLowerCase();
         return name.includes(q) || phone.includes(q) || src.includes(q);
       });
     }
@@ -67,7 +67,7 @@ export function PresetSummaryCards({
         "S.No": idx + 1,
         "Lead Name": c.Name || c.name || "N/A",
         "Phone": c.Phone || c.phone || "N/A",
-        "Original Source": c.original_source || c.Source || "N/A",
+        "Original Source": c.leadOrigin || c.original_source || c.originalSource || c.Source || c.source || "N/A",
         "Called For Program": c["Called For"] || c.calledFor || c.programName || "N/A",
         "Pipeline Stage": c.status || c.pipelineStage || "N/A",
         "Call Attempts": c.attemptCount || (c.history ? c.history.length : 0),
@@ -300,7 +300,7 @@ export function PresetSummaryCards({
                             </td>
                             <td className="py-2.5 px-3">
                               <span className="px-2 py-0.5 bg-slate-800 text-slate-300 rounded border border-slate-700/60 text-[10px]">
-                                {c.original_source || c.Source || "Direct"}
+                                {c.leadOrigin || c.original_source || c.originalSource || c.Source || c.source || "Direct"}
                               </span>
                             </td>
                             <td className="py-2.5 px-3 text-slate-300">

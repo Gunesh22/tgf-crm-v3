@@ -11,6 +11,8 @@ import {
   addIncomingCallLog, updateCallLog, createProgram, checkGlobalDuplicate, findMatchingAttenderState, combineContactHistories, isLeadShared, syncGhlTagsForLead
 } from "../../../lib/db";
 import { searchCRMByPhone } from "../../../lib/ghl";
+import { CONTACT_FIELDS } from "../../../lib/fieldSchema";
+import { getContactLeadOrigin, getContactSource } from "../../../utils/registrationEngine";
 import {
   STATUS_OPTIONS,
   SOURCE_OPTIONS,
@@ -46,7 +48,6 @@ import CallButton from "./CallButton";
 import WhatsAppButton from "./WhatsAppButton";
 import { getEffectiveStage, PIPELINE_STAGES, getProgramSpecificStatus } from "../../../utils/pipelineEngine";
 import { extractProgramsList, getProgramContext, getProgramRegistrationInfo } from "../utils/programContextHelper";
-import { getContactSource } from "../../../utils/registrationEngine";
 
 export const EditModal = ({
   row,
@@ -73,31 +74,36 @@ export const EditModal = ({
   const activeAttenderId = (!allowAttenderSelection && attenderId) ? attenderId : (selectedAttenderId || attenderId || row?.attenderId || "");
   const activeAttenderName = (!allowAttenderSelection && attenderName) ? attenderName : (selectedAttenderName || attenderName || row?.attenderName || "");
 
-  const getNormalizedRow = () => {
-    const normalized = { ...row };
-    if (normalized.callType) {
-      normalized.callType = String(normalized.callType).toLowerCase();
+  const getNormalizedRow = (customBase = null) => {
+    const baseLead = customBase || freshSharedLead || row;
+    const normalized = { ...baseLead, ...row };
+    const rawInitCallType = baseLead.callType || baseLead.callDirection || row?.callType || row?.callDirection || "";
+    if (rawInitCallType) {
+      normalized.callType = String(rawInitCallType).toLowerCase();
+      normalized.callDirection = normalized.callType;
     }
     
-    // Profile & Origin fields: whitelist and normalize from root record
-    const profileFields = ["Name", "Phone", "Mobile", "Email", "City", "State", "Khoji", "Tags", "Source"];
+    // Profile & Origin fields: whitelist and normalize from base record
+    const profileFields = ["Name", "Phone", "Mobile", "Email", "City", "State", "Khoji", "Tags"];
     profileFields.forEach(col => {
-      normalized[col] = getFieldWithFallback(row, col, activeAttenderId, activeAttenderName);
+      normalized[col] = getFieldWithFallback(baseLead, col, activeAttenderId, activeAttenderName);
     });
 
-    const rootOriginalSource = row?.original_source || row?.originalSource || row?.leadOrigin || row?.["Lead Origin"] || "";
-    normalized.original_source = rootOriginalSource;
-    normalized.originalSource = rootOriginalSource;
+    const rootOriginalSource = getContactLeadOrigin(baseLead) || baseLead?.original_source || baseLead?.originalSource || baseLead?.leadOrigin || baseLead?.["Lead Origin"] || "";
     normalized.leadOrigin = rootOriginalSource;
 
-    if (row._isNew && !normalized.Khoji) {
+    const rootSource = getContactSource(baseLead) || normalized.source || normalized.Source || "";
+    normalized.source = rootSource;
+
+    if (baseLead._isNew && !normalized.Khoji) {
       normalized.Khoji = "No";
     }
-    if (row._isNew && !normalized.callType) {
+    if (baseLead._isNew && !normalized.callType) {
       normalized.callType = "incoming";
+      normalized.callDirection = "incoming";
     }
-    if (!normalized.Tags && Array.isArray(row.tags) && row.tags.length > 0) {
-      normalized.Tags = row.tags.join(", ");
+    if (!normalized.Tags && Array.isArray(baseLead.tags) && baseLead.tags.length > 0) {
+      normalized.Tags = baseLead.tags.join(", ");
     }
 
     // Lookup ACTIVE attender's own saved working state
@@ -105,22 +111,40 @@ export const EditModal = ({
     const combinedHistory = combineContactHistories(normalized.history, attState?.history);
     normalized.history = combinedHistory;
 
-    normalized.callType = normalized.callType || "outgoing";
+    if (attState && (attState.callType || attState.callDirection)) {
+      normalized.callType = String(attState.callType || attState.callDirection).toLowerCase();
+      normalized.callDirection = normalized.callType;
+    }
 
-    const rootCallbackDate = attState?.callbackDate || row.callbackDate || row["Callback Date"] || row.callback_date || row.nextCallDate || row.next_call_date || row.callback || null;
-    const rootCallbackTime = attState?.callbackTime || row.callbackTime || row["Callback Time"] || row.callback_time || "";
-    const rootCallbackStatus = attState?.callbackStatus || row.callbackStatus || (rootCallbackDate ? "pending" : null);
+    normalized.callType = normalized.callType || "outgoing";
+    normalized.callDirection = normalized.callDirection || normalized.callType;
+
+    const rootCallbackDate = attState?.callbackDate || baseLead.callbackDate || baseLead["Callback Date"] || baseLead.callback_date || baseLead.nextCallDate || baseLead.next_call_date || baseLead.callback || null;
+    const rootCallbackTime = attState?.callbackTime || baseLead.callbackTime || baseLead["Callback Time"] || baseLead.callback_time || "";
+    const rootCallbackStatus = attState?.callbackStatus || baseLead.callbackStatus || (rootCallbackDate ? "pending" : null);
 
     // Call-entry fields: restore ACTIVE attender's own saved state if present, else START COMPLETELY EMPTY
-    const rawAttStatus = attState?.status || row?.status || "";
+    const rawAttStatus = attState?.status || baseLead?.status || "";
     const cleanAttStatus = String(rawAttStatus).toLowerCase() === "pending" ? "" : rawAttStatus;
 
+    const rawRootProg = baseLead?.["Called For"] || baseLead?.calledFor || baseLead?.called_for || "";
+    const isNonProgStr = (str) => {
+      if (!str) return true;
+      const l = String(str).trim().toLowerCase();
+      return ["incoming", "incoming call", "incoming calls", "incoming-calls", "outgoing", "outgoing call", "outgoing calls", "outgoing-calls", "reminder", "query", "na", "none", "null", "undefined"].includes(l);
+    };
+
+    const validRootProg = !isNonProgStr(rawRootProg) ? rawRootProg : "";
+    const fallbackProgram = validRootProg || (extractProgramsList(baseLead || {})[0]) || "";
+    const rawAttProg = attState?.calledFor || attState?.["Called For"] || "";
+    const resolvedProgram = (!isNonProgStr(rawAttProg) ? rawAttProg : "") || fallbackProgram;
+
     if (attState) {
-      normalized["Called For"] = attState.calledFor || attState["Called For"] || "";
-      normalized.calledFor = normalized["Called For"];
-      normalized.Source = attState.source || attState.Source || "";
+      normalized["Called For"] = resolvedProgram;
+      normalized.calledFor = resolvedProgram;
+      normalized.Source = attState.source || attState.Source || getContactSource(baseLead, resolvedProgram) || rootSource;
       normalized.source = normalized.Source;
-      normalized.previousProgram = attState.previousProgram || row.previousProgram || "";
+      normalized.previousProgram = attState.previousProgram || baseLead.previousProgram || "";
       normalized.callPurpose = attState.callPurpose || "SALES";
       normalized.status = cleanAttStatus;
       normalized.remark = "";
@@ -128,11 +152,11 @@ export const EditModal = ({
       normalized.callbackStatus = rootCallbackStatus;
       normalized.callbackTime = rootCallbackTime;
     } else {
-      normalized["Called For"] = "";
-      normalized.calledFor = "";
-      normalized.Source = "";
-      normalized.source = "";
-      normalized.previousProgram = row.previousProgram || "";
+      normalized["Called For"] = fallbackProgram;
+      normalized.calledFor = fallbackProgram;
+      normalized.Source = getContactSource(baseLead, fallbackProgram) || rootSource;
+      normalized.source = normalized.Source;
+      normalized.previousProgram = baseLead.previousProgram || "";
       normalized.callPurpose = "SALES";
       normalized.status = cleanAttStatus;
       normalized.remark = "";
@@ -142,12 +166,12 @@ export const EditModal = ({
     }
 
     normalized.callStatus = "";
-    normalized.queryStatus = row.queryStatus || "";
+    normalized.queryStatus = baseLead.queryStatus || "";
     normalized.queryDetails = "";
     normalized.objectionReason = "";
 
     // Preserve MongoDB pipelineStage from record
-    normalized.pipelineStage = normalized.pipelineStage || row.pipelineStage;
+    normalized.pipelineStage = normalized.pipelineStage || baseLead.pipelineStage;
 
     return normalized;
   };
@@ -174,13 +198,15 @@ export const EditModal = ({
   const programsList = useMemo(() => extractProgramsList(edited), [edited]);
 
   const [activeProgram, setActiveProgram] = useState(() => {
-    const list = extractProgramsList(row || {});
-    return list[0] || (row ? (row["Called For"] || row.calledFor || row.called_for) : "") || "";
+    const baseLead = freshSharedLead || globalDup?.first || row;
+    const list = extractProgramsList(baseLead || {});
+    return list[0] || "";
   });
 
   useEffect(() => {
-    const freshNorm = getNormalizedRow();
-    freshNorm.rawOriginalCalledFor = row?.["Called For"] || row?.calledFor || row?.called_for || "";
+    const baseLead = freshSharedLead || globalDup?.first || row;
+    const freshNorm = getNormalizedRow(baseLead);
+    freshNorm.rawOriginalCalledFor = baseLead?.["Called For"] || baseLead?.calledFor || baseLead?.called_for || "";
     setSavedRow(freshNorm);
     setEdited(freshNorm);
     setShowCalledForPrompt(false);
@@ -188,22 +214,23 @@ export const EditModal = ({
     setPendingSave(false);
     setValidationErrors([]);
 
-    const list = extractProgramsList(row || {});
-    const rawFirstProg = list[0] || freshNorm["Called For"] || freshNorm.calledFor || freshNorm.called_for || "";
-    const firstProg = rawFirstProg ? String(rawFirstProg).split(",")[0].trim() : "";
+    const list = extractProgramsList(baseLead || {});
+    const candidateProg = freshNorm["Called For"] || freshNorm.calledFor || freshNorm.called_for || list[0] || "";
+    const firstProg = candidateProg ? String(candidateProg).split(",")[0].trim() : "";
 
     if (firstProg) {
-      const attId = activeAttenderId || freshNorm.attenderId || row?.attenderId || null;
+      const attId = activeAttenderId || freshNorm.attenderId || baseLead?.attenderId || null;
       freshNorm.calledFor = firstProg;
-      freshNorm["Called For"] = firstProg;
-      freshNorm.called_for = firstProg;
       freshNorm.status = getProgramSpecificStatus(freshNorm, firstProg, attId);
-      const programSource = getContactSource(row, firstProg);
+      const programSource = getContactSource(baseLead, firstProg) || freshNorm.source || getContactSource(baseLead);
       if (programSource) {
-        freshNorm.Source = programSource;
         freshNorm.source = programSource;
       }
-      freshNorm.pipelineStage = getEffectiveStage(freshNorm, firstProg, attId) || PIPELINE_STAGES.NEW_LEAD;
+      const programOrigin = getContactLeadOrigin(baseLead, firstProg) || freshNorm.leadOrigin || getContactLeadOrigin(baseLead);
+      if (programOrigin) {
+        freshNorm.leadOrigin = programOrigin;
+      }
+      freshNorm.pipelineStage = getEffectiveStage(freshNorm, firstProg, attId) || getEffectiveStage(baseLead, firstProg) || getEffectiveStage(baseLead) || PIPELINE_STAGES.NEW_LEAD;
     }
 
     setSavedRow(freshNorm);
@@ -213,7 +240,7 @@ export const EditModal = ({
     setPendingSave(false);
     setValidationErrors([]);
     setActiveProgram(firstProg);
-  }, [row]);
+  }, [row, freshSharedLead]);
 
   const handleSelectProgram = (programName) => {
     if (!programName) return;
@@ -228,11 +255,8 @@ export const EditModal = ({
     setEdited(prev => ({
       ...prev,
       calledFor: targetProg,
-      "Called For": targetProg,
-      called_for: targetProg,
       status: targetStatus,
       pipelineStage: targetStage,
-      Source: targetSource || "",
       source: targetSource || ""
     }));
   };
@@ -880,7 +904,7 @@ export const EditModal = ({
         remark: h.remark || "",
         calledFor: h.calledFor || h.called_for || h["Called For"] || "",
         source: h.source || h.sourse || h.Source || "",
-        callType: h.callType || "outgoing",
+        callType: h.callType || h.callDirection || "outgoing",
         attenderName: h.attenderName || "Unknown",
         timestamp: h.timestamp || new Date().toISOString(),
         isCurrentDoc: true,
@@ -899,7 +923,7 @@ export const EditModal = ({
           remark: remarkStr,
           calledFor: savedRow["Called For"] || savedRow.calledFor || "",
           source: savedRow.Source || savedRow.source || "",
-          callType: savedRow.callType || "outgoing",
+          callType: savedRow.callType || savedRow.callDirection || "outgoing",
           attenderName: savedRow.attenderName || savedRow.assignedName || "Unknown",
           timestamp: savedRow.updatedAt?.toDate?.()?.toISOString?.() || savedRow.updatedAt || savedRow.createdAt?.toDate?.()?.toISOString?.() || savedRow.createdAt || new Date().toISOString(),
           isCurrentDoc: true,
@@ -933,7 +957,7 @@ export const EditModal = ({
                 remark: h.remark || "",
                 calledFor: h.calledFor || h.called_for || h["Called For"] || state["Called For"] || state.calledFor || "",
                 source: h.source || h.sourse || h.Source || state.Source || state.source || "",
-                callType: h.callType || state.callType || "outgoing",
+                callType: h.callType || h.callDirection || state.callType || state.callDirection || "outgoing",
                 attenderName: h.attenderName || state.attenderName || "Unknown",
                 timestamp: h.timestamp || new Date().toISOString(),
                 isCurrentDoc: false,
@@ -951,7 +975,7 @@ export const EditModal = ({
                 remark: attRemark,
                 calledFor: state["Called For"] || state.calledFor || "",
                 source: state.Source || state.source || "",
-                callType: state.callType || "outgoing",
+                callType: state.callType || state.callDirection || "outgoing",
                 attenderName: state.attenderName || "Unknown",
                 timestamp: state.updatedAt || new Date().toISOString(),
                 isCurrentDoc: false,
@@ -981,7 +1005,7 @@ export const EditModal = ({
                     remark: h.remark || "",
                     calledFor: h.calledFor || h.called_for || h["Called For"] || state["Called For"] || state.calledFor || "",
                     source: h.source || h.sourse || h.Source || state.Source || state.source || "",
-                    callType: h.callType || state.callType || "outgoing",
+                    callType: h.callType || h.callDirection || state.callType || state.callDirection || "outgoing",
                     attenderName: h.attenderName || state.attenderName || "Unknown",
                     timestamp: h.timestamp || new Date().toISOString(),
                     isCurrentDoc: false,
@@ -998,7 +1022,7 @@ export const EditModal = ({
                     remark: attRemark,
                     calledFor: state["Called For"] || state.calledFor || "",
                     source: state.Source || state.source || "",
-                    callType: state.callType || "outgoing",
+                    callType: state.callType || state.callDirection || "outgoing",
                     attenderName: state.attenderName || "Unknown",
                     timestamp: state.updatedAt || new Date().toISOString(),
                     isCurrentDoc: false,
@@ -1018,7 +1042,7 @@ export const EditModal = ({
               remark: h.remark || "",
               calledFor: h.calledFor || h.called_for || h["Called For"] || "",
               source: h.source || h.sourse || h.Source || "",
-              callType: h.callType || "outgoing",
+              callType: h.callType || h.callDirection || "outgoing",
               attenderName: h.attenderName || "Unknown",
               timestamp: h.timestamp || new Date().toISOString(),
               isCurrentDoc: false,
@@ -1036,7 +1060,7 @@ export const EditModal = ({
               remark: dupRemark,
               calledFor: m["Called For"] || m.calledFor || "",
               source: m.Source || m.source || "",
-              callType: m.callType || "outgoing",
+              callType: m.callType || m.callDirection || "outgoing",
               attenderName: m.assignedName || m.attenderName || "Unknown",
               timestamp: m.updatedAt?.toDate?.()?.toISOString?.() || m.updatedAt || m.createdAt?.toDate?.()?.toISOString?.() || m.createdAt || new Date().toISOString(),
               isCurrentDoc: false,
@@ -1153,14 +1177,11 @@ export const EditModal = ({
   const handleChange = (key, val) => {
     setEdited(prev => {
       const next = { ...prev, [key]: val };
-      const isCalledFor = key === calledForField || 
+      const isCalledFor = key === CONTACT_FIELDS.CALLED_FOR || 
         ["called for", "called_for", "calledfor"].includes(String(key || "").toLowerCase());
       if (isCalledFor) {
         const singleProg = String(val || "").split(",")[0].trim();
-        next[calledForField] = singleProg;
-        next["Called For"] = singleProg;
-        next.calledFor = singleProg;
-        next.called_for = singleProg;
+        next[CONTACT_FIELDS.CALLED_FOR] = singleProg;
         if (singleProg) {
           setActiveProgram(singleProg);
           const attId = activeAttenderId || prev.attenderId || row?.attenderId || null;
@@ -1214,31 +1235,35 @@ export const EditModal = ({
     });
   };
 
-  // Smart field matching: find actual key name in data that matches an alias list.
-  // Explicitly exclude dot-notation keys (e.g. attenderStates.attenderId.source) which
-  // are internal Firestore paths and must never be used as field labels.
-  const findField = (aliases) => {
-    const keys = Object.keys(edited).filter(k => !k.includes(".") && !k.toLowerCase().startsWith("attenderstates"));
-    return keys.find(k => aliases.some(a => k.toLowerCase() === a || k.toLowerCase() === a.replace(/_/g, " "))) 
-      || keys.find(k => aliases.some(a => k.toLowerCase().includes(a)))
-      || (aliases[0].charAt(0).toUpperCase() + aliases[0].slice(1));
-  };
-  const sourceField = findField(["source", "sourse"]);
-  const calledForField = findField(["called for", "called_for", "calledfor"]);
+  // Canonical field identifiers
+  const sourceField = CONTACT_FIELDS.SOURCE;
+  const calledForField = CONTACT_FIELDS.CALLED_FOR;
 
   const isManualEntry = edited.isManualEntry || edited.programId === "incoming-calls" || edited.programId === "outgoing-calls" || edited.programId === "Incoming Calls" || edited.programId === "Outgoing Calls";
-  const isIncoming = edited._isNew || edited.callType === "incoming" || edited.callType === "incoming f" || isManualEntry;
+  const isIncoming = edited._isNew || (edited.callType || edited.callDirection || "").toLowerCase().startsWith("in") || isManualEntry;
 
   const getEditable = (field) => {
-    if (field === "Tags") return true;
+    if (!field) return true;
+    const fLower = String(field).toLowerCase();
+    const fClean = fLower.replace(/[\s_-]/g, "");
+    if (fClean === "tags") return true;
     if (isIncoming) return true;
     if (addedFields.includes(field)) return true;
-    const fLower = field.toLowerCase();
-    return ["source", "called for", "khoji", "city", "state"].includes(fLower) || 
+    return [
+      "source",
+      "calledfor",
+      "leadorigin",
+      "currentsource",
+      "khoji",
+      "city",
+      "state",
+      "email",
+      "mobile"
+    ].includes(fClean) || 
       fLower.includes("asmani") || 
       fLower.includes("aasmani") || 
       fLower.includes("आसमानी") || 
-      fLower.includes("shivir done");
+      fLower.includes("shivir");
   };
 
 
@@ -1370,7 +1395,7 @@ export const EditModal = ({
       const isUnconnected = isNotConnectedStatus(targetEdited.status) || (targetEdited.callStatus && targetEdited.callStatus !== "Connected");
       const khojiVal = String(targetEdited.Khoji || targetEdited.khoji || "").trim();
       const cityVal = String(targetEdited.City || targetEdited.city || "").trim();
-      const calledForVal = String(targetEdited[calledForField] || "").trim();
+      const calledForVal = String(targetEdited[calledForField] || targetEdited["Called For"] || targetEdited.calledFor || "").trim();
       const sourceVal = String(targetEdited[sourceField] || targetEdited.Source || targetEdited.source || targetEdited.currentSource || "").trim();
 
       if (isUnconnected) {
@@ -1385,9 +1410,12 @@ export const EditModal = ({
       const missingFields = [];
 
       const isQueryMode = String(targetEdited.callPurpose || "").toUpperCase() === "QUERY";
+      const isReminderMode = String(targetEdited.callPurpose || "").toUpperCase() === "REMINDER";
       if (isQueryMode) {
         if (!targetEdited.status || targetEdited.status === "Pending") targetEdited.status = "Query";
         if (!targetEdited.queryStatus) targetEdited.queryStatus = "Pending";
+      } else if (isReminderMode) {
+        if (!targetEdited.status || targetEdited.status === "Pending") targetEdited.status = "Reminder Given";
       } else if (targetEdited.status !== "Query") {
         if (targetEdited.queryStatus === "Pending" && !savedRow?.queryStatus) {
           targetEdited.queryStatus = "";
@@ -1567,8 +1595,8 @@ export const EditModal = ({
             remark: updates.remark || "Payment query / incoming confirmation",
             attenderName: safeName,
             timestamp: nowStr,
-            calledFor: targetEdited["Called For"] || targetEdited.calledFor || "",
-            source: targetEdited.Source || targetEdited.source || targetEdited.Sourse || targetEdited.sourse || "",
+            calledFor: targetEdited.calledFor || targetEdited["Called For"] || "",
+            source: targetEdited.source || targetEdited.Source || "",
             callType: targetEdited.callType || "incoming"
           };
 
@@ -1578,8 +1606,8 @@ export const EditModal = ({
             remark: "Registered",
             attenderName: safeName,
             timestamp: new Date(new Date(nowStr).getTime() + 1000).toISOString(),
-            calledFor: targetEdited["Called For"] || targetEdited.calledFor || "",
-            source: targetEdited.Source || targetEdited.source || targetEdited.Sourse || targetEdited.sourse || "",
+            calledFor: targetEdited.calledFor || targetEdited["Called For"] || "",
+            source: targetEdited.source || targetEdited.Source || "",
             callType: "outgoing"
           };
 
@@ -1589,8 +1617,8 @@ export const EditModal = ({
           const safeName = activeAttenderName || attenderName || "Unknown";
           const nowStr = new Date().toISOString();
 
-          const oldCalledForVal = String(savedRow["Called For"] || savedRow.calledFor || "").trim().toLowerCase();
-          const newCalledForVal = String(targetEdited["Called For"] || targetEdited.calledFor || "").trim().toLowerCase();
+          const oldCalledForVal = String(savedRow.calledFor || savedRow["Called For"] || "").trim().toLowerCase();
+          const newCalledForVal = String(targetEdited.calledFor || targetEdited["Called For"] || "").trim().toLowerCase();
           const calledForChanged = oldCalledForVal !== newCalledForVal;
 
           const isNewConversionEvent = (oldStatus !== "Reg.Done" && targetEdited.status === "Reg.Done") ||
@@ -1601,26 +1629,25 @@ export const EditModal = ({
             histStatus = "Call Log Added";
           }
 
-          const resolvedLeadOrigin = targetEdited.original_source || targetEdited.originalSource || targetEdited.leadOrigin || targetEdited["Lead Origin"] || savedRow.original_source || "";
-          const resolvedCurrentSource = targetEdited.Source || targetEdited.source || targetEdited.currentSource || targetEdited["Current Source"] || "";
+          const resolvedLeadOrigin = targetEdited.leadOrigin || targetEdited.original_source || targetEdited.originalSource || targetEdited["Lead Origin"] || savedRow.leadOrigin || savedRow.original_source || "";
+          const resolvedCurrentSource = targetEdited.source || targetEdited.Source || targetEdited.currentSource || targetEdited["Current Source"] || "";
+          const resolvedCallType = String(targetEdited.callType || "outgoing").toLowerCase().startsWith("incoming") ? "incoming" : "outgoing";
 
           updates.leadOrigin = resolvedLeadOrigin;
-          updates.original_source = resolvedLeadOrigin;
-          updates.originalSource = resolvedLeadOrigin;
-          updates.currentSource = resolvedCurrentSource;
           updates.source = resolvedCurrentSource;
-          updates.Source = resolvedCurrentSource;
+          updates.callType = resolvedCallType;
+          updates.callDirection = resolvedCallType;
 
           const newHist = {
             status: histStatus,
             remark: updates.remark || "",
             attenderName: safeName,
             timestamp: nowStr,
-            calledFor: targetEdited["Called For"] || targetEdited.calledFor || "",
+            calledFor: targetEdited.calledFor || targetEdited["Called For"] || "",
             leadOrigin: resolvedLeadOrigin,
-            currentSource: resolvedCurrentSource,
             source: resolvedCurrentSource,
-            callType: targetEdited.callType || "outgoing"
+            callType: resolvedCallType,
+            callDirection: resolvedCallType
           };
 
           // Fix for Flaw 2: 15-second session collapsing for status-only edits by same attender
@@ -1644,9 +1671,9 @@ export const EditModal = ({
                   remark: newHist.remark || lastEntry.remark,
                   calledFor: newHist.calledFor,
                   leadOrigin: newHist.leadOrigin,
-                  currentSource: newHist.currentSource,
                   source: newHist.source,
                   callType: newHist.callType,
+                  callDirection: newHist.callDirection,
                   timestamp: nowStr
                 };
                 
@@ -1679,15 +1706,16 @@ export const EditModal = ({
       const currentAttStates = { ...(targetEdited.attenderStates || savedRow.attenderStates || {}) };
       if (activeAttenderId) {
         const prevAttState = currentAttStates[activeAttenderId] || {};
+        const savedCallType = String(targetEdited.callType || prevAttState.callType || "outgoing").toLowerCase().startsWith("incoming") ? "incoming" : "outgoing";
         currentAttStates[activeAttenderId] = {
           ...prevAttState,
           attenderId: activeAttenderId,
           attenderName: activeAttenderName || prevAttState.attenderName || "Unknown",
-          calledFor: targetEdited["Called For"] || targetEdited.calledFor || prevAttState.calledFor || "",
-          leadOrigin: targetEdited.original_source || targetEdited.originalSource || targetEdited.leadOrigin || prevAttState.leadOrigin || "",
-          original_source: targetEdited.original_source || targetEdited.originalSource || targetEdited.leadOrigin || prevAttState.original_source || "",
-          currentSource: targetEdited.Source || targetEdited.source || targetEdited.currentSource || prevAttState.currentSource || "",
-          source: targetEdited.Source || targetEdited.source || targetEdited.currentSource || prevAttState.source || "",
+          callType: savedCallType,
+          callDirection: savedCallType,
+          calledFor: targetEdited.calledFor || targetEdited["Called For"] || prevAttState.calledFor || "",
+          leadOrigin: targetEdited.leadOrigin || targetEdited.original_source || targetEdited.originalSource || prevAttState.leadOrigin || "",
+          source: targetEdited.source || targetEdited.Source || targetEdited.currentSource || prevAttState.source || "",
           previousProgram: targetEdited.previousProgram || prevAttState.previousProgram || "",
           status: updates.status || prevAttState.status,
           remark: updates.remark !== undefined ? updates.remark : prevAttState.remark,
@@ -1754,7 +1782,7 @@ export const EditModal = ({
               }
             });
           }
-          const progKey = String(updates["Called For"] || targetEdited["Called For"] || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+          const progKey = String(updates.calledFor || targetEdited.calledFor || updates["Called For"] || targetEdited["Called For"] || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
           const currentProgStates = { ...(targetEdited.programStates || {}) };
           if (activeAttenderId && progKey) {
             currentProgStates[activeAttenderId] = currentProgStates[activeAttenderId] || {};
@@ -1762,14 +1790,12 @@ export const EditModal = ({
               attenderId: activeAttenderId,
               attenderName: activeAttenderName || "",
               programKey: progKey,
-              program: updates["Called For"] || targetEdited["Called For"] || "",
+              program: updates.calledFor || targetEdited.calledFor || updates["Called For"] || targetEdited["Called For"] || "",
               pipelineStage: res?.pipelineStage || targetEdited.pipelineStage,
               status: updates.status || targetEdited.status || "",
               remark: updates.remark || targetEdited.remark || "",
               callbackDate: updates.callbackDate || targetEdited.callbackDate || null,
-              leadOrigin: targetEdited.original_source || targetEdited.originalSource || targetEdited.leadOrigin || "",
-              original_source: targetEdited.original_source || targetEdited.originalSource || targetEdited.leadOrigin || "",
-              currentSource: updates.source || targetEdited.source || targetEdited.Source || "",
+              leadOrigin: targetEdited.leadOrigin || targetEdited.original_source || targetEdited.originalSource || "",
               source: updates.source || targetEdited.source || targetEdited.Source || "",
               updatedAt: new Date().toISOString()
             };
@@ -2194,14 +2220,12 @@ export const EditModal = ({
                   }
                   const valStr = promptSelection;
                   handleChange(calledForField, valStr);
-                  handleChange("calledFor", valStr);
-                  handleChange("Called For", valStr);
                   handleChange("status", "Reg.Done");
                   setShowCalledForPrompt(false);
                   
                   if (pendingSave) {
                     setPendingSave(false);
-                    handleSaveAndClose({ [calledForField]: valStr, calledFor: valStr, "Called For": valStr, status: "Reg.Done" });
+                    handleSaveAndClose({ [calledForField]: valStr, status: "Reg.Done" });
                   } else {
                     toast.success("Called For and Registration status updated!");
                   }

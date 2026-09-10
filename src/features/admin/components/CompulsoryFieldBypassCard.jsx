@@ -61,8 +61,10 @@ export default function CompulsoryFieldBypassCard({ options, setOptions }) {
     }
   };
 
-  const totalOptional = optionalCompulsoryStatuses.length;
-  const totalRequired = statusOptions.length - totalOptional;
+  const totalOptional = statusOptions.filter(s =>
+    optionalCompulsoryStatuses.some(o => o.toLowerCase() === s.toLowerCase())
+  ).length;
+  const totalRequired = Math.max(0, statusOptions.length - totalOptional);
 
   return (
     <div className="space-y-4">

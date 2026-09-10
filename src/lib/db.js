@@ -7,8 +7,18 @@ export const INCOMING_PROGRAM_NAME = "Incoming Calls";
 export const OUTGOING_PROGRAM_ID = "outgoing";
 export const OUTGOING_PROGRAM_NAME = "Outgoing Calls";
 export const DEFAULT_WHATSAPP_TEMPLATES = [];
-export const DEFAULT_NOT_CONNECTED_STATUSES = ["NA", "Busy", "Call Cut", "switched off", "Invalid No", "Called by mistake", "No Network", "wrong no.", "no answer"];
-export const DEFAULT_CONNECTED_STATUSES = ["Info given", "Interested", "Reg.Done", "reminder", "Reminder Given", "Reminder Pending", "Query", "Already Reg.d", "Next time", "Shivir done", "Not possible", "Pending", "Not interested", "Not Attended", "Call Log Added"];
+export const DEFAULT_NOT_CONNECTED_STATUSES = ["Not Connected", "NA", "Busy", "Call Cut", "switched off", "Invalid Number", "Invalid No", "Called by mistake", "No Network", "wrong no.", "no answer", "Not Picked Up"];
+export const DEFAULT_CONNECTED_STATUSES = ["Info Given", "Info given", "Interested", "Previous Program Pending", "Reg.Done", "reminder", "Reminder Given", "Reminder Pending", "Query", "Already Reg.d", "Next Time", "Next time", "Shivir done", "Not possible", "Pending", "Not Interested", "Not interested", "Not Attended", "Call Log Added"];
+export const DEFAULT_SALES_OUTCOME_OPTIONS = [
+  "Info Given",
+  "Interested",
+  "Previous Program Pending",
+  "Next Time",
+  "Not Interested",
+  "Reg.Done",
+  "Already Reg.d",
+  "Shivir done"
+];
 
 
 
@@ -71,7 +81,7 @@ export const globalSearchContacts = async (query) => {
 };
 
 export const updateCallLog = async (contactId, updates = {}, attenderId, attenderName, context = {}) => {
-  const resolvedCalledFor = updates["Called For"] || updates.calledFor || context["Called For"] || context.calledFor || "";
+  const resolvedCalledFor = updates.calledFor || updates["Called For"] || context.calledFor || context["Called For"] || "";
   return fetchAPI(`/api/contacts/log-call`, "POST", {
     contactId,
     attenderId,
@@ -80,8 +90,7 @@ export const updateCallLog = async (contactId, updates = {}, attenderId, attende
     remark: updates.remark,
     callbackDate: updates.callbackDate,
     ...updates,
-    calledFor: resolvedCalledFor,
-    "Called For": resolvedCalledFor
+    calledFor: resolvedCalledFor
   });
 };
 
@@ -108,16 +117,12 @@ export const importContacts = async (arg1, arg2, arg3, arg4) => {
 
   const enriched = contactsList.map(c => {
     const leadOrigin = c.leadOrigin || c.original_source || c.originalSource || "";
-    const currentSource = c.currentSource || c.callSource || c.source || c.Source || "";
+    const currentSource = c.source || c.currentSource || c.callSource || c.Source || "";
     return {
       ...c,
       programId: c.programId || programId,
       leadOrigin,
-      original_source: leadOrigin,
-      originalSource: leadOrigin,
-      currentSource,
       source: currentSource,
-      Source: currentSource,
       tags: c.tags || tags
     };
   });
@@ -156,6 +161,9 @@ try {
   const localSettings = typeof window !== "undefined" ? localStorage.getItem(SETTINGS_CACHE_KEY) : null;
   if (localSettings) {
     settingsCache = JSON.parse(localSettings);
+    if (settingsCache && !settingsCache.salesOutcomeOptions) {
+      settingsCache.salesOutcomeOptions = DEFAULT_SALES_OUTCOME_OPTIONS;
+    }
   }
 } catch (e) {}
 
@@ -187,6 +195,9 @@ export const getSettingsOptions = async (opts = {}) => {
     if (cachedStr && !forceRefresh) {
       const parsed = JSON.parse(cachedStr);
       if (parsed && typeof parsed === "object") {
+        if (!parsed.salesOutcomeOptions) {
+          parsed.salesOutcomeOptions = DEFAULT_SALES_OUTCOME_OPTIONS;
+        }
         settingsCache = parsed;
         applyDynamicOptions(parsed);
         return parsed;
@@ -202,6 +213,9 @@ export const getSettingsOptions = async (opts = {}) => {
     try {
       const res = await fetchAPI(`/api/admin/settings`);
       if (res && res.data) {
+        if (!res.data.salesOutcomeOptions) {
+          res.data.salesOutcomeOptions = DEFAULT_SALES_OUTCOME_OPTIONS;
+        }
         settingsCache = res.data;
         try {
           if (typeof window !== "undefined") {
@@ -223,6 +237,7 @@ export const getSettingsOptions = async (opts = {}) => {
 
     const fallback = {
       statusOptions: [...DEFAULT_CONNECTED_STATUSES, ...DEFAULT_NOT_CONNECTED_STATUSES],
+      salesOutcomeOptions: DEFAULT_SALES_OUTCOME_OPTIONS,
       connectedStatuses: DEFAULT_CONNECTED_STATUSES,
       notConnectedStatuses: DEFAULT_NOT_CONNECTED_STATUSES,
       whatsappTemplates: DEFAULT_WHATSAPP_TEMPLATES

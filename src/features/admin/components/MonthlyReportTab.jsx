@@ -554,7 +554,7 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
     return attenders
       .filter(a => a.role !== 'admin' && !EXCLUDED_ATTENDER_NAMES.includes((a.name || "").toLowerCase().trim()))
       .map(a => ({
-        value: a.id,
+        value: a.id || a._id,
         label: a.name
       }));
   }, [attenders]);

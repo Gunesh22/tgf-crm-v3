@@ -64,117 +64,49 @@ export function renderVal(val, fallback = "—") {
 }
 
 export const getContactPhone = (log, attempt) => {
-  if (attempt?.contactPhone && String(attempt.contactPhone).trim()) return String(attempt.contactPhone).trim();
-  if (attempt?.phone && String(attempt.phone).trim()) return String(attempt.phone).trim();
-  if (attempt?.mobile && String(attempt.mobile).trim()) return String(attempt.mobile).trim();
+  const attPhone = attempt?.Phone || attempt?.contactPhone || attempt?.phone || attempt?.Mobile || attempt?.mobile;
+  if (attPhone && String(attPhone).trim()) return String(attPhone).trim();
 
   if (!log || typeof log !== "object") return "";
   const actualLog = log.contact || log.row || log;
 
-  const directCandidates = [
-    actualLog.Phone, actualLog.Mobile, actualLog.phone, actualLog.mobile, actualLog.contactPhone,
-    actualLog.normalizedPhone, actualLog.normalizedMobile, actualLog["Mobile Number"],
-    actualLog["Phone Number"], actualLog["Whatsapp Number"], actualLog["WhatsApp Number"],
-    actualLog["Contact Number"], actualLog["Contact No"], actualLog["Phone No"], actualLog["Mobile No"],
-    actualLog.contact_no, actualLog.whatsapp, actualLog.number
-  ];
-
-  for (const c of directCandidates) {
-    if (c !== undefined && c !== null && String(c).trim() !== "") {
-      return String(c).trim();
-    }
-  }
-
-  const keys = Object.keys(actualLog);
-  const phoneKey = keys.find(k => {
-    const lk = k.toLowerCase();
-    return lk.includes("phone") || lk.includes("mobile") || lk.includes("whatsapp") || lk.includes("contact") || lk.includes("number");
-  });
-
-  return (phoneKey && actualLog[phoneKey]) ? String(actualLog[phoneKey]).trim() : "";
+  const val = actualLog.Phone || actualLog.Mobile || actualLog.phone || actualLog.mobile || actualLog.contactPhone || actualLog.normalizedPhone || actualLog["Mobile Number"] || actualLog["Phone Number"] || actualLog["Contact Number"];
+  return (val && String(val).trim()) ? String(val).trim() : "";
 };
 
 export const getContactName = (log, attempt) => {
-  if (attempt?.contactName && String(attempt.contactName).trim()) return String(attempt.contactName).trim();
-  if (attempt?.name && String(attempt.name).trim()) return String(attempt.name).trim();
+  const attName = attempt?.Name || attempt?.contactName || attempt?.name;
+  if (attName && String(attName).trim()) return String(attName).trim();
 
   if (!log || typeof log !== "object") return "";
   const actualLog = log.contact || log.row || log;
 
-  const directCandidates = [
-    actualLog.Name, actualLog.name, actualLog.leadName, actualLog["Lead Name"], actualLog["Full Name"],
-    actualLog.caller, actualLog["Caller Name"], actualLog["Name of Caller"], actualLog.fullName,
-    actualLog.contactName, actualLog.customerName, actualLog.studentName
-  ];
-
-  for (const c of directCandidates) {
-    if (c !== undefined && c !== null && String(c).trim() !== "" && String(c).trim() !== "Unknown") {
-      return String(c).trim();
-    }
-  }
-
-  const keys = Object.keys(actualLog);
-  const nameKey = keys.find(k => {
-    const lk = k.toLowerCase();
-    return (lk.includes("name") || lk.includes("caller") || lk.includes("lead")) && !lk.includes("attender") && !lk.includes("program") && !lk.includes("file");
-  });
-
-  const val = (nameKey && actualLog[nameKey]) ? String(actualLog[nameKey]).trim() : "";
-  if (val && val !== "Unknown") return val;
+  const val = actualLog.Name || actualLog.name || actualLog.leadName || actualLog["Lead Name"] || actualLog["Full Name"] || actualLog.caller || actualLog.fullName || actualLog.contactName;
+  if (val && String(val).trim() && String(val).trim() !== "Unknown") return String(val).trim();
 
   return "";
 };
 
 export const getContactCity = (log, attempt) => {
-  if (attempt?.contactCity && String(attempt.contactCity).trim()) return String(attempt.contactCity).trim();
-  if (attempt?.city && String(attempt.city).trim()) return String(attempt.city).trim();
+  const attCity = attempt?.City || attempt?.city || attempt?.contactCity;
+  if (attCity && String(attCity).trim()) return String(attCity).trim();
 
   if (!log || typeof log !== "object") return "";
+  const actualLog = log.contact || log.row || log;
 
-  const directCandidates = [
-    log.City, log.city, log.location, log.Location, log["Khoji City"],
-    log["City Name"], log.place, log.town, log.district, log.address
-  ];
-
-  for (const c of directCandidates) {
-    if (c !== undefined && c !== null && String(c).trim() !== "") {
-      return String(c).trim();
-    }
-  }
-
-  const keys = Object.keys(log);
-  const cityKey = keys.find(k => {
-    const lk = k.toLowerCase();
-    return lk.includes("city") || lk.includes("location") || lk.includes("place") || lk.includes("town");
-  });
-
-  return (cityKey && log[cityKey]) ? String(log[cityKey]).trim() : "";
+  const val = actualLog.City || actualLog.city || actualLog.location || actualLog["Khoji City"] || actualLog["City Name"] || actualLog.place;
+  return (val && String(val).trim()) ? String(val).trim() : "";
 };
 
 export const getContactKhoji = (log, attempt) => {
-  if (attempt?.Khoji && String(attempt.Khoji).trim()) return String(attempt.Khoji).trim();
-  if (attempt?.khoji && String(attempt.khoji).trim()) return String(attempt.khoji).trim();
+  const attKhoji = attempt?.Khoji || attempt?.khoji;
+  if (attKhoji && String(attKhoji).trim()) return String(attKhoji).trim();
 
   if (!log || typeof log !== "object") return "";
+  const actualLog = log.contact || log.row || log;
 
-  const directCandidates = [
-    log.Khoji, log.khoji, log["Khoji Type"], log["Khoji Yes or No"],
-    log["Have you done Maha Asmani"], log["Maha Asmani"], log["Mahaasmani"], log["Khoji Status"]
-  ];
-
-  for (const c of directCandidates) {
-    if (c !== undefined && c !== null && String(c).trim() !== "") {
-      return String(c).trim();
-    }
-  }
-
-  const keys = Object.keys(log);
-  const khojiKey = keys.find(k => {
-    const lk = k.toLowerCase();
-    return lk.includes("khoji") || lk.includes("asmani");
-  });
-
-  return (khojiKey && log[khojiKey]) ? String(log[khojiKey]).trim() : "";
+  const val = actualLog.Khoji || actualLog.khoji || actualLog["Khoji Type"] || actualLog["Khoji Status"];
+  return (val && String(val).trim()) ? String(val).trim() : "";
 };
 
 export const getCanonicalStage = (stageOrContact) => {
@@ -505,8 +437,8 @@ export const TAB_ITEMS = [
   { id: "settings", label: "Settings", icon: <Settings size={18} /> },
 ];
 
-export const CONNECTED_STATUSES = ["Info given", "Interested", "Previous Program Pending", "Reg.Done", "reminder", "Reminder Given", "Reminder Pending", "Query", "Already Reg.d", "Next time", "Shivir done", "Not possible", "Pending", "Not interested", "Not Attended", "Call Log Added"];
-export const NOT_CONNECTED_STATUSES = ["NA", "Busy", "Call Cut", "switched off", "Invalid No", "Called by mistake", "No Network", "wrong no.", "no answer"];
+export const CONNECTED_STATUSES = ["Info Given", "Info given", "Interested", "Previous Program Pending", "Reg.Done", "reminder", "Reminder Given", "Reminder Pending", "Query", "Already Reg.d", "Next Time", "Next time", "Shivir done", "Not possible", "Pending", "Not Interested", "Not interested", "Not Attended", "Call Log Added"];
+export const NOT_CONNECTED_STATUSES = ["Not Connected", "NA", "Busy", "Call Cut", "switched off", "Invalid Number", "Invalid No", "Called by mistake", "No Network", "wrong no.", "no answer", "Not Picked Up"];
 
 export function classifyCallStatus(rawStatus) {
   if (!rawStatus) return "NOT_CONNECTED";
@@ -666,16 +598,18 @@ export function getCanonicalStatus(status) {
   if (sLower === "interested") return "Interested";
   if (sLower === "reg.done" || sLower === "registered") return "Reg.Done";
   if (sLower === "previous program pending") return "Previous Program Pending";
-  if (sLower === "not interested" || sLower === "not intrested") return "Not interested";
+  if (sLower === "not interested" || sLower === "not intrested") return "Not Interested";
   if (sLower === "na") return "NA";
   if (sLower === "busy") return "Busy";
   if (sLower === "call cut") return "Call Cut";
   if (sLower === "switched off") return "switched off";
-  if (sLower === "invalid no") return "Invalid No";
+  if (sLower === "invalid no" || sLower === "invalid number" || sLower === "invalid") return "Invalid Number";
+  if (sLower === "not connected") return "Not Connected";
   if (sLower === "already reg.d" || sLower === "already registered") return "Already Reg.d";
-  if (sLower === "info given") return "Info given";
-  if (sLower === "next time") return "Next time";
-  if (sLower === "reminder") return "reminder";
+  if (sLower === "info given" || sLower === "information given") return "Info Given";
+  if (sLower === "next time") return "Next Time";
+  if (sLower === "reminder" || sLower === "reminder given") return "Reminder Given";
+  if (sLower === "reminder pending") return "Reminder Pending";
   if (sLower === "query") return "Query";
   if (sLower === "called by mistake") return "Called by mistake";
   if (sLower === "not possible") return "Not possible";
