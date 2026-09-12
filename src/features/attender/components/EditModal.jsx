@@ -1876,7 +1876,7 @@ export const EditModal = ({
     const calledForVal = edited[calledForField] || "";
     const selectedArr = calledForVal.split(",").map(x => x.trim()).filter(Boolean);
     if (selectedArr.length === 0) {
-      return CALLED_FOR_OPTIONS;
+      return [...CALLED_FOR_OPTIONS];
     }
     return selectedArr;
   };

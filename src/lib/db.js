@@ -7,8 +7,8 @@ export const INCOMING_PROGRAM_NAME = "Incoming Calls";
 export const OUTGOING_PROGRAM_ID = "outgoing";
 export const OUTGOING_PROGRAM_NAME = "Outgoing Calls";
 export const DEFAULT_WHATSAPP_TEMPLATES = [];
-export const DEFAULT_NOT_CONNECTED_STATUSES = ["Not Connected", "NA", "Busy", "Call Cut", "switched off", "Invalid Number", "Invalid No", "Called by mistake", "No Network", "wrong no.", "no answer", "Not Picked Up"];
-export const DEFAULT_CONNECTED_STATUSES = ["Info Given", "Info given", "Interested", "Previous Program Pending", "Reg.Done", "reminder", "Reminder Given", "Reminder Pending", "Query", "Already Reg.d", "Next Time", "Next time", "Shivir done", "Not possible", "Pending", "Not Interested", "Not interested", "Not Attended", "Call Log Added"];
+export const DEFAULT_NOT_CONNECTED_STATUSES = ["Not Connected", "NA", "Busy", "Call Cut", "switched off", "Invalid Number", "Invalid No", "Called by mistake", "No Network", "wrong no.", "no answer", "Not Picked Up", "Not Attended", "Call Log Added", "Pending"];
+export const DEFAULT_CONNECTED_STATUSES = ["Info Given", "Info given", "Interested", "Previous Program Pending", "Reg.Done", "reminder", "Reminder Given", "Reminder Pending", "Query", "Already Reg.d", "Next Time", "Next time", "Shivir done", "Not possible", "Not Interested", "Not interested"];
 export const DEFAULT_SALES_OUTCOME_OPTIONS = [
   "Info Given",
   "Interested",
@@ -155,7 +155,6 @@ export const getProgramContactStats = async (programId) => {
 const SETTINGS_CACHE_KEY = "crm_settings_options_cache";
 let settingsCache = null;
 let settingsFetchPromise = null;
-let lastSettingsFetchTime = 0;
 const settingsListeners = new Set();
 
 export const subscribeToSettingsOptions = (callback) => {
@@ -220,7 +219,6 @@ const fetchAndSyncSettings = async () => {
       if (!res.data.salesOutcomeOptions) {
         res.data.salesOutcomeOptions = DEFAULT_SALES_OUTCOME_OPTIONS;
       }
-      lastSettingsFetchTime = Date.now();
       settingsCache = res.data;
       try {
         if (typeof window !== "undefined") {
@@ -258,20 +256,14 @@ const fetchAndSyncSettings = async () => {
 
 export const getSettingsOptions = async (opts = {}) => {
   const forceRefresh = Boolean(opts && opts.forceRefresh);
-  const now = Date.now();
-  const isStale = forceRefresh || (now - lastSettingsFetchTime > 15000);
 
-  // If memory cache exists and forceRefresh is not requested: return 0ms immediately,
-  // and trigger a background revalidation if stale
+  // If memory cache exists and forceRefresh is not requested: return 0ms immediately
   if (settingsCache && !forceRefresh) {
     applyDynamicOptions(settingsCache);
-    if (isStale && !settingsFetchPromise) {
-      settingsFetchPromise = fetchAndSyncSettings();
-    }
     return settingsCache;
   }
 
-  // If local storage has it, use it for 0ms return, and trigger background revalidation if stale
+  // If local storage has it, use it for 0ms return
   try {
     const cachedStr = typeof window !== "undefined" ? localStorage.getItem(SETTINGS_CACHE_KEY) : null;
     if (cachedStr && !forceRefresh) {
@@ -282,9 +274,6 @@ export const getSettingsOptions = async (opts = {}) => {
         }
         settingsCache = parsed;
         applyDynamicOptions(parsed);
-        if (isStale && !settingsFetchPromise) {
-          settingsFetchPromise = fetchAndSyncSettings();
-        }
         return parsed;
       }
     }
@@ -297,13 +286,6 @@ export const getSettingsOptions = async (opts = {}) => {
   settingsFetchPromise = fetchAndSyncSettings();
   return settingsFetchPromise;
 };
-
-// Eager background sync on client startup
-if (typeof window !== "undefined") {
-  setTimeout(() => {
-    getSettingsOptions().catch(() => {});
-  }, 100);
-}
 
 export const updateCallCenterOptions = async (options) => {
   // Update memory and local cache immediately before API call so UI updates with 0ms delay!
@@ -323,7 +305,6 @@ export const updateCallCenterOptions = async (options) => {
   const res = await fetchAPI(`/api/admin/settings`, "POST", options);
   if (res && res.data) {
     settingsCache = res.data;
-    lastSettingsFetchTime = Date.now();
     try {
       if (typeof window !== "undefined") {
         localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(res.data));

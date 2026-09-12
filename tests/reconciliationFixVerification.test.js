@@ -59,12 +59,13 @@ console.log("✓ Interested & Registered People helpers passed!");
 console.log("\n3. Testing Call Status Classification Invariant...");
 const explicitNotConnectedStatuses = [
   "Busy", "Call Cut", "switched off", "Invalid No", "No Network", "wrong no.", "no answer",
-  "No answer", "Not Picked Up", "Not Connected", "Called by mistake", "wrong number", "no response", "invalid number"
+  "No answer", "Not Picked Up", "Not Connected", "Called by mistake", "wrong number", "no response", "invalid number",
+  "Not Attended", "not attended", "Call Log Added", "Pending"
 ];
 
 const explicitConnectedStatuses = [
   "Info given", "Interested", "Reg.Done", "reminder", "Query", "Already Reg.d", 
-  "Next time", "Shivir done", "Not possible", "Pending", "Not interested", "Not Attended", "Call Log Added",
+  "Next time", "Shivir done", "Not possible", "Not interested",
   "info given", "interested", "registered", "shivir", "attended"
 ];
 

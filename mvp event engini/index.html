@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TGF CRM — Event-Driven State Machine Studio</title>
+  
+  <!-- Inter Font matching TGF CRM -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+          },
+          boxShadow: {
+            'xs': '0 1px 2px rgba(0, 0, 0, 0.04)',
+            '2xs': '0 1px 2px rgba(0, 0, 0, 0.05)',
+            'card': '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05)'
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    body {
+      background-color: #f8fafc;
+      color: #0f172a;
+      font-family: 'Inter', sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .badge-pulse {
+      animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes pulse-ring {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: .75; transform: scale(1.05); }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-50">
+
+  <!-- ── TOP NAVIGATION BAR (Exact TGF CRM Style) ───────────────────────────── -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <!-- Left: Logo & Title -->
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-2xs">
+          <i data-lucide="layers" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-slate-900 tracking-tight text-base">TGF CRM</span>
+            <span class="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[11px] px-2 py-0.5 rounded-md font-semibold">
+              Event State Engine MVP
+            </span>
+          </div>
+          <p class="text-xs text-slate-500 font-medium">Pure Reducer • Zero Side-Effects • CRM V2 Light SaaS Theme</p>
+        </div>
+      </div>
+
+      <!-- Right: Status Pill & Reset -->
+      <div class="flex items-center gap-3">
+        <div class="hidden sm:flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-1 rounded-lg text-xs font-semibold">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+          Engine Active (Deterministic)
+        </div>
+        <button id="btnResetLead" class="inline-flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all shadow-2xs">
+          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+          Reset Lead
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── MAIN CONTENT CONTAINER ────────────────────────────────────────────── -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- ── 1-CLICK SCENARIOS BAR ───────────────────────────────────────────── -->
+    <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <i data-lucide="play-circle" class="w-4 h-4 text-indigo-600"></i>
+          <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Interactive Test Scenarios (1-Click Verification)</span>
+        </div>
+        <span class="text-xs text-slate-400">Click any preset to simulate the exact customer journey</span>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+        <!-- Scenario 1: Alumni Fix -->
+        <button id="presetScenario1" class="flex flex-col text-left p-3 rounded-lg border border-purple-200 bg-purple-50/50 hover:bg-purple-50 hover:border-purple-300 transition-all group">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-bold text-purple-900 group-hover:text-purple-700 flex items-center gap-1">
+              <i data-lucide="shield-check" class="w-3.5 h-3.5 text-purple-600"></i> 1. Pradnya Shah
+            </span>
+            <span class="text-[10px] bg-purple-100 text-purple-800 px-1.5 py-0.2 rounded font-semibold">Alumni</span>
+          </div>
+          <p class="text-[11px] text-slate-600 leading-tight">Already Reg.d moves to Alumni with ZERO false reg credit.</p>
+        </button>
+
+        <!-- Scenario 2: Non-regression -->
+        <button id="presetScenario2" class="flex flex-col text-left p-3 rounded-lg border border-amber-200 bg-amber-50/50 hover:bg-amber-50 hover:border-amber-300 transition-all group">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-bold text-amber-900 group-hover:text-amber-700 flex items-center gap-1">
+              <i data-lucide="lock" class="w-3.5 h-3.5 text-amber-600"></i> 2. Busy Follow-up
+            </span>
+            <span class="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded font-semibold">Guard</span>
+          </div>
+          <p class="text-[11px] text-slate-600 leading-tight">Lead in Nurture gets Busy call. Preserves high stage.</p>
+        </button>
+
+        <!-- Scenario 3: 5 Dials Auto Close -->
+        <button id="presetScenario3" class="flex flex-col text-left p-3 rounded-lg border border-rose-200 bg-rose-50/50 hover:bg-rose-50 hover:border-rose-300 transition-all group">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-bold text-rose-900 group-hover:text-rose-700 flex items-center gap-1">
+              <i data-lucide="phone-missed" class="w-3.5 h-3.5 text-rose-600"></i> 3. 5 Failed Dials
+            </span>
+            <span class="text-[10px] bg-rose-100 text-rose-800 px-1.5 py-0.2 rounded font-semibold">Auto-Close</span>
+          </div>
+          <p class="text-[11px] text-slate-600 leading-tight">5 consecutive failed attempts auto-close to Invalid.</p>
+        </button>
+
+        <!-- Scenario 4: True Registration -->
+        <button id="presetScenario4" class="flex flex-col text-left p-3 rounded-lg border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50 hover:border-emerald-300 transition-all group">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-bold text-emerald-900 group-hover:text-emerald-700 flex items-center gap-1">
+              <i data-lucide="award" class="w-3.5 h-3.5 text-emerald-600"></i> 4. True Reg.Done
+            </span>
+            <span class="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded font-semibold">Sale Won</span>
+          </div>
+          <p class="text-[11px] text-slate-600 leading-tight">Real conversion emits RECORD_TRUE_REGISTRATION.</p>
+        </button>
+
+        <!-- Scenario 5: Query Isolation -->
+        <button id="presetScenario5" class="flex flex-col text-left p-3 rounded-lg border border-sky-200 bg-sky-50/50 hover:bg-sky-50 hover:border-sky-300 transition-all group">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-bold text-sky-900 group-hover:text-sky-700 flex items-center gap-1">
+              <i data-lucide="help-circle" class="w-3.5 h-3.5 text-sky-600"></i> 5. Support Query
+            </span>
+            <span class="text-[10px] bg-sky-100 text-sky-800 px-1.5 py-0.2 rounded font-semibold">Multi-Track</span>
+          </div>
+          <p class="text-[11px] text-slate-600 leading-tight">Solved query updates status without resetting sales funnel.</p>
+        </button>
+      </div>
+    </div>
+
+    <!-- ── PIPELINE VISUAL TRACKER ─────────────────────────────────────────── -->
+    <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <i data-lucide="git-branch" class="w-4 h-4 text-indigo-600"></i>
+          <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Live Visual Pipeline Stage Flow</span>
+        </div>
+        <span class="text-xs text-slate-500 font-medium" id="funnelPositionIndicator">Active: 1. New Lead</span>
+      </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2" id="pipelineFlowContainer">
+        <!-- Stages will be populated by JS -->
+      </div>
+    </div>
+
+    <!-- ── 2-COLUMN SIMULATION WORKSPACE ────────────────────────────────────── -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- ── LEFT COLUMN: ACTIVE LEAD & CALL LOGGING (5 cols) ──────────────── -->
+      <div class="lg:col-span-5 space-y-6">
+
+        <!-- Active Lead Card -->
+        <div class="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
+          <div class="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i data-lucide="user-check" class="w-4 h-4 text-indigo-600"></i>
+              <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Active Lead State</h3>
+            </div>
+            <span id="leadStatusPill" class="text-xs px-2.5 py-0.5 rounded-md font-semibold border border-slate-300 bg-slate-50 text-slate-700">
+              1. New Lead
+            </span>
+          </div>
+
+          <div class="p-4 space-y-4">
+            <!-- Lead Profile Info -->
+            <div class="flex items-start justify-between">
+              <div>
+                <h2 id="leadName" class="text-base font-bold text-slate-900">Pradnya Shah</h2>
+                <div class="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                  <span class="flex items-center gap-1"><i data-lucide="phone" class="w-3 h-3"></i> +91 98690 01572</span>
+                  <span>•</span>
+                  <span id="leadCity">Mumbai, MH</span>
+                </div>
+              </div>
+              <div class="text-right">
+                <span class="text-[10px] uppercase font-bold text-slate-400 block">Dial Attempts</span>
+                <span id="leadAttemptBadge" class="text-xs font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 inline-block mt-0.5">
+                  0 / 5
+                </span>
+              </div>
+            </div>
+
+            <!-- Current Stage Spotlight Box -->
+            <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/50 space-y-2">
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-slate-500 font-medium">Pipeline Stage:</span>
+                <span id="leadStageDetail" class="font-bold text-slate-800">1. New Lead</span>
+              </div>
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-slate-500 font-medium">Query Desk Status:</span>
+                <span id="leadQueryDetail" class="font-semibold text-slate-600">None</span>
+              </div>
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-slate-500 font-medium">Last Interaction:</span>
+                <span id="leadLastInteraction" class="text-slate-600 font-medium">Awaiting first call</span>
+              </div>
+            </div>
+
+            <!-- Program Relationships Section -->
+            <div>
+              <span class="text-xs font-semibold text-slate-600 block mb-2">Program Relationships:</span>
+              <div id="programRelationshipsList" class="space-y-1.5">
+                <span class="text-xs text-slate-400 italic">No previous program relationships recorded.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Call Event Logger (Dispatcher) -->
+        <div class="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
+          <div class="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i data-lucide="phone-call" class="w-4 h-4 text-indigo-600"></i>
+              <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Dispatch Pipeline Event</h3>
+            </div>
+            <span class="text-[11px] text-slate-500">Triggers Pure Reducer</span>
+          </div>
+
+          <div class="p-4 space-y-4">
+            <!-- Call Purpose Toggle -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1.5">Call Purpose</label>
+              <div class="grid grid-cols-3 gap-2">
+                <button type="button" class="purpose-btn active py-1.5 px-3 text-xs font-semibold rounded-lg border border-indigo-600 bg-indigo-600 text-white transition-all text-center" data-purpose="SALES">
+                  Sales
+                </button>
+                <button type="button" class="purpose-btn py-1.5 px-3 text-xs font-semibold rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-all text-center" data-purpose="QUERY">
+                  Query
+                </button>
+                <button type="button" class="purpose-btn py-1.5 px-3 text-xs font-semibold rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-all text-center" data-purpose="REMINDER">
+                  Reminder
+                </button>
+              </div>
+            </div>
+
+            <!-- Program Selector -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1.5">Program / Shivir</label>
+              <select id="selectProgram" class="w-full text-xs font-medium bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+                <option value="Residential Basic">Residential Basic (3 Days)</option>
+                <option value="Basic Online">Basic Online</option>
+                <option value="Residential Advanced">Residential Advanced</option>
+                <option value="General">General Shivir</option>
+              </select>
+            </div>
+
+            <!-- Call Outcome Selection Grid -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1.5">Select Call Outcome</label>
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5" id="outcomePillsContainer">
+                <button type="button" class="outcome-pill p-2 text-xs font-medium rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800 text-left transition-all" data-outcome="Info Given">Info Given</button>
+                <button type="button" class="outcome-pill p-2 text-xs font-medium rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800 text-left transition-all" data-outcome="Interested">Interested</button>
+                <button type="button" class="outcome-pill p-2 text-xs font-medium rounded-lg border border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100/60 text-emerald-900 font-semibold text-left transition-all" data-outcome="Reg.Done">Reg.Done 🏆</button>
+                <button type="button" class="outcome-pill p-2 text-xs font-medium rounded-lg border border-purple-200 bg-purple-50/60 hover:bg-purple-100/60 text-purple-900 font-semibold text-left transition-all" data-outcome="Already Reg.d">Already Reg.d 🎓</button>
+                <button type="button" class="outcome-pill p-2 text-xs font-medium rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800 text-left transition-all" data-outcome="Shivir done">Shivir done</button>
+                <button type="button" class="outcome-pill p-2 text-xs font-medium rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800 text-left transition-all" data-outcome="Next time">Next time</button>
+                <button type="button" class="outcome-pill p-2 text-xs font-medium rounded-lg border border-amber-200 bg-amber-50/60 hover:bg-amber-100/60 text-amber-900 text-left transition-all" data-outcome="Busy">Busy (Dropped)</button>
+                <button type="button" class="outcome-pill p-2 text-xs font-medium rounded-lg border border-amber-200 bg-amber-50/60 hover:bg-amber-100/60 text-amber-900 text-left transition-all" data-outcome="No Answer">No Answer</button>
+                <button type="button" class="outcome-pill p-2 text-xs font-medium rounded-lg border border-rose-200 bg-rose-50/60 hover:bg-rose-100/60 text-rose-900 text-left transition-all" data-outcome="Not Interested">Not Interested</button>
+                <button type="button" class="outcome-pill p-2 text-xs font-medium rounded-lg border border-zinc-200 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-left transition-all" data-outcome="Invalid Number">Invalid Number</button>
+                <button type="button" class="outcome-pill p-2 text-xs font-medium rounded-lg border border-blue-200 bg-blue-50/60 hover:bg-blue-100/60 text-blue-900 text-left transition-all" data-outcome="Solved">Solved (Query)</button>
+              </div>
+            </div>
+
+            <!-- Custom Status Input & Dispatch Button -->
+            <div class="pt-2 border-t border-slate-100 space-y-2">
+              <div class="flex gap-2">
+                <input type="text" id="customOutcomeInput" placeholder="Or type outcome..." class="flex-1 text-xs bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
+                <button type="button" id="btnDispatchCustom" class="inline-flex items-center justify-center font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-4 py-2 transition-all shadow-2xs">
+                  <i data-lucide="send" class="w-3.5 h-3.5 mr-1.5"></i>
+                  Dispatch
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── RIGHT COLUMN: ACTIONS EMITTED & AUDIT TIMELINE (7 cols) ───────── -->
+      <div class="lg:col-span-7 space-y-6">
+
+        <!-- Emitted Actions Inspector Card -->
+        <div class="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
+          <div class="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i data-lucide="activity" class="w-4 h-4 text-indigo-600"></i>
+              <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Emitted Discrete Actions</h3>
+            </div>
+            <span id="actionsCountBadge" class="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-semibold border border-slate-200">
+              0 Actions
+            </span>
+          </div>
+
+          <div class="p-4 space-y-4">
+            <!-- Emitted Actions Badges Container -->
+            <div id="emittedActionsContainer" class="flex flex-wrap gap-2">
+              <span class="text-xs text-slate-400 italic">No events processed yet. Click an outcome or preset to begin.</span>
+            </div>
+
+            <!-- Security & Integrity Flags -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-100">
+              <!-- Flag 1: True Registration Credit -->
+              <div id="flagTrueReg" class="p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 text-xs">
+                <div class="flex items-center gap-1.5 font-semibold text-slate-700 mb-0.5">
+                  <i data-lucide="award" class="w-3.5 h-3.5 text-slate-400"></i>
+                  Registration Credit
+                </div>
+                <span class="text-[11px] font-bold text-slate-500">Inactive</span>
+              </div>
+
+              <!-- Flag 2: Alumni Relationship -->
+              <div id="flagAlumni" class="p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 text-xs">
+                <div class="flex items-center gap-1.5 font-semibold text-slate-700 mb-0.5">
+                  <i data-lucide="graduation-cap" class="w-3.5 h-3.5 text-slate-400"></i>
+                  Alumni Protection
+                </div>
+                <span class="text-[11px] font-bold text-slate-500">Inactive</span>
+              </div>
+
+              <!-- Flag 3: Non-Regression Guard -->
+              <div id="flagNoRegression" class="p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 text-xs">
+                <div class="flex items-center gap-1.5 font-semibold text-slate-700 mb-0.5">
+                  <i data-lucide="shield" class="w-3.5 h-3.5 text-slate-400"></i>
+                  Non-Regression Guard
+                </div>
+                <span class="text-[11px] font-bold text-slate-500">Inactive</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Real-Time Audit Log Timeline -->
+        <div class="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
+          <div class="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i data-lucide="clock" class="w-4 h-4 text-indigo-600"></i>
+              <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Real-Time Event Audit Trail</h3>
+            </div>
+            <button id="btnClearLogs" class="text-slate-400 hover:text-slate-600 text-xs font-medium transition-all">Clear</button>
+          </div>
+
+          <div class="p-4 max-h-[380px] overflow-y-auto space-y-3" id="auditLogsTimeline">
+            <div class="text-center py-8 text-slate-400 text-xs">
+              <i data-lucide="inbox" class="w-8 h-8 mx-auto mb-2 text-slate-300"></i>
+              Audit log is ready. Dispatch an event to see pure reducer state transitions in real time.
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ── FOOTER ────────────────────────────────────────────────────────────── -->
+  <footer class="bg-white border-t border-slate-200 py-3 text-center text-xs text-slate-400">
+    TGF Call Center CRM • Event-Driven State Machine MVP • Strict Zero Production Code Modification
+  </footer>
+
+  <!-- ── ENGINE IMPLEMENTATION & INTERACTION SCRIPT ────────────────────────── -->
+  <script>
+    // 1. CONSTANTS & STAGES (Exact CRM mappings)
+    const PIPELINE_STAGES = {
+      NEW_LEAD:                 "1. New Lead",
+      ATTEMPTING:               "2. Attempting Contact",
+      INFO_GIVEN:               "3. Information Given",
+      PREVIOUS_PROGRAM_PENDING: "Previous Program Pending",
+      NURTURE_INTERESTED:       "4. Nurture / Interested",
+      FUTURE_POOL:              "5. Future Pool",
+      REGISTERED_WON:           "6. Registered / Won",
+      EXISTING_ALUMNI:          "Existing Alumni",
+      CLOSED_LOST:              "Closed / Lost",
+      CLOSED_INVALID:           "Closed / Invalid",
+    };
+
+    const STAGE_RANKS = {
+      [PIPELINE_STAGES.NEW_LEAD]: 1,
+      [PIPELINE_STAGES.ATTEMPTING]: 2,
+      [PIPELINE_STAGES.INFO_GIVEN]: 3,
+      [PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING]: 3.2,
+      [PIPELINE_STAGES.NURTURE_INTERESTED]: 4,
+      [PIPELINE_STAGES.FUTURE_POOL]: 5,
+      [PIPELINE_STAGES.REGISTERED_WON]: 6,
+      [PIPELINE_STAGES.EXISTING_ALUMNI]: 6,
+      [PIPELINE_STAGES.CLOSED_LOST]: 7,
+      [PIPELINE_STAGES.CLOSED_INVALID]: 7,
+    };
+
+    const STAGE_COLORS = {
+      "1. New Lead": "border-slate-300 bg-slate-50 text-slate-700",
+      "2. Attempting Contact": "border-amber-300 bg-amber-50 text-amber-800",
+      "3. Information Given": "border-sky-300 bg-sky-50 text-sky-800",
+      "Previous Program Pending": "border-purple-300 bg-purple-50 text-purple-800",
+      "4. Nurture / Interested": "border-indigo-300 bg-indigo-50 text-indigo-800",
+      "5. Future Pool": "border-teal-300 bg-teal-50 text-teal-800",
+      "6. Registered / Won": "border-emerald-300 bg-emerald-50 text-emerald-800",
+      "Existing Alumni": "border-violet-300 bg-violet-50 text-violet-800",
+      "Closed / Lost": "border-rose-300 bg-rose-50 text-rose-800",
+      "Closed / Invalid": "border-zinc-300 bg-zinc-50 text-zinc-800",
+    };
+
+    const ACTIONS = {
+      SET_STAGE: "SET_STAGE",
+      ADD_PROGRAM_RELATIONSHIP: "ADD_PROGRAM_RELATIONSHIP",
+      RECORD_TRUE_REGISTRATION: "RECORD_TRUE_REGISTRATION",
+      AUTO_CLOSE_UNREACHABLE: "AUTO_CLOSE_UNREACHABLE",
+      PRESERVE_STAGE_NO_REGRESSION: "PRESERVE_STAGE_NO_REGRESSION",
+      SET_QUERY_STATUS: "SET_QUERY_STATUS",
+    };
+
+    const MACHINE_BLUEPRINT = {
+      globalOutcomes: {
+        "reg.done": { targetStage: PIPELINE_STAGES.REGISTERED_WON, actions: [ACTIONS.SET_STAGE, ACTIONS.RECORD_TRUE_REGISTRATION] },
+        "already reg.d": { targetStage: PIPELINE_STAGES.EXISTING_ALUMNI, actions: [ACTIONS.SET_STAGE, ACTIONS.ADD_PROGRAM_RELATIONSHIP] },
+        "already reg. done": { targetStage: PIPELINE_STAGES.EXISTING_ALUMNI, actions: [ACTIONS.SET_STAGE, ACTIONS.ADD_PROGRAM_RELATIONSHIP] },
+        "already registered": { targetStage: PIPELINE_STAGES.EXISTING_ALUMNI, actions: [ACTIONS.SET_STAGE, ACTIONS.ADD_PROGRAM_RELATIONSHIP] },
+        "shivir done": { targetStage: PIPELINE_STAGES.EXISTING_ALUMNI, actions: [ACTIONS.SET_STAGE, ACTIONS.ADD_PROGRAM_RELATIONSHIP] },
+        "shivir already done": { targetStage: PIPELINE_STAGES.EXISTING_ALUMNI, actions: [ACTIONS.SET_STAGE, ACTIONS.ADD_PROGRAM_RELATIONSHIP] },
+        "invalid number": { targetStage: PIPELINE_STAGES.CLOSED_INVALID, actions: [ACTIONS.SET_STAGE] },
+        "not interested": { targetStage: PIPELINE_STAGES.CLOSED_LOST, actions: [ACTIONS.SET_STAGE] }
+      },
+      outcomesByStage: {
+        [PIPELINE_STAGES.NEW_LEAD]: {
+          "info given": { targetStage: PIPELINE_STAGES.INFO_GIVEN, actions: [ACTIONS.SET_STAGE] },
+          "interested": { targetStage: PIPELINE_STAGES.NURTURE_INTERESTED, actions: [ACTIONS.SET_STAGE] },
+          "previous program pending": { targetStage: PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING, actions: [ACTIONS.SET_STAGE] },
+          "next time": { targetStage: PIPELINE_STAGES.FUTURE_POOL, actions: [ACTIONS.SET_STAGE] },
+        },
+        [PIPELINE_STAGES.ATTEMPTING]: {
+          "info given": { targetStage: PIPELINE_STAGES.INFO_GIVEN, actions: [ACTIONS.SET_STAGE] },
+          "interested": { targetStage: PIPELINE_STAGES.NURTURE_INTERESTED, actions: [ACTIONS.SET_STAGE] },
+          "previous program pending": { targetStage: PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING, actions: [ACTIONS.SET_STAGE] },
+          "next time": { targetStage: PIPELINE_STAGES.FUTURE_POOL, actions: [ACTIONS.SET_STAGE] },
+        },
+        [PIPELINE_STAGES.INFO_GIVEN]: {
+          "interested": { targetStage: PIPELINE_STAGES.NURTURE_INTERESTED, actions: [ACTIONS.SET_STAGE] },
+          "previous program pending": { targetStage: PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING, actions: [ACTIONS.SET_STAGE] },
+          "next time": { targetStage: PIPELINE_STAGES.FUTURE_POOL, actions: [ACTIONS.SET_STAGE] },
+        },
+        [PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING]: {
+          "interested": { targetStage: PIPELINE_STAGES.NURTURE_INTERESTED, actions: [ACTIONS.SET_STAGE] },
+          "next time": { targetStage: PIPELINE_STAGES.FUTURE_POOL, actions: [ACTIONS.SET_STAGE] },
+        },
+        [PIPELINE_STAGES.NURTURE_INTERESTED]: {
+          "next time": { targetStage: PIPELINE_STAGES.FUTURE_POOL, actions: [ACTIONS.SET_STAGE] },
+        },
+        [PIPELINE_STAGES.FUTURE_POOL]: {
+          "interested": { targetStage: PIPELINE_STAGES.NURTURE_INTERESTED, actions: [ACTIONS.SET_STAGE] },
+          "info given": { targetStage: PIPELINE_STAGES.INFO_GIVEN, actions: [ACTIONS.SET_STAGE] },
+        },
+        [PIPELINE_STAGES.REGISTERED_WON]: {},
+        [PIPELINE_STAGES.EXISTING_ALUMNI]: {
+          "info given": { targetStage: PIPELINE_STAGES.INFO_GIVEN, actions: [ACTIONS.SET_STAGE] },
+          "interested": { targetStage: PIPELINE_STAGES.NURTURE_INTERESTED, actions: [ACTIONS.SET_STAGE] },
+        }
+      }
+    };
+
+    const UNCONNECTED_STATUSES = new Set([
+      "not connected", "busy", "call cut", "switched off",
+      "no answer", "no network", "na", "not attended", "not picked up"
+    ]);
+
+    // 2. PURE REDUCER ENGINE FUNCTION
+    function processPipelineEvent(currentState, event) {
+      const currentStage = currentState.pipelineStage || PIPELINE_STAGES.NEW_LEAD;
+      const currentAttempts = currentState.attemptCount || 0;
+      const purpose = (event.callPurpose || "SALES").toUpperCase().trim();
+      const rawStatus = (event.status || event.outcome || "").trim().toLowerCase();
+      const program = event.calledFor || currentState.calledFor || "General";
+      const emittedActions = [];
+
+      // Track 1: Query & Reminder Isolation
+      if (purpose === "QUERY") {
+        const qStatus = rawStatus.includes("solve") ? "Solved" : "Pending";
+        emittedActions.push({ type: ACTIONS.SET_QUERY_STATUS, queryStatus: qStatus });
+        return {
+          nextState: { ...currentState, queryStatus: qStatus },
+          emittedActions,
+          logMessage: `[QUERY ISOLATION] Kept sales stage "${currentStage}", updated queryStatus to "${qStatus}".`
+        };
+      }
+
+      if (purpose === "REMINDER") {
+        return {
+          nextState: { ...currentState, lastReminderAt: new Date().toISOString() },
+          emittedActions,
+          logMessage: `[REMINDER ISOLATION] Kept sales stage "${currentStage}", logged reminder event.`
+        };
+      }
+
+      // Track 2: Unconnected Calls & 5-Attempt Auto-Close
+      if (UNCONNECTED_STATUSES.has(rawStatus)) {
+        const newAttemptCount = currentAttempts + 1;
+        const currentRank = STAGE_RANKS[currentStage] || 1;
+
+        if (newAttemptCount >= 5 && currentRank <= 2) {
+          emittedActions.push({ type: ACTIONS.AUTO_CLOSE_UNREACHABLE, reason: "5 Unanswered Dial Attempts" });
+          return {
+            nextState: {
+              ...currentState,
+              pipelineStage: PIPELINE_STAGES.CLOSED_INVALID,
+              attemptCount: newAttemptCount,
+              closedReason: "Automated: 5 Unanswered Dial Attempts"
+            },
+            emittedActions,
+            logMessage: `[AUTO-CLOSE] Reached 5 failed dials. Transitioned to "${PIPELINE_STAGES.CLOSED_INVALID}".`
+          };
+        }
+
+        if (currentRank > 2) {
+          emittedActions.push({ type: ACTIONS.PRESERVE_STAGE_NO_REGRESSION });
+          return {
+            nextState: { ...currentState, attemptCount: newAttemptCount },
+            emittedActions,
+            logMessage: `[NO-REGRESSION] Unconnected dial ignored for high-rank lead. Kept "${currentStage}".`
+          };
+        }
+
+        emittedActions.push({ type: ACTIONS.SET_STAGE, targetStage: PIPELINE_STAGES.ATTEMPTING });
+        return {
+          nextState: {
+            ...currentState,
+            pipelineStage: PIPELINE_STAGES.ATTEMPTING,
+            attemptCount: newAttemptCount
+          },
+          emittedActions,
+          logMessage: `[ATTEMPT] Dial recorded (Attempt #${newAttemptCount}). Moved to "${PIPELINE_STAGES.ATTEMPTING}".`
+        };
+      }
+
+      // Track 3: Global Outcomes
+      const globalMatch = MACHINE_BLUEPRINT.globalOutcomes[rawStatus];
+      if (globalMatch) {
+        globalMatch.actions.forEach(actionType => {
+          if (actionType === ACTIONS.RECORD_TRUE_REGISTRATION) {
+            emittedActions.push({ type: ACTIONS.RECORD_TRUE_REGISTRATION, program, isAttenderCreditEligible: true });
+          } else if (actionType === ACTIONS.ADD_PROGRAM_RELATIONSHIP) {
+            emittedActions.push({ type: ACTIONS.ADD_PROGRAM_RELATIONSHIP, program, status: "Existing Alumni" });
+          } else if (actionType === ACTIONS.SET_STAGE) {
+            emittedActions.push({ type: ACTIONS.SET_STAGE, targetStage: globalMatch.targetStage });
+          }
+        });
+
+        const isReg = emittedActions.some(a => a.type === ACTIONS.RECORD_TRUE_REGISTRATION);
+        return {
+          nextState: {
+            ...currentState,
+            pipelineStage: globalMatch.targetStage,
+            attemptCount: 0,
+            programRelationships: [
+              ...(currentState.programRelationships || []).filter(r => r.program !== program),
+              { program, status: globalMatch.targetStage === PIPELINE_STAGES.EXISTING_ALUMNI ? "Existing Alumni" : "Registered" }
+            ]
+          },
+          emittedActions,
+          logMessage: `[GLOBAL MATCH] Outcome "${event.status}" ➔ "${globalMatch.targetStage}". RegisteredCredit=${isReg}.`
+        };
+      }
+
+      // Track 4: Stage-Specific Funnel Progression
+      const stageRules = MACHINE_BLUEPRINT.outcomesByStage[currentStage] || {};
+      const stageTransition = stageRules[rawStatus];
+      if (stageTransition) {
+        emittedActions.push({ type: ACTIONS.SET_STAGE, targetStage: stageTransition.targetStage });
+        return {
+          nextState: {
+            ...currentState,
+            pipelineStage: stageTransition.targetStage,
+            attemptCount: 0
+          },
+          emittedActions,
+          logMessage: `[STAGE MOVE] Progressed from "${currentStage}" ➔ "${stageTransition.targetStage}".`
+        };
+      }
+
+      // Fallback: Preserve stage
+      emittedActions.push({ type: ACTIONS.PRESERVE_STAGE_NO_REGRESSION });
+      return {
+        nextState: currentState,
+        emittedActions,
+        logMessage: `[GUARD] Outcome "${event.status}" not permitted from "${currentStage}". Preserved current stage.`
+      };
+    }
+
+    // 3. UI STATE & INTERACTION LOGIC
+    let activeLead = {
+      id: "lead-001",
+      name: "Pradnya Shah",
+      phone: "+91 98690 01572",
+      city: "Mumbai, MH",
+      pipelineStage: PIPELINE_STAGES.NEW_LEAD,
+      attemptCount: 0,
+      queryStatus: "None",
+      calledFor: "Residential Basic",
+      programRelationships: []
+    };
+
+    let activePurpose = "SALES";
+    let auditTrail = [];
+
+    // Initialize Pipeline Flow Visualizer
+    const mainFunnelStages = [
+      PIPELINE_STAGES.NEW_LEAD,
+      PIPELINE_STAGES.ATTEMPTING,
+      PIPELINE_STAGES.INFO_GIVEN,
+      PIPELINE_STAGES.NURTURE_INTERESTED,
+      PIPELINE_STAGES.FUTURE_POOL,
+      PIPELINE_STAGES.REGISTERED_WON,
+    ];
+
+    function renderPipelineFlow() {
+      const container = document.getElementById("pipelineFlowContainer");
+      container.innerHTML = "";
+
+      mainFunnelStages.forEach((stage, idx) => {
+        const isActive = activeLead.pipelineStage === stage;
+        const colorClass = STAGE_COLORS[stage] || "border-slate-300 bg-slate-50 text-slate-700";
+        
+        const card = document.createElement("div");
+        card.className = `p-2.5 rounded-lg border text-center transition-all ${
+          isActive 
+            ? `${colorClass} ring-2 ring-indigo-500 font-bold shadow-xs scale-102` 
+            : 'border-slate-200 bg-white text-slate-500 opacity-70'
+        }`;
+
+        card.innerHTML = `
+          <div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Stage ${idx + 1}</div>
+          <div class="text-xs mt-0.5 truncate ${isActive ? 'font-bold' : 'font-medium'}">${stage.replace(/^\\d+\\.\\s*/, '')}</div>
+          ${isActive ? '<span class="inline-block w-1.5 h-1.5 rounded-full bg-indigo-600 mt-1"></span>' : ''}
+        `;
+        container.appendChild(card);
+      });
+
+      // Update indicator text
+      document.getElementById("funnelPositionIndicator").textContent = `Active: ${activeLead.pipelineStage}`;
+    }
+
+    function updateLeadUI(lastResult, lastEvent) {
+      // Name & details
+      document.getElementById("leadName").textContent = activeLead.name;
+      document.getElementById("leadCity").textContent = activeLead.city;
+      document.getElementById("leadStageDetail").textContent = activeLead.pipelineStage;
+      document.getElementById("leadQueryDetail").textContent = activeLead.queryStatus || "None";
+      
+      // Stage badge color
+      const stagePill = document.getElementById("leadStatusPill");
+      stagePill.textContent = activeLead.pipelineStage;
+      stagePill.className = `text-xs px-2.5 py-0.5 rounded-md font-semibold border ${STAGE_COLORS[activeLead.pipelineStage] || 'border-slate-300 bg-slate-50 text-slate-700'}`;
+
+      // Attempts
+      const attemptBadge = document.getElementById("leadAttemptBadge");
+      attemptBadge.textContent = `${activeLead.attemptCount} / 5`;
+      if (activeLead.attemptCount >= 5) {
+        attemptBadge.className = "text-xs font-bold px-2 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200 inline-block mt-0.5";
+      } else if (activeLead.attemptCount > 0) {
+        attemptBadge.className = "text-xs font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 inline-block mt-0.5";
+      } else {
+        attemptBadge.className = "text-xs font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 inline-block mt-0.5";
+      }
+
+      // Relationships
+      const relContainer = document.getElementById("programRelationshipsList");
+      if (!activeLead.programRelationships || activeLead.programRelationships.length === 0) {
+        relContainer.innerHTML = `<span class="text-xs text-slate-400 italic">No previous program relationships recorded.</span>`;
+      } else {
+        relContainer.innerHTML = activeLead.programRelationships.map(r => `
+          <div class="flex items-center justify-between p-2 rounded-md bg-white border border-slate-200 text-xs shadow-2xs">
+            <span class="font-medium text-slate-700">${r.program}</span>
+            <span class="px-2 py-0.5 rounded font-semibold text-[11px] ${r.status === 'Existing Alumni' ? 'bg-purple-100 text-purple-800' : 'bg-emerald-100 text-emerald-800'}">
+              ${r.status}
+            </span>
+          </div>
+        `).join('');
+      }
+
+      // Last interaction
+      if (lastEvent) {
+        document.getElementById("leadLastInteraction").textContent = `${lastEvent.status || lastEvent.outcome} (${lastEvent.callPurpose})`;
+      }
+
+      renderPipelineFlow();
+      updateActionsUI(lastResult);
+    }
+
+    function updateActionsUI(result) {
+      if (!result) return;
+
+      const container = document.getElementById("emittedActionsContainer");
+      document.getElementById("actionsCountBadge").textContent = `${result.emittedActions.length} Action${result.emittedActions.length === 1 ? '' : 's'}`;
+
+      container.innerHTML = result.emittedActions.map(action => {
+        let badgeColor = "bg-slate-100 text-slate-700 border-slate-200";
+        if (action.type === ACTIONS.RECORD_TRUE_REGISTRATION) badgeColor = "bg-emerald-100 text-emerald-800 border-emerald-300 font-bold";
+        if (action.type === ACTIONS.ADD_PROGRAM_RELATIONSHIP) badgeColor = "bg-purple-100 text-purple-800 border-purple-300 font-bold";
+        if (action.type === ACTIONS.AUTO_CLOSE_UNREACHABLE) badgeColor = "bg-rose-100 text-rose-800 border-rose-300 font-bold";
+        if (action.type === ACTIONS.PRESERVE_STAGE_NO_REGRESSION) badgeColor = "bg-sky-100 text-sky-800 border-sky-300 font-semibold";
+        if (action.type === ACTIONS.SET_STAGE) badgeColor = "bg-indigo-50 text-indigo-700 border-indigo-200";
+
+        let detail = "";
+        if (action.targetStage) detail = ` ➔ "${action.targetStage}"`;
+        if (action.program) detail += ` (${action.program})`;
+
+        return `<span class="inline-flex items-center text-xs px-2.5 py-1 rounded-md border font-mono ${badgeColor}">
+          ${action.type}${detail}
+        </span>`;
+      }).join('');
+
+      // Update Flags
+      const hasReg = result.emittedActions.some(a => a.type === ACTIONS.RECORD_TRUE_REGISTRATION);
+      const hasAlumni = result.emittedActions.some(a => a.type === ACTIONS.ADD_PROGRAM_RELATIONSHIP);
+      const hasNoRegress = result.emittedActions.some(a => a.type === ACTIONS.PRESERVE_STAGE_NO_REGRESSION);
+
+      // Flag 1: True Reg
+      const flagReg = document.getElementById("flagTrueReg");
+      if (hasReg) {
+        flagReg.className = "p-2.5 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-800 text-xs";
+        flagReg.querySelector("span").textContent = "Active (Credited!)";
+        flagReg.querySelector("span").className = "text-[11px] font-bold text-emerald-700";
+      } else {
+        flagReg.className = "p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 text-xs";
+        flagReg.querySelector("span").textContent = "Inactive (No Credit)";
+        flagReg.querySelector("span").className = "text-[11px] font-bold text-slate-500";
+      }
+
+      // Flag 2: Alumni Protection
+      const flagAlm = document.getElementById("flagAlumni");
+      if (hasAlumni) {
+        flagAlm.className = "p-2.5 rounded-lg border border-purple-300 bg-purple-50 text-purple-800 text-xs";
+        flagAlm.querySelector("span").textContent = "Active (Preserved Alumni)";
+        flagAlm.querySelector("span").className = "text-[11px] font-bold text-purple-700";
+      } else {
+        flagAlm.className = "p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 text-xs";
+        flagAlm.querySelector("span").textContent = "Inactive";
+        flagAlm.querySelector("span").className = "text-[11px] font-bold text-slate-500";
+      }
+
+      // Flag 3: Non-regression
+      const flagRegr = document.getElementById("flagNoRegression");
+      if (hasNoRegress) {
+        flagRegr.className = "p-2.5 rounded-lg border border-sky-300 bg-sky-50 text-sky-800 text-xs";
+        flagRegr.querySelector("span").textContent = "Protected (High Rank Kept)";
+        flagRegr.querySelector("span").className = "text-[11px] font-bold text-sky-700";
+      } else {
+        flagRegr.className = "p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 text-xs";
+        flagRegr.querySelector("span").textContent = "Inactive";
+        flagRegr.querySelector("span").className = "text-[11px] font-bold text-slate-500";
+      }
+
+      // Re-create icons in dynamically injected elements
+      lucide.createIcons();
+    }
+
+    function addAuditLog(beforeState, event, result) {
+      const logsTimeline = document.getElementById("auditLogsTimeline");
+      if (auditTrail.length === 0) logsTimeline.innerHTML = "";
+
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      auditTrail.unshift({ beforeState, event, result, timeStr });
+
+      const logItem = document.createElement("div");
+      logItem.className = "p-3 rounded-lg border border-slate-200 bg-white shadow-2xs space-y-1.5 transition-all hover:border-slate-300";
+
+      const hasReg = result.emittedActions.some(a => a.type === ACTIONS.RECORD_TRUE_REGISTRATION);
+      const isAlumni = result.emittedActions.some(a => a.type === ACTIONS.ADD_PROGRAM_RELATIONSHIP);
+
+      logItem.innerHTML = `
+        <div class="flex items-center justify-between text-xs">
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-slate-800">${event.status || event.outcome}</span>
+            <span class="text-[10px] px-1.5 py-0.2 rounded font-semibold bg-slate-100 text-slate-600">${event.callPurpose || 'SALES'}</span>
+            ${hasReg ? '<span class="text-[10px] px-1.5 py-0.2 rounded font-semibold bg-emerald-100 text-emerald-800">Registration Won</span>' : ''}
+            ${isAlumni ? '<span class="text-[10px] px-1.5 py-0.2 rounded font-semibold bg-purple-100 text-purple-800">Alumni Protected</span>' : ''}
+          </div>
+          <span class="text-[11px] text-slate-400 font-mono">${timeStr}</span>
+        </div>
+        <div class="flex items-center gap-2 text-xs">
+          <span class="text-slate-500 line-through">${beforeState.pipelineStage}</span>
+          <i data-lucide="arrow-right" class="w-3 h-3 text-slate-400"></i>
+          <span class="font-bold text-slate-800">${result.nextState.pipelineStage}</span>
+        </div>
+        <div class="text-[11px] text-slate-500 font-mono bg-slate-50 p-1.5 rounded border border-slate-100">
+          ${result.logMessage}
+        </div>
+      `;
+
+      logsTimeline.prepend(logItem);
+      lucide.createIcons();
+    }
+
+    function dispatch(outcomeText) {
+      const outcome = outcomeText || document.getElementById("customOutcomeInput").value.trim();
+      if (!outcome) return;
+
+      const program = document.getElementById("selectProgram").value;
+      const event = {
+        type: "CALL_LOGGED",
+        status: outcome,
+        outcome: outcome,
+        callPurpose: activePurpose,
+        calledFor: program,
+      };
+
+      const before = { ...activeLead };
+      const result = processPipelineEvent(activeLead, event);
+      activeLead = result.nextState;
+
+      updateLeadUI(result, event);
+      addAuditLog(before, event, result);
+      document.getElementById("customOutcomeInput").value = "";
+    }
+
+    // 4. EVENT LISTENERS
+    // Purpose Toggle Buttons
+    document.querySelectorAll(".purpose-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".purpose-btn").forEach(b => {
+          b.className = "purpose-btn py-1.5 px-3 text-xs font-semibold rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-all text-center";
+        });
+        btn.className = "purpose-btn active py-1.5 px-3 text-xs font-semibold rounded-lg border border-indigo-600 bg-indigo-600 text-white transition-all text-center";
+        activePurpose = btn.dataset.purpose;
+      });
+    });
+
+    // Outcome Pills Click
+    document.querySelectorAll(".outcome-pill").forEach(pill => {
+      pill.addEventListener("click", () => {
+        dispatch(pill.dataset.outcome);
+      });
+    });
+
+    // Custom Outcome Dispatch
+    document.getElementById("btnDispatchCustom").addEventListener("click", () => dispatch());
+    document.getElementById("customOutcomeInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") dispatch();
+    });
+
+    // Reset Lead
+    function resetLead() {
+      activeLead = {
+        id: "lead-001",
+        name: "Pradnya Shah",
+        phone: "+91 98690 01572",
+        city: "Mumbai, MH",
+        pipelineStage: PIPELINE_STAGES.NEW_LEAD,
+        attemptCount: 0,
+        queryStatus: "None",
+        calledFor: "Residential Basic",
+        programRelationships: []
+      };
+      updateLeadUI({ emittedActions: [] }, null);
+    }
+    document.getElementById("btnResetLead").addEventListener("click", resetLead);
+
+    // Clear Logs
+    document.getElementById("btnClearLogs").addEventListener("click", () => {
+      auditTrail = [];
+      document.getElementById("auditLogsTimeline").innerHTML = `
+        <div class="text-center py-8 text-slate-400 text-xs">
+          <i data-lucide="inbox" class="w-8 h-8 mx-auto mb-2 text-slate-300"></i>
+          Audit log is cleared.
+        </div>
+      `;
+      lucide.createIcons();
+    });
+
+    // Preset Scenarios Handlers
+    document.getElementById("presetScenario1").addEventListener("click", () => {
+      resetLead();
+      setTimeout(() => dispatch("Already Reg.d"), 100);
+    });
+
+    document.getElementById("presetScenario2").addEventListener("click", () => {
+      resetLead();
+      activeLead.pipelineStage = PIPELINE_STAGES.NURTURE_INTERESTED;
+      activeLead.name = "Amit Deshmukh";
+      updateLeadUI({ emittedActions: [] }, null);
+      setTimeout(() => dispatch("Busy"), 100);
+    });
+
+    document.getElementById("presetScenario3").addEventListener("click", () => {
+      resetLead();
+      activeLead.name = "Rahul Patil";
+      updateLeadUI({ emittedActions: [] }, null);
+      
+      const calls = ["Not Connected", "No Answer", "Switched Off", "Call Cut", "No Network"];
+      calls.forEach((c, idx) => {
+        setTimeout(() => dispatch(c), idx * 220);
+      });
+    });
+
+    document.getElementById("presetScenario4").addEventListener("click", () => {
+      resetLead();
+      activeLead.name = "Sneha Kulkarni";
+      updateLeadUI({ emittedActions: [] }, null);
+      
+      setTimeout(() => dispatch("Info Given"), 100);
+      setTimeout(() => dispatch("Interested"), 350);
+      setTimeout(() => dispatch("Reg.Done"), 600);
+    });
+
+    document.getElementById("presetScenario5").addEventListener("click", () => {
+      resetLead();
+      activeLead.name = "Vikram Joshi";
+      activeLead.pipelineStage = PIPELINE_STAGES.INFO_GIVEN;
+      updateLeadUI({ emittedActions: [] }, null);
+
+      // Switch to Query
+      document.querySelector('[data-purpose="QUERY"]').click();
+      setTimeout(() => dispatch("Solved"), 150);
+    });
+
+    // Initial Render
+    renderPipelineFlow();
+    updateLeadUI({ emittedActions: [] }, null);
+    lucide.createIcons();
+  </script>
+</body>
+</html>

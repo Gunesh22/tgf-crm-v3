@@ -86,8 +86,7 @@ export const CALLED_FOR_OPTIONS = [
 ];
 
 export const CALL_SOURCE_OPTIONS = Array.from(new Set([
-  ...SOURCE_OPTIONS,
-  ...CALLED_FOR_OPTIONS.filter(o => o !== "Reminder" && o !== "Query")
+  ...SOURCE_OPTIONS
 ]));
 
 export const CALL_DIRECTION_OPTIONS = ["outgoing", "incoming"];
@@ -139,11 +138,8 @@ export const CONNECTED_STATUSES = [
   "Next time",
   "Shivir done",
   "Not possible",
-  "Pending",
   "Not Interested",
-  "Not interested",
-  "Not Attended",
-  "Call Log Added"
+  "Not interested"
 ];
 
 export const NOT_CONNECTED_STATUSES = [
@@ -161,7 +157,13 @@ export const NOT_CONNECTED_STATUSES = [
   "Not Picked Up",
   "not picked up",
   "Not Connected",
-  "not connected"
+  "not connected",
+  "Not Attended",
+  "not attended",
+  "Call Log Added",
+  "call log added",
+  "Pending",
+  "pending"
 ];
 
 export const OPTIONAL_COMPULSORY_STATUSES = [
@@ -179,7 +181,13 @@ export const OPTIONAL_COMPULSORY_STATUSES = [
   "not picked up",
   "Not Picked Up",
   "Not Connected",
-  "not connected"
+  "not connected",
+  "Not Attended",
+  "not attended",
+  "Call Log Added",
+  "call log added",
+  "Pending",
+  "pending"
 ];
 
 export const classifyCallStatus = (rawStatus) => {
@@ -188,9 +196,11 @@ export const classifyCallStatus = (rawStatus) => {
 
   if (
     sLower.includes("not connected") ||
+    sLower.includes("not attended") ||
     sLower.includes("busy") ||
     sLower.includes("call cut") ||
     sLower.includes("switched off") ||
+    sLower.includes("switch off") ||
     sLower.includes("invalid") ||
     sLower.includes("no answer") ||
     sLower.includes("no network") ||
@@ -199,7 +209,10 @@ export const classifyCallStatus = (rawStatus) => {
     sLower.includes("no response") ||
     sLower.includes("not reachable") ||
     sLower.includes("unreachable") ||
+    sLower.includes("call log added") ||
+    sLower.includes("called by mistake") ||
     sLower === "na" ||
+    sLower === "pending" ||
     NOT_CONNECTED_STATUSES.some(ns => ns.toLowerCase() === sLower)
   ) {
     return "NOT_CONNECTED";
@@ -845,21 +858,16 @@ export const updateDynamicOptions = (data) => {
       Object.assign(STATUS_STAGE_MAPPING, data.statusStageMapping);
     }
     if (Array.isArray(data.statusOptions)) {
-      const removedSet = new Set(Array.isArray(data.removedStatuses) ? data.removedStatuses : []);
-      const mergedStatuses = Array.from(new Set([...data.statusOptions, "Shivir done", "Already Reg.d"]));
-      const filtered = mergedStatuses.filter(s => !removedSet.has(s));
-      STATUS_OPTIONS.splice(0, STATUS_OPTIONS.length, ...filtered);
+      STATUS_OPTIONS.splice(0, STATUS_OPTIONS.length, ...data.statusOptions);
     }
     if (Array.isArray(data.sourceOptions)) {
-      const mergedSources = Array.from(new Set([...data.sourceOptions, "Fail Payment"]));
-      SOURCE_OPTIONS.splice(0, SOURCE_OPTIONS.length, ...mergedSources);
+      SOURCE_OPTIONS.splice(0, SOURCE_OPTIONS.length, ...data.sourceOptions);
     }
     if (Array.isArray(data.calledForOptions)) {
       CALLED_FOR_OPTIONS.splice(0, CALLED_FOR_OPTIONS.length, ...data.calledForOptions);
     }
     if (Array.isArray(data.connectedStatuses)) {
-      const mergedConnected = Array.from(new Set([...data.connectedStatuses, "Shivir done", "Already Reg.d"]));
-      CONNECTED_STATUSES.splice(0, CONNECTED_STATUSES.length, ...mergedConnected);
+      CONNECTED_STATUSES.splice(0, CONNECTED_STATUSES.length, ...data.connectedStatuses);
     }
     if (Array.isArray(data.notConnectedStatuses)) {
       NOT_CONNECTED_STATUSES.splice(0, NOT_CONNECTED_STATUSES.length, ...data.notConnectedStatuses);
@@ -867,14 +875,12 @@ export const updateDynamicOptions = (data) => {
     if (Array.isArray(data.optionalCompulsoryStatuses)) {
       OPTIONAL_COMPULSORY_STATUSES.splice(0, OPTIONAL_COMPULSORY_STATUSES.length, ...data.optionalCompulsoryStatuses);
     }
-    if (Array.isArray(data.salesOutcomeOptions) && data.salesOutcomeOptions.length > 0) {
-      const mergedOutcomes = Array.from(new Set([...data.salesOutcomeOptions, "Already Reg.d", "Shivir done"]));
-      SALES_OUTCOME_OPTIONS.splice(0, SALES_OUTCOME_OPTIONS.length, ...mergedOutcomes);
+    if (Array.isArray(data.salesOutcomeOptions)) {
+      SALES_OUTCOME_OPTIONS.splice(0, SALES_OUTCOME_OPTIONS.length, ...data.salesOutcomeOptions);
     }
 
     const freshCallSources = Array.from(new Set([
-      ...SOURCE_OPTIONS,
-      ...CALLED_FOR_OPTIONS.filter(o => o !== "Reminder" && o !== "Query")
+      ...SOURCE_OPTIONS
     ]));
     CALL_SOURCE_OPTIONS.splice(0, CALL_SOURCE_OPTIONS.length, ...freshCallSources);
   }

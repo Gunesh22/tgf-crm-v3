@@ -15,6 +15,7 @@ import SettingsTab from "./components/SettingsTab";
 import AllAttendersSheetTab from "./components/AllAttendersSheetTab";
 import PipelineCallsTab from "./components/PipelineCallsTab";
 import FunnelReportsTab from "./components/FunnelReportsTab";
+import CallIntelligenceTab from "./components/CallIntelligenceTab";
 import LottieAnimation from "../../components/ui/LottieAnimation";
 import dataResearchAnimation from "../../assets/data_research_analysis.json";
 
@@ -297,6 +298,19 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
                   settingsOptions={settingsOptions}
                   callLogs={callLogs}
                   registrations={registrations}
+                  callLogsLoading={callLogsLoading}
+                />
+              )}
+              {activeTab === "call-intelligence" && (
+                <CallIntelligenceTab
+                  callLogs={callLogs}
+                  registrations={registrations}
+                  programs={programs}
+                  attenders={attenders}
+                  settingsOptions={settingsOptions}
+                  selectedMonth={selectedMonth}
+                  setSelectedMonth={setSelectedMonth}
+                  monthOptions={monthOptions}
                   callLogsLoading={callLogsLoading}
                 />
               )}

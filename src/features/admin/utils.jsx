@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  BarChart3, FolderOpen, Upload, Users, ClipboardCheck, FileText, Settings, FileSpreadsheet, TrendingUp, Filter
+  BarChart3, FolderOpen, Upload, Users, ClipboardCheck, FileText, Settings, FileSpreadsheet, TrendingUp, Filter, Zap
 } from "lucide-react";
 import { isKhojiField } from "../../lib/khojiHelper";
 import { PIPELINE_STAGES, getEffectiveStage, QUERY_PIPELINE_STAGES, getCanonicalQueryStage } from "../../utils/pipelineEngine";
@@ -454,6 +454,7 @@ export const COLORS = ["#3b82f6", "#10b981", "#ef4444", "#f59e0b", "#8b5cf6", "#
 
 export const TAB_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: <BarChart3 size={18} /> },
+  { id: "call-intelligence", label: "Call Intelligence ⚡", icon: <Zap size={18} /> },
   { id: "presets", label: "Funnel Presets", icon: <Filter size={18} /> },
   { id: "pipeline-calls", label: "Pipeline & Calls 📈", icon: <TrendingUp size={18} /> },
   { id: "monthly", label: "Report", icon: <FileText size={18} /> },
@@ -465,34 +466,52 @@ export const TAB_ITEMS = [
   { id: "settings", label: "Settings", icon: <Settings size={18} /> },
 ];
 
-export const CONNECTED_STATUSES = ["Info Given", "Info given", "Interested", "Previous Program Pending", "Reg.Done", "reminder", "Reminder Given", "Reminder Pending", "Query", "Already Reg.d", "Next Time", "Next time", "Shivir done", "Not possible", "Pending", "Not Interested", "Not interested", "Not Attended", "Call Log Added"];
-export const NOT_CONNECTED_STATUSES = ["Not Connected", "NA", "Busy", "Call Cut", "switched off", "Invalid Number", "Invalid No", "Called by mistake", "No Network", "wrong no.", "no answer", "Not Picked Up"];
+export const CONNECTED_STATUSES = [
+  "Info Given", "Info given", "Interested", "Previous Program Pending", 
+  "Reg.Done", "reminder", "Reminder Given", "Reminder Pending", 
+  "Query", "Already Reg.d", "Next Time", "Next time", "Shivir done", 
+  "Not possible", "Not Interested", "Not interested"
+];
+
+export const NOT_CONNECTED_STATUSES = [
+  "Not Connected", "NA", "Busy", "Call Cut", "switched off", "Switched Off",
+  "Invalid Number", "Invalid No", "Called by mistake", "No Network", 
+  "wrong no.", "wrong no", "no answer", "Not Picked Up", "not picked up",
+  "Not Attended", "not attended", "Call Log Added", "call log added", "Pending", "pending"
+];
 
 export function classifyCallStatus(rawStatus) {
   if (!rawStatus) return "NOT_CONNECTED";
   const canonical = getCanonicalStatus(rawStatus);
   const sLower = String(rawStatus).trim().toLowerCase();
 
-  // Explicit Not Connected matches
+  // 1. Explicit Not Connected matches FIRST (prevents false positives like "Not Attended" matching "attended")
   if (
-    NOT_CONNECTED_STATUSES.includes(canonical) ||
-    NOT_CONNECTED_STATUSES.some(ns => ns.toLowerCase() === sLower) ||
+    sLower.includes("not connected") ||
+    sLower.includes("not attended") ||
+    sLower.includes("not picked") ||
     sLower.includes("busy") ||
     sLower.includes("call cut") ||
     sLower.includes("switched off") ||
+    sLower.includes("switch off") ||
     sLower.includes("invalid") ||
     sLower.includes("no answer") ||
     sLower.includes("no network") ||
     sLower.includes("wrong no") ||
-    sLower.includes("not picked") ||
     sLower.includes("no response") ||
     sLower.includes("not reachable") ||
-    sLower.includes("unreachable")
+    sLower.includes("unreachable") ||
+    sLower.includes("call log added") ||
+    sLower.includes("called by mistake") ||
+    sLower === "pending" ||
+    sLower === "na" ||
+    NOT_CONNECTED_STATUSES.includes(canonical) ||
+    NOT_CONNECTED_STATUSES.some(ns => ns.toLowerCase() === sLower)
   ) {
     return "NOT_CONNECTED";
   }
 
-  // Explicit Connected matches
+  // 2. Explicit Connected matches
   if (
     CONNECTED_STATUSES.includes(canonical) ||
     CONNECTED_STATUSES.some(cs => cs.toLowerCase() === sLower) ||
@@ -505,7 +524,7 @@ export function classifyCallStatus(rawStatus) {
     sLower.includes("query") ||
     sLower.includes("shivir") ||
     sLower.includes("alumni") ||
-    sLower.includes("attended")
+    (sLower.includes("attended") && !sLower.includes("not attended"))
   ) {
     return "CONNECTED";
   }

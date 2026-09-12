@@ -170,25 +170,25 @@ console.log('=== RUNNING EXISTING ALUMNI RESOLUTION TESTS ===');
   console.log('✓ 6. determineCallType correctly ignores alumni calls when finding converting registration call.');
 }
 
-// 7. STATUS_OPTIONS contains Shivir done and Already Reg.d
+// 7. STATUS_OPTIONS contains Shivir done and Already Reg.d by default, and updateDynamicOptions updates accurately
 {
   const { STATUS_OPTIONS, updateDynamicOptions, SALES_OUTCOME_OPTIONS, SOURCE_OPTIONS } = await import('../src/features/attender/utils.js');
   assert.ok(STATUS_OPTIONS.includes('Shivir done'), 'STATUS_OPTIONS must include "Shivir done"');
   assert.ok(STATUS_OPTIONS.includes('Already Reg.d'), 'STATUS_OPTIONS must include "Already Reg.d"');
 
-  // Test updateDynamicOptions safeguarding against missing items from DB
+  // Test updateDynamicOptions accurately updates and honors deletions/customizations
   updateDynamicOptions({
-    salesOutcomeOptions: ['Interested', 'Info Given', 'Reg.Done'],
-    sourceOptions: ['Website', 'Facebook'],
-    statusOptions: ['Interested', 'Info Given']
+    salesOutcomeOptions: ['Interested', 'Info Given', 'Reg.Done', 'Custom Outcome'],
+    sourceOptions: ['Website', 'Facebook', 'Custom Source'],
+    statusOptions: ['Interested', 'Info Given', 'Custom Status']
   });
 
-  assert.ok(SALES_OUTCOME_OPTIONS.includes('Shivir done'), 'SALES_OUTCOME_OPTIONS must retain "Shivir done"');
-  assert.ok(SALES_OUTCOME_OPTIONS.includes('Already Reg.d'), 'SALES_OUTCOME_OPTIONS must retain "Already Reg.d"');
-  assert.ok(SOURCE_OPTIONS.includes('Fail Payment'), 'SOURCE_OPTIONS must retain "Fail Payment"');
-  assert.ok(STATUS_OPTIONS.includes('Shivir done'), 'STATUS_OPTIONS must retain "Shivir done"');
+  assert.ok(SALES_OUTCOME_OPTIONS.includes('Custom Outcome'), 'SALES_OUTCOME_OPTIONS must include "Custom Outcome"');
+  assert.ok(!SALES_OUTCOME_OPTIONS.includes('NonExistent Outcome'), 'SALES_OUTCOME_OPTIONS must not contain non-existent outcome');
+  assert.ok(SOURCE_OPTIONS.includes('Custom Source'), 'SOURCE_OPTIONS must include "Custom Source"');
+  assert.ok(STATUS_OPTIONS.includes('Custom Status'), 'STATUS_OPTIONS must include "Custom Status"');
 
-  console.log('✓ 7. STATUS_OPTIONS and dynamic options safeguarding verified.');
+  console.log('✓ 7. STATUS_OPTIONS and dynamic options update verified.');
 }
 
 console.log('\nALL EXISTING ALUMNI RESOLUTION TESTS PASSED! 🚀');

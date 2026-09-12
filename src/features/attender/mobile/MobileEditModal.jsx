@@ -253,6 +253,14 @@ export default function MobileEditModal({
     ));
   }, [edited.Tags, edited.tags, row?.Tags, row?.tags]);
 
+  const calledForOptionsList = useMemo(() => {
+    return [...CALLED_FOR_OPTIONS];
+  }, [optionsVersion, localSettingsVer, CALLED_FOR_OPTIONS.length, CALLED_FOR_OPTIONS.join(",")]);
+
+  const statusOptionsList = useMemo(() => {
+    return [...STATUS_OPTIONS];
+  }, [optionsVersion, localSettingsVer, STATUS_OPTIONS.length, STATUS_OPTIONS.join(",")]);
+
   const callSourceOptionsList = useMemo(() => {
     return [...CALL_SOURCE_OPTIONS];
   }, [optionsVersion, localSettingsVer, CALL_SOURCE_OPTIONS.length, CALL_SOURCE_OPTIONS.join(",")]);
@@ -923,7 +931,7 @@ export default function MobileEditModal({
                   <Phone size={13} className="text-blue-500" /> PROGRAM (CALLED FOR) <span className="text-red-500 font-bold ml-0.5">*</span>
                 </label>
                 <SearchableDropdown
-                  options={CALLED_FOR_OPTIONS}
+                  options={calledForOptionsList}
                   selected={String(activeProgram || (edited[calledForField] ? String(edited[calledForField]).split(",")[0].trim() : ""))}
                   onChange={val => handleChange(calledForField, val)}
                   placeholder="Search & select program..."
@@ -969,7 +977,7 @@ export default function MobileEditModal({
                   <CheckCircle2 size={13} className="text-blue-500" /> GENERAL RESULT STATUS <span className="text-red-500 font-bold ml-0.5">*</span>
                 </label>
                 <SearchableDropdown
-                  options={STATUS_OPTIONS}
+                  options={statusOptionsList}
                   selected={edited.status || ""}
                   onChange={val => handleChange("status", val)}
                   placeholder="Search & select status..."

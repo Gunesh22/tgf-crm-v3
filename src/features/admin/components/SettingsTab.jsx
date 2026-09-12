@@ -14,6 +14,7 @@ import { AddStatusCategorizationModal } from "./AddStatusCategorizationModal";
 import { 
   getSettingsOptions, 
   updateCallCenterOptions,
+  subscribeToSettingsOptions,
   getActiveCacheMonths,
   getLockedMonthlyReports,
   DEFAULT_CONNECTED_STATUSES,
@@ -43,6 +44,13 @@ export default function SettingsTab() {
   useEffect(() => {
     loadOptions();
     loadMonths();
+
+    const unsub = subscribeToSettingsOptions((newSettings) => {
+      if (newSettings && typeof newSettings === "object") {
+        setOptions(prev => ({ ...(prev || {}), ...newSettings }));
+      }
+    });
+    return () => unsub();
   }, []);
 
   const sectionIds = ["security", "call-center", "whatsapp-templates", "status-rules", "status-stage-mapping", "call-classification", "data-management"];

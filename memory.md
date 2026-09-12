@@ -1191,5 +1191,39 @@ Enable administrators to visually inspect the exact list of canonical registrati
 - **Production Build**: **Vite build PASSED with 0 errors in 20.27s** (`npm run build`).
 - **Database Integrity**: Verified lead `919869001572` in MongoDB sits cleanly in Existing Alumni. No other contacts were modified.
 
+---
+
+## 51. Settings Options Local Cache & UI Deletion Resiliency Fix
+
+### 1. Root Cause Analysis & Problem Overview
+- **Symptom**: When an administrator deleted options in Settings under "Call Center Options" (Program / Called For, Source Options, Connected Outcome) or "Status Rules", the deleted options either continued to display in the call entry modals, or reappeared upon page refresh / modal remount.
+- **Root Causes**:
+  1. **Forceful In-Memory Re-merging (`src/features/attender/utils.js`)**: `updateDynamicOptions` forced `Set([...data.statusOptions, "Shivir done", "Already Reg.d"])` and similar merges back into `salesOutcomeOptions`, `sourceOptions`, and `connectedStatuses`.
+  2. **Server GET Re-injection (`api/_admin/settings.js`)**: The GET `/api/admin/settings` endpoint similarly re-added `"Already Reg.d"`, `"Shivir done"`, and `"Fail Payment"` to the payload before returning.
+  3. **15-Second Background Polling (`src/lib/db.js`)**: `getSettingsOptions` checked `now - lastSettingsFetchTime > 15000` on mounts and timeouts, repeatedly polling MongoDB and overwriting `localStorage`.
+  4. **Source Options Polluted by Programs (`src/features/attender/utils.js`)**: `CALL_SOURCE_OPTIONS` merged `...SOURCE_OPTIONS` with `...CALLED_FOR_OPTIONS`, causing deleted source options to remain visible if present in programs.
+  5. **Static Array References in Modals (`CallEntryTab.jsx`, `MobileEditModal.jsx`)**: `<SearchableDropdown>` memoized on `[options, search]`. Passing in-place spliced arrays didn't change object references (`options === prevProps.options`), preventing dropdown options from updating.
+
+### 2. Architectural Fixes Implemented
+1. **Pure Dynamic Updates (`src/features/attender/utils.js`)**:
+   - Removed all hardcoded `Set` merging from `updateDynamicOptions`.
+   - `CALL_SOURCE_OPTIONS` derives strictly from `SOURCE_OPTIONS`.
+2. **Safe Server Initialization (`api/_admin/settings.js`)**:
+   - Removed silent re-merging from GET handler. Initial defaults only populate empty collections and never override explicit deletions.
+3. **No 15-Second Polling & 0ms Local Cache Return (`src/lib/db.js`)**:
+   - Removed the 15-second staleness check and startup eager timer. `getSettingsOptions` returns cached data instantly without background network traffic.
+4. **Reactive Memoized Dropdowns (`CallEntryTab.jsx`, `MobileEditModal.jsx`, `EditModal.jsx`)**:
+   - Memoized `salesCalledForOptions`, `salesOutcomeOptionsList`, `callStatusOptionsList`, `calledForOptionsList`, and `statusOptionsList` with `localSettingsVer` and array content fingerprints, ensuring `<SearchableDropdown>` receives fresh references upon deletion.
+5. **SettingsTab Real-Time Sync (`SettingsTab.jsx`)**:
+   - Subscribed to `subscribeToSettingsOptions` on mount to keep admin settings state synchronized with cache updates.
+6. **Historical Value Preservation**:
+   - Preserved fallback `return selected;` in `<SearchableDropdown>`, ensuring previous call logs render historical values correctly.
+
+### 3. Verification & Compliance
+- **Full Automated Test Suite**: **178 / 178 PASSED (100%)** across all 6 test files (`npm test`).
+- **Targeted Lifecycle Suite**: **6 / 6 PASSED** (`test_settings_lifecycle.mjs`).
+- **Production Build**: Built cleanly with **0 errors in 26.14s** (`npm run build`).
+
+
 
 

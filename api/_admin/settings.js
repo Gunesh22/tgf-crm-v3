@@ -5,12 +5,12 @@ import { requireAuth, requireAdmin } from '../lib/auth.js';
 const DEFAULT_CONNECTED_STATUSES = [
   "Info Given", "Info given", "Interested", "Previous Program Pending", "Reg.Done", "reminder", "Query", 
   "Already Reg.d", "Next Time", "Next time", "Shivir done", "Not possible", 
-  "Pending", "Not Interested", "Not interested", "Not Attended", "Call Log Added"
+  "Not Interested", "Not interested"
 ];
 
 const DEFAULT_NOT_CONNECTED_STATUSES = [
-  "NA", "Busy", "Call Cut", "switched off", "Invalid No", 
-  "Called by mistake", "No Network", "wrong no.", "no answer"
+  "Not Connected", "NA", "Busy", "Call Cut", "switched off", "Invalid No", "Invalid Number",
+  "Called by mistake", "No Network", "wrong no.", "no answer", "Not Picked Up", "Not Attended", "Call Log Added", "Pending"
 ];
 
 const DEFAULT_SALES_OUTCOME_OPTIONS = [
@@ -124,14 +124,15 @@ export default async function handler(req, res) {
       const { _id, ...cleanData } = doc;
       if (!cleanData.salesOutcomeOptions) {
         cleanData.salesOutcomeOptions = DEFAULT_SALES_OUTCOME_OPTIONS;
-      } else {
-        cleanData.salesOutcomeOptions = Array.from(new Set([...cleanData.salesOutcomeOptions, "Already Reg.d", "Shivir done"]));
       }
-      if (Array.isArray(cleanData.sourceOptions)) {
-        cleanData.sourceOptions = Array.from(new Set([...cleanData.sourceOptions, "Fail Payment"]));
+      if (!cleanData.sourceOptions) {
+        cleanData.sourceOptions = DEFAULT_SOURCE_OPTIONS;
       }
-      if (Array.isArray(cleanData.statusOptions)) {
-        cleanData.statusOptions = Array.from(new Set([...cleanData.statusOptions, "Shivir done", "Already Reg.d"]));
+      if (!cleanData.calledForOptions) {
+        cleanData.calledForOptions = DEFAULT_CALLED_FOR_OPTIONS;
+      }
+      if (!cleanData.statusOptions) {
+        cleanData.statusOptions = DEFAULT_SETTINGS.statusOptions;
       }
       return res.status(200).json({ success: true, data: cleanData });
     }

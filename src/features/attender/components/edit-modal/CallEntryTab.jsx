@@ -224,7 +224,17 @@ export const CallEntryTab = ({
   const activeCallStatus = edited.callStatus || "";
 
   // Filter Sales Called For options (exclude Query/Reminder)
-  const salesCalledForOptions = CALLED_FOR_OPTIONS.filter(o => o !== "Reminder" && o !== "Query");
+  const salesCalledForOptions = useMemo(() => {
+    return CALLED_FOR_OPTIONS.filter(o => o !== "Reminder" && o !== "Query");
+  }, [optionsVersion, localSettingsVer, CALLED_FOR_OPTIONS.length, CALLED_FOR_OPTIONS.join(",")]);
+
+  const salesOutcomeOptionsList = useMemo(() => {
+    return [...SALES_OUTCOME_OPTIONS];
+  }, [optionsVersion, localSettingsVer, SALES_OUTCOME_OPTIONS.length, SALES_OUTCOME_OPTIONS.join(",")]);
+
+  const callStatusOptionsList = useMemo(() => {
+    return [...CALL_STATUS_OPTIONS];
+  }, [optionsVersion, localSettingsVer, CALL_STATUS_OPTIONS.length, CALL_STATUS_OPTIONS.join(",")]);
 
   const contactTagsList = useMemo(() => {
     const rawTags = edited.Tags || edited.tags || row?.Tags || row?.tags || "";
@@ -258,31 +268,6 @@ export const CallEntryTab = ({
 
   const stageSource = edited || row;
 
-  console.log("[PROGRAM STAGE TRACE]", {
-    activeProgram,
-    selectedProgram,
-    activeAttenderId,
-
-    editedCalledFor: edited["Called For"],
-    editedCalledForLower: edited.calledFor,
-
-    editedPipelineStage: edited.pipelineStage,
-    editedStatus: edited.status,
-    editedCallStatus: edited.callStatus,
-
-    rootPipelineStage: row?.pipelineStage,
-    rootCalledFor: row?.["Called For"],
-
-    attenderState: edited?.attenderStates?.[activeAttenderId],
-    rowAttenderState: row?.attenderStates?.[activeAttenderId],
-
-    history: edited?.history,
-    rowHistory: row?.history,
-
-    resolvedStageFromEdited: getEffectiveStage(edited, selectedProgram, activeAttenderId),
-    resolvedStageFromRow: getEffectiveStage(stageSource, selectedProgram, activeAttenderId)
-  });
-
   const evalResult = evaluatePipeline(
     edited,
     {
@@ -305,17 +290,6 @@ export const CallEntryTab = ({
   const isFormDirtyCall = Boolean(activeCallStatus && edited.status);
   const displayStage = isFormDirtyCall ? evalResult.pipelineStage : dbStage;
   const stageConfig = getPipelineStageConfig(displayStage);
-
-  console.log("[MODAL STAGE TRACE]", {
-    activeProgram,
-    activeAttenderId,
-    rootCalledFor: row?.["Called For"],
-    rootPipelineStage: row?.pipelineStage,
-    editedCalledFor: edited?.["Called For"],
-    editedPipelineStage: edited?.pipelineStage,
-    resolvedStage: displayStage,
-    sourceUsed: isFormDirtyCall ? "evalResult (dirty form)" : (row ? "row (saved database contact)" : "edited")
-  });
 
   // Whether this contact qualifies for "Convert to Sales" (only for new/query-only contacts)
   const showConvertToSales = useMemo(() => {
@@ -937,7 +911,7 @@ export const CallEntryTab = ({
             Call Result <span className="text-rose-500 font-bold">*</span>
           </label>
           <SearchableDropdown
-            options={CALL_STATUS_OPTIONS}
+            options={callStatusOptionsList}
             selected={activePrimaryResult || ""}
             onChange={val => {
               if (val) handlePrimaryResultChange(val);
@@ -956,7 +930,7 @@ export const CallEntryTab = ({
                 Connected Outcome <span className="text-rose-500 font-bold">*</span>
               </label>
               <SearchableDropdown
-                options={SALES_OUTCOME_OPTIONS}
+                options={salesOutcomeOptionsList}
                 selected={edited.status || ""}
                 onChange={val => {
                   if (!val) return;
