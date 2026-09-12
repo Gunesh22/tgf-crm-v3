@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Calendar as CalendarIcon, Clock, X } from "lucide-react";
 import { parseTimeTo3Boxes, normalizeTypedTime } from "./EasyTimePicker";
 
@@ -14,6 +15,7 @@ const WEEKDAY_NAMES = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
  * - Left card: Month calendar picker with weekday headers, selection highlight, Cancel/OK buttons.
  * - Right card: Time picker with ^/v steppers for Hour & Min, AM/PM toggle, formatted preview, Cancel/OK buttons.
  * - Time is optional: user can select a date with or without a time string.
+ * - Portaled to document.body with zIndex: 999999 to guarantee top-layer rendering over all modals and dropdowns.
  */
 export const CustomDateTimePicker = ({
   dateValue = "",
@@ -27,24 +29,37 @@ export const CustomDateTimePicker = ({
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
-  // Parse initial or fallback date (YYYY-MM-DD)
-  const initialDateObj = useMemo(() => {
+  // Date states
+  const [currentYear, setCurrentYear] = useState(() => {
     if (dateValue && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
-      const [y, m, d] = dateValue.split("-").map(Number);
-      return new Date(y, m - 1, d);
+      return Number(dateValue.split("-")[0]);
     }
-    return new Date();
-  }, [dateValue]);
-
-  const [currentYear, setCurrentYear] = useState(initialDateObj.getFullYear());
-  const [currentMonth, setCurrentMonth] = useState(initialDateObj.getMonth());
+    return new Date().getFullYear();
+  });
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    if (dateValue && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+      return Number(dateValue.split("-")[1]) - 1;
+    }
+    return new Date().getMonth();
+  });
   const [selectedDateStr, setSelectedDateStr] = useState(dateValue || "");
 
+  // Time states
   const parsedInitialTime = useMemo(() => parseTimeTo3Boxes(timeValue), [timeValue]);
   const [hour, setHour] = useState(parsedInitialTime.hour || "10");
   const [minute, setMinute] = useState(parsedInitialTime.minute || "00");
   const [period, setPeriod] = useState(parsedInitialTime.period || "AM");
   const [hasTimeSelected, setHasTimeSelected] = useState(!!timeValue);
+
+  // Dynamic portal coordinates
+  const [dateCoords, setDateCoords] = useState({ top: 0, left: 0 });
+  const [timeCoords, setTimeCoords] = useState({ top: 0, left: 0 });
+
+  const containerRef = useRef(null);
+  const dateButtonRef = useRef(null);
+  const timeButtonRef = useRef(null);
+  const datePickerRef = useRef(null);
+  const timePickerRef = useRef(null);
 
   const resetDateToProp = () => {
     setSelectedDateStr(dateValue || "");
@@ -70,21 +85,57 @@ export const CustomDateTimePicker = ({
     }
   };
 
-  // Synchronize when dateValue prop changes from parent
   useEffect(() => {
     resetDateToProp();
   }, [dateValue]);
 
-  // Synchronize when timeValue prop changes from parent
   useEffect(() => {
     resetTimeToProp();
   }, [timeValue]);
 
+  // Unified popover viewport-aware coordinate calculator
+  const calculateCoords = (buttonEl, width, height, alignRight = false) => {
+    if (!buttonEl) return { top: 0, left: 0 };
+    const rect = buttonEl.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    const top = spaceBelow < height && spaceAbove > height
+      ? Math.max(10, rect.top - height - 4)
+      : Math.min(window.innerHeight - height - 10, rect.bottom + 4);
+
+    let left = alignRight ? rect.right - width : rect.left;
+    if (left + width > window.innerWidth - 12) left = window.innerWidth - width - 12;
+    if (left < 12) left = 12;
+
+    return { top, left };
+  };
+
+  const updateCoords = () => {
+    if (dateButtonRef.current) setDateCoords(calculateCoords(dateButtonRef.current, 256, 310, false));
+    if (timeButtonRef.current) setTimeCoords(calculateCoords(timeButtonRef.current, 224, 285, true));
+  };
+
+  useEffect(() => {
+    if (showDatePicker || showTimePicker) {
+      updateCoords();
+      window.addEventListener("scroll", updateCoords, true);
+      window.addEventListener("resize", updateCoords);
+      return () => {
+        window.removeEventListener("scroll", updateCoords, true);
+        window.removeEventListener("resize", updateCoords);
+      };
+    }
+  }, [showDatePicker, showTimePicker]);
+
   // Ref for closing popovers on outside click
-  const containerRef = useRef(null);
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (containerRef.current && !containerRef.current.contains(e.target)) {
+      const inContainer = containerRef.current && containerRef.current.contains(e.target);
+      const inDatePicker = datePickerRef.current && datePickerRef.current.contains(e.target);
+      const inTimePicker = timePickerRef.current && timePickerRef.current.contains(e.target);
+
+      if (!inContainer && !inDatePicker && !inTimePicker) {
         if (showDatePicker) resetDateToProp();
         if (showTimePicker) resetTimeToProp();
         setShowDatePicker(false);
@@ -202,11 +253,7 @@ export const CustomDateTimePicker = ({
   }, [hour, minute, period, hasTimeSelected]);
 
   const handleConfirmTime = () => {
-    if (hasTimeSelected) {
-      onTimeChange(formattedTimePreview);
-    } else {
-      onTimeChange("");
-    }
+    onTimeChange(hasTimeSelected ? formattedTimePreview : "");
     setShowTimePicker(false);
   };
 
@@ -249,12 +296,14 @@ export const CustomDateTimePicker = ({
           {dateLabel}
         </label>
         <button
+          ref={dateButtonRef}
           type="button"
           onClick={() => {
             const nextState = !showDatePicker;
             if (!nextState) resetDateToProp();
             setShowDatePicker(nextState);
             setShowTimePicker(false);
+            if (nextState) updateCoords();
           }}
           className={`w-full h-9 px-3 bg-white border border-slate-300 text-slate-900 font-bold rounded-md text-xs flex items-center justify-between shadow-2xs hover:border-blue-400 focus:outline-none transition-colors cursor-pointer ${showDatePicker ? primaryBorderClass : ""}`}
         >
@@ -266,8 +315,17 @@ export const CustomDateTimePicker = ({
         </button>
 
         {/* CUSTOM DATE PICKER CARD MODAL (LEFT CARD IN IMAGE) */}
-        {showDatePicker && (
-          <div className="absolute bottom-full mb-1 left-0 z-50 w-64 bg-white rounded-xl shadow-xl border border-slate-200/90 p-3 space-y-3 animate-fade-in">
+        {showDatePicker && typeof document !== "undefined" && createPortal(
+          <div
+            ref={datePickerRef}
+            style={{
+              position: "fixed",
+              top: `${dateCoords.top}px`,
+              left: `${dateCoords.left}px`,
+              zIndex: 999999
+            }}
+            className="w-64 bg-white rounded-xl shadow-2xl border border-slate-200/90 p-3 space-y-3 animate-fade-in"
+          >
             {/* Header: < October 2023 > */}
             <div className="flex items-center justify-between">
               <button
@@ -351,7 +409,8 @@ export const CustomDateTimePicker = ({
                 OK
               </button>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
 
@@ -362,12 +421,14 @@ export const CustomDateTimePicker = ({
         </label>
         <div className="flex items-center gap-1.5">
           <button
+            ref={timeButtonRef}
             type="button"
             onClick={() => {
               const nextState = !showTimePicker;
               setShowTimePicker(nextState);
               if (nextState) {
                 setHasTimeSelected(true);
+                updateCoords();
               } else {
                 resetTimeToProp();
               }
@@ -397,8 +458,17 @@ export const CustomDateTimePicker = ({
         </div>
 
         {/* CUSTOM TIME PICKER CARD MODAL (RIGHT CARD IN IMAGE) */}
-        {showTimePicker && (
-          <div className="absolute bottom-full mb-1 right-0 z-50 w-56 bg-white rounded-xl shadow-xl border border-slate-200/90 p-3 space-y-3 animate-fade-in">
+        {showTimePicker && typeof document !== "undefined" && createPortal(
+          <div
+            ref={timePickerRef}
+            style={{
+              position: "fixed",
+              top: `${timeCoords.top}px`,
+              left: `${timeCoords.left}px`,
+              zIndex: 999999
+            }}
+            className="w-56 bg-white rounded-xl shadow-2xl border border-slate-200/90 p-3 space-y-3 animate-fade-in"
+          >
             {/* Header: Time */}
             <div className="text-xs font-extrabold text-slate-800 text-center uppercase tracking-wider">
               Time
@@ -563,7 +633,8 @@ export const CustomDateTimePicker = ({
                 Clear Time (Optional)
               </button>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     </div>
