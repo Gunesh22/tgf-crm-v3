@@ -1499,25 +1499,17 @@ export default function MobileEditModal({
 
         {/* 4. Modal Footer Bar - Sticky at bottom */}
         <div className="sticky bottom-0 z-30 px-5 py-3.5 border-t border-slate-200 bg-white flex items-center justify-between shrink-0 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] pb-5 sm:pb-3.5">
-          <div className="flex items-center gap-2">
-            {(!row._isNew && row.id) ? (
-              <button
-                type="button"
-                onClick={handleDelete}
-                className="flex items-center gap-1.5 text-xs font-bold text-red-500 hover:text-red-700 transition active:scale-95 py-2 px-2"
-              >
-                <Trash2 size={16} /> Remove
-              </button>
-            ) : null}
+          {(!row._isNew && row.id) ? (
             <button
               type="button"
-              onClick={() => triggerRegistrationConfetti(edited?.Name || row?.Name || "Test Lead")}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-amber-700 hover:text-amber-800 bg-amber-50 border border-amber-200 active:scale-95 shadow-xs"
-              title="Test Confetti Animation"
+              onClick={handleDelete}
+              className="flex items-center gap-1.5 text-xs font-bold text-red-500 hover:text-red-700 transition active:scale-95 py-2 px-2"
             >
-              🎉 Test
+              <Trash2 size={16} /> Remove
             </button>
-          </div>
+          ) : (
+            <div />
+          )}
 
           <button
             type="button"

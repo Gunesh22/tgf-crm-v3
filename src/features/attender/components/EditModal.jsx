@@ -2113,21 +2113,13 @@ export const EditModal = ({
         )}
 
         <div className="px-7 py-4 bg-slate-50 border-t border-slate-200/80 flex items-center justify-between shadow-inner shrink-0 z-10">
-          <div className="flex items-center gap-2">
-            {(!row._isNew && row.id) ? (
-              <button onClick={handleDelete} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition cursor-pointer">
-                <Trash2 size={13} /> Remove Entry
-              </button>
-            ) : null}
-            <button 
-              type="button" 
-              onClick={() => triggerRegistrationConfetti(edited?.Name || row?.Name || "Test Lead")}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition cursor-pointer shadow-xs"
-              title="Test Confetti Animation"
-            >
-              🎉 Test Confetti
+          {(!row._isNew && row.id) ? (
+            <button onClick={handleDelete} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition cursor-pointer">
+              <Trash2 size={13} /> Remove Entry
             </button>
-          </div>
+          ) : (
+            <div />
+          )}
           <div className="flex items-center gap-4 text-xs font-bold text-slate-400 tracking-wider uppercase">
             {saving ? "Saving..." : "All exits auto-save"}
           </div>
