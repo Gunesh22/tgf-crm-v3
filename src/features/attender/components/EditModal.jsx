@@ -26,18 +26,10 @@ import {
   isKhojiField,
   formatContactName,
   isNotConnectedStatus,
-  getSharedAttenders
+  getSharedAttenders,
+  getLocalDateString,
+  formatFollowupDate
 } from "../utils";
-
-function parseTimestamp(t) {
-  if (!t) return null;
-  if (t instanceof Date) return t;
-  if (typeof t.toDate === "function") return t.toDate();
-  if (typeof t === "object" && t.seconds !== undefined) {
-    return new Date(t.seconds * 1000 + Math.round((t.nanoseconds || 0) / 1000000));
-  }
-  return new Date(t);
-}
 
 import SearchableDropdown from "./edit-modal/SearchableDropdown";
 import DuplicateBanner from "./edit-modal/DuplicateBanner";
@@ -131,9 +123,15 @@ export const EditModal = ({
     normalized.callType = normalized.callType || "outgoing";
     normalized.callDirection = normalized.callDirection || normalized.callType;
 
-    const rootCallbackDate = attState?.callbackDate || baseLead.callbackDate || baseLead["Callback Date"] || baseLead.callback_date || baseLead.nextCallDate || baseLead.next_call_date || baseLead.callback || null;
-    const rootCallbackTime = attState?.callbackTime || baseLead.callbackTime || baseLead["Callback Time"] || baseLead.callback_time || "";
-    const rootCallbackStatus = attState?.callbackStatus || baseLead.callbackStatus || (rootCallbackDate ? "pending" : null);
+    const rootCallbackDate = attState && attState.callbackDate !== undefined
+      ? (attState.callbackDate ? getLocalDateString(attState.callbackDate) : null)
+      : (baseLead.callbackDate ? getLocalDateString(baseLead.callbackDate) : (baseLead["Callback Date"] ? getLocalDateString(baseLead["Callback Date"]) : null));
+    const rootCallbackTime = attState && attState.callbackTime !== undefined
+      ? (attState.callbackTime || "")
+      : (baseLead.callbackTime || baseLead["Callback Time"] || baseLead.callback_time || "");
+    const rootCallbackStatus = attState && attState.callbackStatus !== undefined
+      ? (attState.callbackStatus || (rootCallbackDate ? "pending" : null))
+      : (baseLead.callbackStatus || (rootCallbackDate ? "pending" : null));
 
     // Call-entry fields: restore ACTIVE attender's own saved state if present, else START COMPLETELY EMPTY
     const rawAttStatus = attState?.status || baseLead?.status || "";
@@ -158,11 +156,6 @@ export const EditModal = ({
       normalized.source = normalized.Source;
       normalized.previousProgram = attState.previousProgram || baseLead.previousProgram || "";
       normalized.callPurpose = attState.callPurpose || "SALES";
-      normalized.status = cleanAttStatus;
-      normalized.remark = "";
-      normalized.callbackDate = rootCallbackDate;
-      normalized.callbackStatus = rootCallbackStatus;
-      normalized.callbackTime = rootCallbackTime;
     } else {
       normalized["Called For"] = fallbackProgram;
       normalized.calledFor = fallbackProgram;
@@ -170,12 +163,13 @@ export const EditModal = ({
       normalized.source = normalized.Source;
       normalized.previousProgram = baseLead.previousProgram || "";
       normalized.callPurpose = "SALES";
-      normalized.status = cleanAttStatus;
-      normalized.remark = "";
-      normalized.callbackDate = rootCallbackDate;
-      normalized.callbackStatus = rootCallbackStatus;
-      normalized.callbackTime = rootCallbackTime;
     }
+
+    normalized.status = cleanAttStatus;
+    normalized.remark = "";
+    normalized.callbackDate = rootCallbackDate;
+    normalized.callbackStatus = rootCallbackStatus;
+    normalized.callbackTime = rootCallbackTime;
 
     normalized.callStatus = "";
     normalized.queryStatus = baseLead.queryStatus || "";
@@ -1296,19 +1290,6 @@ export const EditModal = ({
     const isNew = !!row._isNew;
 
     // We compute the call-attempt changes first
-    const getTimestampOrNull = (val) => {
-      if (!val) return null;
-      if (val instanceof Date) return val.getTime();
-      if (typeof val === "string") return new Date(val).getTime();
-      if (val.toDate && typeof val.toDate === "function") return val.toDate().getTime();
-      if (typeof val === "object" && val.seconds !== undefined) return val.seconds * 1000;
-      try {
-        return new Date(val).getTime();
-      } catch (e) {
-        return null;
-      }
-    };
-
     const oldStatus = String(savedRow.status || "").trim();
     const newStatus = String(targetEdited.status || "").trim();
     const statusChanged = oldStatus !== newStatus;
@@ -1330,9 +1311,9 @@ export const EditModal = ({
     const newCallType = String(targetEdited.callType || "outgoing").toLowerCase();
     const callTypeChanged = oldCallType !== newCallType;
 
-    const oldCallbackTime = getTimestampOrNull(savedRow.callbackDate);
-    const newCallbackTime = getTimestampOrNull(targetEdited.callbackDate);
-    const callbackDateChanged = oldCallbackTime !== newCallbackTime;
+    const oldCallbackDate = getLocalDateString(savedRow.callbackDate);
+    const newCallbackDate = getLocalDateString(targetEdited.callbackDate);
+    const callbackDateChanged = oldCallbackDate !== newCallbackDate;
 
     const oldCallbackStatus = String(savedRow.callbackStatus || "").trim();
     const newCallbackStatus = String(targetEdited.callbackStatus || "").trim();
@@ -1512,32 +1493,9 @@ export const EditModal = ({
       });
 
       if (isFromHistory) {
-        if (updates.callbackDate) {
-          if (typeof updates.callbackDate === "string") {
-            updates.callbackDate = new Date(updates.callbackDate);
-          }
-        } else {
-          updates.callbackDate = null;
-        }
-
-        // Clean undefined values out of updates because Firebase will CRASH if any field is undefined.
-        Object.keys(updates).forEach(key => {
-          if (updates[key] === undefined) {
-            delete updates[key];
-          }
-        });
-
-        // Ensure any newly added fields are marked as mapped so they show up in the table/attender view
-        if (addedFields.length > 0) {
-          const currentMapped = Array.isArray(updates._mappedFields) ? [...updates._mappedFields] : [];
-          addedFields.forEach(f => {
-            if (!currentMapped.includes(f)) {
-              currentMapped.push(f);
-            }
-          });
-          updates._mappedFields = currentMapped;
-        }
-
+        updates.callbackDate = updates.callbackDate ? getLocalDateString(updates.callbackDate) : null;
+        updates.callbackTime = updates.callbackTime ? String(updates.callbackTime).trim() : null;
+        updates.callbackStatus = updates.callbackStatus || (updates.callbackDate ? "pending" : null);
         updates.history = targetEdited.history || [];
       } else if (!isNew && !isCallAttemptUpdated && !historyChanged) {
         // Strip all call-specific fields to prevent ghost calls or history additions
@@ -1545,6 +1503,7 @@ export const EditModal = ({
         delete updates.remark;
         delete updates.callType;
         delete updates.callbackDate;
+        delete updates.callbackTime;
         delete updates.callbackStatus;
         delete updates.objectionReason;
         delete updates.queryStatus;
@@ -1552,33 +1511,9 @@ export const EditModal = ({
         delete updates.firstCalledAt;
         delete updates.history;
       } else {
-        if (updates.callbackDate) {
-          if (typeof updates.callbackDate === "string") {
-            updates.callbackDate = new Date(updates.callbackDate);
-          }
-        } else {
-          updates.callbackDate = null;
-        }
-
-        // Clean undefined values out of updates because Firebase will CRASH if any field is undefined.
-        Object.keys(updates).forEach(key => {
-          if (updates[key] === undefined) {
-            delete updates[key];
-          }
-        });
-
-        const baseHistory = Array.isArray(targetEdited.history) ? [...targetEdited.history] : (Array.isArray(savedRow.history) ? [...savedRow.history] : []);
-
-        // Ensure any newly added fields are marked as mapped so they show up in the table/attender view
-        if (addedFields.length > 0) {
-          const currentMapped = Array.isArray(updates._mappedFields) ? [...updates._mappedFields] : [];
-          addedFields.forEach(f => {
-            if (!currentMapped.includes(f)) {
-              currentMapped.push(f);
-            }
-          });
-          updates._mappedFields = currentMapped;
-        }
+        updates.callbackDate = updates.callbackDate ? getLocalDateString(updates.callbackDate) : null;
+        updates.callbackTime = updates.callbackTime ? String(updates.callbackTime).trim() : null;
+        updates.callbackStatus = updates.callbackStatus || (updates.callbackDate ? "pending" : null);
 
         // Track call timestamp — only when a call-attempt actually changes or a new entry is created
         if (isNew || isCallAttemptUpdated) {
@@ -1709,6 +1644,24 @@ export const EditModal = ({
         if (!newRemarkEntered && !isCallAttemptUpdated) {
           delete updates.remark;
         }
+      }
+
+      // Clean undefined values out of updates because Firebase/DB will crash if any field is undefined.
+      Object.keys(updates).forEach(key => {
+        if (updates[key] === undefined) {
+          delete updates[key];
+        }
+      });
+
+      // Ensure any newly added fields are marked as mapped so they show up in the table/attender view
+      if (addedFields.length > 0) {
+        const currentMapped = Array.isArray(updates._mappedFields) ? [...updates._mappedFields] : [];
+        addedFields.forEach(f => {
+          if (!currentMapped.includes(f)) {
+            currentMapped.push(f);
+          }
+        });
+        updates._mappedFields = currentMapped;
       }
 
       const targetDocId = targetEdited.contactId || targetEdited.id || id || `temp_${Date.now()}`;
@@ -1867,9 +1820,7 @@ export const EditModal = ({
   };
 
   const getCallbackDateStr = () => {
-    if (!edited.callbackDate) return "";
-    const d = parseTimestamp(edited.callbackDate);
-    return d && !isNaN(d.getTime()) ? d.toISOString().split("T")[0] : "";
+    return getLocalDateString(edited.callbackDate);
   };
 
   const getPromptOptions = () => {

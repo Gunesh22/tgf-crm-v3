@@ -20,7 +20,9 @@ import {
   getFieldWithFallback,
   formatContactName,
   isNotConnectedStatus,
-  getSharedAttenders
+  getSharedAttenders,
+  getLocalDateString,
+  formatFollowupDate
 } from "../utils";
 
 import SearchableDropdown from "../components/edit-modal/SearchableDropdown";
@@ -35,16 +37,6 @@ import { CustomDateTimePicker } from "../components/edit-modal/CustomDateTimePic
 import { extractProgramsList, getProgramContext } from "../utils/programContextHelper";
 import { getEffectiveStage, PIPELINE_STAGES } from "../../../utils/pipelineEngine";
 import { getContactLeadOrigin } from "../../../utils/registrationEngine";
-
-function parseTimestamp(t) {
-  if (!t) return null;
-  if (t instanceof Date) return t;
-  if (typeof t.toDate === "function") return t.toDate();
-  if (typeof t === "object" && t.seconds !== undefined) {
-    return new Date(t.seconds * 1000 + Math.round((t.nanoseconds || 0) / 1000000));
-  }
-  return new Date(t);
-}
 
 export default function MobileEditModal({
   row,
@@ -98,9 +90,15 @@ export default function MobileEditModal({
 
     const attState = findMatchingAttenderState(normalized.attenderStates, attenderId, attenderName);
     
-    const rootCallbackDate = attState?.callbackDate || row.callbackDate || row["Callback Date"] || row.callback_date || row.nextCallDate || row.next_call_date || row.callback || null;
-    const rootCallbackTime = attState?.callbackTime || row.callbackTime || row["Callback Time"] || row.callback_time || "";
-    const rootCallbackStatus = attState?.callbackStatus || row.callbackStatus || (rootCallbackDate ? "pending" : null);
+    const rootCallbackDate = attState && attState.callbackDate !== undefined
+      ? (attState.callbackDate ? getLocalDateString(attState.callbackDate) : null)
+      : (row.callbackDate ? getLocalDateString(row.callbackDate) : null);
+    const rootCallbackTime = attState && attState.callbackTime !== undefined
+      ? (attState.callbackTime || null)
+      : (row.callbackTime || null);
+    const rootCallbackStatus = attState && attState.callbackStatus !== undefined
+      ? (attState.callbackStatus || null)
+      : (row.callbackStatus || (rootCallbackDate ? "pending" : null));
 
     if (attState) {
       normalized["Called For"] = attState.calledFor || attState["Called For"] || "";
@@ -108,21 +106,18 @@ export default function MobileEditModal({
       normalized.Source = attState.source || attState.Source || rootSource;
       normalized.source = normalized.Source;
       normalized.status = attState.status || "";
-      normalized.remark = "";
-      normalized.callbackDate = rootCallbackDate;
-      normalized.callbackStatus = rootCallbackStatus;
-      normalized.callbackTime = rootCallbackTime;
     } else {
       normalized["Called For"] = "";
       normalized.calledFor = "";
       normalized.Source = rootSource;
       normalized.source = rootSource;
       normalized.status = "";
-      normalized.remark = "";
-      normalized.callbackDate = rootCallbackDate;
-      normalized.callbackStatus = rootCallbackStatus;
-      normalized.callbackTime = rootCallbackTime;
     }
+
+    normalized.remark = "";
+    normalized.callbackDate = rootCallbackDate;
+    normalized.callbackStatus = rootCallbackStatus;
+    normalized.callbackTime = rootCallbackTime;
 
     normalized.callStatus = "";
     normalized.queryStatus = "";
@@ -165,12 +160,6 @@ export default function MobileEditModal({
     }
   };
 
-  const formatFollowupDateStr = (dateVal) => {
-    if (!dateVal) return "";
-    const d = new Date(dateVal);
-    if (isNaN(d.getTime())) return String(dateVal);
-    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-  };
 
   const rawCbStatus = String(edited.callbackStatus || "").toLowerCase().trim();
   const isFollowupCompleted = rawCbStatus === "done" || rawCbStatus === "completed";
@@ -523,7 +512,12 @@ export default function MobileEditModal({
       const newRemark = String(targetEdited.remark || "").trim();
       const remarkChanged = oldRemark !== newRemark;
 
-      const isCallAttemptUpdated = statusChanged || remarkChanged || purposeChanged || callStatusChanged;
+      const oldCallbackDate = getLocalDateString(savedRow.callbackDate);
+      const newCallbackDate = getLocalDateString(targetEdited.callbackDate);
+      const callbackDateChanged = oldCallbackDate !== newCallbackDate;
+      const callbackStatusChanged = String(savedRow.callbackStatus || "").trim() !== String(targetEdited.callbackStatus || "").trim();
+
+      const isCallAttemptUpdated = statusChanged || remarkChanged || purposeChanged || callStatusChanged || callbackDateChanged || callbackStatusChanged;
       if (isCallAttemptUpdated) {
         const resolvedLeadOrigin = targetEdited.leadOrigin || targetEdited.original_source || targetEdited.originalSource || targetEdited["Lead Origin"] || savedRow.leadOrigin || savedRow.original_source || "";
         const resolvedCurrentSource = targetEdited.source || targetEdited[sourceField] || targetEdited.Source || targetEdited.currentSource || "";
@@ -620,11 +614,7 @@ export default function MobileEditModal({
   };
 
   const getLogName = () => edited.Name || edited.name || row.Name || row.name || "";
-  const getCallbackDateStr = () => {
-    if (!edited.callbackDate) return "";
-    const d = parseTimestamp(edited.callbackDate);
-    return d && !isNaN(d.getTime()) ? d.toISOString().split("T")[0] : "";
-  };
+  const getCallbackDateStr = () => getLocalDateString(edited.callbackDate);
 
   const mergedHistory = useMemo(() => {
     const list = [];
@@ -1090,7 +1080,7 @@ export default function MobileEditModal({
                               Rescheduling Follow-up
                             </div>
                             <div className="text-[10px] text-sky-700 font-medium">
-                              Current: {formatFollowupDateStr(edited.callbackDate)} {edited.callbackTime ? `· ${formatFollowupTime12h(edited.callbackTime)}` : ""}
+                              Current: {formatFollowupDate(edited.callbackDate)} {edited.callbackTime ? `· ${formatFollowupTime12h(edited.callbackTime)}` : ""}
                             </div>
                           </div>
                         </div>
@@ -1120,7 +1110,7 @@ export default function MobileEditModal({
                               handleChange("callbackTime", tempTime);
                               handleChange("callbackStatus", "rescheduled");
                               setIsRescheduling(false);
-                              toast.success(`Rescheduled to ${formatFollowupDateStr(tempDate)}`);
+                              toast.success(`Rescheduled to ${formatFollowupDate(tempDate)}`);
                             }}
                             className="px-3.5 py-1.5 bg-sky-600 active:scale-95 text-white font-extrabold text-xs rounded-lg flex items-center gap-1"
                           >
@@ -1144,7 +1134,7 @@ export default function MobileEditModal({
                           </div>
                           <div>
                             <div className="text-xs font-extrabold text-amber-950 flex items-center gap-1.5">
-                              <span>📅 {formatFollowupDateStr(edited.callbackDate)}</span>
+                              <span>📅 {formatFollowupDate(edited.callbackDate)}</span>
                               {edited.callbackTime && <span className="text-amber-800">· 🕒 {formatFollowupTime12h(edited.callbackTime)}</span>}
                             </div>
                             <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded border border-amber-300/60">
@@ -1213,7 +1203,7 @@ export default function MobileEditModal({
                   <div className="space-y-2.5 p-3 bg-emerald-50/80 border border-emerald-200 rounded-xl">
                     <div className="flex items-center gap-2 text-emerald-950 font-extrabold text-xs">
                       <CheckCircle2 size={15} className="text-emerald-600" />
-                      <span>✓ Completed — {formatFollowupDateStr(edited.callbackDate) || "Follow-up"}</span>
+                      <span>✓ Completed — {formatFollowupDate(edited.callbackDate) || "Follow-up"}</span>
                     </div>
 
                     {isAddingNext ? (
@@ -1240,7 +1230,7 @@ export default function MobileEditModal({
                               handleChange("callbackTime", tempTime);
                               handleChange("callbackStatus", "pending");
                               setIsAddingNext(false);
-                              toast.success(`Next follow-up scheduled for ${formatFollowupDateStr(tempDate)}`);
+                              toast.success(`Next follow-up scheduled for ${formatFollowupDate(tempDate)}`);
                             }}
                             className="px-3.5 py-1.5 bg-indigo-600 text-white font-extrabold text-xs rounded-lg flex items-center gap-1"
                           >
@@ -1268,7 +1258,7 @@ export default function MobileEditModal({
                         <button
                           type="button"
                           onClick={() => {
-                            const today = new Date().toISOString().split('T')[0];
+                            const today = getLocalDateString();
                             setTempDate(today);
                             setTempTime("");
                             setIsAddingNext(true);
@@ -1287,7 +1277,7 @@ export default function MobileEditModal({
                   <div className="space-y-2.5 p-3 bg-slate-50 border border-slate-200 rounded-xl">
                     <div className="flex items-center gap-2 text-slate-700 font-extrabold text-xs">
                       <X size={15} className="text-slate-400" />
-                      <span>✕ Cancelled — {formatFollowupDateStr(edited.callbackDate) || "Follow-up"}</span>
+                      <span>✕ Cancelled — {formatFollowupDate(edited.callbackDate) || "Follow-up"}</span>
                     </div>
 
                     {isAddingNext ? (
@@ -1314,7 +1304,7 @@ export default function MobileEditModal({
                               handleChange("callbackTime", tempTime);
                               handleChange("callbackStatus", "pending");
                               setIsAddingNext(false);
-                              toast.success(`New follow-up set for ${formatFollowupDateStr(tempDate)}`);
+                              toast.success(`New follow-up set for ${formatFollowupDate(tempDate)}`);
                             }}
                             className="px-3.5 py-1.5 bg-indigo-600 text-white font-extrabold text-xs rounded-lg flex items-center gap-1"
                           >
@@ -1342,7 +1332,7 @@ export default function MobileEditModal({
                         <button
                           type="button"
                           onClick={() => {
-                            const today = new Date().toISOString().split('T')[0];
+                            const today = getLocalDateString();
                             setTempDate(today);
                             setTempTime("");
                             setIsAddingNext(true);
@@ -1383,7 +1373,7 @@ export default function MobileEditModal({
                               handleChange("callbackTime", tempTime);
                               handleChange("callbackStatus", "pending");
                               setIsAddingNext(false);
-                              toast.success(`Follow-up set for ${formatFollowupDateStr(tempDate)}`);
+                              toast.success(`Follow-up set for ${formatFollowupDate(tempDate)}`);
                             }}
                             className="px-3.5 py-1.5 bg-indigo-600 text-white font-extrabold text-xs rounded-lg flex items-center gap-1"
                           >
@@ -1403,7 +1393,7 @@ export default function MobileEditModal({
                         <button
                           type="button"
                           onClick={() => {
-                            const today = new Date().toISOString().split('T')[0];
+                            const today = getLocalDateString();
                             setTempDate(today);
                             setTempTime("");
                             setIsAddingNext(true);

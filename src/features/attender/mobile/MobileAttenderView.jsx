@@ -53,7 +53,7 @@ export default function MobileAttenderView({
   filterCallbackStatus, setFilterCallbackStatus,
   filterCallCount, setFilterCallCount,
   filterGeneralStatus, setFilterGeneralStatus,
-  filterQueryStatus, setFilterQueryStatus,
+  followupScope, setFollowupScope,
   filterAbhivyakti, setFilterAbhivyakti,
   filterKhoji, setFilterKhoji,
   filterDateType, setFilterDateType,
@@ -267,7 +267,7 @@ export default function MobileAttenderView({
           filterCallbackStatus={filterCallbackStatus} setFilterCallbackStatus={setFilterCallbackStatus}
           filterCallCount={filterCallCount} setFilterCallCount={setFilterCallCount}
           filterGeneralStatus={filterGeneralStatus} setFilterGeneralStatus={setFilterGeneralStatus}
-          filterQueryStatus={filterQueryStatus} setFilterQueryStatus={setFilterQueryStatus}
+          followupScope={followupScope} setFollowupScope={setFollowupScope}
           filterAbhivyakti={filterAbhivyakti} setFilterAbhivyakti={setFilterAbhivyakti}
           filterKhoji={filterKhoji} setFilterKhoji={setFilterKhoji}
           filterDateType={filterDateType} setFilterDateType={setFilterDateType}

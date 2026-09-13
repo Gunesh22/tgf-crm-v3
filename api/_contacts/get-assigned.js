@@ -85,7 +85,27 @@ export default async function handler(req, res) {
 
     // Map response to preserve all contact fields for clean frontend rendering
     const formattedContacts = contacts.map(c => {
-      const attState = (c.attenderStates && c.attenderStates[attenderId]) || {};
+      let attState = {};
+      if (c.attenderStates && typeof c.attenderStates === 'object') {
+        if (cleanInput && c.attenderStates[cleanInput]) {
+          attState = c.attenderStates[cleanInput];
+        } else if (resolvedId && c.attenderStates[resolvedId]) {
+          attState = c.attenderStates[resolvedId];
+        } else if (attenderId && c.attenderStates[attenderId]) {
+          attState = c.attenderStates[attenderId];
+        } else {
+          const inLower = cleanInput.toLowerCase();
+          const resLower = (resolvedId || '').toLowerCase();
+          const matchedKey = Object.keys(c.attenderStates).find(k => {
+            const st = c.attenderStates[k];
+            const kLower = k.toLowerCase();
+            return kLower === inLower || (resLower && kLower === resLower) ||
+              (st && st.attenderName && String(st.attenderName).toLowerCase().trim() === inLower);
+          });
+          if (matchedKey) attState = c.attenderStates[matchedKey];
+        }
+      }
+
       const idStr = c._id.toString();
       const phoneVal = c.Phone || c.phone || c.Mobile || c.mobile || '';
       const nameVal = c.Name || c.name || '';
@@ -108,9 +128,11 @@ export default async function handler(req, res) {
         leadOrigin: c.leadOrigin || c.original_source || c.originalSource || c['Lead Origin'] || '',
         source: c.source || c.Source || c.Sourse || c.sourse || '',
         Source: c.Source || c.source || c.Sourse || c.sourse || '',
-        status: attState.status || (c.status === 'Pending' ? '' : (c.status || '')),
+        status: attState.status !== undefined ? attState.status : (c.status === 'Pending' ? '' : (c.status || '')),
         remark: attState.remark !== undefined ? attState.remark : (c.remark || ''),
-        callbackDate: attState.callbackDate || c.callbackDate || null,
+        callbackDate: attState.callbackDate !== undefined ? attState.callbackDate : (c.callbackDate || null),
+        callbackTime: attState.callbackTime !== undefined ? attState.callbackTime : (c.callbackTime || null),
+        callbackStatus: attState.callbackStatus !== undefined ? attState.callbackStatus : (c.callbackStatus || (c.callbackDate ? 'pending' : null)),
         lastCalledAt: attState.lastCalledAt || c.lastCalledAt || null,
         history: Array.isArray(c.history) ? c.history : []
       };

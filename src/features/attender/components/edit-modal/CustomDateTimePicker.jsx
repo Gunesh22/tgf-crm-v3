@@ -370,7 +370,7 @@ export const CustomDateTimePicker = ({
                 }
 
                 const isSelected = cell.dateStr === selectedDateStr;
-                const todayStr = new Date().toISOString().split("T")[0];
+                const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
                 const isToday = cell.dateStr === todayStr;
 
                 return (

@@ -2,7 +2,7 @@ import React from "react";
 import {
   Search, SlidersHorizontal, FileSpreadsheet, Flame, Clock, Tag,
   ChevronDown, X, AlertCircle, Phone, PhoneOff, Calendar, CalendarDays,
-  User, Users, CheckCircle2, CheckSquare, MoreHorizontal, PhoneOutgoing, RefreshCw, Loader
+  User, Users, CheckCircle2, MoreHorizontal, PhoneOutgoing, RefreshCw, Loader
 } from "lucide-react";
 import { STATUS_OPTIONS } from "../utils";
 
@@ -238,8 +238,8 @@ export function AttenderFilters({
   setFilterCallCount,
   filterGeneralStatus,
   setFilterGeneralStatus,
-  filterQueryStatus,
-  setFilterQueryStatus,
+  followupScope = "All",
+  setFollowupScope,
   filterAbhivyakti,
   setFilterAbhivyakti,
   filterKhoji,
@@ -276,7 +276,6 @@ export function AttenderFilters({
 }) {
   const [searchDraft, setSearchDraft] = React.useState(searchQuery);
   const [filterSearchQuery, setFilterSearchQuery] = React.useState("");
-  const [showDatePickerModal, setShowDatePickerModal] = React.useState(false);
   const [appliedFeedback, setAppliedFeedback] = React.useState("");
   const [moreMenuOpen, setMoreMenuOpen] = React.useState(false);
   const drawerSearchInputRef = React.useRef(null);
@@ -456,22 +455,46 @@ export function AttenderFilters({
     });
 
     if (filterDateType && filterDateType !== "All") {
-      const dateLabel = filterDateType === "lastCalledAt" ? "Last Called" : "Assignment Date";
+      let dateLabel = "Date";
+      let rangeText = "";
+      if (filterDateType === "callbackDate") {
+        dateLabel = "Follow-up";
+        const scopeStr = followupScope !== "All" ? followupScope : "";
+        const dateStr = filterDateRange === "Custom" && (customDateFrom || customDateTo)
+          ? (customDateFrom === customDateTo ? customDateFrom : `${customDateFrom || "..."} to ${customDateTo || "..."}`)
+          : (filterDateRange !== "All" ? filterDateRange : "");
+        
+        if (scopeStr && dateStr) {
+          rangeText = `${scopeStr}: ${dateStr}`;
+        } else if (scopeStr) {
+          rangeText = scopeStr;
+        } else if (dateStr) {
+          rangeText = dateStr;
+        } else {
+          rangeText = "All";
+        }
+      } else {
+        dateLabel = filterDateType === "lastCalledAt" ? "Last Called" : "Assignment Date";
+        rangeText = filterDateRange === "Custom" && (customDateFrom || customDateTo)
+          ? (customDateFrom === customDateTo ? customDateFrom : `${customDateFrom || "..."} to ${customDateTo || "..."}`)
+          : filterDateRange;
+      }
       chips.push({
         catId: "date",
         catName: "Date",
-        val: filterDateRange,
-        label: `${dateLabel}: ${filterDateRange}`,
+        val: `${filterDateType}-${followupScope}-${filterDateRange}`,
+        label: `${dateLabel}: ${rangeText}`,
         remove: () => {
           setFilterDateType("All");
           setFilterDateRange("All");
+          setFollowupScope?.("All");
           setCustomDateFrom("");
           setCustomDateTo("");
         }
       });
     }
     return chips;
-  }, [allCategories, filterDateType, filterDateRange, setFilterDateType, setFilterDateRange, setCustomDateFrom, setCustomDateTo]);
+  }, [allCategories, filterDateType, followupScope, filterDateRange, setFilterDateType, setFilterDateRange, setFollowupScope, customDateFrom, customDateTo, setCustomDateFrom, setCustomDateTo]);
 
   // Perform Global Value & Field Search across all Categories
   const searchResults = React.useMemo(() => {
@@ -496,15 +519,239 @@ export function AttenderFilters({
     return results;
   }, [filterSearchQuery, allCategories]);
 
-  React.useEffect(() => {
-    function handleKeyDown(e) {
-      if (e.key === "Escape" && showAdvancedFilters) {
-        setShowAdvancedFilters(false);
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showAdvancedFilters, setShowAdvancedFilters]);
+  // Check if drawer search matches date / follow-up keywords
+  const isDateSearchMatch = React.useMemo(() => {
+    const q = filterSearchQuery.trim().toLowerCase();
+    if (!q || q.length < 2) return false;
+    const dateKeywords = [
+      "date", "dates", "follow", "followup", "flowwup", "flowup", "follow-up", "follow up", 
+      "callback", "call back", "callbacks", "today", "tomorrow", "yesterday", "overdue", 
+      "pending", "upcoming", "custom", "range", "calendar", "when", "due"
+    ];
+    return dateKeywords.some(keyword => keyword.includes(q) || q.includes(keyword));
+  }, [filterSearchQuery]);
+
+  // Reusable Date Parameters block (for default view and search view)
+  const renderDateParameters = (isSearch = false) => (
+    <div className={`space-y-3 ${isSearch ? "" : "pt-2 border-t border-slate-100"}`}>
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+          <CalendarDays size={13} className="text-slate-500" /> Date Parameters
+        </span>
+        {filterDateType !== "All" && (
+          <button
+            type="button"
+            onClick={() => {
+              setFilterDateType("All");
+              setFilterDateRange("All");
+              setFollowupScope?.("All");
+              setCustomDateFrom("");
+              setCustomDateTo("");
+            }}
+            className="text-[10px] text-rose-600 hover:underline font-semibold cursor-pointer"
+          >
+            Clear Date
+          </button>
+        )}
+      </div>
+
+      {/* Date Target Selector Buttons */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-slate-100 rounded-md">
+        {[
+          { label: "No Date", value: "All" },
+          { label: "Follow-up", value: "callbackDate" },
+          { label: "Last Called", value: "lastCalledAt" },
+          { label: "Assigned", value: "createdAt" }
+        ].map(opt => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => {
+              setFilterDateType(opt.value);
+              setPage(1);
+              if (opt.value === "All") {
+                setFilterDateRange("All");
+                setFollowupScope?.("All");
+                setCustomDateFrom("");
+                setCustomDateTo("");
+              }
+            }}
+            className={`py-1.5 px-2 rounded text-xs font-semibold transition-colors cursor-pointer text-center ${
+              filterDateType === opt.value
+                ? opt.value === "callbackDate"
+                  ? "bg-amber-500 text-white shadow-2xs font-bold"
+                  : "bg-white text-indigo-700 shadow-2xs font-bold"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Revealable Date Range & Custom From/To */}
+      {filterDateType !== "All" && (
+        <div className="space-y-3 p-3 bg-slate-50 border border-slate-200 rounded-md animate-fade-in">
+          {filterDateType === "callbackDate" ? (
+            <>
+              {/* Follow-up Status Scope Toggle (All / Pending / Upcoming) */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                  Follow-up Status
+                </label>
+                <div className="grid grid-cols-3 gap-1 p-0.5 bg-slate-200/80 rounded-lg">
+                  {[
+                    { label: "All", value: "All" },
+                    { label: "Pending", value: "Pending" },
+                    { label: "Upcoming", value: "Upcoming" }
+                  ].map(sc => (
+                    <button
+                      key={sc.value}
+                      type="button"
+                      onClick={() => {
+                        setFollowupScope?.(sc.value);
+                        setPage(1);
+                      }}
+                      className={`py-1 rounded-md text-xs font-bold transition cursor-pointer text-center ${
+                        followupScope === sc.value
+                          ? "bg-amber-500 text-white shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      {sc.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Under that: Select the Date */}
+              <div className="space-y-1.5 pt-2 border-t border-slate-200/60">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                  Follow-up Date
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { label: "All Dates", value: "All" },
+                    { label: "Today", value: "Today" },
+                    { label: "Tomorrow", value: "Tomorrow" },
+                    { label: "Overdue", value: "Overdue" },
+                    { label: "Next 7 Days", value: "This Week" },
+                    { label: "Custom Date", value: "Custom" }
+                  ].map(range => (
+                    <button
+                      key={range.value}
+                      type="button"
+                      onClick={() => {
+                        setFilterDateRange(range.value);
+                        setPage(1);
+                        if (range.value !== "Custom") {
+                          setCustomDateFrom("");
+                          setCustomDateTo("");
+                        }
+                      }}
+                      className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors cursor-pointer ${
+                        filterDateRange === range.value
+                          ? "bg-amber-500 border-amber-500 text-white font-bold shadow-xs"
+                          : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      {range.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                Quick Range
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { label: "Today", value: "Today" },
+                  { label: "Yesterday", value: "Yesterday" },
+                  { label: "Last 7 Days", value: "This Week" },
+                  { label: "Custom Date", value: "Custom" }
+                ].map(range => (
+                  <button
+                    key={range.value}
+                    type="button"
+                    onClick={() => {
+                      setFilterDateRange(range.value);
+                      setPage(1);
+                      if (range.value !== "Custom") {
+                        setCustomDateFrom("");
+                        setCustomDateTo("");
+                      }
+                    }}
+                    className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors cursor-pointer ${
+                      filterDateRange === range.value
+                        ? "bg-indigo-600 border-indigo-600 text-white font-semibold shadow-xs"
+                        : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    {range.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* From / To Date Inputs */}
+          {(filterDateRange === "Custom" || customDateFrom || customDateTo) && (
+            <div className="space-y-2 pt-2 border-t border-slate-200/60">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                  Custom Date Range
+                </label>
+                {(customDateFrom || customDateTo) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomDateFrom("");
+                      setCustomDateTo("");
+                      setPage(1);
+                    }}
+                    className="text-[10px] text-rose-500 hover:underline font-semibold cursor-pointer"
+                  >
+                    Clear Range
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">From Date</label>
+                  <input
+                    type="date"
+                    value={customDateFrom}
+                    onChange={e => {
+                      setCustomDateFrom(e.target.value);
+                      setFilterDateRange("Custom");
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">To Date</label>
+                  <input
+                    type="date"
+                    value={customDateTo}
+                    onChange={e => {
+                      setCustomDateTo(e.target.value);
+                      setFilterDateRange("Custom");
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 
   const handleApplyFilters = () => {
     setShowAdvancedFilters(false);
@@ -911,7 +1158,14 @@ export function AttenderFilters({
               {/* ── MODE 1: GLOBAL VALUE & FIELD SEARCH RESULTS ── */}
               {filterSearchQuery.trim() !== "" ? (
                 <div className="space-y-4">
-                  {searchResults && searchResults.length > 0 ? (
+                  {/* Date Parameters Section when searching for date/followup */}
+                  {isDateSearchMatch && (
+                    <div className="bg-white border border-slate-200 rounded-md p-3.5 shadow-2xs">
+                      {renderDateParameters(true)}
+                    </div>
+                  )}
+
+                  {searchResults && searchResults.length > 0 && (
                     <>
                       <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                         {searchResults.length} Filter Group{searchResults.length > 1 ? "s" : ""} Matched
@@ -957,11 +1211,13 @@ export function AttenderFilters({
                         </div>
                       ))}
                     </>
-                  ) : (
+                  )}
+
+                  {!isDateSearchMatch && (!searchResults || searchResults.length === 0) && (
                     <div className="p-8 text-center space-y-2 border border-dashed border-slate-200 rounded-lg">
                       <div className="text-slate-700 font-semibold text-xs">No matching filters for "{filterSearchQuery}"</div>
                       <p className="text-slate-400 text-xs">
-                        Try searching for: <span className="font-mono text-indigo-600">source, city, status, program, phone</span>
+                        Try searching for: <span className="font-mono text-indigo-600">date, follow up, source, city, status, program</span>
                       </p>
                       <button
                         type="button"
@@ -1057,126 +1313,7 @@ export function AttenderFilters({
                   </div>
 
                   {/* DATE PARAMETERS SECTION */}
-                  <div className="space-y-3 pt-2 border-t border-slate-100">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <CalendarDays size={13} className="text-slate-500" /> Date Parameters
-                      </span>
-                      {filterDateType !== "All" && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFilterDateType("All");
-                            setFilterDateRange("All");
-                            setCustomDateFrom("");
-                            setCustomDateTo("");
-                          }}
-                          className="text-[10px] text-rose-600 hover:underline font-semibold cursor-pointer"
-                        >
-                          Clear Date
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Date Target Selector Buttons */}
-                    <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-md">
-                      {[
-                        { label: "No Date", value: "All" },
-                        { label: "Last Called", value: "lastCalledAt" },
-                        { label: "Assigned", value: "createdAt" }
-                      ].map(opt => (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() => {
-                            setFilterDateType(opt.value);
-                            setPage(1);
-                            if (opt.value === "All") {
-                              setFilterDateRange("All");
-                              setCustomDateFrom("");
-                              setCustomDateTo("");
-                            } else if (filterDateRange === "All") {
-                              setFilterDateRange("Today");
-                            }
-                          }}
-                          className={`py-1.5 px-2 rounded text-xs font-semibold transition-colors cursor-pointer ${
-                            filterDateType === opt.value
-                              ? "bg-white text-indigo-700 shadow-2xs font-bold"
-                              : "text-slate-600 hover:text-slate-900"
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Revealable Date Range & Custom From/To */}
-                    {filterDateType !== "All" && (
-                      <div className="space-y-3 p-3 bg-slate-50 border border-slate-200 rounded-md animate-fade-in">
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Quick Range</label>
-                          <div className="flex flex-wrap gap-1.5">
-                            {[
-                              { label: "Today", value: "Today" },
-                              { label: "Yesterday", value: "Yesterday" },
-                              { label: "Last 7 Days", value: "This Week" },
-                              { label: "Custom", value: "Custom" }
-                            ].map(range => (
-                              <button
-                                key={range.value}
-                                type="button"
-                                onClick={() => {
-                                  setFilterDateRange(range.value);
-                                  setPage(1);
-                                  if (range.value !== "Custom") {
-                                    setCustomDateFrom("");
-                                    setCustomDateTo("");
-                                  }
-                                }}
-                                className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors cursor-pointer ${
-                                  filterDateRange === range.value
-                                    ? "bg-indigo-600 border-indigo-600 text-white font-semibold"
-                                    : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100"
-                                }`}
-                              >
-                                {range.label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* From / To Date Inputs */}
-                        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60">
-                          <div>
-                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">From Date</label>
-                            <input
-                              type="date"
-                              value={customDateFrom}
-                              onChange={e => {
-                                setCustomDateFrom(e.target.value);
-                                setFilterDateRange("Custom");
-                                setPage(1);
-                              }}
-                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">To Date</label>
-                            <input
-                              type="date"
-                              value={customDateTo}
-                              onChange={e => {
-                                setCustomDateTo(e.target.value);
-                                setFilterDateRange("Custom");
-                                setPage(1);
-                              }}
-                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  {renderDateParameters(false)}
                 </div>
               )}
             </div>
@@ -1216,128 +1353,6 @@ export function AttenderFilters({
         </>
       )}
 
-      {/* Dedicated Historical Date Range Picker Modal */}
-      {showDatePickerModal && (
-        <div
-          onClick={e => { if (e.target === e.currentTarget) setShowDatePickerModal(false); }}
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in"
-        >
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100 p-6 space-y-5">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <div>
-                <h3 className="text-base font-black text-gray-900 flex items-center gap-2">
-                  <CalendarDays size={18} className="text-indigo-600" />
-                  Historical Date Range
-                </h3>
-                <p className="text-xs text-gray-500 font-semibold mt-0.5">
-                  Fetch historical lead partitions older than 3 months on-demand
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowDatePickerModal(false)}
-                className="p-2 hover:bg-gray-100 active:scale-90 rounded-xl transition text-gray-400 hover:text-gray-600"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Date Parameter Field */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-700">Filter By Date Field</label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setFilterDateType("lastCalledAt")}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold transition border ${
-                    filterDateType === "lastCalledAt" || filterDateType === "All"
-                      ? "bg-indigo-50 border-indigo-200 text-indigo-700 font-black"
-                      : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  Last Called Date
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterDateType("createdAt")}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold transition border ${
-                    filterDateType === "createdAt"
-                      ? "bg-indigo-50 border-indigo-200 text-indigo-700 font-black"
-                      : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  Assignment Date
-                </button>
-              </div>
-            </div>
-
-            {/* Date Inputs */}
-            <div className="space-y-3">
-              <label className="text-xs font-bold text-gray-700">Select Date Range</label>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">From Date</span>
-                  <input
-                    type="date"
-                    value={customDateFrom}
-                    onChange={e => {
-                      setCustomDateFrom(e.target.value);
-                      if (filterDateType === "All") setFilterDateType("lastCalledAt");
-                      setFilterDateRange("Custom");
-                    }}
-                    className="w-full bg-gray-50 border border-gray-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs font-bold text-gray-800 outline-none"
-                  />
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">To Date</span>
-                  <input
-                    type="date"
-                    value={customDateTo}
-                    onChange={e => {
-                      setCustomDateTo(e.target.value);
-                      if (filterDateType === "All") setFilterDateType("lastCalledAt");
-                      setFilterDateRange("Custom");
-                    }}
-                    className="w-full bg-gray-50 border border-gray-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs font-bold text-gray-800 outline-none"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => {
-                  setFilterDateType("All");
-                  setFilterDateRange("All");
-                  setCustomDateFrom("");
-                  setCustomDateTo("");
-                  setPage(1);
-                  setShowDatePickerModal(false);
-                }}
-                className="px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition"
-              >
-                Reset to 3-Month Window
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (filterDateType === "All") setFilterDateType("lastCalledAt");
-                  if (!customDateFrom && !customDateTo) setFilterDateRange("This Month");
-                  else setFilterDateRange("Custom");
-                  setPage(1);
-                  setShowDatePickerModal(false);
-                }}
-                className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-95 rounded-xl shadow-md transition"
-              >
-                Apply Date Range
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       </>
     );
   }

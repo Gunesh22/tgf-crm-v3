@@ -301,6 +301,22 @@ export async function executeLogCall(db, payload) {
 
   const callId = 'call_' + Date.now() + '_' + process.hrtime.bigint().toString(36) + '_' + Math.random().toString(36).substring(2, 7);
 
+  let cleanCallbackDate = null;
+  if (callbackDate) {
+    if (typeof callbackDate === 'string') {
+      const match = callbackDate.match(/^(\d{4}-\d{2}-\d{2})/);
+      cleanCallbackDate = match ? match[1] : null;
+    } else {
+      const d = callbackDate instanceof Date ? callbackDate : new Date(callbackDate);
+      if (!isNaN(d.getTime())) {
+        cleanCallbackDate = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+      }
+    }
+  }
+
+  const cleanCallbackTime = callbackTime ? String(callbackTime).trim() : null;
+  const cleanCallbackStatus = payload.callbackStatus || rootUpdates.callbackStatus || (cleanCallbackDate ? 'pending' : null);
+
   // ── Build history item ─────────────────────────────────────────────────
   const historyItem = {
     callId,                                    // unique call event ID
@@ -322,8 +338,9 @@ export async function executeLogCall(db, payload) {
     queryStatus: evalResult.queryStatus || queryStatus || null,
     queryDetails: queryDetails || null,
     remark:       remark || queryDetails || '',
-    callbackDate: callbackDate || null,
-    callbackTime: callbackTime || null,
+    callbackDate: cleanCallbackDate,
+    callbackTime: cleanCallbackTime,
+    callbackStatus: cleanCallbackStatus,
     calledFor:    targetCalledFor || '',
     calledForKey: normalizeCalledForKey(targetCalledFor || ''),
     source:       currentCallSource,
@@ -395,7 +412,7 @@ export async function executeLogCall(db, payload) {
     source:          currentCallSource,
     updatedAt: nowIso,
     isAssigned: true,
-    // Per-attender state (call-specific snapshot)
+    // Per-attender state (call-specific snapshot) — Authoritative follow-up per attender
     [`attenderStates.${cleanAttenderId}`]: {
       attenderId: cleanAttenderId,
       attenderName:  cleanAttenderName || '',
@@ -408,8 +425,9 @@ export async function executeLogCall(db, payload) {
       queryStatus:  evalResult.queryStatus || queryStatus || null,
       queryDetails: queryDetails || null,
       remark:       remark || queryDetails || '',
-      callbackDate: callbackDate || null,
-      callbackTime: callbackTime || null,
+      callbackDate: cleanCallbackDate,
+      callbackTime: cleanCallbackTime,
+      callbackStatus: cleanCallbackStatus,
       lastCalledAt: nowIso,
       calledFor:    targetCalledFor || existingContact.calledFor || existingContact['Called For'] || '',
       calledForKey: normalizeCalledForKey(targetCalledFor || ''),
@@ -434,8 +452,9 @@ export async function executeLogCall(db, payload) {
       callStatus:    callStatusClean,
       queryStatus:   evalResult.queryStatus || queryStatus || null,
       remark:        remark || queryDetails || '',
-      callbackDate:  callbackDate || null,
-      callbackTime:  callbackTime || null,
+      callbackDate:  cleanCallbackDate,
+      callbackTime:  cleanCallbackTime,
+      callbackStatus: cleanCallbackStatus,
       source:        currentCallSource,
       leadOrigin:    originalSource,
       updatedAt:     nowIso
@@ -455,6 +474,10 @@ export async function executeLogCall(db, payload) {
     setPayload.queryStatus = evalResult.queryStatus || queryStatus || existingContact.queryStatus || null;
     setPayload.queryDetails = queryDetails || existingContact.queryDetails || null;
     setPayload.source = currentCallSource;
+    // Root callback is updated for non-shared leads as secondary cache
+    setPayload.callbackDate = cleanCallbackDate;
+    setPayload.callbackTime = cleanCallbackTime;
+    setPayload.callbackStatus = cleanCallbackStatus;
     const resolvedCalledFor = calledFor || rootUpdates.calledFor || rootUpdates['Called For'];
     if (resolvedCalledFor) {
       setPayload.calledFor = resolvedCalledFor;

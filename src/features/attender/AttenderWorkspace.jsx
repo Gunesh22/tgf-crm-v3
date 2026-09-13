@@ -9,7 +9,7 @@ import {
   Bell, Sparkles, UserCheck, RefreshCw, Info, Eye
 } from "lucide-react";
 import {
-  subscribeToCallLogs, getAssignedContacts, safeSetLocalStorage, updateCallLog, addIncomingCallLog,
+  subscribeToCallLogs, getAssignedContacts, safeSetLocalStorage,
   assignContactsToAttender, normalizePhone, getActiveTags,
   INCOMING_PROGRAM_ID, INCOMING_PROGRAM_NAME, ensureIncomingProgram,
   OUTGOING_PROGRAM_ID, OUTGOING_PROGRAM_NAME, ensureOutgoingProgram,
@@ -34,9 +34,11 @@ import {
   isIgnoredField,
   getCanonicalStatus,
   classifyCallStatus,
-  isUnansweredCallback
+  isUnansweredCallback,
+  getLocalDateString,
+  parseTimestamp
 } from "./utils";
-import { normalizeProgramStates, normalizeStageStr } from "../../utils/pipelineEngine";
+import { normalizeProgramStates } from "../../utils/pipelineEngine";
 import { EditModal } from "./components/EditModal";
 import { MyPerformanceDashboard } from "./components/MyPerformanceDashboard";
 import { ColumnsSelector } from "./components/ColumnsSelector";
@@ -49,24 +51,9 @@ import { ContactTable } from "./components/ContactTable";
 import MobileAttenderView from "./mobile/MobileAttenderView";
 import MobileEditModal from "./mobile/MobileEditModal";
 
-function parseTimestamp(t) {
-  if (!t) return null;
-  if (t instanceof Date) return isNaN(t.getTime()) ? null : t;
-  if (typeof t.toDate === "function") return t.toDate();
-  if (typeof t === "object" && t.seconds !== undefined) {
-    return new Date(t.seconds * 1000 + Math.round((t.nanoseconds || 0) / 1000000));
-  }
-  if (typeof t === "number" || typeof t === "string") {
-    const d = new Date(t);
-    return isNaN(d.getTime()) ? null : d;
-  }
-  return null;
-}
-
 function enrichLogsWithCallbackFlags(logs, activeAttenderCtx) {
   if (!Array.isArray(logs)) return [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const todayStr = getLocalDateString();
 
   const seenIds = new Set();
   const uniqueLogs = [];
@@ -80,19 +67,13 @@ function enrichLogsWithCallbackFlags(logs, activeAttenderCtx) {
   }
 
   return uniqueLogs.map(log => {
-    let shouldBeDue = false;
     const view = getContactView(log, activeAttenderCtx);
     const cbStatus = String(view.callbackStatus || log.callbackStatus || "").trim().toLowerCase();
     const isDoneOrCancelled = cbStatus === "done" || cbStatus === "completed" || cbStatus === "cancelled";
-    const rawCbDate = view.callbackDate || log.callbackDate;
+    const rawCbDate = view.callbackDate;
+    const cbDateStr = (!isDoneOrCancelled && rawCbDate) ? getLocalDateString(rawCbDate) : "";
+    const shouldBeDue = !!(cbDateStr && cbDateStr <= todayStr);
 
-    if (rawCbDate && !isDoneOrCancelled) {
-      const cbDate = parseTimestamp(rawCbDate);
-      if (cbDate && !isNaN(cbDate.getTime())) {
-        cbDate.setHours(0, 0, 0, 0);
-        shouldBeDue = cbDate <= today;
-      }
-    }
     if (log._callbackDue === shouldBeDue) return log;
     return { ...log, _callbackDue: shouldBeDue };
   });
@@ -146,10 +127,10 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   const [filterCallbackStatus, setFilterCallbackStatus] = useState([]);
   const [filterCallCount, setFilterCallCount] = useState([]);
   const [filterGeneralStatus, setFilterGeneralStatus] = useState([]);
-  const [filterQueryStatus, setFilterQueryStatus] = useState([]);
   const [filterAbhivyakti, setFilterAbhivyakti] = useState([]);
   const [filterKhoji, setFilterKhoji] = useState([]);
   const [filterDateType, setFilterDateType] = useState("All");
+  const [followupScope, setFollowupScope] = useState("All"); // "All" | "Pending" | "Upcoming"
   const [filterDateRange, setFilterDateRange] = useState("All");
   const [customDateFrom, setCustomDateFrom] = useState("");
   const [customDateTo, setCustomDateTo] = useState("");
@@ -393,8 +374,8 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     setFilterSource([]); setFilterCity([]); setFilterCalledFor([]);
     setFilterCallType([]); setFilterSubProgram([]); setFilterObjectionReason([]);
     setFilterCallbackStatus([]); setFilterCallCount([]); setFilterGeneralStatus([]);
-    setFilterQueryStatus([]);
-    setFilterAbhivyakti([]); setFilterKhoji([]); setFilterDateType("All"); setFilterDateRange("All");
+    setFilterAbhivyakti([]); setFilterKhoji([]); setFilterDateType("All");
+    setFollowupScope("All"); setFilterDateRange("All");
     setCustomDateFrom(""); setCustomDateTo(""); setSearchQuery("");
   };
 
@@ -1102,16 +1083,22 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     if (filterGeneralStatus.length > 0) count++;
     if (filterAbhivyakti.length > 0) count++;
     if (filterKhoji.length > 0) count++;
-    if (filterDateType !== "All" && filterDateRange !== "All") count++;
+    if (filterDateType !== "All") {
+      if (filterDateType === "callbackDate") {
+        if (followupScope !== "All" || filterDateRange !== "All" || customDateFrom || customDateTo) count++;
+      } else {
+        if (filterDateRange !== "All" || customDateFrom || customDateTo) count++;
+      }
+    }
     if (customTimeFrom) count++;
     if (customTimeTo) count++;
     return count;
   }, [
     searchQuery, filterStatus, filterSource, filterCity, filterCalledFor,
     filterCallType, filterSubProgram, filterObjectionReason,
-    filterCallbackStatus, filterCallCount, filterGeneralStatus, filterQueryStatus, filterAbhivyakti,
+    filterCallbackStatus, filterCallCount, filterGeneralStatus, filterAbhivyakti,
     filterKhoji,
-    filterDateType, filterDateRange, customTimeFrom, customTimeTo
+    filterDateType, followupScope, filterDateRange, customDateFrom, customDateTo, customTimeFrom, customTimeTo
   ]);
 
   const handleClearAllFilters = () => {
@@ -1129,6 +1116,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     setFilterAbhivyakti([]);
     setFilterKhoji([]);
     setFilterDateType("All");
+    setFollowupScope("All");
     setFilterDateRange("All");
     setCustomDateFrom("");
     setCustomDateTo("");
@@ -1353,51 +1341,104 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
 
       // 11. Date & Time Range Filter
       if (filterDateType !== "All") {
-        let logDate = null;
-        if (filterDateType === "lastCalledAt") {
-          logDate = log.lastCalledAt ? new Date(log.lastCalledAt) : null;
-        } else if (filterDateType === "createdAt") {
-          logDate = log.createdAt?.toDate ? log.createdAt.toDate() : log.createdAt ? new Date(log.createdAt) : null;
-        }
+        if (filterDateType === "callbackDate") {
+          const cbView = getContactView(log, attenderId || attenderName);
+          const rawCb = cbView.callbackDate;
+          if (!rawCb) return false;
+          const cbYmd = getLocalDateString(rawCb);
+          if (!cbYmd) return false;
 
-        if (!logDate || isNaN(logDate)) return false;
+          const todayYmd = getLocalDateString();
 
-        if (filterDateRange !== "All") {
-          const startOfDay = (d) => { const nd = new Date(d); nd.setHours(0, 0, 0, 0); return nd; };
-          const endOfDay = (d) => { const nd = new Date(d); nd.setHours(23, 59, 59, 999); return nd; };
+          const cbStatus = String(cbView.callbackStatus || "").trim().toLowerCase();
+          const isDoneOrCancelled = cbStatus === "done" || cbStatus === "cancelled";
 
-          const today = new Date();
-          const yesterday = new Date();
-          yesterday.setDate(today.getDate() - 1);
-
-          if (filterDateRange === "Today") {
-            if (logDate < startOfDay(today) || logDate > endOfDay(today)) return false;
-          } else if (filterDateRange === "Yesterday") {
-            if (logDate < startOfDay(yesterday) || logDate > endOfDay(yesterday)) return false;
-          } else if (filterDateRange === "This Week") {
-            const sevenDaysAgo = new Date();
-            sevenDaysAgo.setDate(today.getDate() - 7);
-            if (logDate < startOfDay(sevenDaysAgo)) return false;
-          } else if (filterDateRange === "Custom") {
-            if (customDateFrom && logDate < startOfDay(new Date(customDateFrom))) return false;
-            if (customDateTo && logDate > endOfDay(new Date(customDateTo))) return false;
+          // 1. Follow-up Scope Toggle (All / Pending / Upcoming)
+          if (followupScope === "Pending") {
+            if (isDoneOrCancelled) return false;
+            // If date range is "All", pending defaults to due today or overdue
+            if (filterDateRange === "All" && cbYmd > todayYmd) return false;
+          } else if (followupScope === "Upcoming") {
+            if (isDoneOrCancelled || cbYmd <= todayYmd) return false;
           }
-        }
 
-        if (customTimeFrom || customTimeTo) {
-          const logHours = logDate.getHours();
-          const logMinutes = logDate.getMinutes();
-          const logMinutesSinceMidnight = logHours * 60 + logMinutes;
-
-          if (customTimeFrom) {
-            const [h, m] = customTimeFrom.split(":").map(Number);
-            const fromMinutes = h * 60 + m;
-            if (logMinutesSinceMidnight < fromMinutes) return false;
+          // 2. Follow-up Date Filter under the toggle
+          if (filterDateRange !== "All") {
+            if (filterDateRange === "Pending") {
+              if (isDoneOrCancelled || cbYmd > todayYmd) return false;
+            } else if (filterDateRange === "Upcoming") {
+              if (isDoneOrCancelled || cbYmd <= todayYmd) return false;
+            } else if (filterDateRange === "Today") {
+              if (cbYmd !== todayYmd) return false;
+            } else if (filterDateRange === "Tomorrow") {
+              const now = new Date();
+              now.setDate(now.getDate() + 1);
+              const tomorrowYmd = getLocalDateString(now);
+              if (cbYmd !== tomorrowYmd) return false;
+            } else if (filterDateRange === "Yesterday") {
+              const now = new Date();
+              now.setDate(now.getDate() - 1);
+              const yesterdayYmd = getLocalDateString(now);
+              if (cbYmd !== yesterdayYmd) return false;
+            } else if (filterDateRange === "Overdue") {
+              if (cbYmd >= todayYmd || isDoneOrCancelled) return false;
+            } else if (filterDateRange === "This Week") {
+              const next7 = new Date();
+              next7.setDate(next7.getDate() + 7);
+              const next7Ymd = getLocalDateString(next7);
+              if (cbYmd < todayYmd || cbYmd > next7Ymd) return false;
+            } else if (filterDateRange === "Custom") {
+              if (customDateFrom && cbYmd < customDateFrom) return false;
+              if (customDateTo && cbYmd > customDateTo) return false;
+            }
           }
-          if (customTimeTo) {
-            const [h, m] = customTimeTo.split(":").map(Number);
-            const toMinutes = h * 60 + m;
-            if (logMinutesSinceMidnight > toMinutes) return false;
+        } else {
+          let logDate = null;
+          if (filterDateType === "lastCalledAt") {
+            logDate = log.lastCalledAt ? new Date(log.lastCalledAt) : null;
+          } else if (filterDateType === "createdAt") {
+            logDate = log.createdAt?.toDate ? log.createdAt.toDate() : log.createdAt ? new Date(log.createdAt) : null;
+          }
+
+          if (!logDate || isNaN(logDate)) return false;
+
+          if (filterDateRange !== "All") {
+            const startOfDay = (d) => { const nd = new Date(d); nd.setHours(0, 0, 0, 0); return nd; };
+            const endOfDay = (d) => { const nd = new Date(d); nd.setHours(23, 59, 59, 999); return nd; };
+
+            const today = new Date();
+            const yesterday = new Date();
+            yesterday.setDate(today.getDate() - 1);
+
+            if (filterDateRange === "Today") {
+              if (logDate < startOfDay(today) || logDate > endOfDay(today)) return false;
+            } else if (filterDateRange === "Yesterday") {
+              if (logDate < startOfDay(yesterday) || logDate > endOfDay(yesterday)) return false;
+            } else if (filterDateRange === "This Week") {
+              const sevenDaysAgo = new Date();
+              sevenDaysAgo.setDate(today.getDate() - 7);
+              if (logDate < startOfDay(sevenDaysAgo)) return false;
+            } else if (filterDateRange === "Custom") {
+              if (customDateFrom && logDate < startOfDay(new Date(customDateFrom))) return false;
+              if (customDateTo && logDate > endOfDay(new Date(customDateTo))) return false;
+            }
+          }
+
+          if (customTimeFrom || customTimeTo) {
+            const logHours = logDate.getHours();
+            const logMinutes = logDate.getMinutes();
+            const logMinutesSinceMidnight = logHours * 60 + logMinutes;
+
+            if (customTimeFrom) {
+              const [h, m] = customTimeFrom.split(":").map(Number);
+              const fromMinutes = h * 60 + m;
+              if (logMinutesSinceMidnight < fromMinutes) return false;
+            }
+            if (customTimeTo) {
+              const [h, m] = customTimeTo.split(":").map(Number);
+              const toMinutes = h * 60 + m;
+              if (logMinutesSinceMidnight > toMinutes) return false;
+            }
           }
         }
       }
@@ -1407,9 +1448,9 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   }, [
     tagFilteredLogs, searchQuery, filterStatus, filterSource, filterCalledFor,
     filterCity, filterCallType, filterSubProgram, filterObjectionReason,
-    filterCallbackStatus, filterCallCount, filterGeneralStatus, filterQueryStatus, filterAbhivyakti,
+    filterCallbackStatus, filterCallCount, filterGeneralStatus, filterAbhivyakti,
     filterKhoji,
-    filterDateType, filterDateRange, customDateFrom, customDateTo, customTimeFrom, customTimeTo
+    filterDateType, followupScope, filterDateRange, customDateFrom, customDateTo, customTimeFrom, customTimeTo
   ]);
 
   // ── Dynamic columns from data ──
@@ -1606,14 +1647,16 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
       }
     });
 
-    // Overdue callbacks
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    // Overdue / today callbacks — use per-attender view, not root l.callbackDate
+    const todayYmd = getLocalDateString();
     const callbacksDue = tagFilteredLogs.filter(l => {
-      if (!l.callbackDate) return false;
-      const d = parseTimestamp(l.callbackDate);
-      if (!d || isNaN(d.getTime())) return false;
-      d.setHours(0, 0, 0, 0);
-      return d <= today && l.callbackStatus !== "done";
+      const cbView = getContactView(l, attenderId);
+      const rawCb = cbView.callbackDate;
+      if (!rawCb) return false;
+      const cbStatus = String(cbView.callbackStatus || "").trim().toLowerCase();
+      if (cbStatus === "done" || cbStatus === "cancelled") return false;
+      const cbYmd = getLocalDateString(rawCb);
+      return cbYmd && cbYmd <= todayYmd;
     }).length;
 
     return {
@@ -1647,11 +1690,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     return { bg: "bg-indigo-100", text: "text-indigo-700", label: status };
   };
 
-  const getCallbackStr = (log) => {
-    if (!log.callbackDate) return "";
-    if (log.callbackDate?.toDate) return log.callbackDate.toDate().toLocaleDateString("en-IN");
-    return String(log.callbackDate).split("T")[0];
-  };
+  const getCallbackStr = (log) => getLocalDateString(log.callbackDate);
 
   return (
     <>
@@ -1704,10 +1743,10 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
           filterCallbackStatus={filterCallbackStatus} setFilterCallbackStatus={setFilterCallbackStatus}
           filterCallCount={filterCallCount} setFilterCallCount={setFilterCallCount}
           filterGeneralStatus={filterGeneralStatus} setFilterGeneralStatus={setFilterGeneralStatus}
-          filterQueryStatus={filterQueryStatus} setFilterQueryStatus={setFilterQueryStatus}
           filterAbhivyakti={filterAbhivyakti} setFilterAbhivyakti={setFilterAbhivyakti}
           filterKhoji={filterKhoji} setFilterKhoji={setFilterKhoji}
           filterDateType={filterDateType} setFilterDateType={setFilterDateType}
+          followupScope={followupScope} setFollowupScope={setFollowupScope}
           filterDateRange={filterDateRange} setFilterDateRange={setFilterDateRange}
           customDateFrom={customDateFrom} setCustomDateFrom={setCustomDateFrom}
           customDateTo={customDateTo} setCustomDateTo={setCustomDateTo}
@@ -2119,14 +2158,14 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
           setFilterCallCount={setFilterCallCount}
           filterGeneralStatus={filterGeneralStatus}
           setFilterGeneralStatus={setFilterGeneralStatus}
-          filterQueryStatus={filterQueryStatus}
-          setFilterQueryStatus={setFilterQueryStatus}
           filterAbhivyakti={filterAbhivyakti}
           setFilterAbhivyakti={setFilterAbhivyakti}
           filterKhoji={filterKhoji}
           setFilterKhoji={setFilterKhoji}
           filterDateType={filterDateType}
           setFilterDateType={setFilterDateType}
+          followupScope={followupScope}
+          setFollowupScope={setFollowupScope}
           filterDateRange={filterDateRange}
           setFilterDateRange={setFilterDateRange}
           customDateFrom={customDateFrom}

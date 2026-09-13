@@ -1,36 +1,11 @@
 import React from "react";
 import { Flame, Clock, RotateCw, Users, Loader, ArrowDownLeft, ArrowUpRight, Calendar } from "lucide-react";
 import { normalizePhone } from "../../../lib/db";
-import { getFieldWithFallback, isUnansweredCallback, getCanonicalStatus, getSharedAttenders, getAttenderStatus, getAttenderRemark, getContactView, parseTimestamp } from "../utils";
+import { getFieldWithFallback, isUnansweredCallback, getCanonicalStatus, getSharedAttenders, getAttenderStatus, getAttenderRemark, getContactView, parseTimestamp, formatFollowupDate } from "../utils";
 import { getPipelineStageConfig } from "../../../utils/pipelineEngine";
 import LottieAnimation from "../../../components/ui/LottieAnimation";
 import customerServiceAnimation from "../../../assets/customer_service.json";
 
-function formatCallbackDisplay(rawDate, isDue) {
-  if (!rawDate) return null;
-  const d = parseTimestamp(rawDate);
-  if (!d || isNaN(d.getTime())) return null;
-
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const targetDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-
-  const diffDays = Math.round((targetDay - today) / (1000 * 60 * 60 * 24));
-  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const dateStr = `${d.getDate()} ${monthNames[d.getMonth()]}`;
-  const hasTime = d.getHours() > 0 || d.getMinutes() > 0;
-  const timeStr = hasTime ? d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "";
-
-  if (isDue || diffDays < 0) {
-    return { text: `Overdue · ${dateStr}`, type: "overdue" };
-  } else if (diffDays === 0) {
-    return { text: timeStr ? `Today · ${timeStr}` : `Today · ${dateStr}`, type: "today" };
-  } else if (diffDays === 1) {
-    return { text: timeStr ? `Tomorrow · ${timeStr}` : `Tomorrow · ${dateStr}`, type: "tomorrow" };
-  } else {
-    return { text: timeStr ? `${dateStr} · ${timeStr}` : dateStr, type: "normal" };
-  }
-}
 
 function CollapsedTags({ tags }) {
   const [expanded, setExpanded] = React.useState(false);
@@ -444,11 +419,11 @@ export function ContactTable({
                   {!hiddenColumns.includes("Callback") && (
                     <td className="py-2.5 px-3 align-top whitespace-nowrap">
                       {(() => {
-                        const rawCb = view.callbackDate || log.callbackDate;
-                        const parsedDate = parseTimestamp(rawCb) || parseTimestamp(log.callbackDate);
-                        const cbStr = parsedDate ? parsedDate.toLocaleDateString("en-IN") : "";
+                        // view.callbackDate is already authoritative (attender-specific, null = cleared)
+                        const rawCb = view.callbackDate;
                         const cbStatus = view.callbackStatus || log.callbackStatus;
-                        if (cbStr) {
+                        if (rawCb) {
+                          const cbStr = formatFollowupDate(rawCb);
                           return (
                             <div className="flex flex-col gap-0.5">
                               {isDue ? (

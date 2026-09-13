@@ -17,7 +17,9 @@ import {
   SALES_OUTCOME_OPTIONS,
   CALLED_FOR_OPTIONS,
   SOURCE_OPTIONS,
-  CALL_SOURCE_OPTIONS
+  CALL_SOURCE_OPTIONS,
+  getLocalDateString,
+  formatFollowupDate
 } from "../../utils";
 import { evaluatePipeline, getPipelineStageConfig, getEffectiveStage, normalizeStageStr, shouldShowConvertToSales, PIPELINE_STAGES } from "../../../../utils/pipelineEngine";
 import { overridePipelineStage, subscribeToSettingsOptions } from "../../../../lib/db";
@@ -112,28 +114,6 @@ export const CallEntryTab = ({
     }
   };
 
-  const formatFollowupDateStr = (dateVal) => {
-    if (!dateVal) return "";
-    let raw = dateVal;
-    if (typeof raw === "object" && raw !== null) {
-      if (raw instanceof Date) {
-        // Date instance
-      } else if (typeof raw.seconds === "number") {
-        raw = new Date(raw.seconds * 1000);
-      } else if (typeof raw._seconds === "number") {
-        raw = new Date(raw._seconds * 1000);
-      } else {
-        raw = raw.date || raw.$date || raw.callbackDate || raw.callback_date || raw.value || raw.iso || raw.formatted || raw.startDate || raw.endDate || "";
-      }
-    }
-    if (!raw) return "";
-    const d = new Date(raw);
-    if (isNaN(d.getTime())) {
-      const str = typeof raw === "string" ? raw : "";
-      return str === "[object Object]" ? "" : str;
-    }
-    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-  };
 
   const rawCbStatus = String(edited.callbackStatus || "").toLowerCase().trim();
   const isFollowupCompleted = rawCbStatus === "done" || rawCbStatus === "completed";
@@ -1234,7 +1214,7 @@ export const CallEntryTab = ({
                       Rescheduling Follow-up
                     </div>
                     <div className="text-[10px] text-sky-700 font-medium">
-                      Current: {formatFollowupDateStr(edited.callbackDate)} {edited.callbackTime ? `· ${formatFollowupTime12h(edited.callbackTime)}` : ""}
+                      Current: {formatFollowupDate(edited.callbackDate)} {edited.callbackTime ? `· ${formatFollowupTime12h(edited.callbackTime)}` : ""}
                     </div>
                   </div>
                 </div>
@@ -1264,7 +1244,7 @@ export const CallEntryTab = ({
                       handleChange("callbackTime", tempTime);
                       handleChange("callbackStatus", "rescheduled");
                       setIsRescheduling(false);
-                      toast.success(`Rescheduled to ${formatFollowupDateStr(tempDate)}`);
+                      toast.success(`Rescheduled to ${formatFollowupDate(tempDate)}`);
                     }}
                     className="px-4 py-1.5 bg-sky-600 hover:bg-sky-700 active:scale-95 text-white font-extrabold text-xs rounded-lg shadow-2xs transition cursor-pointer flex items-center gap-1.5"
                   >
@@ -1289,7 +1269,7 @@ export const CallEntryTab = ({
                     </div>
                     <div>
                       <div className="text-xs font-extrabold text-amber-950 flex items-center gap-1.5">
-                        <span>📅 {formatFollowupDateStr(edited.callbackDate)}</span>
+                        <span>📅 {formatFollowupDate(edited.callbackDate)}</span>
                         {edited.callbackTime && <span className="text-amber-800">· 🕒 {formatFollowupTime12h(edited.callbackTime)}</span>}
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
@@ -1366,7 +1346,7 @@ export const CallEntryTab = ({
                 </div>
                 <div>
                   <div className="text-xs font-extrabold text-emerald-950">
-                    ✓ Completed — {formatFollowupDateStr(edited.callbackDate) || "Follow-up"}
+                    ✓ Completed — {formatFollowupDate(edited.callbackDate) || "Follow-up"}
                   </div>
                   <div className="text-[10px] text-emerald-700 font-medium">
                     No active follow-up pending.
@@ -1399,7 +1379,7 @@ export const CallEntryTab = ({
                       handleChange("callbackTime", tempTime);
                       handleChange("callbackStatus", "pending");
                       setIsAddingNext(false);
-                      toast.success(`Next follow-up scheduled for ${formatFollowupDateStr(tempDate)}`);
+                      toast.success(`Next follow-up scheduled for ${formatFollowupDate(tempDate)}`);
                     }}
                     className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-extrabold text-xs rounded-lg shadow-2xs transition cursor-pointer flex items-center gap-1.5"
                   >
@@ -1427,7 +1407,7 @@ export const CallEntryTab = ({
                 <button
                   type="button"
                   onClick={() => {
-                    const today = new Date().toISOString().split('T')[0];
+                    const today = getLocalDateString();
                     setTempDate(today);
                     setTempTime("");
                     setIsAddingNext(true);
@@ -1451,7 +1431,7 @@ export const CallEntryTab = ({
                 </div>
                 <div>
                   <div className="text-xs font-extrabold text-slate-700">
-                    ✕ Cancelled — {formatFollowupDateStr(edited.callbackDate) || "Follow-up"}
+                    ✕ Cancelled — {formatFollowupDate(edited.callbackDate) || "Follow-up"}
                   </div>
                   <div className="text-[10px] text-slate-500 font-medium">
                     Follow-up cancelled.
@@ -1484,7 +1464,7 @@ export const CallEntryTab = ({
                       handleChange("callbackTime", tempTime);
                       handleChange("callbackStatus", "pending");
                       setIsAddingNext(false);
-                      toast.success(`New follow-up set for ${formatFollowupDateStr(tempDate)}`);
+                      toast.success(`New follow-up set for ${formatFollowupDate(tempDate)}`);
                     }}
                     className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-extrabold text-xs rounded-lg transition cursor-pointer flex items-center gap-1.5"
                   >
@@ -1512,7 +1492,7 @@ export const CallEntryTab = ({
                 <button
                   type="button"
                   onClick={() => {
-                    const today = new Date().toISOString().split('T')[0];
+                    const today = getLocalDateString();
                     setTempDate(today);
                     setTempTime("");
                     setIsAddingNext(true);
@@ -1553,7 +1533,7 @@ export const CallEntryTab = ({
                       handleChange("callbackTime", tempTime);
                       handleChange("callbackStatus", "pending");
                       setIsAddingNext(false);
-                      toast.success(`Follow-up set for ${formatFollowupDateStr(tempDate)}`);
+                      toast.success(`Follow-up set for ${formatFollowupDate(tempDate)}`);
                     }}
                     className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-extrabold text-xs rounded-lg transition cursor-pointer flex items-center gap-1.5"
                   >
@@ -1573,7 +1553,7 @@ export const CallEntryTab = ({
                 <button
                   type="button"
                   onClick={() => {
-                    const today = new Date().toISOString().split('T')[0];
+                    const today = getLocalDateString();
                     setTempDate(today);
                     setTempTime("");
                     setIsAddingNext(true);

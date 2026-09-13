@@ -468,6 +468,36 @@ export function parseTimestamp(t) {
   return d && !isNaN(d.getTime()) ? d : null;
 }
 
+const MONTH_SHORT_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * Returns YYYY-MM-DD in IST (Asia/Kolkata). Pass nothing for today.
+ */
+export function getLocalDateString(d = new Date()) {
+  if (!d) return "";
+  if (typeof d === "string") {
+    const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+    return "";
+  }
+  const dateObj = d instanceof Date ? d : parseTimestamp(d);
+  if (!dateObj || isNaN(dateObj.getTime())) return "";
+  return dateObj.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+}
+
+
+/**
+ * Formats follow-up date into "13 Sep 2026" in IST without UTC shifts
+ */
+export function formatFollowupDate(dateVal) {
+  if (!dateVal) return "";
+  const ymd = getLocalDateString(dateVal);
+  if (!ymd) return typeof dateVal === "string" && dateVal !== "[object Object]" ? dateVal : "";
+  const [y, m, d] = ymd.split("-");
+  const monthName = MONTH_SHORT_NAMES[parseInt(m, 10) - 1] || m;
+  return `${d} ${monthName} ${y}`;
+}
+
 /**
  * Resolves an attender field context deterministically following strict business priority:
  * 1. attenderStates[currentAttenderId] (exact ID lookup)
@@ -485,16 +515,31 @@ export function resolveCurrentAttenderContext(log, fieldName, currentAttenderId,
   const attIdLower = attId.toLowerCase();
   const attNameLower = attName.toLowerCase();
 
+  const isCallField = [
+    "called for", "calledfor", "called_for",
+    "status", "callstatus", "call_status",
+    "remark", "remarks", "comment", "notes",
+    "callpurpose", "call_purpose",
+    "querystatus", "query_status",
+    "callbackdate", "callback_date", "callback date",
+    "callbacktime", "callback_time", "callback time",
+    "callbackstatus", "callback_status", "callback status"
+  ].includes(cleanField);
+
   const formatVal = (raw) => {
     if (raw === undefined || raw === null) return "";
     if (typeof raw === "object") {
-      if (raw instanceof Date) return raw.toISOString();
-      if (typeof raw.toDate === "function") return raw.toDate().toISOString();
-      if (raw.seconds !== undefined) return new Date(raw.seconds * 1000).toISOString();
+      if (raw instanceof Date) return getLocalDateString(raw);
+      if (typeof raw.toDate === "function") return getLocalDateString(raw.toDate());
+      if (raw.seconds !== undefined) return getLocalDateString(new Date(raw.seconds * 1000));
       return "";
     }
     const s = String(raw).trim();
-    return s === "[object Object]" ? "" : s;
+    if (s === "[object Object]") return "";
+    if (/^\d{4}-\d{2}-\d{2}/.test(s) && (cleanField.includes("callback") || cleanField.includes("date"))) {
+      return getLocalDateString(s);
+    }
+    return s;
   };
 
   const candidateKeys = [];
@@ -518,6 +563,12 @@ export function resolveCurrentAttenderContext(log, fieldName, currentAttenderId,
     candidateKeys.push("Khoji", "khoji", "Khoji Type", "Khoji Status");
   } else if (cleanField === "calltype" || cleanField === "calldirection" || cleanField === "call type" || cleanField === "call direction") {
     candidateKeys.push("callType", "callDirection", "call_type", "call_direction", "type");
+  } else if (cleanField === "callbackdate" || cleanField === "callback date" || cleanField === "callback_date") {
+    candidateKeys.push("callbackDate", "callback_date", "Callback Date");
+  } else if (cleanField === "callbacktime" || cleanField === "callback time" || cleanField === "callback_time") {
+    candidateKeys.push("callbackTime", "callback_time", "Callback Time");
+  } else if (cleanField === "callbackstatus" || cleanField === "callback status" || cleanField === "callback_status") {
+    candidateKeys.push("callbackStatus", "callback_status", "Callback Status");
   } else {
     candidateKeys.push(cleanField, fieldName);
   }
@@ -560,12 +611,25 @@ export function resolveCurrentAttenderContext(log, fieldName, currentAttenderId,
     }
 
     if (stateObj) {
+      // If this is an attender-context/call field and this attender has an attenderState:
+      if (isCallField) {
+        for (const key of candidateKeys) {
+          if (key in stateObj) {
+            const rawVal = stateObj[key];
+            if (rawVal === null || rawVal === undefined || rawVal === "") return "";
+            return formatVal(rawVal);
+          }
+        }
+        // Attender has state record but this call field is not present -> do NOT fall back to history or root
+        return "";
+      }
+
       const val = extractFromObject(stateObj);
       if (val !== "") return val;
     }
   }
 
-  // 3. Check current attender's latest entry in history
+  // 3. Check current attender's latest entry in history (only if attender has no attenderStates entry)
   if (Array.isArray(log.history) && log.history.length > 0) {
     const latestHist = [...log.history].reverse().find(h => {
       if (!h || typeof h !== "object") return false;
@@ -583,14 +647,6 @@ export function resolveCurrentAttenderContext(log, fieldName, currentAttenderId,
   }
 
   // Call-entry fields (must NOT fall back to root record or another attender)
-  const isCallField = [
-    "called for", "calledfor", "called_for",
-    "status", "callstatus", "call_status",
-    "remark", "remarks", "comment", "notes",
-    "callpurpose", "call_purpose",
-    "querystatus", "query_status"
-  ].includes(cleanField);
-
   if (isCallField) {
     return "";
   }
@@ -765,10 +821,29 @@ export function getContactView(contact, currentAttenderIdOrName) {
   const status = getAttenderStatus(contact, activeAttender);
   const remark = getAttenderRemark(contact, activeAttender);
   const pipelineStage = getEffectiveStage(contact, calledFor);
+  // Check if attender has an existing state record on this lead
+  const hasAttState = !!(contact.attenderStates && (
+    (activeAttender && contact.attenderStates[activeAttender]) ||
+    Object.keys(contact.attenderStates).some(k => {
+      const st = contact.attenderStates[k];
+      const sTarget = String(activeAttender).toLowerCase().trim();
+      return st && (
+        String(st.attenderId || k).toLowerCase().trim() === sTarget ||
+        String(st.attenderName || st.name || "").toLowerCase().trim() === sTarget
+      );
+    })
+  ));
+
+  const cbDateFromAtt = getFieldWithFallback(contact, "callbackDate", activeAttender);
+  const cbTimeFromAtt = getFieldWithFallback(contact, "callbackTime", activeAttender);
+  const cbStatusFromAtt = getFieldWithFallback(contact, "callbackStatus", activeAttender);
   const queryStatus = getFieldWithFallback(contact, "queryStatus", activeAttender) || contact.queryStatus || "";
   const callPurpose = getFieldWithFallback(contact, "callPurpose", activeAttender) || contact.callPurpose || "";
-  const callbackDate = getFieldWithFallback(contact, "callbackDate", activeAttender) || contact.callbackDate || "";
-  const callbackStatus = getFieldWithFallback(contact, "callbackStatus", activeAttender) || contact.callbackStatus || "";
+
+  // If attender has state, their callback state is strictly authoritative (null/empty means no callback)
+  const callbackDate = hasAttState ? cbDateFromAtt : (cbDateFromAtt || getLocalDateString(contact.callbackDate) || "");
+  const callbackTime = hasAttState ? cbTimeFromAtt : (cbTimeFromAtt || contact.callbackTime || "");
+  const callbackStatus = hasAttState ? cbStatusFromAtt : (cbStatusFromAtt || contact.callbackStatus || (callbackDate ? "pending" : ""));
   const callType = getFieldWithFallback(contact, "callType", activeAttender) || contact.callType || "outgoing";
 
   return {
@@ -780,6 +855,7 @@ export function getContactView(contact, currentAttenderIdOrName) {
     queryStatus,
     callPurpose,
     callbackDate,
+    callbackTime,
     callbackStatus,
     callType,
   };
