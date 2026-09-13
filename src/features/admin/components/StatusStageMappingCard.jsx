@@ -15,9 +15,11 @@ import {
   ArrowDown,
   CornerDownRight,
   Workflow,
-  LayoutGrid
+  LayoutGrid,
+  GitBranch
 } from "lucide-react";
 import { toast } from "react-hot-toast";
+import VisualWorkflowModal from "./VisualWorkflowModal";
 
 export const PIPELINE_STAGE_OPTIONS = [
   // Main Sales Funnel (Sequential Stages 1 to 6 & Outcomes)
@@ -124,6 +126,9 @@ export function StatusStageMappingCard({ options, onSaveMapping }) {
 
   // Stage Delete Confirmation Modal
   const [stageToDelete, setStageToDelete] = useState(null);
+
+  // Visual Pipeline Flowchart Modal
+  const [showVisualModal, setShowVisualModal] = useState(false);
 
   // Sync options from props
   useEffect(() => {
@@ -448,7 +453,7 @@ export function StatusStageMappingCard({ options, onSaveMapping }) {
               </div>
             </div>
             <p className="text-xs text-[#667085] mt-0.5">
-              Visual vertical pipeline flowchart mapping sequential sales steps and parallel workstreams.
+              Configure and map stages and call outcomes for the CRM pipeline.
             </p>
           </div>
         </div>
@@ -477,6 +482,16 @@ export function StatusStageMappingCard({ options, onSaveMapping }) {
               <LayoutGrid size={13} /> Card Grid
             </button>
           </div>
+
+          {/* Edit Pipeline (Visual Flow) button */}
+          <button
+            type="button"
+            onClick={() => setShowVisualModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-md transition-colors shadow-2xs cursor-pointer"
+            title="Open Interactive Visual Pipeline Flowchart"
+          >
+            <GitBranch size={14} className="text-indigo-600" /> Edit Pipeline (Visual Flow)
+          </button>
 
           {/* Add New Stage button */}
           <button
@@ -588,23 +603,6 @@ export function StatusStageMappingCard({ options, onSaveMapping }) {
       {/* VIEW MODE 1: VERTICAL LIGHT THEMED FLOWCHART DIAGRAM */}
       {viewMode === "flowchart" && (
         <div className="bg-[#FAFBFD] p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-6">
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
-            <div className="flex items-center gap-2">
-              <span className="p-1.5 rounded-lg bg-indigo-100/80 text-indigo-700 border border-indigo-200">
-                <Workflow size={16} />
-              </span>
-              <div>
-                <h4 className="text-xs font-bold tracking-wide uppercase text-indigo-950">
-                  Vertical Pipeline Stage Flowchart
-                </h4>
-                <p className="text-[11px] text-slate-500 font-medium">
-                  Sequential Sales Funnel (Top-to-Bottom) & Parallel Auxiliary Desks.
-                </p>
-              </div>
-            </div>
-          </div>
-
           {/* Two-Column Flowchart Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             
@@ -765,6 +763,17 @@ export function StatusStageMappingCard({ options, onSaveMapping }) {
             </div>
           </div>
         </div>,
+        document.body
+      )}
+
+      {/* Visual Pipeline Flowchart Modal */}
+      {showVisualModal && createPortal(
+        <VisualWorkflowModal
+          isOpen={showVisualModal}
+          onClose={() => setShowVisualModal(false)}
+          defaultProgram="CBT Basic"
+          programOptions={options?.calledForOptions || []}
+        />,
         document.body
       )}
     </div>

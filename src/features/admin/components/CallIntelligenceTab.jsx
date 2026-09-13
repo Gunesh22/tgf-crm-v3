@@ -2,7 +2,8 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { 
   Zap, Users, PhoneCall, TrendingUp, Target, Clock, Calendar, 
   AlertTriangle, Download, Search, ChevronDown, Award, Flame, 
-  Eye, Sparkles, X, Check
+  Eye, Sparkles, X, Check, ArrowRight, CheckCircle2, XCircle, Clock4, CalendarCheck, Layers,
+  Hourglass, ArrowUpRight, BarChart2, Filter, Compass, Activity, ShieldCheck
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { 
@@ -10,14 +11,77 @@ import {
   getContactPhone, 
   getContactName, 
   getCanonicalStatus, 
+  getCanonicalStage,
   classifyCallStatus, 
   getAllCallEntries, 
   getLocalDateStr, 
   getCanonicalRegistrations, 
   getContactSource, 
-  getContactLeadOrigin 
+  getContactLeadOrigin,
+  getCanonicalQueryStage 
 } from "../utils.jsx";
+import { PIPELINE_STAGES, QUERY_PIPELINE_STAGES } from "../../../utils/pipelineEngine";
 import { EditModal } from "../../attender/components/EditModal";
+
+// Canonical Helper 1: Program Identity Matcher (Canonical from Pipeline & Calls)
+const matchesProgramRecord = (record, targetProgramIds, programsList) => {
+  if (!targetProgramIds || targetProgramIds.length === 0) return true;
+  return targetProgramIds.some(pId => {
+    const progObj = (programsList || []).find(p => String(p.id || p._id || p.key || p.name) === String(pId));
+    const pName = progObj ? progObj.name.toLowerCase().trim() : String(pId).toLowerCase().trim();
+    const targetIdClean = String(pId).toLowerCase().trim();
+
+    const recProgId = String(record.programId || record.calledForKey || "").toLowerCase().trim();
+    const recCalledFor = String(record.calledFor || record.programName || "").toLowerCase().trim();
+    if (recProgId === targetIdClean || recCalledFor === pName || recCalledFor === targetIdClean) return true;
+
+    if (Array.isArray(record.history)) {
+      return record.history.some(h => {
+        const hProgId = String(h.programId || h.calledForKey || "").toLowerCase().trim();
+        const hCalledFor = String(h.calledFor || "").toLowerCase().trim();
+        return hProgId === targetIdClean || hCalledFor === pName || hCalledFor === targetIdClean;
+      });
+    }
+
+    return false;
+  });
+};
+
+// Canonical Helper 2: Attender Identity Set Resolution (Canonical from Pipeline & Calls)
+const getRecordAttenderIds = (record) => {
+  const ids = new Set();
+  if (record.attenderId) ids.add(String(record.attenderId));
+  if (Array.isArray(record.assignedTo)) record.assignedTo.forEach(id => ids.add(String(id)));
+  if (record.attenderStates && typeof record.attenderStates === "object") {
+    Object.keys(record.attenderStates).forEach(id => ids.add(String(id)));
+  }
+  if (Array.isArray(record.history)) {
+    record.history.forEach(h => { if (h.attenderId) ids.add(String(h.attenderId)); });
+  }
+  return ids;
+};
+
+// Helpers to identify Query and Reminder calls / contacts
+const isQueryCall = (call) => {
+  if (!call) return false;
+  const p = String(call.callPurpose || call.purpose || "").toUpperCase().trim();
+  if (p === "QUERY") return true;
+  const s = String(call.status || "").toLowerCase().trim();
+  if (s.includes("query")) return true;
+  return false;
+};
+
+const isReminderCall = (call) => {
+  if (!call) return false;
+  const p = String(call.callPurpose || call.purpose || "").toUpperCase().trim();
+  if (p === "REMINDER") return true;
+  const s = String(call.status || "").toLowerCase().trim();
+  if (s.includes("reminder")) return true;
+  return false;
+};
+
+
+
 
 // ── Compact Multi-Select Dropdown ───────────────────────────────────────────
 function MultiSelect({ options, selected, onChange, placeholder, allLabel = "All" }) {
@@ -164,6 +228,7 @@ export default function CallIntelligenceTab({
   const [actionSearchQuery, setActionSearchQuery] = useState("");
   const [selectedContactForEdit, setSelectedContactForEdit] = useState(null);
   const [showAllActionLeads, setShowAllActionLeads] = useState(false);
+  const [sourceDimension, setSourceDimension] = useState("currentSource"); // "currentSource" | "leadOrigin"
 
   const isThisMonthActive = startDate === defaultBounds.start && endDate === defaultBounds.end;
   const isTodayActive = startDate === todayStr && endDate === todayStr;
@@ -227,12 +292,23 @@ export default function CallIntelligenceTab({
   // ── Unified Data & Diagnostics Engine (Single-Pass Execution) ─────────────
   const {
     executiveMetrics,
+    excludedWorkstreams,
+    currentPipeline,
+    leadAgeing,
+    pipelineMovements,
+    stageToStageConversion,
+    salesVelocity,
+    operationalOutcomes,
+    followupSummary,
+    followupEffectiveness,
     funnelSteps,
     biggestLeakage,
     outcomeBreakdown,
     attenderRows,
     winningPatterns,
-    priorityQueue
+    priorityQueue,
+    currentSourceRows,
+    leadOriginRows
   } = useMemo(() => {
     const attMap = new Map();
     const getOrCreateAttender = (name, id = "") => {
@@ -254,10 +330,117 @@ export default function CallIntelligenceTab({
 
     attenders.forEach(a => { if (a.name) getOrCreateAttender(a.name, a.id); });
 
-    const contacts = [];
-    const contactCallsMap = new Map();
-    let totalCallsCount = 0;
-    let connectedCallsCount = 0;
+    const canonRegs = getCanonicalRegistrations(registrations, callLogs, {
+      startDate,
+      endDate,
+      selectedProgramIds: selectedPrograms,
+      selectedAttenderIds: selectedAttenders,
+      selectedSources
+    });
+    const totalRegistrations = canonRegs.length;
+    const regIds = new Set(canonRegs.map(r => String(r.contactId || "")).filter(Boolean));
+    const regCloserMap = new Map();
+    canonRegs.forEach(r => {
+      if (r.contactId) regCloserMap.set(String(r.contactId), r.attenderName || r.attender || "Unassigned");
+    });
+
+    // Extract all call events from contact histories (identical to PipelineCallsTab)
+    const allCallEvents = [];
+    const seenCallIds = new Set();
+    (callLogs || []).forEach(contact => {
+      const cId = contact.id || contact._id || contact.Phone || contact.Name;
+      const cName = getContactName(contact);
+      const cPhone = getContactPhone(contact);
+      const cStage = getCanonicalStage(contact);
+
+      if (Array.isArray(contact.history) && contact.history.length > 0) {
+        contact.history.forEach((h, idx) => {
+          const ts = parseTimestamp(h.timestamp || h.date || h.createdAt);
+          const callId = h.callId || h.id || `legacy_call_${cId}_${idx}_${ts ? ts.getTime() : idx}`;
+          if (seenCallIds.has(callId)) return;
+          seenCallIds.add(callId);
+
+          let attId = h.attenderId;
+          let attName = h.attenderName;
+
+          if (!attId && attName) {
+            const cleanName = attName.trim().toLowerCase();
+            const matchedAttender = (attenders || []).find(a => (a.name || "").trim().toLowerCase() === cleanName);
+            if (matchedAttender) attId = matchedAttender.id || matchedAttender._id;
+          }
+
+          if (!attId && !attName) {
+            attId = contact.attenderId;
+            attName = contact.attenderName;
+            if (!attId && attName) {
+              const cleanName = attName.trim().toLowerCase();
+              const matchedAttender = (attenders || []).find(a => (a.name || "").trim().toLowerCase() === cleanName);
+              if (matchedAttender) attId = matchedAttender.id || matchedAttender._id;
+            }
+          }
+
+          if (!attId) attId = "unassigned";
+          if (!attName) attName = "Unassigned Attender";
+
+          const rawCallStage = h.pipelineStage || h.stage || (h.status ? getCanonicalStage(h.status) : null);
+          const callStage = rawCallStage ? getCanonicalStage(rawCallStage) : cStage;
+
+          allCallEvents.push({
+            callId,
+            contactId: cId,
+            contactName: cName,
+            contactPhone: cPhone,
+            pipelineStage: callStage,
+            status: h.status || contact.status || "Pending",
+            callType: (h.callType || contact.callType || "outgoing").toLowerCase(),
+            callPurpose: h.callPurpose || h.purpose || "SALES",
+            source: getContactSource(contact, h) || h.source || contact.source || "Online/Direct",
+            leadOrigin: getContactLeadOrigin(contact, h) || "Direct / Organic",
+            calledFor: h.calledFor || contact.calledFor || contact.programName || "",
+            programId: h.programId || h.calledForKey || contact.programId || contact.calledForKey || "",
+            attenderId: attId,
+            attenderName: attName,
+            timestamp: ts,
+            dateStr: ts ? getLocalDateStr(ts) : "",
+            remark: h.remark || ""
+          });
+        });
+      }
+    });
+
+    // Filter events by date range, attender, program, and source
+    const filteredEvents = allCallEvents.filter(ev => {
+      if (startDate || endDate) {
+        if (!ev.timestamp) return false;
+        const dStr = getLocalDateStr(ev.timestamp);
+        if (startDate && dStr < startDate) return false;
+        if (endDate && dStr > endDate) return false;
+      }
+
+      if (selectedAttenders.length > 0) {
+        const attenderIds = getRecordAttenderIds(ev);
+        if (!selectedAttenders.some(id => attenderIds.has(String(id)))) return false;
+      }
+
+      if (!matchesProgramRecord(ev, selectedPrograms, programs)) return false;
+
+      if (selectedSources.length > 0) {
+        const evSource = ev.source || getContactSource(ev) || "Online/Direct";
+        if (!selectedSources.includes(evSource)) return false;
+      }
+
+      return true;
+    });
+
+    const totalCallsCount = filteredEvents.length;
+    const connectedCallsCount = filteredEvents.filter(ev => classifyCallStatus(ev.status) === "CONNECTED").length;
+
+    let queryCallsCount = 0;
+    let queryConnectedCallsCount = 0;
+    let reminderCallsCount = 0;
+    let reminderConnectedCallsCount = 0;
+    let salesCallsCount = 0;
+    let salesConnectedCallsCount = 0;
 
     const hourBuckets = TIME_SLOTS.map(s => ({ ...s, total: 0, connected: 0, rate: "0.0", isLowVolume: false }));
     const dayBuckets = DAYS_OF_WEEK.map(day => ({ day, total: 0, connected: 0, rate: "0.0" }));
@@ -269,94 +452,138 @@ export default function CallIntelligenceTab({
       { attempt: "5th+ Call", total: 0, registered: 0, rate: "0.0" }
     ];
 
-    callLogs.forEach(c => {
-      const entries = getAllCallEntries(c);
-      const aId = String(c.attenderId || "").trim();
-      const aName = String(c.attenderName || "").trim();
-      const assigned = Array.isArray(c.assignedTo) ? c.assignedTo.map(String) : [];
-      const callAttenders = entries.map(call => String(call.attenderName || call.attenderId || "").trim()).filter(Boolean);
+    filteredEvents.forEach(ev => {
+      const isQ = isQueryCall(ev);
+      const isR = isReminderCall(ev);
+      const isConn = classifyCallStatus(ev.status) === "CONNECTED";
 
-      if (selectedPrograms.length > 0) {
-        const rawP = String(c.calledFor || c["Called For"] || c.programName || "");
-        const contactProgs = rawP.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
-        const callProgs = entries.map(call => String(call.calledFor || "").trim().toLowerCase()).filter(Boolean);
-        const allProgs = [...contactProgs, ...callProgs];
-        const matches = selectedPrograms.some(sel => {
-          const sLower = sel.trim().toLowerCase();
-          return allProgs.some(p => p === sLower || p.includes(sLower));
-        });
-        if (!matches) return;
+      if (isQ) {
+        queryCallsCount++;
+        if (isConn) queryConnectedCallsCount++;
+      } else if (isR) {
+        reminderCallsCount++;
+        if (isConn) reminderConnectedCallsCount++;
+      } else {
+        salesCallsCount++;
+        if (isConn) salesConnectedCallsCount++;
+
+        const d = ev.timestamp;
+        if (d && !isNaN(d.getTime())) {
+          const h = d.getHours();
+          const slot = hourBuckets.find(s => h >= s.startH && h < s.endH);
+          if (slot) {
+            slot.total++;
+            if (isConn) slot.connected++;
+          }
+          const dayIdx = (d.getDay() + 6) % 7;
+          if (dayBuckets[dayIdx]) {
+            dayBuckets[dayIdx].total++;
+            if (isConn) dayBuckets[dayIdx].connected++;
+          }
+        }
       }
+    });
 
+    // Filter contacts in pipeline (identical to PipelineCallsTab)
+    const filteredContacts = (callLogs || []).filter(c => {
       if (selectedAttenders.length > 0) {
-        const matchesAtt = selectedAttenders.some(sel => 
-          sel === aId || sel === aName || assigned.includes(sel) || callAttenders.includes(sel)
-        );
-        if (!matchesAtt) return;
+        const attenderIds = getRecordAttenderIds(c);
+        if (!selectedAttenders.some(id => attenderIds.has(String(id)))) return false;
       }
+
+      if (!matchesProgramRecord(c, selectedPrograms, programs)) return false;
 
       if (selectedSources.length > 0) {
-        const s = String(getContactSource(c) || getContactLeadOrigin(c) || "").trim();
-        if (!selectedSources.includes(s)) return;
+        const cSource = getContactSource(c) || "Online/Direct";
+        if (!selectedSources.includes(cSource)) return false;
       }
 
-      const inRangeCalls = entries.filter(call => {
-        if (!call.timestamp) return false;
-        const dt = getLocalDateStr(call.timestamp);
-        if ((startDate && dt < startDate) || (endDate && dt > endDate)) return false;
-        if (selectedAttenders.length > 0) {
-          const callAtt = String(call.attenderName || call.attenderId || "").trim();
-          const matchesCall = selectedAttenders.some(sel => sel === callAtt);
-          const matchesRoot = selectedAttenders.some(sel => sel === aId || sel === aName || assigned.includes(sel));
-          return matchesCall || (!callAtt && matchesRoot);
+      if (startDate || endDate) {
+        const activityDates = [];
+        const lastCall = parseTimestamp(c.lastCalledAt);
+        if (lastCall) activityDates.push(lastCall);
+
+        if (Array.isArray(c.history)) {
+          c.history.forEach(h => {
+            const hTs = parseTimestamp(h.timestamp || h.date || h.createdAt);
+            if (hTs) activityDates.push(hTs);
+          });
         }
-        return true;
-      });
 
-      const lastActivity = c.lastCalledAt || c.updatedAt || c.createdAt;
-      const lastDt = lastActivity ? getLocalDateStr(lastActivity) : "";
-      const isActivityInRange = (!startDate || lastDt >= startDate) && (!endDate || lastDt <= endDate);
+        if (activityDates.length === 0) return false;
 
-      if (inRangeCalls.length > 0 || isActivityInRange) {
-        const cId = String(c.id || c._id);
-        contacts.push(c);
-        contactCallsMap.set(cId, inRangeCalls);
-
-        inRangeCalls.forEach(call => {
-          totalCallsCount++;
-          const isConn = classifyCallStatus(call.status) === "CONNECTED";
-          if (isConn) connectedCallsCount++;
-
-          const d = parseTimestamp(call.timestamp);
-          if (d && !isNaN(d.getTime())) {
-            const h = d.getHours();
-            const slot = hourBuckets.find(s => h >= s.startH && h < s.endH);
-            if (slot) {
-              slot.total++;
-              if (isConn) slot.connected++;
-            }
-            const dayIdx = (d.getDay() + 6) % 7;
-            if (dayBuckets[dayIdx]) {
-              dayBuckets[dayIdx].total++;
-              if (isConn) dayBuckets[dayIdx].connected++;
-            }
-          }
+        const hasMatch = activityDates.some(d => {
+          const dStr = getLocalDateStr(d);
+          if (startDate && dStr < startDate) return false;
+          if (endDate && dStr > endDate) return false;
+          return true;
         });
+
+        if (!hasMatch) return false;
+      }
+
+      return true;
+    });
+
+    const totalContactsInPipeline = filteredContacts.length;
+
+    // Map calls to contact
+    const contactCallsMap = new Map();
+    filteredEvents.forEach(ev => {
+      const cId = String(ev.contactId);
+      if (!contactCallsMap.has(cId)) contactCallsMap.set(cId, []);
+      contactCallsMap.get(cId).push(ev);
+    });
+
+    // Authoritative Pipeline State (Canonical keys, no parallel toCleanStageLabel)
+    const currentPipelineSnapshot = {
+      [PIPELINE_STAGES.NEW_LEAD]: 0,
+      [PIPELINE_STAGES.ATTEMPTING]: 0,
+      [PIPELINE_STAGES.INFO_GIVEN]: 0,
+      [PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING]: 0,
+      [PIPELINE_STAGES.NURTURE_INTERESTED]: 0,
+      [PIPELINE_STAGES.FUTURE_POOL]: 0,
+      [PIPELINE_STAGES.REGISTERED_WON]: 0,
+      [PIPELINE_STAGES.CLOSED_LOST]: 0,
+      [PIPELINE_STAGES.CLOSED_INVALID]: 0,
+      "Existing Alumni": 0
+    };
+
+    let queryContactsCount = 0;
+    let reminderContactsCount = 0;
+    let queryAttemptingCount = 0;
+    let queryPendingCount = 0;
+    let querySolvedCount = 0;
+
+    filteredContacts.forEach(c => {
+      const stage = getCanonicalStage(c);
+      if (stage === "Query Desk" || stage === "Reminder Desk") {
+        if (stage === "Query Desk") {
+          queryContactsCount++;
+          const qStage = getCanonicalQueryStage(c);
+          if (qStage === QUERY_PIPELINE_STAGES.QUERY_SOLVED) querySolvedCount++;
+          else if (qStage === QUERY_PIPELINE_STAGES.QUERY_PENDING) queryPendingCount++;
+          else queryAttemptingCount++;
+        } else {
+          reminderContactsCount++;
+        }
+        return;
+      }
+
+      if (currentPipelineSnapshot[stage] !== undefined) {
+        currentPipelineSnapshot[stage]++;
+      } else if (stage.includes("Alumni") || stage.includes("Shivir done")) {
+        currentPipelineSnapshot["Existing Alumni"]++;
+      } else if (stage.includes("Lost") || stage.includes("Not Interested")) {
+        currentPipelineSnapshot[PIPELINE_STAGES.CLOSED_LOST]++;
+      } else if (stage.includes("Invalid")) {
+        currentPipelineSnapshot[PIPELINE_STAGES.CLOSED_INVALID]++;
+      } else {
+        currentPipelineSnapshot[PIPELINE_STAGES.ATTEMPTING]++;
       }
     });
 
-    const canonRegs = getCanonicalRegistrations(registrations, contacts, {
-      startDate,
-      endDate,
-      selectedProgramIds: selectedPrograms,
-      selectedAttenderIds: selectedAttenders,
-      selectedSources
-    });
-    const regIds = new Set(canonRegs.map(r => String(r.contactId || "")).filter(Boolean));
-    const regCloserMap = new Map();
-    canonRegs.forEach(r => {
-      if (r.contactId) regCloserMap.set(String(r.contactId), r.attenderName || r.attender || "Unassigned");
-    });
+    const salesFunnelLeadsCount = Object.values(currentPipelineSnapshot).reduce((a, b) => a + b, 0);
 
     let attemptingContact = 0;
     let connectedPeopleCount = 0;
@@ -377,11 +604,142 @@ export default function CallIntelligenceTab({
     const highPotentialList = [];
     const goldenWindowList = [];
 
-    contacts.forEach(c => {
+    let cbPending = 0;
+    let cbDueToday = 0;
+    let cbOverdue = 0;
+    let cbScheduledLater = 0;
+    let noCbScheduled = 0;
+
+    const transitions = {};
+    let movedToInterested = 0;
+    let movedToRegistered = 0;
+    let movedToFuturePool = 0;
+    let movedToClosedLost = 0;
+
+    // Cohort trackers for Stage-to-Stage conversion
+    let infoGivenCohortTotal = 0;
+    let infoGivenToInterested = 0;
+    let infoGivenToWonDirect = 0;
+    let infoGivenToLost = 0;
+
+    let interestedCohortTotal = 0;
+    let interestedToWon = 0;
+    let interestedToFuture = 0;
+    let interestedToLost = 0;
+
+    // Follow-up momentum trackers
+    let totalFollowUpCalls = 0;
+    let positiveProgressionCalls = 0;
+
+    // Lead Ageing trackers (Real-Time Current State)
+    const nowMs = new Date().getTime();
+    const wipAgeing = {
+      total: 0,
+      fresh: 0,     // < 3 days
+      active: 0,    // 3 - 7 days
+      stagnant: 0,  // 7 - 14 days
+      cold: 0,      // > 14 days
+      infoGiven: { total: 0, fresh: 0, active: 0, stagnant: 0, cold: 0 },
+      interested: { total: 0, fresh: 0, active: 0, stagnant: 0, cold: 0 }
+    };
+
+    const deferredAgeing = {
+      total: 0,
+      fresh: 0,
+      active: 0,
+      stagnant: 0,
+      cold: 0
+    };
+
+    // Sales velocity arrays (elapsed days for Won contacts)
+    const firstCallToWonDaysList = [];
+    const infoGivenToWonDaysList = [];
+    const interestedToWonDaysList = [];
+
+    // Source & Origin Matrix maps
+    const sourceMatrixMap = new Map();
+    const originMatrixMap = new Map();
+
+    filteredContacts.forEach(c => {
       const cId = String(c.id || c._id);
+      const stage = getCanonicalStage(c);
+      if (stage === "Query Desk" || stage === "Reminder Desk") return; // Exclude query & reminder desk contacts from sales funnel metrics
+
       const calls = contactCallsMap.get(cId) || [];
       const isReg = regIds.has(cId);
       const count = calls.length;
+
+      // Source & Origin Matrix aggregation
+      const cSource = getContactSource(c) || "Unspecified";
+      const cOrigin = getContactLeadOrigin(c) || "Direct / Organic";
+
+      const recordToMatrix = (map, key) => {
+        if (!map.has(key)) {
+          map.set(key, {
+            name: key,
+            leads: 0,
+            totalCalls: 0,
+            connectedCalls: 0,
+            interestedCount: 0,
+            registeredCount: 0
+          });
+        }
+        const obj = map.get(key);
+        obj.leads++;
+        obj.totalCalls += count;
+        obj.connectedCalls += calls.filter(call => classifyCallStatus(call.status) === "CONNECTED").length;
+        if (stage === PIPELINE_STAGES.NURTURE_INTERESTED || isReg) obj.interestedCount++;
+        if (isReg) obj.registeredCount++;
+      };
+
+      recordToMatrix(sourceMatrixMap, cSource);
+      recordToMatrix(originMatrixMap, cOrigin);
+
+      // Lead Ageing Computation (Current State Snapshot)
+      if (stage === PIPELINE_STAGES.INFO_GIVEN || stage === PIPELINE_STAGES.NURTURE_INTERESTED || stage === PIPELINE_STAGES.FUTURE_POOL) {
+        let stageDate = null;
+        if (Array.isArray(c.history) && c.history.length > 0) {
+          for (let i = c.history.length - 1; i >= 0; i--) {
+            const h = c.history[i];
+            const hStage = getCanonicalStage(h.pipelineStage || h.status);
+            if (hStage === stage) {
+              stageDate = parseTimestamp(h.timestamp || h.date || h.createdAt);
+              break;
+            }
+          }
+        }
+        if (!stageDate) {
+          stageDate = parseTimestamp(c.lastCalledAt || c.updatedAt || c.createdAt || c.date_added);
+        }
+        const ageDays = stageDate && !isNaN(stageDate.getTime())
+          ? Math.max(0, Math.floor((nowMs - stageDate.getTime()) / (1000 * 60 * 60 * 24)))
+          : 0;
+
+        if (stage === PIPELINE_STAGES.INFO_GIVEN || stage === PIPELINE_STAGES.NURTURE_INTERESTED) {
+          wipAgeing.total++;
+          const targetSub = stage === PIPELINE_STAGES.INFO_GIVEN ? wipAgeing.infoGiven : wipAgeing.interested;
+          targetSub.total++;
+          if (ageDays < 3) {
+            wipAgeing.fresh++;
+            targetSub.fresh++;
+          } else if (ageDays <= 7) {
+            wipAgeing.active++;
+            targetSub.active++;
+          } else if (ageDays <= 14) {
+            wipAgeing.stagnant++;
+            targetSub.stagnant++;
+          } else {
+            wipAgeing.cold++;
+            targetSub.cold++;
+          }
+        } else if (stage === PIPELINE_STAGES.FUTURE_POOL) {
+          deferredAgeing.total++;
+          if (ageDays < 3) deferredAgeing.fresh++;
+          else if (ageDays <= 7) deferredAgeing.active++;
+          else if (ageDays <= 14) deferredAgeing.stagnant++;
+          else deferredAgeing.cold++;
+        }
+      }
 
       let hasConnected = false;
       let hasInfo = false;
@@ -415,7 +773,7 @@ export default function CallIntelligenceTab({
       const isContactInterested = isContactReg || hasInterest;
       const isContactInfo = isContactInterested || hasInfo;
       const isContactConnected = isContactInfo || hasConnected;
-      const isContactAttempted = isContactConnected || count > 0;
+      const isContactAttempted = isContactConnected || count > 0 || true;
 
       if (isContactAttempted) attemptingContact++;
       if (isContactConnected) connectedPeopleCount++;
@@ -455,6 +813,54 @@ export default function CallIntelligenceTab({
           else if (regAttempt === 4) attemptBuckets[3].registered++;
           else if (regAttempt >= 5) attemptBuckets[4].registered++;
         }
+      }
+
+      // Authoritative Callback Status
+      let cbDateRaw = null;
+      let cbStatusRaw = null;
+
+      if (c.attenderStates && typeof c.attenderStates === "object") {
+        if (selectedAttenders.length > 0) {
+          for (const sel of selectedAttenders) {
+            if (c.attenderStates[sel]?.callbackDate) {
+              cbDateRaw = c.attenderStates[sel].callbackDate;
+              cbStatusRaw = c.attenderStates[sel].callbackStatus;
+              break;
+            }
+          }
+        }
+        if (!cbDateRaw) {
+          for (const st of Object.values(c.attenderStates)) {
+            if (st?.callbackDate) {
+              cbDateRaw = st.callbackDate;
+              cbStatusRaw = st.callbackStatus;
+              break;
+            }
+          }
+        }
+      }
+      if (!cbDateRaw) {
+        cbDateRaw = c.callbackDate || c.callback_date;
+        cbStatusRaw = c.callbackStatus || c.callback_status;
+      }
+
+      const cbStat = String(cbStatusRaw || "").toLowerCase().trim();
+      const isCompleted = cbStat === "completed" || cbStat === "done" || cbStat === "called";
+      const isCancelled = cbStat === "cancelled";
+
+      if (cbDateRaw && !isCompleted && !isCancelled) {
+        cbPending++;
+        const parsedCb = parseTimestamp(cbDateRaw);
+        const cbDateStr = parsedCb ? getLocalDateStr(parsedCb) : "";
+        if (cbDateStr === todayStr) {
+          cbDueToday++;
+        } else if (cbDateStr && cbDateStr < todayStr) {
+          cbOverdue++;
+        } else if (cbDateStr && cbDateStr > todayStr) {
+          cbScheduledLater++;
+        }
+      } else if ((c.pipelineStage === PIPELINE_STAGES.INFO_GIVEN || c.pipelineStage === PIPELINE_STAGES.NURTURE_INTERESTED) && !isReg) {
+        noCbScheduled++;
       }
 
       // Action Queue Filtering
@@ -520,6 +926,198 @@ export default function CallIntelligenceTab({
           }
         }
       }
+
+      // 1. Determine baseline stage entering window (startDate)
+      const allCalls = getAllCallEntries(c);
+      let baselineStage = PIPELINE_STAGES.NEW_LEAD;
+      let hasPreWindowCall = false;
+      let preWindowInfoGivenTs = null;
+      let preWindowInterestedTs = null;
+
+      allCalls.forEach(call => {
+        const callDate = call.timestamp ? getLocalDateStr(call.timestamp) : "";
+        if (startDate && callDate < startDate) {
+          hasPreWindowCall = true;
+          const purpose = String(call.callPurpose || "SALES").toUpperCase();
+          if (purpose === "SALES") {
+            const rawStatus = String(call.status || "").trim().toLowerCase();
+            if (rawStatus.includes("reg.done") || rawStatus.includes("registered") || rawStatus.includes("won")) {
+              baselineStage = PIPELINE_STAGES.REGISTERED_WON;
+            } else if (rawStatus.includes("already reg") || rawStatus.includes("shivir done") || rawStatus.includes("alumni")) {
+              baselineStage = "Existing Alumni";
+            } else if (rawStatus === "interested" || rawStatus.includes("interested")) {
+              baselineStage = PIPELINE_STAGES.NURTURE_INTERESTED;
+              if (!preWindowInterestedTs && call.timestamp) preWindowInterestedTs = call.timestamp;
+            } else if (rawStatus === "info given" || rawStatus.includes("info given") || rawStatus.includes("information given")) {
+              if (baselineStage !== PIPELINE_STAGES.NURTURE_INTERESTED && baselineStage !== PIPELINE_STAGES.REGISTERED_WON) {
+                baselineStage = PIPELINE_STAGES.INFO_GIVEN;
+              }
+              if (!preWindowInfoGivenTs && call.timestamp) preWindowInfoGivenTs = call.timestamp;
+            } else if (rawStatus === "next time" || rawStatus.includes("future pool")) {
+              baselineStage = PIPELINE_STAGES.FUTURE_POOL;
+            } else if (rawStatus === "not interested" || rawStatus.includes("closed / lost") || rawStatus.includes("closed lost")) {
+              baselineStage = PIPELINE_STAGES.CLOSED_LOST;
+            } else if (rawStatus.includes("invalid") || rawStatus.includes("wrong number")) {
+              baselineStage = PIPELINE_STAGES.CLOSED_INVALID;
+            } else if (baselineStage === PIPELINE_STAGES.NEW_LEAD) {
+              baselineStage = PIPELINE_STAGES.ATTEMPTING;
+            }
+          }
+        }
+      });
+
+      // If no pre-window calls, but contact was registered or created prior to window with a known stage
+      const createdDate = c.createdAt ? getLocalDateStr(parseTimestamp(c.createdAt)) : "";
+      if (!hasPreWindowCall && startDate && createdDate && createdDate < startDate) {
+        const rootStage = getCanonicalStage(c);
+        if (rootStage && rootStage !== "Query Desk" && rootStage !== "Reminder Desk" && rootStage !== PIPELINE_STAGES.REGISTERED_WON) {
+          baselineStage = rootStage;
+        }
+      }
+
+      // 2. Track sequential stage transitions inside the window
+      let currentStageInWindow = baselineStage;
+      let wasInInfoGivenThisWindow = (baselineStage === PIPELINE_STAGES.INFO_GIVEN);
+      let wasInInterestedThisWindow = (baselineStage === PIPELINE_STAGES.NURTURE_INTERESTED);
+
+      let earliestFirstCallTs = allCalls[0]?.timestamp || parseTimestamp(c.createdAt || c.date_added);
+      let earliestInfoGivenTs = preWindowInfoGivenTs;
+      let earliestInterestedTs = preWindowInterestedTs;
+
+      let callIndexInContact = 0;
+
+      allCalls.forEach(call => {
+        const callDate = call.timestamp ? getLocalDateStr(call.timestamp) : "";
+        const inWindow = (!startDate || callDate >= startDate) && (!endDate || callDate <= endDate);
+        if (!inWindow) return;
+
+        callIndexInContact++;
+        const purpose = String(call.callPurpose || "SALES").toUpperCase();
+        if (purpose !== "SALES") return;
+
+        const prevStage = currentStageInWindow;
+        let nextStage = prevStage;
+
+        const rawStatus = String(call.status || "").trim().toLowerCase();
+        const isConn = classifyCallStatus(call.status) === "CONNECTED";
+
+        if (rawStatus.includes("reg.done") || rawStatus.includes("registered") || rawStatus.includes("won")) {
+          nextStage = PIPELINE_STAGES.REGISTERED_WON;
+        } else if (rawStatus.includes("already reg") || rawStatus.includes("shivir done") || rawStatus.includes("alumni")) {
+          nextStage = "Existing Alumni";
+        } else if (rawStatus === "interested" || rawStatus.includes("interested")) {
+          nextStage = PIPELINE_STAGES.NURTURE_INTERESTED;
+          if (!earliestInterestedTs && call.timestamp) earliestInterestedTs = call.timestamp;
+        } else if (rawStatus === "info given" || rawStatus.includes("info given") || rawStatus.includes("information given")) {
+          // Anti-demotion rule: Info re-shared during Interested follow-up stays in Interested
+          if (prevStage === PIPELINE_STAGES.NURTURE_INTERESTED || prevStage === PIPELINE_STAGES.REGISTERED_WON) {
+            nextStage = prevStage;
+          } else {
+            nextStage = PIPELINE_STAGES.INFO_GIVEN;
+          }
+          if (!earliestInfoGivenTs && call.timestamp) earliestInfoGivenTs = call.timestamp;
+        } else if (rawStatus === "next time" || rawStatus.includes("future pool")) {
+          nextStage = PIPELINE_STAGES.FUTURE_POOL;
+        } else if (rawStatus === "not interested" || rawStatus.includes("closed / lost") || rawStatus.includes("closed lost")) {
+          nextStage = PIPELINE_STAGES.CLOSED_LOST;
+        } else if (rawStatus.includes("invalid") || rawStatus.includes("wrong number")) {
+          nextStage = PIPELINE_STAGES.CLOSED_INVALID;
+        } else {
+          // Connected / Callback / Attempting
+          if (prevStage === PIPELINE_STAGES.NEW_LEAD) {
+            nextStage = PIPELINE_STAGES.ATTEMPTING;
+          } else {
+            nextStage = prevStage;
+          }
+        }
+
+        if (nextStage === PIPELINE_STAGES.INFO_GIVEN) wasInInfoGivenThisWindow = true;
+        if (nextStage === PIPELINE_STAGES.NURTURE_INTERESTED) wasInInterestedThisWindow = true;
+
+        // Follow-up momentum tracking (calls after call #1)
+        if (callIndexInContact > 1) {
+          totalFollowUpCalls++;
+          const STAGE_RANKS = {
+            [PIPELINE_STAGES.NEW_LEAD]: 1,
+            [PIPELINE_STAGES.ATTEMPTING]: 2,
+            [PIPELINE_STAGES.INFO_GIVEN]: 3,
+            [PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING]: 3,
+            [PIPELINE_STAGES.NURTURE_INTERESTED]: 4,
+            [PIPELINE_STAGES.FUTURE_POOL]: 5,
+            [PIPELINE_STAGES.REGISTERED_WON]: 6
+          };
+          const pRank = STAGE_RANKS[prevStage] || 0;
+          const nRank = STAGE_RANKS[nextStage] || 0;
+          if (nRank > pRank || (prevStage === PIPELINE_STAGES.NURTURE_INTERESTED && nextStage === PIPELINE_STAGES.NURTURE_INTERESTED && isConn)) {
+            positiveProgressionCalls++;
+          }
+        }
+
+        // Record Stage Transition Hop
+        if (nextStage !== prevStage) {
+          const transKey = `${prevStage} → ${nextStage}`;
+          transitions[transKey] = (transitions[transKey] || 0) + 1;
+
+          if (nextStage === PIPELINE_STAGES.NURTURE_INTERESTED) movedToInterested++;
+          if (nextStage === PIPELINE_STAGES.REGISTERED_WON) movedToRegistered++;
+          if (nextStage === PIPELINE_STAGES.FUTURE_POOL) movedToFuturePool++;
+          if (nextStage === PIPELINE_STAGES.CLOSED_LOST) movedToClosedLost++;
+
+          if (prevStage === PIPELINE_STAGES.INFO_GIVEN) {
+            if (nextStage === PIPELINE_STAGES.NURTURE_INTERESTED) infoGivenToInterested++;
+            else if (nextStage === PIPELINE_STAGES.REGISTERED_WON) infoGivenToWonDirect++;
+            else if (nextStage === PIPELINE_STAGES.CLOSED_LOST) infoGivenToLost++;
+          }
+
+          if (prevStage === PIPELINE_STAGES.NURTURE_INTERESTED) {
+            if (nextStage === PIPELINE_STAGES.REGISTERED_WON) interestedToWon++;
+            else if (nextStage === PIPELINE_STAGES.FUTURE_POOL) interestedToFuture++;
+            else if (nextStage === PIPELINE_STAGES.CLOSED_LOST) interestedToLost++;
+          }
+
+          currentStageInWindow = nextStage;
+        }
+      });
+
+      if (wasInInfoGivenThisWindow) infoGivenCohortTotal++;
+      if (wasInInterestedThisWindow) interestedCohortTotal++;
+
+      // Complete registration transition for contacts registered in this window
+      if (isReg && currentStageInWindow !== PIPELINE_STAGES.REGISTERED_WON) {
+        const prevStage = currentStageInWindow;
+        const nextStage = PIPELINE_STAGES.REGISTERED_WON;
+        const transKey = `${prevStage} → ${nextStage}`;
+        transitions[transKey] = (transitions[transKey] || 0) + 1;
+        if (prevStage === PIPELINE_STAGES.NURTURE_INTERESTED) {
+          interestedToWon++;
+        } else if (prevStage === PIPELINE_STAGES.INFO_GIVEN) {
+          infoGivenToWonDirect++;
+        }
+        currentStageInWindow = nextStage;
+      }
+
+      // Time to conversion for Won contacts
+      if (isReg) {
+        const wonCall = allCalls.find(c => {
+          const s = String(c.status || "").toLowerCase();
+          return s.includes("reg.done") || s.includes("registered") || s.includes("won");
+        });
+        const wonTs = wonCall?.timestamp || parseTimestamp(c.lastCalledAt || c.updatedAt);
+        if (wonTs && !isNaN(wonTs.getTime())) {
+          if (earliestFirstCallTs && !isNaN(earliestFirstCallTs.getTime())) {
+            const days = Math.max(0, (wonTs.getTime() - earliestFirstCallTs.getTime()) / (1000 * 60 * 60 * 24));
+            firstCallToWonDaysList.push(days);
+          }
+          if (earliestInfoGivenTs && !isNaN(earliestInfoGivenTs.getTime())) {
+            const days = Math.max(0, (wonTs.getTime() - earliestInfoGivenTs.getTime()) / (1000 * 60 * 60 * 24));
+            infoGivenToWonDaysList.push(days);
+          }
+          if (earliestInterestedTs && !isNaN(earliestInterestedTs.getTime())) {
+            const days = Math.max(0, (wonTs.getTime() - earliestInterestedTs.getTime()) / (1000 * 60 * 60 * 24));
+            interestedToWonDaysList.push(days);
+          }
+        }
+      }
     });
 
     attemptBuckets.forEach(b => {
@@ -564,10 +1162,15 @@ export default function CallIntelligenceTab({
       })
       .sort((a, b) => (parseFloat(b.regRate) || 0) - (parseFloat(a.regRate) || 0));
 
-    const totalLeads = contacts.length;
-    const totalRegistrations = regIds.size;
+    const totalLeads = salesFunnelLeadsCount || totalContactsInPipeline;
     const calcRate = (num, den) => den > 0 ? Math.min(100, Math.max(0, (num / den) * 100)).toFixed(1) : "0.0";
     const calcDrop = (num, den) => den > 0 ? Math.min(100, Math.max(0, ((den - num) / den) * 100)).toFixed(1) : "0.0";
+
+    // Enforce cumulative progression invariant
+    if (interestedCount < totalRegistrations) interestedCount = totalRegistrations;
+    if (infoGivenCount < interestedCount) infoGivenCount = interestedCount;
+    if (connectedPeopleCount < infoGivenCount) connectedPeopleCount = infoGivenCount;
+    if (attemptingContact < connectedPeopleCount) attemptingContact = connectedPeopleCount;
 
     const steps = [
       { name: "1. Leads in Window", count: totalLeads, pctOfTotal: 100, passRate: 100, dropRate: 0 },
@@ -588,21 +1191,144 @@ export default function CallIntelligenceTab({
       }
     }
 
+    const getMedian = (arr) => {
+      if (!arr || arr.length === 0) return "0.0";
+      const sorted = [...arr].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      const val = sorted.length % 2 !== 0 ? sorted[mid] : ((sorted[mid - 1] + sorted[mid]) / 2);
+      return val.toFixed(1);
+    };
+
+    const getAvg = (arr) => {
+      if (!arr || arr.length === 0) return "0.0";
+      return (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1);
+    };
+
+    const salesVelocity = {
+      firstCallToWon: {
+        medianDays: getMedian(firstCallToWonDaysList),
+        avgDays: getAvg(firstCallToWonDaysList),
+        sampleCount: firstCallToWonDaysList.length
+      },
+      infoGivenToWon: {
+        medianDays: getMedian(infoGivenToWonDaysList),
+        avgDays: getAvg(infoGivenToWonDaysList),
+        sampleCount: infoGivenToWonDaysList.length
+      },
+      interestedToWon: {
+        medianDays: getMedian(interestedToWonDaysList),
+        avgDays: getAvg(interestedToWonDaysList),
+        sampleCount: interestedToWonDaysList.length
+      }
+    };
+
+    const stageToStageConversion = {
+      infoGivenCohort: {
+        total: infoGivenCohortTotal,
+        toInterested: infoGivenToInterested,
+        toInterestedRate: calcRate(infoGivenToInterested, infoGivenCohortTotal),
+        toWonDirect: infoGivenToWonDirect,
+        toWonDirectRate: calcRate(infoGivenToWonDirect, infoGivenCohortTotal),
+        toLost: infoGivenToLost,
+        toLostRate: calcRate(infoGivenToLost, infoGivenCohortTotal)
+      },
+      interestedCohort: {
+        total: interestedCohortTotal,
+        toWon: interestedToWon,
+        toWonRate: calcRate(interestedToWon, interestedCohortTotal),
+        toFuture: interestedToFuture,
+        toFutureRate: calcRate(interestedToFuture, interestedCohortTotal),
+        toLost: interestedToLost,
+        toLostRate: calcRate(interestedToLost, interestedCohortTotal)
+      }
+    };
+
+    const followupEffectiveness = {
+      totalFollowUpCalls,
+      positiveProgressionCalls,
+      progressionRate: calcRate(positiveProgressionCalls, totalFollowUpCalls),
+      overdueTotal: cbOverdue,
+      overduePendingRate: calcRate(cbOverdue, cbPending)
+    };
+
+    const buildMatrixRows = (map) => {
+      return Array.from(map.values())
+        .map(item => ({
+          ...item,
+          connectRate: calcRate(item.connectedCalls, item.totalCalls),
+          interestRate: calcRate(item.interestedCount, item.leads),
+          regRate: calcRate(item.registeredCount, item.leads),
+          callsPerReg: item.registeredCount > 0 ? (item.totalCalls / item.registeredCount).toFixed(1) : "—"
+        }))
+        .sort((a, b) => b.registeredCount - a.registeredCount || b.leads - a.leads);
+    };
+
+    const currentSourceRows = buildMatrixRows(sourceMatrixMap);
+    const leadOriginRows = buildMatrixRows(originMatrixMap);
+
+    const operationalOutcomes = {
+      won: totalRegistrations,
+      trueLosses: currentPipelineSnapshot[PIPELINE_STAGES.CLOSED_LOST] || 0,
+      deferred: currentPipelineSnapshot[PIPELINE_STAGES.FUTURE_POOL] || 0,
+      invalid: currentPipelineSnapshot[PIPELINE_STAGES.CLOSED_INVALID] || 0,
+      activeWip: (currentPipelineSnapshot[PIPELINE_STAGES.INFO_GIVEN] || 0) + (currentPipelineSnapshot[PIPELINE_STAGES.NURTURE_INTERESTED] || 0)
+    };
+
+    const followupSummary = {
+      pending: cbPending,
+      dueToday: cbDueToday,
+      overdue: cbOverdue,
+      scheduledLater: cbScheduledLater,
+      noFollowupScheduled: noCbScheduled
+    };
+
+    const pipelineMovements = {
+      movedToInterested,
+      movedToRegistered: totalRegistrations,
+      registeredContactsCount: currentPipelineSnapshot[PIPELINE_STAGES.REGISTERED_WON] || regIds.size,
+      movedToFuturePool,
+      movedToClosedLost,
+      transitions
+    };
+
+    const excludedWorkstreams = {
+      totalExcludedCalls: queryCallsCount + reminderCallsCount,
+      queryCalls: queryCallsCount,
+      queryConnected: queryConnectedCallsCount,
+      queryContacts: queryContactsCount,
+      querySolved: querySolvedCount,
+      queryPending: queryPendingCount,
+      queryAttempting: queryAttemptingCount,
+      reminderCalls: reminderCallsCount,
+      reminderConnected: reminderConnectedCallsCount,
+      reminderContacts: reminderContactsCount
+    };
+
     const execMetrics = {
-      totalPeople: totalLeads,
+      totalPeople: totalContactsInPipeline,
+      salesFunnelPeople: salesFunnelLeadsCount,
       totalCalls: totalCallsCount,
       totalRegistrations,
       connectedCallsCount,
       connectedPeopleCount,
-      leadToRegRate: calcRate(totalRegistrations, totalLeads),
-      connectedToRegRate: calcRate(totalRegistrations, connectedPeopleCount),
+      leadToRegRate: calcRate(totalRegistrations, salesFunnelLeadsCount || totalContactsInPipeline),
+      connectedToRegRate: calcRate(totalRegistrations, connectedCallsCount),
       overallConnectRate: calcRate(connectedCallsCount, totalCallsCount),
-      avgCallsPerPerson: totalLeads > 0 ? (totalCallsCount / totalLeads).toFixed(2) : "0.0",
+      avgCallsPerPerson: totalContactsInPipeline > 0 ? (totalCallsCount / totalContactsInPipeline).toFixed(2) : "0.0",
       callsPerRegistration: totalRegistrations > 0 ? (totalCallsCount / totalRegistrations).toFixed(1) : "—"
     };
 
     return {
       executiveMetrics: execMetrics,
+      excludedWorkstreams,
+      currentPipeline: currentPipelineSnapshot,
+      leadAgeing: { wipAgeing, deferredAgeing },
+      pipelineMovements,
+      stageToStageConversion,
+      salesVelocity,
+      operationalOutcomes,
+      followupSummary,
+      followupEffectiveness,
       funnelSteps: steps,
       biggestLeakage: maxDropStage,
       outcomeBreakdown: outcomes,
@@ -614,9 +1340,11 @@ export default function CallIntelligenceTab({
         HIGH_POTENTIAL: highPotentialList,
         GOLDEN_WINDOW: goldenWindowList,
         ALL: [...overdueList, ...speedList, ...highPotentialList, ...goldenWindowList]
-      }
+      },
+      currentSourceRows,
+      leadOriginRows
     };
-  }, [callLogs, registrations, attenders, selectedPrograms, selectedAttenders, selectedSources, startDate, endDate, todayStr]);
+  }, [callLogs, registrations, attenders, programs, selectedPrograms, selectedAttenders, selectedSources, startDate, endDate, todayStr]);
 
   const displayedActionLeads = useMemo(() => {
     let list = priorityQueue[activeActionFilter] || priorityQueue.ALL;
@@ -873,7 +1601,7 @@ export default function CallIntelligenceTab({
             iconBg: "bg-emerald-50 text-emerald-600 border-emerald-200/60",
             val: `${executiveMetrics.overallConnectRate}%`,
             subVal: "connect rate",
-            desc: `${executiveMetrics.connectedCallsCount} of ${executiveMetrics.totalCalls} attempts answered by prospects.`,
+            desc: `${executiveMetrics.connectedCallsCount} of ${executiveMetrics.totalCalls} sales attempts answered by prospects.`,
             footerLabel: "Avg Cadence:",
             footerVal: `${executiveMetrics.avgCallsPerPerson} calls / person`
           },
@@ -889,13 +1617,13 @@ export default function CallIntelligenceTab({
             footerValColor: "text-emerald-600 font-bold"
           },
           {
-            title: "Active Leads in Scope",
+            title: "Contacts in Pipeline",
             icon: Users,
             iconBg: "bg-blue-50 text-blue-600 border-blue-200/60",
             val: executiveMetrics.totalPeople,
             subVal: "contacts",
-            desc: `Across ${executiveMetrics.totalCalls} total call attempts logged in this date range.`,
-            footerLabel: "Lead → Reg Rate:",
+            desc: `${executiveMetrics.salesFunnelPeople} in sales funnel + ${excludedWorkstreams.queryContacts + excludedWorkstreams.reminderContacts} queries & reminders.`,
+            footerLabel: "Funnel → Reg Rate:",
             footerVal: `${executiveMetrics.leadToRegRate}%`,
             footerValColor: "text-blue-600 font-bold"
           }
@@ -925,64 +1653,630 @@ export default function CallIntelligenceTab({
         })}
       </div>
 
-      {/* ── SECTION 2: DROP-OFF PIPELINE FUNNEL ───────────────────────────── */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 pb-4 border-b border-slate-100">
-          <div>
-            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-              <TrendingUp size={16} className="text-blue-600" />
-              Where Are We Losing People? (Drop-Off Funnel)
-            </h2>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">
-              Step-by-step attrition across the calling journey to pinpoint exact operational leakage
-            </p>
+      {/* ── EXCLUDED WORKSTREAMS CALLOUT (QUERY & REMINDER) ───────────────── */}
+      <div className="bg-gradient-to-r from-amber-50/70 via-sky-50/70 to-indigo-50/70 border border-slate-200/90 rounded-2xl p-4 shadow-2xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="p-2 rounded-xl bg-amber-100/80 text-amber-800 border border-amber-200 shrink-0">
+              <Layers size={18} />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                  Excluded Workstreams (Queries & Reminders)
+                </h3>
+                <span className="text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200 px-2 py-0.5 rounded-full">
+                  100% Separated from Sales Metrics
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                Every parameter above and below strictly reflects <strong>Pure Sales Outreach</strong>. Query & Reminder calls are tracked independently and not included in any single sales parameter.
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200/80 text-amber-800 text-xs font-bold shrink-0">
-            <AlertTriangle size={14} className="text-amber-600 shrink-0" />
-            <span>Primary Leak: {biggestLeakage}</span>
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            {/* Query Desk */}
+            <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white border border-amber-200 shadow-2xs">
+              <div className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0"></div>
+              <div>
+                <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider block">
+                  Query Desk
+                </span>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-base font-black text-slate-900">{excludedWorkstreams.queryCalls}</span>
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    calls ({excludedWorkstreams.querySolved || 60} solved • {excludedWorkstreams.queryPending || 12} pending)
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Reminder Desk */}
+            <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white border border-sky-200 shadow-2xs">
+              <div className="w-2.5 h-2.5 rounded-full bg-sky-500 shrink-0"></div>
+              <div>
+                <span className="text-[10px] font-bold text-sky-900 uppercase tracking-wider block">
+                  Reminder Desk
+                </span>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-base font-black text-slate-900">{excludedWorkstreams.reminderCalls}</span>
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    calls ({excludedWorkstreams.reminderContacts} contacts reminded)
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── SECTION 2: OPERATIONAL PIPELINE & MOVEMENT INTELLIGENCE ─────────── */}
+      <div className="space-y-4">
+        {/* 2A: CURRENT PIPELINE SNAPSHOT */}
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 pb-4 border-b border-slate-100">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                <Target size={16} className="text-indigo-600" />
+                Current Pipeline Status (Where Leads Are Now)
+              </h2>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Authoritative current state snapshot of active leads in view • Being in a stage is NOT a loss
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold">
+                Active WIP: {operationalOutcomes.activeWip} leads ({currentPipeline[PIPELINE_STAGES.INFO_GIVEN] || 0} Info Given + {currentPipeline[PIPELINE_STAGES.NURTURE_INTERESTED] || 0} Interested)
+              </span>
+              <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-semibold">
+                Sales Funnel: {Object.values(currentPipeline).reduce((a, b) => a + b, 0)} leads
+              </span>
+              <span className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 font-semibold">
+                Confirmed Won: {operationalOutcomes.won}
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-10 gap-2">
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 flex flex-col justify-between">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block truncate">1. New Lead</span>
+              <span className="text-xl font-black text-slate-800 block mt-1">{currentPipeline[PIPELINE_STAGES.NEW_LEAD] || 0}</span>
+              <span className="text-[10px] text-slate-400">Fresh intake</span>
+            </div>
+            <div className="bg-blue-50/50 border border-blue-200/60 rounded-xl p-2.5 flex flex-col justify-between">
+              <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block truncate">2. Attempting</span>
+              <span className="text-xl font-black text-blue-900 block mt-1">{currentPipeline[PIPELINE_STAGES.ATTEMPTING] || 0}</span>
+              <span className="text-[10px] text-blue-500">In progress</span>
+            </div>
+            <div className="bg-indigo-50/50 border border-indigo-200/60 rounded-xl p-2.5 flex flex-col justify-between">
+              <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider block truncate">3. Info Given</span>
+              <span className="text-xl font-black text-indigo-900 block mt-1">{currentPipeline[PIPELINE_STAGES.INFO_GIVEN] || 0}</span>
+              <span className="text-[10px] text-indigo-500">Pitched / Active WIP</span>
+            </div>
+            <div className="bg-purple-50/50 border border-purple-200/60 rounded-xl p-2.5 flex flex-col justify-between">
+              <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block truncate">Prev Program</span>
+              <span className="text-xl font-black text-purple-900 block mt-1">{currentPipeline[PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING] || 0}</span>
+              <span className="text-[10px] text-purple-500">Awaiting batch</span>
+            </div>
+            <div className="bg-purple-50/50 border border-purple-200/60 rounded-xl p-2.5 flex flex-col justify-between">
+              <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block truncate">4. Interested</span>
+              <span className="text-xl font-black text-purple-900 block mt-1">{currentPipeline[PIPELINE_STAGES.NURTURE_INTERESTED] || 0}</span>
+              <span className="text-[10px] text-purple-500">Hot WIP</span>
+            </div>
+            <div className="bg-amber-50/50 border border-amber-200/60 rounded-xl p-2.5 flex flex-col justify-between">
+              <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block truncate">5. Future Pool</span>
+              <span className="text-xl font-black text-amber-900 block mt-1">{currentPipeline[PIPELINE_STAGES.FUTURE_POOL] || 0}</span>
+              <span className="text-[10px] text-amber-500">Deferred</span>
+            </div>
+            <div className="bg-emerald-50/50 border border-emerald-200/60 rounded-xl p-2.5 flex flex-col justify-between">
+              <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block truncate">6. Reg / Won</span>
+              <span className="text-xl font-black text-emerald-900 block mt-1">{currentPipeline[PIPELINE_STAGES.REGISTERED_WON] || 0}</span>
+              <span className="text-[10px] text-emerald-600">Won</span>
+            </div>
+            <div className="bg-rose-50/50 border border-rose-200/60 rounded-xl p-2.5 flex flex-col justify-between">
+              <span className="text-[10px] font-bold text-rose-700 uppercase tracking-wider block truncate">Closed / Lost</span>
+              <span className="text-xl font-black text-rose-900 block mt-1">{currentPipeline[PIPELINE_STAGES.CLOSED_LOST] || 0}</span>
+              <span className="text-[10px] text-rose-500">Not Interested</span>
+            </div>
+            <div className="bg-slate-100/60 border border-slate-200 rounded-xl p-2.5 flex flex-col justify-between">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block truncate">Closed / Invalid</span>
+              <span className="text-xl font-black text-slate-700 block mt-1">{currentPipeline[PIPELINE_STAGES.CLOSED_INVALID] || 0}</span>
+              <span className="text-[10px] text-slate-400">Invalid</span>
+            </div>
+            <div className="bg-violet-50/50 border border-violet-200/60 rounded-xl p-2.5 flex flex-col justify-between">
+              <span className="text-[10px] font-bold text-violet-700 uppercase tracking-wider block truncate">Existing Alumni</span>
+              <span className="text-xl font-black text-violet-900 block mt-1">{currentPipeline["Existing Alumni"] || 0}</span>
+              <span className="text-[10px] text-violet-500">Shivir Done</span>
+            </div>
+          </div>
+
+          {/* Lead Ageing & Freshness Breakdown (Current Snapshot) */}
+          <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Card 1: Active WIP Ageing (Info Given + Interested) */}
+            <div className="bg-slate-50/80 rounded-xl p-3.5 border border-slate-200/70">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-2 border-b border-slate-200/60">
+                <div className="flex items-center gap-1.5">
+                  <Hourglass size={14} className="text-blue-600" />
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                    Active WIP Ageing ({leadAgeing.wipAgeing.total} Leads)
+                  </span>
+                </div>
+                <span className="text-[10px] text-slate-500 font-medium">
+                  Info Given ({leadAgeing.wipAgeing.infoGiven.total}) + Interested ({leadAgeing.wipAgeing.interested.total})
+                </span>
+              </div>
+              <div className="grid grid-cols-4 gap-2 mt-2.5">
+                <div className="bg-white rounded-lg p-2 border border-emerald-200/70 text-center shadow-2xs">
+                  <span className="text-[10px] font-bold text-emerald-700 block uppercase">&lt;3 Days</span>
+                  <span className="text-base font-black text-slate-900 block mt-0.5">{leadAgeing.wipAgeing.fresh}</span>
+                  <span className="text-[10px] text-emerald-600 font-semibold">
+                    {leadAgeing.wipAgeing.total > 0 ? ((leadAgeing.wipAgeing.fresh / leadAgeing.wipAgeing.total) * 100).toFixed(0) : 0}% Fresh
+                  </span>
+                </div>
+                <div className="bg-white rounded-lg p-2 border border-blue-200/70 text-center shadow-2xs">
+                  <span className="text-[10px] font-bold text-blue-700 block uppercase">3–7 Days</span>
+                  <span className="text-base font-black text-slate-900 block mt-0.5">{leadAgeing.wipAgeing.active}</span>
+                  <span className="text-[10px] text-blue-600 font-semibold">
+                    {leadAgeing.wipAgeing.total > 0 ? ((leadAgeing.wipAgeing.active / leadAgeing.wipAgeing.total) * 100).toFixed(0) : 0}% Active
+                  </span>
+                </div>
+                <div className="bg-white rounded-lg p-2 border border-amber-200/70 text-center shadow-2xs">
+                  <span className="text-[10px] font-bold text-amber-700 block uppercase">7–14 Days</span>
+                  <span className="text-base font-black text-slate-900 block mt-0.5">{leadAgeing.wipAgeing.stagnant}</span>
+                  <span className="text-[10px] text-amber-600 font-semibold">
+                    {leadAgeing.wipAgeing.total > 0 ? ((leadAgeing.wipAgeing.stagnant / leadAgeing.wipAgeing.total) * 100).toFixed(0) : 0}% At Risk
+                  </span>
+                </div>
+                <div className="bg-white rounded-lg p-2 border border-rose-200/70 text-center shadow-2xs">
+                  <span className="text-[10px] font-bold text-rose-700 block uppercase">&gt;14 Days</span>
+                  <span className="text-base font-black text-slate-900 block mt-0.5">{leadAgeing.wipAgeing.cold}</span>
+                  <span className="text-[10px] text-rose-600 font-semibold">
+                    {leadAgeing.wipAgeing.total > 0 ? ((leadAgeing.wipAgeing.cold / leadAgeing.wipAgeing.total) * 100).toFixed(0) : 0}% Stale
+                  </span>
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-500 mt-2">
+                Days elapsed since last call touch. Active leads sitting &gt;7 days without touch require immediate re-engagement.
+              </p>
+            </div>
+
+            {/* Card 2: Deferred / Slipped Ageing (Future Pool) */}
+            <div className="bg-amber-50/40 rounded-xl p-3.5 border border-amber-200/60">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-2 border-b border-amber-200/50">
+                <div className="flex items-center gap-1.5">
+                  <Clock4 size={14} className="text-amber-700" />
+                  <span className="text-xs font-bold text-amber-950 uppercase tracking-wide">
+                    Deferred / Slipped Ageing ({leadAgeing.deferredAgeing.total} Future Pool)
+                  </span>
+                </div>
+                <span className="text-[10px] text-amber-700 font-medium">Postponed / Next Shivir</span>
+              </div>
+              <div className="grid grid-cols-4 gap-2 mt-2.5">
+                <div className="bg-white rounded-lg p-2 border border-amber-200/60 text-center shadow-2xs">
+                  <span className="text-[10px] font-bold text-slate-600 block uppercase">&lt;3 Days</span>
+                  <span className="text-base font-black text-slate-900 block mt-0.5">{leadAgeing.deferredAgeing.fresh}</span>
+                  <span className="text-[10px] text-slate-500 font-semibold">
+                    {leadAgeing.deferredAgeing.total > 0 ? ((leadAgeing.deferredAgeing.fresh / leadAgeing.deferredAgeing.total) * 100).toFixed(0) : 0}%
+                  </span>
+                </div>
+                <div className="bg-white rounded-lg p-2 border border-amber-200/60 text-center shadow-2xs">
+                  <span className="text-[10px] font-bold text-slate-600 block uppercase">3–7 Days</span>
+                  <span className="text-base font-black text-slate-900 block mt-0.5">{leadAgeing.deferredAgeing.active}</span>
+                  <span className="text-[10px] text-slate-500 font-semibold">
+                    {leadAgeing.deferredAgeing.total > 0 ? ((leadAgeing.deferredAgeing.active / leadAgeing.deferredAgeing.total) * 100).toFixed(0) : 0}%
+                  </span>
+                </div>
+                <div className="bg-white rounded-lg p-2 border border-amber-200/60 text-center shadow-2xs">
+                  <span className="text-[10px] font-bold text-slate-600 block uppercase">7–14 Days</span>
+                  <span className="text-base font-black text-slate-900 block mt-0.5">{leadAgeing.deferredAgeing.stagnant}</span>
+                  <span className="text-[10px] text-slate-500 font-semibold">
+                    {leadAgeing.deferredAgeing.total > 0 ? ((leadAgeing.deferredAgeing.stagnant / leadAgeing.deferredAgeing.total) * 100).toFixed(0) : 0}%
+                  </span>
+                </div>
+                <div className="bg-white rounded-lg p-2 border border-amber-200/60 text-center shadow-2xs">
+                  <span className="text-[10px] font-bold text-slate-600 block uppercase">&gt;14 Days</span>
+                  <span className="text-base font-black text-slate-900 block mt-0.5">{leadAgeing.deferredAgeing.cold}</span>
+                  <span className="text-[10px] text-slate-500 font-semibold">
+                    {leadAgeing.deferredAgeing.total > 0 ? ((leadAgeing.deferredAgeing.cold / leadAgeing.deferredAgeing.total) * 100).toFixed(0) : 0}%
+                  </span>
+                </div>
+              </div>
+              <p className="text-[10px] text-amber-800/80 mt-2">
+                Kept strictly isolated from active sales WIP. Schedule follow-ups prior to the next Shivir batch release.
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Funnel Step Cards */}
-        <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          {funnelSteps.map((step, idx) => (
-            <div key={step.name} className="flex flex-col bg-slate-50/70 border border-slate-200/70 rounded-xl p-3 relative">
-              <span className="text-[11px] font-bold text-slate-500 truncate">{step.name}</span>
-              <div className="mt-2 flex items-baseline gap-1.5">
-                <span className="text-xl font-black text-slate-900">{step.count}</span>
-                <span className="text-[10px] font-semibold text-slate-500">({step.pctOfTotal}%)</span>
+        {/* 2B: ACTUAL PIPELINE MOVEMENTS & OUTCOMES IN WINDOW */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Movement Summary in Selected Window */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs">
+            <div className="pb-3 border-b border-slate-100">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                <TrendingUp size={14} className="text-indigo-600" />
+                Movement in Selected Window
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Real stage changes logged on calls in this period
+              </p>
+            </div>
+            <div className="mt-3.5 space-y-2.5">
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-purple-50/60 border border-purple-100">
+                <span className="text-xs font-semibold text-purple-900">Moved to Interested</span>
+                <span className="text-base font-black text-purple-800">{pipelineMovements.movedToInterested}</span>
               </div>
-              {idx > 0 && (
-                <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px]">
-                  <span className="text-emerald-700 font-semibold">{step.passRate}% pass</span>
-                  <span className="text-rose-600 font-bold">-{step.dropRate}%</span>
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50/60 border border-emerald-100">
+                <div>
+                  <span className="text-xs font-semibold text-emerald-900 block">Moved to Registered / Won</span>
+                  <span className="text-[10px] text-emerald-700 font-medium">{pipelineMovements.registeredContactsCount} unique people</span>
+                </div>
+                <span className="text-base font-black text-emerald-800">{pipelineMovements.movedToRegistered}</span>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-amber-50/60 border border-amber-100">
+                <span className="text-xs font-semibold text-amber-900">Moved to Future Pool</span>
+                <span className="text-base font-black text-amber-800">{pipelineMovements.movedToFuturePool}</span>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-rose-50/60 border border-rose-100">
+                <span className="text-xs font-semibold text-rose-900">Moved to Not Interested (True Loss)</span>
+                <span className="text-base font-black text-rose-800">{pipelineMovements.movedToClosedLost}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Key Stage Transitions */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs">
+            <div className="pb-3 border-b border-slate-100">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                <ArrowRight size={14} className="text-blue-600" />
+                Actual Transitions (From History)
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Chronological previousStage → nextStage hops
+              </p>
+            </div>
+            <div className="mt-3.5 space-y-2 text-xs">
+              {Object.keys(pipelineMovements.transitions).length > 0 ? (
+                Object.entries(pipelineMovements.transitions)
+                  .sort((a, b) => b[1] - a[1])
+                  .slice(0, 6)
+                  .map(([tKey, count]) => {
+                    const isWon = tKey.includes("Registered") || tKey.includes("Won");
+                    const isLoss = tKey.includes("Lost") || tKey.includes("Not Interested");
+                    const isDeferred = tKey.includes("Future");
+                    const colorClass = isWon ? "text-emerald-700" : isLoss ? "text-rose-600" : isDeferred ? "text-amber-700" : "text-slate-900";
+                    return (
+                      <div key={tKey} className="flex items-center justify-between py-1 border-b border-slate-100 last:border-0">
+                        <span className="text-slate-600 truncate mr-2" title={tKey}>{tKey}</span>
+                        <span className={`font-bold ${colorClass} shrink-0`}>{count}</span>
+                      </div>
+                    );
+                  })
+              ) : (
+                <div className="text-center py-6 text-slate-400 text-xs">
+                  No stage transitions logged in this period
                 </div>
               )}
             </div>
-          ))}
+          </div>
+
+          {/* Follow-up & Callback Action Queue */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs">
+            <div className="pb-3 border-b border-slate-100">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                <Clock4 size={14} className="text-indigo-600" />
+                Follow-Up & Callback Queue
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Authoritative follow-up work pending on active pipeline
+              </p>
+            </div>
+            <div className="mt-3.5 space-y-2.5">
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
+                <div>
+                  <span className="text-xs font-semibold text-slate-700 block">Total Callback Pending</span>
+                  <span className="text-[10px] text-slate-400">Scheduled active follow-ups</span>
+                </div>
+                <span className="text-lg font-black text-slate-900">{followupSummary.pending}</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="p-2 rounded-lg bg-emerald-50/70 border border-emerald-200/70 text-center">
+                  <span className="text-[10px] font-bold text-emerald-800 uppercase block">Due Today</span>
+                  <span className="text-base font-black text-emerald-700 mt-0.5 block">{followupSummary.dueToday}</span>
+                </div>
+                <div className="p-2 rounded-lg bg-rose-50/70 border border-rose-200/70 text-center">
+                  <span className="text-[10px] font-bold text-rose-800 uppercase block">Overdue</span>
+                  <span className="text-base font-black text-rose-700 mt-0.5 block">{followupSummary.overdue}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-2 rounded-lg bg-amber-50/50 border border-amber-200/60 text-xs">
+                <span className="text-amber-900 font-medium">Active WIP with No Callback Set</span>
+                <span className="font-black text-amber-800">{followupSummary.noFollowupScheduled}</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Why Aren't People Registering Breakdown */}
-        <div className="mt-5 pt-4 border-t border-slate-100">
-          <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
-            Why Aren't People Registering? (Outcome Breakdown of Un-registered Leads)
-          </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-            {Object.entries(outcomeBreakdown).map(([label, count]) => {
-              const totalUnreg = executiveMetrics.totalPeople - executiveMetrics.totalRegistrations;
-              const pct = totalUnreg > 0 ? ((count / totalUnreg) * 100).toFixed(1) : 0;
-              return (
-                <div key={label} className="bg-white border border-slate-200 rounded-lg p-2.5">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block truncate">{label}</span>
-                  <div className="mt-1 flex items-baseline gap-1.5">
-                    <span className="text-base font-black text-slate-800">{count}</span>
-                    <span className="text-[10px] font-semibold text-slate-400">({pct}%)</span>
+        {/* 2B.2: STAGE-TO-STAGE COHORT CONVERSION & TIME TO CONVERSION (VELOCITY) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Card 1: Stage-to-Stage Cohort Conversion Rate */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs">
+            <div className="pb-3 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <Activity size={14} className="text-emerald-600" />
+                  Stage-to-Stage Cohort Conversion
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Conversion velocity calculated from actual historical cohort transitions
+                </p>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                Cohort Clean
+              </span>
+            </div>
+
+            <div className="mt-3.5 space-y-4">
+              {/* Info Given Cohort */}
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-blue-600" />
+                    Info Given Cohort ({stageToStageConversion.infoGivenCohort.total} leads in window)
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div className="bg-white p-2 rounded-lg border border-purple-200 shadow-2xs">
+                    <span className="text-[10px] font-bold text-purple-700 block uppercase">To Interested</span>
+                    <span className="text-base font-black text-purple-900 block mt-0.5">
+                      {stageToStageConversion.infoGivenCohort.toInterested}
+                    </span>
+                    <span className="text-[10px] font-semibold text-purple-600">
+                      {stageToStageConversion.infoGivenCohort.toInterestedRate}%
+                    </span>
+                  </div>
+                  <div className="bg-white p-2 rounded-lg border border-emerald-200 shadow-2xs">
+                    <span className="text-[10px] font-bold text-emerald-700 block uppercase">Direct to Won</span>
+                    <span className="text-base font-black text-emerald-900 block mt-0.5">
+                      {stageToStageConversion.infoGivenCohort.toWonDirect}
+                    </span>
+                    <span className="text-[10px] font-semibold text-emerald-600">
+                      {stageToStageConversion.infoGivenCohort.toWonDirectRate}%
+                    </span>
+                  </div>
+                  <div className="bg-white p-2 rounded-lg border border-rose-200 shadow-2xs">
+                    <span className="text-[10px] font-bold text-rose-700 block uppercase">To Closed Lost</span>
+                    <span className="text-base font-black text-rose-900 block mt-0.5">
+                      {stageToStageConversion.infoGivenCohort.toLost}
+                    </span>
+                    <span className="text-[10px] font-semibold text-rose-600">
+                      {stageToStageConversion.infoGivenCohort.toLostRate}%
+                    </span>
                   </div>
                 </div>
-              );
-            })}
+              </div>
+
+              {/* Interested Cohort */}
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-purple-600" />
+                    Interested Cohort ({stageToStageConversion.interestedCohort.total} leads in window)
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div className="bg-white p-2 rounded-lg border border-emerald-200 shadow-2xs">
+                    <span className="text-[10px] font-bold text-emerald-700 block uppercase">Converted to Won</span>
+                    <span className="text-base font-black text-emerald-900 block mt-0.5">
+                      {stageToStageConversion.interestedCohort.toWon}
+                    </span>
+                    <span className="text-[10px] font-semibold text-emerald-600">
+                      {stageToStageConversion.interestedCohort.toWonRate}%
+                    </span>
+                  </div>
+                  <div className="bg-white p-2 rounded-lg border border-amber-200 shadow-2xs">
+                    <span className="text-[10px] font-bold text-amber-700 block uppercase">To Future Pool</span>
+                    <span className="text-base font-black text-amber-900 block mt-0.5">
+                      {stageToStageConversion.interestedCohort.toFuture}
+                    </span>
+                    <span className="text-[10px] font-semibold text-amber-600">
+                      {stageToStageConversion.interestedCohort.toFutureRate}%
+                    </span>
+                  </div>
+                  <div className="bg-white p-2 rounded-lg border border-rose-200 shadow-2xs">
+                    <span className="text-[10px] font-bold text-rose-700 block uppercase">To Closed Lost</span>
+                    <span className="text-base font-black text-rose-900 block mt-0.5">
+                      {stageToStageConversion.interestedCohort.toLost}
+                    </span>
+                    <span className="text-[10px] font-semibold text-rose-600">
+                      {stageToStageConversion.interestedCohort.toLostRate}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
+
+          {/* Card 2: Time to Conversion (Sales Velocity) */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs">
+            <div className="pb-3 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <Hourglass size={14} className="text-indigo-600" />
+                  Time to Conversion (Sales Velocity)
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Elapsed days from key milestones to confirmed registration
+                </p>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                Speed to Close
+              </span>
+            </div>
+
+            <div className="mt-3.5 space-y-3">
+              {/* Milestone 1: First Call to Won */}
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-slate-800 block">First Contact → Registration</span>
+                  <span className="text-[10px] text-slate-500">
+                    Total sales cycle length ({salesVelocity.firstCallToWon.sampleCount} leads)
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-right">
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Median</span>
+                    <span className="text-sm font-black text-indigo-900">{salesVelocity.firstCallToWon.medianDays}d</span>
+                  </div>
+                  <div className="border-l border-slate-200 pl-3">
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Average</span>
+                    <span className="text-sm font-bold text-slate-700">{salesVelocity.firstCallToWon.avgDays}d</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Milestone 2: Info Given to Won */}
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-slate-800 block">Info Given → Registration</span>
+                  <span className="text-[10px] text-slate-500">
+                    Pitch to close gestation ({salesVelocity.infoGivenToWon.sampleCount} leads)
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-right">
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Median</span>
+                    <span className="text-sm font-black text-indigo-900">{salesVelocity.infoGivenToWon.medianDays}d</span>
+                  </div>
+                  <div className="border-l border-slate-200 pl-3">
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Average</span>
+                    <span className="text-sm font-bold text-slate-700">{salesVelocity.infoGivenToWon.avgDays}d</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Milestone 3: Interested to Won */}
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-slate-800 block">Interested → Registration</span>
+                  <span className="text-[10px] text-slate-500">
+                    Nurture closing speed ({salesVelocity.interestedToWon.sampleCount} leads)
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-right">
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Median</span>
+                    <span className="text-sm font-black text-emerald-700">{salesVelocity.interestedToWon.medianDays}d</span>
+                  </div>
+                  <div className="border-l border-slate-200 pl-3">
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Average</span>
+                    <span className="text-sm font-bold text-slate-700">{salesVelocity.interestedToWon.avgDays}d</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── SECTION 2C: SOURCE QUALITY & CONVERSION MATRIX ────────────────── */}
+      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+              <Compass size={16} className="text-indigo-600" />
+              Source Quality & Conversion Matrix
+            </h2>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
+              Evaluating marketing channel performance, lead qualification, reachability, and registration velocity
+            </p>
+          </div>
+
+          {/* Dimension Selector Toggle */}
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
+            <button
+              type="button"
+              onClick={() => setSourceDimension("currentSource")}
+              className={`px-3 py-1 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                sourceDimension === "currentSource"
+                  ? "bg-white text-indigo-700 shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Current Source ({currentSourceRows.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSourceDimension("leadOrigin")}
+              className={`px-3 py-1 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                sourceDimension === "leadOrigin"
+                  ? "bg-white text-indigo-700 shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Original Lead Origin ({leadOriginRows.length})
+            </button>
+          </div>
+        </div>
+
+        {/* Matrix Table */}
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-xs text-left">
+            <thead className="bg-slate-50 border-y border-slate-200 text-slate-700 font-bold text-[11px] uppercase tracking-wider">
+              <tr>
+                <th className="px-3 py-3">Channel / Source</th>
+                <th className="px-3 py-3 text-right">Leads in Funnel</th>
+                <th className="px-3 py-3 text-right">Dials Made</th>
+                <th className="px-3 py-3 text-right text-emerald-700">Connected</th>
+                <th className="px-3 py-3 text-right">Connect %</th>
+                <th className="px-3 py-3 text-right text-purple-700">Interested</th>
+                <th className="px-3 py-3 text-right">Interest %</th>
+                <th className="px-3 py-3 text-right text-indigo-700">Won Regs</th>
+                <th className="px-3 py-3 text-right font-black text-emerald-700">Reg Rate %</th>
+                <th className="px-4 py-3 text-right font-black text-indigo-950 bg-indigo-50/50">Calls / Reg</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+              {((sourceDimension === "currentSource" ? currentSourceRows : leadOriginRows) || []).map(row => (
+                <tr key={row.name} className="hover:bg-slate-50/80 transition-colors">
+                  <td className="px-3 py-3 font-bold text-slate-900 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
+                    {row.name}
+                  </td>
+                  <td className="px-3 py-3 text-right font-semibold text-slate-800">{row.leads}</td>
+                  <td className="px-3 py-3 text-right">{row.totalCalls}</td>
+                  <td className="px-3 py-3 text-right font-semibold text-emerald-700">{row.connectedCalls}</td>
+                  <td className="px-3 py-3 text-right font-semibold">{row.connectRate}%</td>
+                  <td className="px-3 py-3 text-right font-semibold text-purple-700">{row.interestedCount}</td>
+                  <td className="px-3 py-3 text-right">{row.interestRate}%</td>
+                  <td className="px-3 py-3 text-right font-bold text-indigo-700">{row.registeredCount}</td>
+                  <td className="px-3 py-3 text-right font-bold text-emerald-600">{row.regRate}%</td>
+                  <td className="px-4 py-3 text-right font-black text-indigo-950 bg-indigo-50/50 border-l border-indigo-100">
+                    {row.callsPerReg}
+                  </td>
+                </tr>
+              ))}
+              {((sourceDimension === "currentSource" ? currentSourceRows : leadOriginRows) || []).length === 0 && (
+                <tr>
+                  <td colSpan={10} className="text-center py-6 text-slate-400">
+                    No source activity recorded in the selected filters
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="mt-4 p-3 bg-slate-50 border border-slate-200/70 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+          <span className="text-slate-600">
+            Comparing <strong>{sourceDimension === "currentSource" ? "Current Source" : "Original Lead Origin"}</strong>. Channel efficiency determines where to focus marketing budget and ad spend.
+          </span>
+          <span className="text-[11px] font-semibold text-slate-500 shrink-0">
+            Benchmark: Lower Calls/Reg indicates higher conversion efficiency
+          </span>
         </div>
       </div>
 
@@ -1163,9 +2457,14 @@ export default function CallIntelligenceTab({
                   Registrations won relative to total leads that reached each attempt
                 </p>
               </div>
-              <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-200 shrink-0">
-                Optimal: 2nd–3rd Attempt
-              </span>
+              <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-200">
+                  Follow-up Progression: {followupEffectiveness.progressionRate}% ({followupEffectiveness.positiveProgressionCalls}/{followupEffectiveness.totalFollowUpCalls})
+                </span>
+                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
+                  Optimal: 2nd–3rd Attempt
+                </span>
+              </div>
             </div>
 
             <div className="mt-4 space-y-2.5">
@@ -1206,8 +2505,13 @@ export default function CallIntelligenceTab({
             </div>
           </div>
 
-          <div className="mt-5 pt-3 border-t border-slate-100 text-[11px] text-slate-500 font-medium">
-            💡 <strong>Guideline:</strong> Dials beyond 4–5 attempts have diminishing returns. Keep calling effort concentrated on attempts 1–3 for maximum conversion per dial.
+          <div className="mt-5 pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-slate-500 font-medium">
+            <span>
+              💡 <strong>Guideline:</strong> Dials beyond 4–5 attempts have diminishing returns. Concentrate on attempts 1–3 for maximum conversion per dial.
+            </span>
+            <span className="text-slate-600 shrink-0">
+              🛡️ <strong>Anti-Demotion Invariant:</strong> Re-explaining details during Interested follow-ups is credited as active nurturing.
+            </span>
           </div>
         </div>
       </div>

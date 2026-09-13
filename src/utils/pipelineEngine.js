@@ -47,6 +47,106 @@ export const INVALID_NUMBER_STATUSES = [
   "Invalid Number", "Invalid No", "Wrong No", "wrong no.", "Called by mistake",
 ];
 
+import { defaultStages, buildDefaultEdges } from "./defaultWorkflow.js";
+
+/**
+ * Resolves the next pipeline stage using the graph-driven workflow engine (from D:\mvp pipeline code).
+ * Reads custom saved program workflows from localStorage (if in browser) or falls back to default edges.
+ */
+export function resolveGraphTransition(currentStage, outcome, program = null) {
+  if (!outcome) return null;
+  const outcomeNorm = String(outcome).trim().toLowerCase();
+  
+  let edges = null;
+  let rawNodes = null;
+  let stages = defaultStages;
+
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      const saved = window.localStorage.getItem("workflow-global") ||
+                    (program ? window.localStorage.getItem(`workflow-${program}`) : null);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed.edges) && parsed.edges.length > 0) {
+          edges = parsed.edges;
+        }
+        if (Array.isArray(parsed.nodes) && parsed.nodes.length > 0) {
+          rawNodes = parsed.nodes;
+          stages = parsed.nodes.map(n => n.data?.label || n.label);
+        }
+      }
+    } catch {
+      // Fallback cleanly to default
+    }
+  }
+
+  if (!edges) {
+    edges = buildDefaultEdges();
+  }
+
+  const normCurrent = normalizeStageStr(currentStage);
+
+  // Helper to resolve stage name from node target ID or index
+  const getStageFromTarget = (targetId) => {
+    if (rawNodes) {
+      const found = rawNodes.find(n => n.id === targetId);
+      if (found) return normalizeStageStr(found.data?.label || found.label);
+    }
+    const targetIndex = parseInt(String(targetId).replace("stage-", ""), 10);
+    if (!isNaN(targetIndex) && stages[targetIndex]) {
+      return normalizeStageStr(stages[targetIndex]);
+    }
+    return null;
+  };
+
+  // Find source node ID matching currentStage
+  let sourceId = null;
+  if (normCurrent) {
+    if (rawNodes) {
+      const foundSource = rawNodes.find(n => normalizeStageStr(n.data?.label || n.label) === normCurrent);
+      if (foundSource) sourceId = foundSource.id;
+    }
+    if (!sourceId) {
+      const sourceIndex = stages.findIndex(s => normalizeStageStr(s) === normCurrent);
+      if (sourceIndex >= 0) sourceId = `stage-${sourceIndex}`;
+    }
+  }
+
+  // Look for matching edge:
+  // 1. Precise match from current source node
+  if (sourceId) {
+    for (const edge of edges) {
+      if (edge.source === sourceId) {
+        const edgeOptions = (edge.data?.options || (edge.label ? edge.label.split(",").map(x => x.trim()) : []));
+        const matched = edgeOptions.some(opt => {
+          const optNorm = String(opt).trim().toLowerCase();
+          if (optNorm === outcomeNorm) return true;
+          if ((optNorm === "already reg.d" || optNorm === "already registered") && (outcomeNorm.includes("already") && outcomeNorm.includes("reg"))) return true;
+          if (optNorm === "shivir done" && (outcomeNorm.includes("shivir") && outcomeNorm.includes("done"))) return true;
+          if (optNorm === "reg.done" && (outcomeNorm === "registered" || outcomeNorm === "reg.done" || outcomeNorm === "registered / won")) return true;
+          return false;
+        });
+        if (matched) {
+          const st = getStageFromTarget(edge.target);
+          if (st) return st;
+        }
+      }
+    }
+  }
+
+  // 2. Global outcome match across graph if not explicitly originating from current node
+  for (const edge of edges) {
+    const edgeOptions = (edge.data?.options || (edge.label ? edge.label.split(",").map(x => x.trim()) : []));
+    const matched = edgeOptions.some(opt => String(opt).trim().toLowerCase() === outcomeNorm);
+    if (matched) {
+      const st = getStageFromTarget(edge.target);
+      if (st) return st;
+    }
+  }
+
+  return null;
+}
+
 export const STAGE_RANKS = {
   // Core
   "1. New Lead": 1, "New Lead": 1,
@@ -312,40 +412,21 @@ export function evaluatePipeline(contact = {}, callEvent = {}) {
     if (callStatus === "Connected") wasConnected = true;
   }
 
-  // ── SALES outcomes ─────────────────────────────────────────────────────────
-  else if (sLower === "reg.done" || sLower === "registered") {
-    targetStage              = PIPELINE_STAGES.REGISTERED_WON;
-    isAttenderCreditEligible = true;
-    wasConnected             = true;
-  }
-  else if (["already reg.d", "already registered", "already reg done", "already reg. done", "shivir done", "shivir already done"].includes(sLower) || sLower.includes("already reg") || sLower.includes("shivir done") || sLower === "existing alumni") {
-    targetStage               = PIPELINE_STAGES.EXISTING_ALUMNI;
-    wasConnected              = true;
-    programRelationshipUpdate = { status: "Existing Alumni" };
-  }
-  else if (sLower === "previous program pending") {
-    targetStage  = PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING;
-    attemptCount = 0;
-    wasConnected = true;
-  }
-  else if (["not interested", "not possible"].includes(sLower)) {
-    targetStage  = PIPELINE_STAGES.CLOSED_LOST;
-    closedReason = "Not Interested / Opt-Out";
-    wasConnected = true;
-  }
-  else if (sLower === "next time") {
-    targetStage  = PIPELINE_STAGES.FUTURE_POOL;
-    attemptCount = 0;
-    wasConnected = true;
-  }
-  else if (sLower === "interested") {
-    targetStage  = PIPELINE_STAGES.NURTURE_INTERESTED;
-    attemptCount = 0;
-    wasConnected = true;
-  }
-  else if (sLower === "info given" || sLower === "info") {
-    targetStage  = PIPELINE_STAGES.INFO_GIVEN;
-    attemptCount = 0;
+  // ── SALES outcomes (Pure Graph-Driven Engine — 0 Hardcoded Stages) ────────
+  else if (purpose === "SALES" && !isUnconnected) {
+    targetStage = resolveGraphTransition(currentStage, outcome, calledFor) || currentStage;
+
+    if (targetStage === PIPELINE_STAGES.REGISTERED_WON) {
+      isAttenderCreditEligible = true;
+    } else if (targetStage === PIPELINE_STAGES.EXISTING_ALUMNI) {
+      programRelationshipUpdate = { status: "Existing Alumni" };
+    } else if (targetStage === PIPELINE_STAGES.CLOSED_LOST) {
+      closedReason = "Not Interested / Opt-Out";
+    }
+
+    if (targetStage !== currentStage) {
+      attemptCount = 0;
+    }
     wasConnected = true;
   }
   else if (isUnconnected) {

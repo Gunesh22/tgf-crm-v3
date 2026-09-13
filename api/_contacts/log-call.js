@@ -102,7 +102,7 @@ function getEffectiveStageServer(lead, targetProgram = null) {
   return stage || lead.pipelineStage || lead.status || null;
 }
 
-function evaluateStageServer(lead, callEvent) {
+export function evaluateStageServer(lead, callEvent) {
   const targetProg = callEvent.calledFor || lead['Called For'] || lead.calledFor || null;
   const currentStage = getEffectiveStageServer(lead, targetProg);
   const currentRank  = currentStage ? (STAGE_RANKS[currentStage] || 0) : 0;

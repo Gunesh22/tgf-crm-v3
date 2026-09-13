@@ -3,7 +3,7 @@
 // Server-side canonical authority on duplicate detection and atomic profile merging.
 import clientPromise from '../lib/mongodb.js';
 import { buildPhoneDuplicateFilter } from '../lib/phoneNormalizer.js';
-import { executeLogCall } from './log-call.js';
+import { executeLogCall, evaluateStageServer } from './log-call.js';
 import { requireAuth, sanitizeString, isSameAttender } from '../lib/auth.js';
 
 export default async function handler(req, res) {
@@ -86,6 +86,23 @@ export default async function handler(req, res) {
     const currentSourceVal = updates.currentSource || updates.callSource || updates['Current Source'] || updates.Source || updates.source || '';
     const targetCalledForVal = updates.calledFor || updates['Called For'] || '';
 
+    const callPurposeVal = (updates.callPurpose || (updates.status === 'Query' ? 'QUERY' : 'SALES')).toUpperCase();
+    const evalResult = evaluateStageServer({
+      'Called For': targetCalledForVal,
+      calledFor: targetCalledForVal,
+      pipelineStage: '1. New Lead',
+      status: updates.status || 'Pending'
+    }, {
+      calledFor: targetCalledForVal,
+      callPurpose: callPurposeVal,
+      callStatus: updates.callStatus || 'Connected',
+      purposeOutcome: updates.status || 'Pending',
+      status: updates.status || 'Pending',
+      queryStatus: updates.queryStatus || null
+    });
+
+    const initialStage = evalResult.pipelineStage || '1. New Lead';
+
     const historyItem = {
       callId,
       attenderId: cleanAttenderId,
@@ -96,9 +113,10 @@ export default async function handler(req, res) {
       leadOwnerNameAtTime: cleanAttenderName || '',
       callDirection:     'incoming',
       callType:          'incoming',
-      callPurpose:       (updates.callPurpose || (updates.status === 'Query' ? 'QUERY' : 'SALES')).toUpperCase(),
+      callPurpose:       callPurposeVal,
       callStatus:        updates.callStatus || 'Connected',
       status:            updates.status || 'Pending',
+      pipelineStage:     initialStage,
       queryStatus:       updates.queryStatus || null,
       remark:            updates.remark || '',
       callbackDate:      updates.callbackDate || null,
@@ -125,7 +143,7 @@ export default async function handler(req, res) {
       callDirection: 'incoming',
       programId:   programId   || 'incoming',
       programName: programName || 'Incoming Calls',
-      pipelineStage: '1. New Lead',
+      pipelineStage: initialStage,
       leadOwner:     cleanAttenderId,
       leadOwnerName: cleanAttenderName || '',
       ownerHistory:  [],
@@ -142,9 +160,10 @@ export default async function handler(req, res) {
           attenderName:  cleanAttenderName || '',
           callDirection: 'incoming',
           callType:      'incoming',
-          callPurpose:   (updates.callPurpose || (updates.status === 'Query' ? 'QUERY' : 'SALES')).toUpperCase(),
+          callPurpose:   callPurposeVal,
           callStatus:    updates.callStatus || 'Connected',
           status:        updates.status || 'Pending',
+          pipelineStage: initialStage,
           remark:        updates.remark || '',
           callbackDate:  updates.callbackDate || null,
           callbackTime:  updates.callbackTime || null,

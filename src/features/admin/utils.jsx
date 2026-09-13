@@ -115,6 +115,29 @@ export const getCanonicalStage = (stageOrContact) => {
   if (typeof stageOrContact === "object") {
     const contact = stageOrContact;
 
+    // 0. If contact already has an authoritative pipelineStage, respect it directly (never demote on unconnected call)
+    const rawStage = String(contact.pipelineStage || "").trim();
+    if (rawStage) {
+      const s = rawStage;
+      if (s === "Query Desk" || s.toLowerCase() === "query desk" || s.toLowerCase() === "query") return "Query Desk";
+      if (s === "Reminder Desk" || s.toLowerCase() === "reminder desk" || s.toLowerCase() === "reminder") return "Reminder Desk";
+      if (s === PIPELINE_STAGES.REGISTERED_WON || s === "Registered / Won" || s === "Reg.Done" || s === "6. Registered / Won" || s === "Registered") return PIPELINE_STAGES.REGISTERED_WON;
+      if (s === "Existing Alumni" || s === "Alumni" || s.toLowerCase() === "existing alumni" || s.toLowerCase() === "alumni" || s.toLowerCase().includes("already reg") || s.toLowerCase().includes("shivir done")) return "Existing Alumni";
+      if (s === PIPELINE_STAGES.NURTURE_INTERESTED || s === "Nurture / Interested" || s === "Interested" || s === "4. Nurture / Interested") return PIPELINE_STAGES.NURTURE_INTERESTED;
+      if (s === PIPELINE_STAGES.FUTURE_POOL || s === "Future Pool" || s === "Next Time" || s === "5. Future Pool") return PIPELINE_STAGES.FUTURE_POOL;
+      if (s === PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING || s === "Previous Program Pending") return PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING;
+      if (s === PIPELINE_STAGES.INFO_GIVEN || s === "Information Given" || s === "Info Given" || s === "3. Information Given") return PIPELINE_STAGES.INFO_GIVEN;
+      if (s === PIPELINE_STAGES.CLOSED_LOST || s === "Closed / Lost" || s === "Closed Lost" || s === "7. Closed / Lost" || s === "Not Interested") return PIPELINE_STAGES.CLOSED_LOST;
+      if (s === PIPELINE_STAGES.CLOSED_INVALID || s === "Closed / Invalid" || s === "Invalid") return PIPELINE_STAGES.CLOSED_INVALID;
+      if (s === PIPELINE_STAGES.ATTEMPTING || s === "Attempting Contact" || s === "Attempting" || s === "2. Attempting Contact") return PIPELINE_STAGES.ATTEMPTING;
+    }
+
+    // 0b. Check getEffectiveStage across programStates
+    const effective = getEffectiveStage(contact);
+    if (effective && effective !== PIPELINE_STAGES.NEW_LEAD) {
+      return effective;
+    }
+
     let latestAttenderState = null;
     if (contact.attenderStates && typeof contact.attenderStates === "object") {
       const states = Object.values(contact.attenderStates);
@@ -144,8 +167,6 @@ export const getCanonicalStage = (stageOrContact) => {
       statusLower.includes("shivir done") ||
       statusLower === "existing alumni" ||
       statusLower === "alumni" ||
-      String(contact.pipelineStage || "").trim().toLowerCase() === "existing alumni" ||
-      String(contact.pipelineStage || "").trim().toLowerCase() === "alumni" ||
       lastHistStatus.includes("already reg") ||
       lastHistStatus.includes("shivir done");
 
@@ -163,7 +184,6 @@ export const getCanonicalStage = (stageOrContact) => {
 
     const hasRegHistory =
       isTrueReg(contact.status) ||
-      isTrueReg(contact.pipelineStage) ||
       (Array.isArray(contact.history) && contact.history.some(h => isTrueReg(h.status) || isTrueReg(h.pipelineStage))) ||
       (contact.attenderStates && typeof contact.attenderStates === "object" && Object.values(contact.attenderStates).some(st => isTrueReg(st?.status) || isTrueReg(st?.pipelineStage)));
 
@@ -172,12 +192,39 @@ export const getCanonicalStage = (stageOrContact) => {
     }
 
     // 0b. Query or Reminder Workstream Check
-    const isExplicitQuery = rawCallPurpose === "QUERY" || rawStatus === "Query" || (Boolean(rawQueryStatus) && rawCallPurpose === "QUERY");
+    // Any reminder or query workstream contact must NEVER be classified as Sales stage (especially 1. New Lead)
+    const hasQueryInHistory = Array.isArray(contact.history) && contact.history.some(h => {
+      const p = String(h?.callPurpose || h?.purpose || "").toUpperCase().trim();
+      const s = String(h?.status || "").toLowerCase().trim();
+      return p === "QUERY" || s.includes("query");
+    });
+    const isExplicitQuery =
+      rawCallPurpose === "QUERY" ||
+      statusLower === "query" ||
+      statusLower.includes("query") ||
+      rawStage.toLowerCase().includes("query") ||
+      Boolean(rawQueryStatus) ||
+      Boolean(contact.isQuery) ||
+      lastHistStatus.includes("query") ||
+      hasQueryInHistory;
+
     if (isExplicitQuery) {
       return "Query Desk";
     }
 
-    const isExplicitReminder = rawCallPurpose === "REMINDER" || rawStatus.toLowerCase().includes("reminder");
+    const hasReminderInHistory = Array.isArray(contact.history) && contact.history.some(h => {
+      const p = String(h?.callPurpose || h?.purpose || "").toUpperCase().trim();
+      const s = String(h?.status || "").toLowerCase().trim();
+      return p === "REMINDER" || s.includes("reminder");
+    });
+    const isExplicitReminder =
+      rawCallPurpose === "REMINDER" ||
+      statusLower.includes("reminder") ||
+      rawStage.toLowerCase().includes("reminder") ||
+      Boolean(contact.isReminder) ||
+      lastHistStatus.includes("reminder") ||
+      hasReminderInHistory;
+
     if (isExplicitReminder) {
       return "Reminder Desk";
     }
@@ -220,22 +267,6 @@ export const getCanonicalStage = (stageOrContact) => {
     // 1i. Attempting Contact Check
     if (statusLower === "not connected" || statusLower === "not picked up" || statusLower === "attempting contact" || statusLower === "2. attempting contact") {
       return PIPELINE_STAGES.ATTEMPTING;
-    }
-
-    // 2. Resolve stage from rawStage fallback
-    const rawStage = String(contact.pipelineStage || "").trim();
-    if (rawStage) {
-      const s = rawStage;
-      if (s === PIPELINE_STAGES.NEW_LEAD || s === "New Lead" || s === "1. New Lead") return PIPELINE_STAGES.NEW_LEAD;
-      if (s === PIPELINE_STAGES.ATTEMPTING || s === "Attempting Contact" || s === "Attempting" || s === "2. Attempting Contact") return PIPELINE_STAGES.ATTEMPTING;
-      if (s === PIPELINE_STAGES.INFO_GIVEN || s === "Information Given" || s === "Info Given" || s === "3. Information Given") return PIPELINE_STAGES.INFO_GIVEN;
-      if (s === PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING || s === "Previous Program Pending") return PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING;
-      if (s === PIPELINE_STAGES.NURTURE_INTERESTED || s === "Nurture / Interested" || s === "Interested" || s === "4. Nurture / Interested") return PIPELINE_STAGES.NURTURE_INTERESTED;
-      if (s === PIPELINE_STAGES.FUTURE_POOL || s === "Future Pool" || s === "Next Time" || s === "5. Future Pool") return PIPELINE_STAGES.FUTURE_POOL;
-      if (s === PIPELINE_STAGES.REGISTERED_WON || s === "Registered / Won" || s === "Reg.Done" || s === "6. Registered / Won" || s === "Registered") return PIPELINE_STAGES.REGISTERED_WON;
-      if (s === PIPELINE_STAGES.CLOSED_LOST || s === "Closed / Lost" || s === "Closed Lost" || s === "7. Closed / Lost" || s === "Not Interested") return PIPELINE_STAGES.CLOSED_LOST;
-      if (s === PIPELINE_STAGES.CLOSED_INVALID || s === "Closed / Invalid" || s === "Invalid") return PIPELINE_STAGES.CLOSED_INVALID;
-      if (s === "Existing Alumni" || s === "Alumni" || s.toLowerCase() === "existing alumni" || s.toLowerCase() === "alumni" || s.toLowerCase().includes("already reg") || s.toLowerCase().includes("shivir done")) return "Existing Alumni";
     }
 
     return PIPELINE_STAGES.NEW_LEAD;
@@ -675,7 +706,7 @@ export const getAllCallEntries = (log) => {
   const calls = [];
   const seenKeys = new Set();
 
-  const addCall = (timestamp, status, remark, attenderName, callType) => {
+  const addCall = (timestamp, status, remark, attenderName, callType, callPurpose, pipelineStage, calledFor) => {
     const rTrim = String(remark || "").trim();
     const sTrim = String(status || "").trim();
     if (!sTrim && !rTrim) return;
@@ -695,7 +726,10 @@ export const getAllCallEntries = (log) => {
       status: sTrim || log.status || "Pending",
       remark: rTrim,
       attenderName: attenderName || log.attenderName || "Unassigned",
-      callType: callType || log.callType || "outgoing"
+      callType: callType || log.callType || "outgoing",
+      callPurpose: callPurpose || log.callPurpose || "SALES",
+      pipelineStage: pipelineStage || log.pipelineStage || null,
+      calledFor: calledFor || log.calledFor || log["Called For"] || ""
     });
   };
 
@@ -707,7 +741,10 @@ export const getAllCallEntries = (log) => {
         h.status,
         h.remark,
         h.attenderName,
-        h.callType
+        h.callType,
+        h.callPurpose,
+        h.pipelineStage || h.stage,
+        h.calledFor || h["Called For"]
       );
     });
   }
@@ -725,7 +762,10 @@ export const getAllCallEntries = (log) => {
             h.status,
             h.remark,
             h.attenderName || state.attenderName,
-            h.callType
+            h.callType,
+            h.callPurpose || state.callPurpose,
+            h.pipelineStage || state.pipelineStage || h.stage,
+            h.calledFor || state.calledFor
           );
         });
       }
@@ -741,7 +781,10 @@ export const getAllCallEntries = (log) => {
             state.status,
             state.remark,
             state.attenderName,
-            state.callType
+            state.callType,
+            state.callPurpose,
+            state.pipelineStage,
+            state.calledFor
           );
         }
       }
@@ -755,7 +798,10 @@ export const getAllCallEntries = (log) => {
       log.status,
       log.remark,
       log.attenderName,
-      log.callType
+      log.callType,
+      log.callPurpose,
+      log.pipelineStage,
+      log.calledFor || log["Called For"]
     );
   }
 

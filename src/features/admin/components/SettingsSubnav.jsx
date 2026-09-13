@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { ShieldCheck, PhoneCall, MessageSquare, ListChecks, SlidersHorizontal, Database, Layers } from "lucide-react";
+import { ShieldCheck, PhoneCall, MessageSquare, ListChecks, SlidersHorizontal, Database, GitBranch } from "lucide-react";
 
 export function SettingsSubnav({ activeSection, onSelectSection }) {
   const activeTabRef = useRef(null);
@@ -10,7 +10,7 @@ export function SettingsSubnav({ activeSection, onSelectSection }) {
     { id: "call-center", label: "Call Center", icon: PhoneCall },
     { id: "whatsapp-templates", label: "WhatsApp", icon: MessageSquare },
     { id: "status-rules", label: "Call Outcome Rules", icon: ListChecks },
-    { id: "status-stage-mapping", label: "Stage Mapping", icon: Layers },
+    { id: "status-stage-mapping", label: "Pipeline Workflow", icon: GitBranch },
     { id: "call-classification", label: "Classification", icon: SlidersHorizontal },
     { id: "data-management", label: "Data Management", icon: Database },
   ];

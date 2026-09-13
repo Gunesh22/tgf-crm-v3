@@ -6,11 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "node --experimental-vm-modules tests/pipelineEngine.test.js && node --experimental-vm-modules tests/presetEngine.test.js && node --experimental-vm-modules tests/allProductionAuditTests.test.js && node --experimental-vm-modules tests/registrationMismatchResolution.test.js && node --experimental-vm-modules tests/existingAlumniResolution.test.js && node --experimental-vm-modules tests/callIntelligenceTabAudits.test.js",
+    "test": "node --experimental-vm-modules tests/pipelineEngine.test.js && node --experimental-vm-modules tests/presetEngine.test.js && node --experimental-vm-modules tests/allProductionAuditTests.test.js && node --experimental-vm-modules tests/registrationMismatchResolution.test.js && node --experimental-vm-modules tests/existingAlumniResolution.test.js && node --experimental-vm-modules tests/callIntelligenceTabAudits.test.js && node --experimental-vm-modules tests/operationalPipelineAudits.test.js",
     "lint": "oxlint",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@xyflow/react": "^12.11.6",
     "classnames": "^2.5.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

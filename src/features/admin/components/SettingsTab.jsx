@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { toast } from "react-hot-toast";
 import { 
-  ShieldCheck, Tag, HelpCircle, Loader, Archive, PhoneCall, PhoneOff
+  ShieldCheck, Tag, HelpCircle, Loader, Archive, PhoneCall, PhoneOff, GitBranch
 } from "lucide-react";
 import { OptionsManagerCard } from "./OptionsManagerCard";
 import { WhatsAppTemplatesCard } from "./WhatsAppTemplatesCard";
@@ -9,7 +9,7 @@ import CompulsoryFieldBypassCard from "./CompulsoryFieldBypassCard";
 import { SettingsSubnav } from "./SettingsSubnav";
 import { AdminPasswordCard } from "./AdminPasswordCard";
 import { StatusClassificationCard } from "./StatusClassificationCard";
-import { StatusStageMappingCard } from "./StatusStageMappingCard";
+import VisualWorkflowModal from "./VisualWorkflowModal";
 import { AddStatusCategorizationModal } from "./AddStatusCategorizationModal";
 import { 
   getSettingsOptions, 
@@ -39,6 +39,7 @@ export default function SettingsTab() {
   const [addStatusModal, setAddStatusModal] = useState(null);
   const [classificationSearch, setClassificationSearch] = useState("");
   const [activeSection, setActiveSection] = useState("security");
+  const [showVisualWorkflowModal, setShowVisualWorkflowModal] = useState(false);
   const isClickingRef = useRef(false);
 
   useEffect(() => {
@@ -378,7 +379,7 @@ export default function SettingsTab() {
     "call-center": { title: "Call Center Options", desc: "Configure global dropdown options for Program (Called For), Source (Lead Origin / Current Source), and Connected Outcome." },
     "whatsapp-templates": { title: "WhatsApp Message Templates", desc: "Customize quick message templates used by attenders when sending WhatsApp messages." },
     "status-rules": { title: "Status Rules & Compulsory Fields", desc: "Configure which fields are required when an attender logs a specific call status." },
-    "status-stage-mapping": { title: "Status to Pipeline Stage Mapping", desc: "Configure which pipeline stage each call status maps to. Stored in MongoDB." },
+    "status-stage-mapping": { title: "Pipeline & Stage Workflow", desc: "Configure visual sales pipeline stages, connection flows, and call outcome routing." },
     "call-classification": { title: "Call Classification (Drag & Drop)", desc: "Classify statuses into Connected, Not Connected, or Unassigned categories for reporting." },
     "data-management": { title: "Data Management & Historical Logs", desc: "Manage monthly log archives, raw database purges, and historical snapshots." }
   };
@@ -485,20 +486,36 @@ export default function SettingsTab() {
           />
         </div>
 
-        {/* Section 4b: Status to Pipeline Stage Mapping */}
+        {/* Section 4b: Pipeline & Stage Workflow */}
         <div 
           id="status-stage-mapping" 
           className="relative bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-4"
         >
-          <StatusStageMappingCard
-            options={options}
-            onSaveMapping={async (payload) => {
-              const updatePayload = payload.statusStageMapping ? payload : { statusStageMapping: payload };
-              await updateCallCenterOptions(updatePayload);
-              setOptions(prev => ({ ...prev, ...updatePayload }));
-              updateDynamicOptions({ ...options, ...updatePayload });
-            }}
-          />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
+                <GitBranch size={20} />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-[#172033] flex items-center gap-2">
+                  Pipeline & Stage Workflow
+                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                    Interactive Flow
+                  </span>
+                </h3>
+                <p className="text-xs md:text-sm text-[#667085] mt-1 max-w-xl">
+                  Configure and visually manage pipeline stages, transition pathways, and call outcome routing across programs.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowVisualWorkflowModal(true)}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-semibold rounded-lg shadow-sm hover:shadow transition-all shrink-0 cursor-pointer"
+            >
+              <GitBranch size={15} />
+              <span>Edit Pipeline (Visual Flow)</span>
+            </button>
+          </div>
         </div>
 
         {/* Section 5: Drag & Drop Status Classification */}
@@ -600,6 +617,16 @@ export default function SettingsTab() {
           addStatusModal={addStatusModal}
           confirmAddStatus={confirmAddStatus}
         />
+
+        {/* Visual Workflow Pipeline Modal */}
+        {showVisualWorkflowModal && (
+          <VisualWorkflowModal
+            isOpen={showVisualWorkflowModal}
+            onClose={() => setShowVisualWorkflowModal(false)}
+            defaultProgram="CBT Basic"
+            programOptions={options?.calledForOptions || CALLED_FOR_OPTIONS}
+          />
+        )}
       </div>
     </div>
   );
