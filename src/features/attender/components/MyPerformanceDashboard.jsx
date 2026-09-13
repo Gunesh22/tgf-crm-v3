@@ -1,12 +1,14 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { toast } from "react-hot-toast";
 import {
   PhoneCall, TrendingUp, Clock,
   Search, Sparkles, Award,
   XCircle, Copy, Check, BarChart3, PieChart as PieIcon, FileText,
-  Layers, CheckCircle2
+  Layers, CheckCircle2, Target, Trophy, Flame, Edit3, Save, RotateCcw, X, ChevronRight
 } from "lucide-react";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, getCanonicalStatus, classifyCallStatus } from "../utils";
+import { triggerRegistrationConfetti } from "../../../utils/confetti";
 
 // ─── Status Color Token System (Restrained Semantic Palette) ─────────────────
 const STATUS_THEMES = {
@@ -419,6 +421,21 @@ function getAbhivyaktiInfo(att) {
   return regProgramName || targetProg || "Registered";
 }
 
+// ─── Attender Personal Target Defaults & Storage ─────────────────────────────
+const GOALS_STORAGE_KEY_PREFIX = "tgf_crm_attender_goals_";
+
+const DEFAULT_GOALS = {
+  dailyCalls: 50,
+  dailyConnected: 25,
+  dailyRegistrations: 2,
+  weeklyCalls: 250,
+  weeklyConnected: 125,
+  weeklyRegistrations: 10,
+  monthlyCalls: 1000,
+  monthlyConnected: 500,
+  monthlyRegistrations: 40,
+};
+
 // ─── Main MyPerformanceDashboard Component ─────────────────────────────────────
 export function MyPerformanceDashboard({
   logs = [],
@@ -431,6 +448,47 @@ export function MyPerformanceDashboard({
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [copiedId, setCopiedId] = useState(null);
+
+  // Personal Targets State (Option A: Self-Motivated, stored in LocalStorage)
+  const [showGoalModal, setShowGoalModal] = useState(false);
+  const [goalModalTab, setGoalModalTab] = useState("daily");
+
+  const [goals, setGoals] = useState(() => {
+    try {
+      const key = `${GOALS_STORAGE_KEY_PREFIX}${attenderId || attenderName || "default"}`;
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        return { ...DEFAULT_GOALS, ...JSON.parse(saved) };
+      }
+    } catch (e) {
+      console.warn("Failed to read attender goals from localStorage:", e);
+    }
+    return DEFAULT_GOALS;
+  });
+
+  const [editGoalsForm, setEditGoalsForm] = useState(goals);
+
+  // Sync editGoalsForm when modal opens or goals change
+  useEffect(() => {
+    if (showGoalModal) {
+      setEditGoalsForm(goals);
+    }
+  }, [showGoalModal, goals]);
+
+  // If attender changes, reload goals for the new attender identity
+  useEffect(() => {
+    try {
+      const key = `${GOALS_STORAGE_KEY_PREFIX}${attenderId || attenderName || "default"}`;
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        setGoals({ ...DEFAULT_GOALS, ...JSON.parse(saved) });
+      } else {
+        setGoals(DEFAULT_GOALS);
+      }
+    } catch (e) {
+      setGoals(DEFAULT_GOALS);
+    }
+  }, [attenderId, attenderName]);
 
   // Extract all-time attempts strictly for THIS attender
   const allAttempts = useMemo(() => {
@@ -593,6 +651,169 @@ export function MyPerformanceDashboard({
     };
   }, [filteredLogs, filteredAttempts]);
 
+  // Dynamic Active Target calculation based on active dateRange filter
+  const activeTarget = useMemo(() => {
+    if (dateRange === "today") {
+      return {
+        periodLabel: "Today's Daily Target",
+        periodShort: "Daily",
+        calls: Math.max(1, Number(goals.dailyCalls) || 50),
+        connected: Math.max(1, Number(goals.dailyConnected) || 25),
+        registrations: Math.max(1, Number(goals.dailyRegistrations) || 2),
+      };
+    }
+    if (dateRange === "week") {
+      return {
+        periodLabel: "This Week's Target",
+        periodShort: "Weekly",
+        calls: Math.max(1, Number(goals.weeklyCalls) || (Number(goals.dailyCalls) || 50) * 5),
+        connected: Math.max(1, Number(goals.weeklyConnected) || (Number(goals.dailyConnected) || 25) * 5),
+        registrations: Math.max(1, Number(goals.weeklyRegistrations) || (Number(goals.dailyRegistrations) || 2) * 5),
+      };
+    }
+    if (dateRange === "month") {
+      return {
+        periodLabel: "This Month's Target",
+        periodShort: "Monthly",
+        calls: Math.max(1, Number(goals.monthlyCalls) || (Number(goals.dailyCalls) || 50) * 22),
+        connected: Math.max(1, Number(goals.monthlyConnected) || (Number(goals.dailyConnected) || 25) * 22),
+        registrations: Math.max(1, Number(goals.monthlyRegistrations) || (Number(goals.dailyRegistrations) || 2) * 22),
+      };
+    }
+    if (dateRange === "custom") {
+      if (customStart && customEnd) {
+        const s = new Date(customStart + "T00:00:00");
+        const e = new Date(customEnd + "T00:00:00");
+        if (!isNaN(s.getTime()) && !isNaN(e.getTime())) {
+          const diffDays = Math.max(1, Math.round(Math.abs(e - s) / (1000 * 60 * 60 * 24)) + 1);
+          const dailyC = Math.max(1, Number(goals.dailyCalls) || 50);
+          const dailyConn = Math.max(1, Number(goals.dailyConnected) || 25);
+          const dailyR = Math.max(1, Number(goals.dailyRegistrations) || 2);
+          return {
+            periodLabel: `${diffDays}-Day Custom Target`,
+            periodShort: `${diffDays}d`,
+            calls: dailyC * diffDays,
+            connected: dailyConn * diffDays,
+            registrations: dailyR * diffDays,
+          };
+        }
+      }
+      return {
+        periodLabel: "Custom Target (Select Dates)",
+        periodShort: "Custom",
+        calls: Math.max(1, Number(goals.dailyCalls) || 50),
+        connected: Math.max(1, Number(goals.dailyConnected) || 25),
+        registrations: Math.max(1, Number(goals.dailyRegistrations) || 2),
+      };
+    }
+    // "all" or fallback
+    return {
+      periodLabel: "All-Time Benchmark (Monthly)",
+      periodShort: "All-Time",
+      calls: Math.max(1, Number(goals.monthlyCalls) || 1000),
+      connected: Math.max(1, Number(goals.monthlyConnected) || 500),
+      registrations: Math.max(1, Number(goals.monthlyRegistrations) || 40),
+    };
+  }, [dateRange, customStart, customEnd, goals]);
+
+  // Goal completion percentages & milestone states
+  const goalProgress = useMemo(() => {
+    const callPct = activeTarget.calls > 0 ? Math.round((stats.totalCalls / activeTarget.calls) * 100) : 0;
+    const connectedPct = activeTarget.connected > 0 ? Math.round((stats.connected / activeTarget.connected) * 100) : 0;
+    const regPct = activeTarget.registrations > 0 ? Math.round((stats.totalRegCount / activeTarget.registrations) * 100) : 0;
+
+    const isCallsMet = stats.totalCalls >= activeTarget.calls;
+    const isConnectedMet = stats.connected >= activeTarget.connected;
+    const isRegMet = stats.totalRegCount >= activeTarget.registrations;
+    const isAllMet = isCallsMet && isConnectedMet && isRegMet;
+    const isAnyMet = isCallsMet || isConnectedMet || isRegMet;
+
+    return {
+      callPct,
+      connectedPct,
+      regPct,
+      isCallsMet,
+      isConnectedMet,
+      isRegMet,
+      isAllMet,
+      isAnyMet
+    };
+  }, [stats, activeTarget]);
+
+  // Safe input updater allowing empty string while typing
+  const handleUpdateDaily = (field, rawValue) => {
+    if (rawValue === "") {
+      setEditGoalsForm(prev => ({
+        ...prev,
+        [field]: "",
+        ...(field === "dailyCalls" ? { weeklyCalls: "", monthlyCalls: "" } : {}),
+        ...(field === "dailyConnected" ? { weeklyConnected: "", monthlyConnected: "" } : {}),
+        ...(field === "dailyRegistrations" ? { weeklyRegistrations: "", monthlyRegistrations: "" } : {}),
+      }));
+      return;
+    }
+    const val = parseInt(rawValue, 10);
+    if (isNaN(val)) return;
+    const num = Math.max(0, val);
+    setEditGoalsForm(prev => ({
+      ...prev,
+      [field]: num,
+      ...(field === "dailyCalls" ? { weeklyCalls: num * 5, monthlyCalls: num * 22 } : {}),
+      ...(field === "dailyConnected" ? { weeklyConnected: num * 5, monthlyConnected: num * 22 } : {}),
+      ...(field === "dailyRegistrations" ? { weeklyRegistrations: num * 5, monthlyRegistrations: num * 22 } : {}),
+    }));
+  };
+
+  const handleUpdateField = (field, rawValue) => {
+    if (rawValue === "") {
+      setEditGoalsForm(prev => ({ ...prev, [field]: "" }));
+      return;
+    }
+    const val = parseInt(rawValue, 10);
+    if (isNaN(val)) return;
+    setEditGoalsForm(prev => ({ ...prev, [field]: Math.max(0, val) }));
+  };
+
+  // Save customized targets to local storage (Option A)
+  const handleSaveGoals = (newForm) => {
+    const sanitized = {
+      dailyCalls: Math.max(1, Number(newForm.dailyCalls) || 50),
+      dailyConnected: Math.max(1, Number(newForm.dailyConnected) || 25),
+      dailyRegistrations: Math.max(1, Number(newForm.dailyRegistrations) || 2),
+      weeklyCalls: Math.max(1, Number(newForm.weeklyCalls) || 250),
+      weeklyConnected: Math.max(1, Number(newForm.weeklyConnected) || 125),
+      weeklyRegistrations: Math.max(1, Number(newForm.weeklyRegistrations) || 10),
+      monthlyCalls: Math.max(1, Number(newForm.monthlyCalls) || 1000),
+      monthlyConnected: Math.max(1, Number(newForm.monthlyConnected) || 500),
+      monthlyRegistrations: Math.max(1, Number(newForm.monthlyRegistrations) || 40),
+    };
+
+    setGoals(sanitized);
+    try {
+      const key = `${GOALS_STORAGE_KEY_PREFIX}${attenderId || attenderName || "default"}`;
+      localStorage.setItem(key, JSON.stringify(sanitized));
+      toast.success("Personal targets updated! 🎯", { duration: 2500, position: "top-center" });
+    } catch (e) {
+      console.error("Failed to save goals to localStorage", e);
+    }
+    setShowGoalModal(false);
+  };
+
+  // Reset targets to system defaults
+  const handleResetGoals = () => {
+    if (!window.confirm("Reset your targets back to standard defaults (50 calls / 25 connects / 2 registrations per day)?")) return;
+    setGoals(DEFAULT_GOALS);
+    setEditGoalsForm(DEFAULT_GOALS);
+    try {
+      const key = `${GOALS_STORAGE_KEY_PREFIX}${attenderId || attenderName || "default"}`;
+      localStorage.removeItem(key);
+      toast.success("Targets reset to defaults", { duration: 2000, position: "top-center" });
+    } catch (e) {
+      console.error("Failed to reset goals in localStorage", e);
+    }
+    setShowGoalModal(false);
+  };
+
   // Search & Filter Call Log Items for Table Display
   const displayedAttempts = useMemo(() => {
     return filteredAttempts.filter(att => {
@@ -685,6 +906,212 @@ export function MyPerformanceDashboard({
         </div>
       </div>
 
+      {/* ─── Personal Targets & Milestones Tracker (Option A) ─────────────── */}
+      <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3.5 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200/70 text-amber-600 flex items-center justify-center shadow-2xs">
+              <Target size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-sm font-bold text-slate-900 tracking-tight">Personal Targets & Milestones</h2>
+                {goalProgress.isAllMet ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <Trophy size={12} className="text-emerald-600" />
+                    All Goals Crushed! 🎉
+                  </span>
+                ) : goalProgress.isAnyMet ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    <Sparkles size={12} className="text-indigo-600" />
+                    Milestone Reached!
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                    <Flame size={12} className="text-amber-500" />
+                    In Progress
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                {activeTarget.periodLabel} • Real-time progress towards your personalized goals
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            {goalProgress.isAnyMet && (
+              <button
+                type="button"
+                onClick={() => triggerRegistrationConfetti(attenderName || "Champion")}
+                className="px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+                title="Celebrate your milestones with confetti!"
+              >
+                <Sparkles size={13} className="text-emerald-600" />
+                <span>Celebrate 🎉</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setShowGoalModal(true)}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs hover:border-slate-300 active:scale-95"
+              title="Customize your personal performance targets"
+            >
+              <Edit3 size={13} className="text-slate-500" />
+              <span>Edit Targets</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 3 Interactive Goal Progress Meters */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+          
+          {/* Target 1: Calls Dialed */}
+          <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-100 hover:border-slate-200 transition-all flex flex-col justify-between space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <PhoneCall size={14} />
+                </div>
+                <span className="text-xs font-bold text-slate-700">Calls Dialed Target</span>
+              </div>
+              <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full border ${
+                goalProgress.isCallsMet 
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                  : "bg-indigo-50 text-indigo-700 border-indigo-200"
+              }`}>
+                {goalProgress.callPct}%
+              </span>
+            </div>
+
+            <div className="flex items-baseline justify-between">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{stats.totalCalls}</span>
+                <span className="text-xs font-semibold text-slate-400">/ {activeTarget.calls} calls</span>
+              </div>
+              {goalProgress.isCallsMet && (
+                <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                  <CheckCircle2 size={13} /> Achieved
+                </span>
+              )}
+            </div>
+
+            <div className="w-full h-2 rounded-full bg-slate-200/70 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-700 ${
+                  goalProgress.isCallsMet ? "bg-emerald-500" : "bg-indigo-600"
+                }`}
+                style={{ width: `${Math.min(100, goalProgress.callPct)}%` }}
+              />
+            </div>
+
+            <div className="text-[11px] font-medium text-slate-500 flex items-center justify-between">
+              {goalProgress.isCallsMet ? (
+                <span className="text-emerald-700 font-bold">🎉 Target achieved! (+{stats.totalCalls - activeTarget.calls} extra dials)</span>
+              ) : (
+                <span>{activeTarget.calls - stats.totalCalls} more calls needed for target</span>
+              )}
+            </div>
+          </div>
+
+          {/* Target 2: Connected Calls */}
+          <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-100 hover:border-slate-200 transition-all flex flex-col justify-between space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <TrendingUp size={14} />
+                </div>
+                <span className="text-xs font-bold text-slate-700">Connected Calls Target</span>
+              </div>
+              <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full border ${
+                goalProgress.isConnectedMet 
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                  : "bg-blue-50 text-blue-700 border-blue-200"
+              }`}>
+                {goalProgress.connectedPct}%
+              </span>
+            </div>
+
+            <div className="flex items-baseline justify-between">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{stats.connected}</span>
+                <span className="text-xs font-semibold text-slate-400">/ {activeTarget.connected} connected</span>
+              </div>
+              {goalProgress.isConnectedMet && (
+                <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                  <CheckCircle2 size={13} /> Achieved
+                </span>
+              )}
+            </div>
+
+            <div className="w-full h-2 rounded-full bg-slate-200/70 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-700 ${
+                  goalProgress.isConnectedMet ? "bg-emerald-500" : "bg-blue-600"
+                }`}
+                style={{ width: `${Math.min(100, goalProgress.connectedPct)}%` }}
+              />
+            </div>
+
+            <div className="text-[11px] font-medium text-slate-500 flex items-center justify-between">
+              {goalProgress.isConnectedMet ? (
+                <span className="text-emerald-700 font-bold">🎉 Connection goal achieved!</span>
+              ) : (
+                <span>{activeTarget.connected - stats.connected} more connects needed</span>
+              )}
+            </div>
+          </div>
+
+          {/* Target 3: Registrations Won */}
+          <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-100 hover:border-slate-200 transition-all flex flex-col justify-between space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <Award size={14} />
+                </div>
+                <span className="text-xs font-bold text-slate-700">Registrations Won Target</span>
+              </div>
+              <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full border ${
+                goalProgress.isRegMet 
+                  ? "bg-emerald-100 text-emerald-800 border-emerald-300" 
+                  : "bg-emerald-50 text-emerald-700 border-emerald-200"
+              }`}>
+                {goalProgress.regPct}%
+              </span>
+            </div>
+
+            <div className="flex items-baseline justify-between">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{stats.totalRegCount}</span>
+                <span className="text-xs font-semibold text-slate-400">/ {activeTarget.registrations} won</span>
+              </div>
+              {goalProgress.isRegMet && (
+                <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                  <Trophy size={13} /> Crushed!
+                </span>
+              )}
+            </div>
+
+            <div className="w-full h-2 rounded-full bg-slate-200/70 overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-700 bg-emerald-500"
+                style={{ width: `${Math.min(100, goalProgress.regPct)}%` }}
+              />
+            </div>
+
+            <div className="text-[11px] font-medium text-slate-500 flex items-center justify-between">
+              {goalProgress.isRegMet ? (
+                <span className="text-emerald-700 font-bold">🏆 Registration Goal Crushed! Great work!</span>
+              ) : (
+                <span>{activeTarget.registrations - stats.totalRegCount} more registration(s) needed</span>
+              )}
+            </div>
+          </div>
+
+        </div>
+      </div>
+
       {/* ─── Top 4 KPI Unified White Cards Grid ──────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
@@ -701,8 +1128,14 @@ export function MyPerformanceDashboard({
             <span className="text-xs font-semibold text-slate-500">attempts</span>
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>Leads Contacted:</span>
-            <span className="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md text-[11px]">{stats.totalLeads}</span>
+            <span>Goal: <span className="font-bold text-slate-700">{activeTarget.calls}</span></span>
+            <span className={`font-bold px-2 py-0.5 rounded-md text-[11px] border ${
+              goalProgress.isCallsMet 
+                ? "text-emerald-700 bg-emerald-50 border-emerald-200" 
+                : "text-indigo-700 bg-indigo-50 border-indigo-200"
+            }`}>
+              {goalProgress.callPct}%
+            </span>
           </div>
         </div>
 
@@ -719,8 +1152,14 @@ export function MyPerformanceDashboard({
             <span className="text-xs font-semibold text-slate-500">registrations</span>
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>Conversion Rate:</span>
-            <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md text-[11px] border border-emerald-100">{stats.conversionRate}%</span>
+            <span>Goal: <span className="font-bold text-slate-700">{activeTarget.registrations}</span></span>
+            <span className={`font-bold px-2 py-0.5 rounded-md text-[11px] border ${
+              goalProgress.isRegMet 
+                ? "text-emerald-700 bg-emerald-50 border-emerald-200" 
+                : "text-emerald-700 bg-emerald-50 border-emerald-100"
+            }`}>
+              {goalProgress.regPct}%
+            </span>
           </div>
         </div>
 
@@ -737,8 +1176,14 @@ export function MyPerformanceDashboard({
             <span className="text-xs font-semibold text-slate-500">/ {stats.totalCalls} calls</span>
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>Connection Rate:</span>
-            <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md text-[11px] border border-blue-100">{stats.connectionRate}%</span>
+            <span>Goal: <span className="font-bold text-slate-700">{activeTarget.connected}</span></span>
+            <span className={`font-bold px-2 py-0.5 rounded-md text-[11px] border ${
+              goalProgress.isConnectedMet 
+                ? "text-emerald-700 bg-emerald-50 border-emerald-200" 
+                : "text-blue-700 bg-blue-50 border-blue-200"
+            }`}>
+              {goalProgress.connectedPct}%
+            </span>
           </div>
         </div>
 
@@ -1071,6 +1516,279 @@ export function MyPerformanceDashboard({
 
       </div>
 
+      {/* ─── Edit Targets Modal (Option A: Self-Motivated) ────────────────── */}
+      {showGoalModal && (
+        <div
+          onClick={() => setShowGoalModal(false)}
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn"
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl border border-slate-200 space-y-5 animate-scaleIn"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center shadow-2xs">
+                  <Target size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 leading-none">Set My Targets</h3>
+                  <p className="text-xs text-slate-500 font-medium mt-1">
+                    Personal goals for {attenderName || "Attender"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGoalModal(false)}
+                className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Timeframe Tabs: Daily (Main) | Weekly | Monthly */}
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/70">
+              <button
+                type="button"
+                onClick={() => setGoalModalTab("daily")}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  goalModalTab === "daily"
+                    ? "bg-indigo-600 text-white shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Daily Targets
+              </button>
+              <button
+                type="button"
+                onClick={() => setGoalModalTab("weekly")}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  goalModalTab === "weekly"
+                    ? "bg-indigo-600 text-white shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Weekly Targets
+              </button>
+              <button
+                type="button"
+                onClick={() => setGoalModalTab("monthly")}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  goalModalTab === "monthly"
+                    ? "bg-indigo-600 text-white shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Monthly Targets
+              </button>
+            </div>
+
+            {/* Inputs Form */}
+            <div className="space-y-4">
+              {goalModalTab === "daily" && (
+                <>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                      <span>Daily Calls Dialed Target</span>
+                      <span className="text-[11px] font-normal text-slate-400">Recommended: 50–70</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        max="500"
+                        value={editGoalsForm.dailyCalls ?? ""}
+                        onChange={e => handleUpdateDaily("dailyCalls", e.target.value)}
+                        className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                        placeholder="50"
+                      />
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const val = Math.max(1, (parseInt(editGoalsForm.dailyCalls) || 50) + 10);
+                            handleUpdateDaily("dailyCalls", String(val));
+                          }}
+                          className="px-2.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+                        >
+                          +10
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                      <span>Daily Connected Calls Target</span>
+                      <span className="text-[11px] font-normal text-slate-400">Recommended: 20–35</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        max="300"
+                        value={editGoalsForm.dailyConnected ?? ""}
+                        onChange={e => handleUpdateDaily("dailyConnected", e.target.value)}
+                        className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                        placeholder="25"
+                      />
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const val = Math.max(1, (parseInt(editGoalsForm.dailyConnected) || 25) + 5);
+                            handleUpdateDaily("dailyConnected", String(val));
+                          }}
+                          className="px-2.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+                        >
+                          +5
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                      <span>Daily Registrations Won Target</span>
+                      <span className="text-[11px] font-normal text-slate-400">Recommended: 1–3</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        max="50"
+                        value={editGoalsForm.dailyRegistrations ?? ""}
+                        onChange={e => handleUpdateDaily("dailyRegistrations", e.target.value)}
+                        className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                        placeholder="2"
+                      />
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const val = Math.max(1, (parseInt(editGoalsForm.dailyRegistrations) || 2) + 1);
+                            handleUpdateDaily("dailyRegistrations", String(val));
+                          }}
+                          className="px-2.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+                        >
+                          +1
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-slate-400 font-medium bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    💡 Changing your Daily targets automatically scales your Weekly (5×) and Monthly (22×) benchmarks.
+                  </p>
+                </>
+              )}
+
+              {goalModalTab === "weekly" && (
+                <>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Weekly Calls Target</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={editGoalsForm.weeklyCalls ?? ""}
+                      onChange={e => handleUpdateField("weeklyCalls", e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Weekly Connected Calls Target</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={editGoalsForm.weeklyConnected ?? ""}
+                      onChange={e => handleUpdateField("weeklyConnected", e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Weekly Registrations Target</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={editGoalsForm.weeklyRegistrations ?? ""}
+                      onChange={e => handleUpdateField("weeklyRegistrations", e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    />
+                  </div>
+                </>
+              )}
+
+              {goalModalTab === "monthly" && (
+                <>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Monthly Calls Target</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={editGoalsForm.monthlyCalls ?? ""}
+                      onChange={e => handleUpdateField("monthlyCalls", e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Monthly Connected Calls Target</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={editGoalsForm.monthlyConnected ?? ""}
+                      onChange={e => handleUpdateField("monthlyConnected", e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Monthly Registrations Target</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={editGoalsForm.monthlyRegistrations ?? ""}
+                      onChange={e => handleUpdateField("monthlyRegistrations", e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="flex items-center justify-between pt-3.5 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={handleResetGoals}
+                className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 transition cursor-pointer"
+              >
+                <RotateCcw size={13} />
+                <span>Reset Defaults</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowGoalModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveGoals(editGoalsForm)}
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-500/20 transition active:scale-95 cursor-pointer flex items-center gap-1.5"
+                >
+                  <Save size={14} />
+                  <span>Save Targets</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
