@@ -39,6 +39,7 @@ import {
   parseTimestamp
 } from "./utils";
 import { normalizeProgramStates } from "../../utils/pipelineEngine";
+import { triggerRegistrationConfetti } from "../../utils/confetti";
 import { EditModal } from "./components/EditModal";
 import { MyPerformanceDashboard } from "./components/MyPerformanceDashboard";
 import { ColumnsSelector } from "./components/ColumnsSelector";
@@ -1837,6 +1838,17 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
             >
               <RefreshCw size={14} className={isSyncingDB ? "animate-spin text-indigo-600" : "text-indigo-600"} />
               <span>{isSyncingDB ? "Syncing..." : "Sync DB"}</span>
+            </button>
+
+            {/* Test Confetti Animation Button */}
+            <button
+              type="button"
+              onClick={() => triggerRegistrationConfetti("Test Lead")}
+              className="px-3 py-1.5 rounded-xl border font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 hover:border-amber-300 active:scale-95"
+              title="Test Confetti Celebration Animation"
+            >
+              <Sparkles size={14} className="text-amber-600" />
+              <span>Test Confetti 🎉</span>
             </button>
 
             {/* Assisted Registration Notification Bell */}
