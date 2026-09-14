@@ -61,25 +61,50 @@ export function resolveGraphTransition(currentStage, outcome, program = null) {
   let rawNodes = null;
   let stages = defaultStages;
 
+  // 1. Primary Source of Truth: Database cached settings (MongoDB -> App)
   if (typeof window !== "undefined" && window.localStorage) {
     try {
-      const saved = window.localStorage.getItem("workflow-global") ||
-                    (program ? window.localStorage.getItem(`workflow-${program}`) : null);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed.edges) && parsed.edges.length > 0) {
-          edges = parsed.edges;
-        }
-        if (Array.isArray(parsed.nodes) && parsed.nodes.length > 0) {
-          rawNodes = parsed.nodes;
-          stages = parsed.nodes.map(n => n.data?.label || n.label);
+      const cachedSettings = window.localStorage.getItem("crm_call_center_options");
+      if (cachedSettings) {
+        const parsedSettings = JSON.parse(cachedSettings);
+        const wf = parsedSettings?.pipelineWorkflow;
+        if (wf) {
+          const parsedWf = typeof wf === "string" ? JSON.parse(wf) : wf;
+          if (Array.isArray(parsedWf.edges) && parsedWf.edges.length > 0) {
+            edges = parsedWf.edges;
+          }
+          if (Array.isArray(parsedWf.nodes) && parsedWf.nodes.length > 0) {
+            rawNodes = parsedWf.nodes;
+            stages = parsedWf.nodes.map(n => n.data?.label || n.label);
+          }
         }
       }
     } catch {
-      // Fallback cleanly to default
+      // Fallback cleanly
+    }
+
+    // 2. Secondary: localStorage cache fallback
+    if (!edges) {
+      try {
+        const saved = window.localStorage.getItem("workflow-global") ||
+                      (program ? window.localStorage.getItem(`workflow-${program}`) : null);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed.edges) && parsed.edges.length > 0) {
+            edges = parsed.edges;
+          }
+          if (Array.isArray(parsed.nodes) && parsed.nodes.length > 0) {
+            rawNodes = parsed.nodes;
+            stages = parsed.nodes.map(n => n.data?.label || n.label);
+          }
+        }
+      } catch {
+        // Fallback cleanly to default
+      }
     }
   }
 
+  // 3. Final Fallback: Hardcoded canonical default
   if (!edges) {
     edges = buildDefaultEdges();
   }
@@ -97,6 +122,33 @@ export function resolveGraphTransition(currentStage, outcome, program = null) {
       return normalizeStageStr(stages[targetIndex]);
     }
     return null;
+  };
+
+  const isMatch = (opt, targetOutcomeNorm) => {
+    const optNorm = String(opt).trim().toLowerCase();
+    if (optNorm === targetOutcomeNorm) return true;
+    if ((optNorm === "already reg.d" || optNorm === "already registered" || optNorm === "shivir done") &&
+        ((targetOutcomeNorm.includes("already") && targetOutcomeNorm.includes("reg")) ||
+         (targetOutcomeNorm.includes("shivir") && targetOutcomeNorm.includes("done")))) {
+      return true;
+    }
+    if (optNorm === "reg.done" &&
+        (targetOutcomeNorm === "registered" || targetOutcomeNorm === "reg.done" || targetOutcomeNorm === "registered / won")) {
+      return true;
+    }
+    if (optNorm === "not interested" && (targetOutcomeNorm === "not possible" || targetOutcomeNorm === "not interested")) {
+      return true;
+    }
+    if (optNorm === "next time" && (targetOutcomeNorm === "future batch" || targetOutcomeNorm === "next time")) {
+      return true;
+    }
+    if (optNorm === "interested" && (targetOutcomeNorm === "needs callback" || targetOutcomeNorm === "callback" || targetOutcomeNorm === "interested")) {
+      return true;
+    }
+    if (optNorm === "invalid number" && (targetOutcomeNorm === "wrong no" || targetOutcomeNorm === "wrong number" || targetOutcomeNorm === "invalid no")) {
+      return true;
+    }
+    return false;
   };
 
   // Find source node ID matching currentStage
@@ -118,14 +170,7 @@ export function resolveGraphTransition(currentStage, outcome, program = null) {
     for (const edge of edges) {
       if (edge.source === sourceId) {
         const edgeOptions = (edge.data?.options || (edge.label ? edge.label.split(",").map(x => x.trim()) : []));
-        const matched = edgeOptions.some(opt => {
-          const optNorm = String(opt).trim().toLowerCase();
-          if (optNorm === outcomeNorm) return true;
-          if ((optNorm === "already reg.d" || optNorm === "already registered") && (outcomeNorm.includes("already") && outcomeNorm.includes("reg"))) return true;
-          if (optNorm === "shivir done" && (outcomeNorm.includes("shivir") && outcomeNorm.includes("done"))) return true;
-          if (optNorm === "reg.done" && (outcomeNorm === "registered" || outcomeNorm === "reg.done" || outcomeNorm === "registered / won")) return true;
-          return false;
-        });
+        const matched = edgeOptions.some(opt => isMatch(opt, outcomeNorm));
         if (matched) {
           const st = getStageFromTarget(edge.target);
           if (st) return st;
@@ -137,7 +182,7 @@ export function resolveGraphTransition(currentStage, outcome, program = null) {
   // 2. Global outcome match across graph if not explicitly originating from current node
   for (const edge of edges) {
     const edgeOptions = (edge.data?.options || (edge.label ? edge.label.split(",").map(x => x.trim()) : []));
-    const matched = edgeOptions.some(opt => String(opt).trim().toLowerCase() === outcomeNorm);
+    const matched = edgeOptions.some(opt => isMatch(opt, outcomeNorm));
     if (matched) {
       const st = getStageFromTarget(edge.target);
       if (st) return st;

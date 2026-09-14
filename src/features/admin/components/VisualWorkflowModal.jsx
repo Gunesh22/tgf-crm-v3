@@ -21,6 +21,7 @@ import {
   buildDefaultNodes,
   buildDefaultEdges,
 } from '../../../utils/defaultWorkflow';
+import { updateCallCenterOptions } from '../../../lib/db';
 import './WorkflowEditor.css';
 
 /* ---------- helpers ---------- */
@@ -258,20 +259,12 @@ const nodeTypes = { stageNode: StageNode };
 const edgeTypes = { customEdge: WorkflowEdge };
 
 /* ========== MAIN COMPONENT ========== */
-export default function VisualWorkflowModal({ isOpen, onClose, defaultProgram = "CBT Basic", programOptions = [] }) {
-  const allPrograms = useMemo(() => {
-    const list = Array.isArray(programOptions) && programOptions.length > 0 ? programOptions : ['CBT Basic', 'CBT Advanced', 'Yoga', 'Other'];
-    return Array.from(new Set([defaultProgram, ...list].filter(Boolean)));
-  }, [programOptions, defaultProgram]);
-
-  const [program, setProgram] = useState(defaultProgram);
-
-  useEffect(() => {
-    if (defaultProgram) {
-      setProgram(defaultProgram);
-    }
-  }, [defaultProgram]);
-
+export default function VisualWorkflowModal({
+  isOpen,
+  onClose,
+  options = null,
+  onSaveOptions = null,
+}) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
@@ -349,31 +342,43 @@ export default function VisualWorkflowModal({ isOpen, onClose, defaultProgram = 
     stopSim();
     setModalConfig(null);
 
-    const saved = localStorage.getItem('workflow-global') || localStorage.getItem('workflow-CBT Basic');
-    if (saved) {
+    // 1. Primary Source of Truth: MongoDB database settings (options.pipelineWorkflow)
+    let savedWorkflow = options?.pipelineWorkflow;
+
+    // 2. Secondary: localStorage temporary migration / cache fallback
+    if (!savedWorkflow && typeof window !== 'undefined' && window.localStorage) {
+      savedWorkflow = localStorage.getItem(STORAGE_KEY);
+    }
+
+    if (savedWorkflow) {
       try {
-        const { nodes: sn, edges: se } = JSON.parse(saved);
-        setNodes(sn);
-        setEdges(
-          se.map((e) => ({
-            ...e,
-            type: 'customEdge',
-            data: {
-              ...e.data,
-              options:
-                e.data?.options ||
-                (e.label ? e.label.split(', ') : []),
-            },
-          }))
-        );
-        return;
+        const parsed = typeof savedWorkflow === 'string' ? JSON.parse(savedWorkflow) : savedWorkflow;
+        const { nodes: sn, edges: se } = parsed || {};
+        if (Array.isArray(sn) && sn.length > 0) {
+          setNodes(sn);
+          setEdges(
+            (se || []).map((e) => ({
+              ...e,
+              type: 'customEdge',
+              data: {
+                ...e.data,
+                options:
+                  e.data?.options ||
+                  (e.label ? e.label.split(', ') : []),
+              },
+            }))
+          );
+          return;
+        }
       } catch (err) {
         console.error('Failed to parse saved workflow:', err);
       }
     }
+
+    // 3. Final Fallback: Clean canonical defaults
     setNodes(buildDefaultNodes());
     setEdges(buildDefaultEdges());
-  }, [isOpen, stopSim, setNodes, setEdges]);
+  }, [isOpen, options?.pipelineWorkflow, stopSim, setNodes, setEdges]);
 
   /* ---- node callbacks ---- */
   const handleRename = useCallback(
@@ -722,7 +727,7 @@ export default function VisualWorkflowModal({ isOpen, onClose, defaultProgram = 
   };
 
   /* ---- toolbar: save ---- */
-  const saveWorkflow = () => {
+  const saveWorkflow = async () => {
     const cleanNodes = nodes.map(
       ({ data: { onRename, onDelete, simState, ...rest }, ...n }) => ({
         ...n,
@@ -736,14 +741,22 @@ export default function VisualWorkflowModal({ isOpen, onClose, defaultProgram = 
       },
     }));
     const payload = JSON.stringify({ nodes: cleanNodes, edges: cleanEdges });
-    localStorage.setItem('workflow-global', payload);
 
-    // Sync across all program keys so every program uses this single unified workflow
-    ['CBT Basic', 'CBT Advanced', 'Yoga', 'Other', ...(programOptions || [])].forEach((p) => {
-      if (p) localStorage.setItem(`workflow-${p}`, payload);
-    });
+    // 1. Save to MongoDB (Source of Truth)
+    try {
+      if (onSaveOptions) {
+        await onSaveOptions({ pipelineWorkflow: payload });
+      } else {
+        await updateCallCenterOptions({ pipelineWorkflow: payload });
+      }
+    } catch (err) {
+      console.error('Failed to sync workflow to database:', err);
+    }
 
-    showToast('Global workflow saved successfully for all programs!');
+    // 2. Update localStorage as cache
+    localStorage.setItem(STORAGE_KEY, payload);
+
+    showToast('Workflow saved & synced');
   };
 
   /* ---- toolbar: reset to defaults ---- */
@@ -751,18 +764,30 @@ export default function VisualWorkflowModal({ isOpen, onClose, defaultProgram = 
     setDialogState({
       type: 'confirm',
       title: 'Reset to Defaults',
-      message: 'Reset the global workflow to defaults? All custom stages and connections will be reset for all programs.',
+      message: 'Reset the global workflow to defaults? All custom stages and connections will be reset.',
       confirmText: 'Reset Pipeline',
       isDestructive: true,
-      onConfirm: () => {
+      onConfirm: async () => {
         stopSim();
-        localStorage.removeItem('workflow-global');
-        ['CBT Basic', 'CBT Advanced', 'Yoga', 'Other', ...(programOptions || [])].forEach((p) => {
-          if (p) localStorage.removeItem(`workflow-${p}`);
-        });
-        setNodes(buildDefaultNodes());
-        setEdges(buildDefaultEdges());
-        showToast('Global workflow reset to defaults');
+        const defaultNodes = buildDefaultNodes();
+        const defaultEdges = buildDefaultEdges();
+        const payload = JSON.stringify({ nodes: defaultNodes, edges: defaultEdges });
+
+        try {
+          if (onSaveOptions) {
+            await onSaveOptions({ pipelineWorkflow: payload });
+          } else {
+            await updateCallCenterOptions({ pipelineWorkflow: payload });
+          }
+        } catch (err) {
+          console.error('Failed to reset workflow on database:', err);
+        }
+
+        localStorage.setItem(STORAGE_KEY, payload);
+
+        setNodes(defaultNodes);
+        setEdges(defaultEdges);
+        showToast('Workflow reset & synced');
       },
     });
   };

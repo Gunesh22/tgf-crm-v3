@@ -771,8 +771,8 @@ export function StatusStageMappingCard({ options, onSaveMapping }) {
         <VisualWorkflowModal
           isOpen={showVisualModal}
           onClose={() => setShowVisualModal(false)}
-          defaultProgram="CBT Basic"
-          programOptions={options?.calledForOptions || []}
+          options={options}
+          onSaveOptions={onSaveMapping}
         />,
         document.body
       )}

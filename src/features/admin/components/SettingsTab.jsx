@@ -623,8 +623,8 @@ export default function SettingsTab() {
           <VisualWorkflowModal
             isOpen={showVisualWorkflowModal}
             onClose={() => setShowVisualWorkflowModal(false)}
-            defaultProgram="CBT Basic"
-            programOptions={options?.calledForOptions || CALLED_FOR_OPTIONS}
+            options={options}
+            onSaveOptions={updateCallCenterOptions}
           />
         )}
       </div>
