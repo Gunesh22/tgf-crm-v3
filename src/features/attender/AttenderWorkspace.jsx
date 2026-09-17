@@ -282,40 +282,53 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
       return false;
     };
 
+    const now = Date.now();
+    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+
     callLogs.forEach(log => {
       if (log._deleted) return;
 
-      // Extract all distinct registered programs on this contact
-      const regPrograms = new Set();
+      // Collect all Reg.Done entries — use an array so multiple programs per lead all show up.
+      // Key: `${prog}|||${attenderId}` so the same program registered by the same person isn't doubled,
+      // but the same person with two different programs (e.g. Off MA + CBT Basic) both appear.
+      const seenRegKeys = new Set();
+      const regEntries = []; // { progName, eventDate }
+
       if (Array.isArray(log.history)) {
         log.history.forEach(h => {
           if (getCanonicalStatus(h?.status || "") === "Reg.Done") {
             const prog = h.calledFor || h.called_for || h["Called For"] || h.program || "";
-            if (prog) regPrograms.add(prog);
+            const who = h.attenderId || h.userId || h.attenderName || "x";
+            const key = `${prog}|||${who}`;
+            if (prog && !seenRegKeys.has(key)) {
+              seenRegKeys.add(key);
+              regEntries.push({ progName: prog, eventDate: h.timestamp || h.callDate || h.createdAt });
+            }
           }
         });
       }
       if (log.attenderStates) {
-        Object.values(log.attenderStates).forEach(st => {
+        Object.entries(log.attenderStates).forEach(([stAttId, st]) => {
           if (getCanonicalStatus(st?.status || "") === "Reg.Done") {
             const prog = st.calledFor || st["Called For"] || st.program || "";
-            if (prog) regPrograms.add(prog);
+            const who = st.attenderId || stAttId || "x";
+            const key = `${prog}|||${who}`;
+            if (prog && !seenRegKeys.has(key)) {
+              seenRegKeys.add(key);
+              regEntries.push({ progName: prog, eventDate: st.lastCalledAt || st.timestamp || st.updatedAt });
+            }
           }
         });
       }
-      if (regPrograms.size === 0 && getCanonicalStatus(log.status || "") === "Reg.Done") {
+      if (regEntries.length === 0 && getCanonicalStatus(log.status || "") === "Reg.Done") {
         const rootProg = log["Called For"] || log.calledFor || log.programName || "Program";
-        regPrograms.add(rootProg);
+        regEntries.push({ progName: rootProg, eventDate: log.registeredAt || log.lastCalledAt || log.updatedAt || log.createdAt });
       }
 
-      regPrograms.forEach(progName => {
+      regEntries.forEach(({ progName, eventDate }) => {
         const progKey = progName.toLowerCase().replace(/[\s_-]+/g, "");
         const attribution = resolveRegistrationAttribution(null, log, progKey);
 
-        // Core Rule:
-        // 1. Must be a true shared conversion (owner != converter)
-        // 2. Current attender must be the actual Lead Owner (amIOwner)
-        // 3. The converter who made the call must be someone else (!isMe)
         if (!attribution.isSharedConversion) return;
 
         const amIOwner = isMe(attribution.leadOwnerName) || isMe(attribution.leadOwnerId);
@@ -323,13 +336,24 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
 
         if (amIOwner && someoneElseConverted) {
           const leadName = log.Name || log.name || log["Contact Name"] || "Lead";
+          const rawPhone = String(log.Phone || log.phone || log.Mobile || log.mobile || "");
+          const cleanPhone = rawPhone.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "");
+          const targetDate = eventDate || log.registeredAt || log.updatedAt || log.createdAt;
+          const parsed = parseTimestamp(targetDate);
+
+          // Skip registrations older than 30 days — don't show July regs in September
+          if (parsed && (now - parsed.getTime()) > thirtyDaysMs) return;
+
+          const displayDate = parsed ? parsed.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "";
+
           notifications.push({
             id: `${log.id || log._id}_${progKey}_${attribution.converterName}`,
             leadName: leadName,
-            phone: log.Phone || log.phone || log.Mobile || log.mobile || "",
+            phone: cleanPhone,
             convertedBy: attribution.converterName,
             program: progName,
-            registeredAt: log.registeredAt || log.updatedAt || log.createdAt,
+            registeredAt: targetDate,
+            displayDate: displayDate,
             log: log
           });
         }
@@ -1902,8 +1926,16 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
                               </p>
 
                               <div className="flex items-center justify-between text-[10px] text-gray-400 font-semibold mt-1.5">
-                                <span className="truncate">{notif.program}</span>
-                                <span>{notif.phone}</span>
+                                <div className="flex items-center gap-1.5 truncate">
+                                  <span className="truncate text-slate-700 font-bold">{notif.program}</span>
+                                  {notif.displayDate && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="text-indigo-600 font-bold">{notif.displayDate}</span>
+                                    </>
+                                  )}
+                                </div>
+                                <span className="font-mono text-slate-500 shrink-0 ml-2">{notif.phone}</span>
                               </div>
                             </div>
                           </div>

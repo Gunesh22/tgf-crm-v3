@@ -183,6 +183,18 @@ export default function MobileAttenderView({
                           <p className="text-[11px] text-slate-600 mt-0.5">
                             Registered by <span className="font-bold text-blue-600">{notif.convertedBy}</span>
                           </p>
+                          <div className="flex items-center justify-between text-[9px] text-slate-400 font-semibold mt-1">
+                            <div className="flex items-center gap-1 truncate">
+                              <span className="truncate text-slate-700 font-bold">{notif.program}</span>
+                              {notif.displayDate && (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-indigo-600 font-medium">{notif.displayDate}</span>
+                                </>
+                              )}
+                            </div>
+                            <span className="font-mono text-slate-500 shrink-0 ml-1.5">{notif.phone}</span>
+                          </div>
                         </div>
                       );
                     })
