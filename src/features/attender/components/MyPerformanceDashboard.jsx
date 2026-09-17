@@ -4,7 +4,8 @@ import {
   PhoneCall, TrendingUp, Clock,
   Search, Sparkles, Award,
   XCircle, Copy, Check, BarChart3, PieChart as PieIcon, FileText,
-  Layers, CheckCircle2, Target, Trophy, Flame, Edit3, Save, RotateCcw, X, ChevronRight
+  Layers, CheckCircle2, Target, Trophy, Flame, Edit3, Save, RotateCcw, X, ChevronRight,
+  UserCheck, ChevronLeft
 } from "lucide-react";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, getCanonicalStatus, classifyCallStatus } from "../utils";
@@ -950,6 +951,15 @@ export function MyPerformanceDashboard({
     });
   }, [filteredAttempts, statusFilter, searchTerm]);
 
+  const LOG_PAGE_SIZE = 10;
+  const [logPage, setLogPage] = useState(1);
+
+  // Reset to page 1 when filters/search change
+  useEffect(() => { setLogPage(1); }, [statusFilter, searchTerm, dateRange]);
+
+  const totalLogPages = Math.max(1, Math.ceil(displayedAttempts.length / LOG_PAGE_SIZE));
+  const pagedAttempts = displayedAttempts.slice((logPage - 1) * LOG_PAGE_SIZE, logPage * LOG_PAGE_SIZE);
+
   // Copy phone helper
   const handleCopyPhone = (phone, id) => {
     if (!phone) return;
@@ -1442,6 +1452,60 @@ export function MyPerformanceDashboard({
 
       </div>
 
+      {/* ─── Team Assisted Registrations Section ─────────────────────────────── */}
+      {(() => {
+        const assistedRegs = filteredAttempts.filter(a => a.isSharedCredit);
+        if (assistedRegs.length === 0) return null;
+        return (
+          <div className="bg-white rounded-2xl border border-purple-200/70 shadow-xs overflow-hidden">
+            <div className="px-5 py-4 border-b border-purple-100 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-purple-50 text-purple-600">
+                  <UserCheck size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Team Assisted Registrations</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Leads registered by teammates on your behalf — you get Primary Credit</p>
+                </div>
+              </div>
+              <span className="text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2.5 py-1 rounded-full">
+                +{assistedRegs.length} Credit{assistedRegs.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {assistedRegs.map((a) => {
+                const rawPhone = String(a.Phone || "");
+                const cleanPhone = rawPhone.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "");
+                const dateStr = a.timestamp
+                  ? a.timestamp.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+                  : "";
+                return (
+                  <div key={a.id} className="flex items-center gap-4 px-5 py-3 hover:bg-purple-50/40 transition-colors">
+                    <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-bold shrink-0">
+                      {String(a.Name || "?")[0].toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-slate-800 truncate">{a.Name || "Unknown Lead"}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">+1 Primary Credit</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500 flex-wrap">
+                        <span className="font-medium text-slate-700">{a.calledFor || a.programName || "Program"}</span>
+                        {dateStr && <><span className="text-slate-300">·</span><span>{dateStr}</span></>}
+                        {a.convertedBy && <><span className="text-slate-300">·</span><span>by <span className="font-semibold text-purple-700">{a.convertedBy}</span></span></>}
+                      </div>
+                    </div>
+                    {cleanPhone && (
+                      <span className="text-xs font-mono text-slate-500 shrink-0">{cleanPhone}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ─── Bottom Section: Searchable Call History Log Table ───────────────── */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden space-y-4">
         
@@ -1517,7 +1581,7 @@ export function MyPerformanceDashboard({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                {displayedAttempts.map((att, idx) => {
+                {pagedAttempts.map((att, idx) => {
                   const theme = STATUS_THEMES[att.status] || STATUS_THEMES["Pending"];
                   const dateFormatted = att.timestamp
                     ? att.timestamp.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
@@ -1658,10 +1722,28 @@ export function MyPerformanceDashboard({
           )}
         </div>
 
-        {/* Footer info */}
-        <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between text-xs text-slate-400">
-          <span>Showing {displayedAttempts.length} of {filteredAttempts.length} call events</span>
-          <span className="font-semibold text-slate-500">IndexedDB Zero-Read Dataset</span>
+        {/* Pagination Footer */}
+        <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between text-xs text-slate-500">
+          <span>
+            Showing <span className="font-bold text-slate-700">{Math.min((logPage - 1) * LOG_PAGE_SIZE + 1, displayedAttempts.length)}–{Math.min(logPage * LOG_PAGE_SIZE, displayedAttempts.length)}</span> of <span className="font-bold text-slate-700">{displayedAttempts.length}</span> events
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setLogPage(p => Math.max(1, p - 1))}
+              disabled={logPage === 1}
+              className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <span className="px-2 font-semibold text-slate-700">{logPage} / {totalLogPages}</span>
+            <button
+              onClick={() => setLogPage(p => Math.min(totalLogPages, p + 1))}
+              disabled={logPage === totalLogPages}
+              className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
         </div>
 
       </div>
