@@ -340,6 +340,9 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
 
           if (!seenCallKeys.has(callKey)) {
             seenCallKeys.add(callKey);
+            const isQuery = canonicalStatus === "Query" || String(h.callPurpose || h.purpose || "").toUpperCase() === "QUERY";
+            const isReminder = canonicalStatus === "Reminder Given" || String(h.callPurpose || h.purpose || "").toUpperCase() === "REMINDER";
+            const resolvedCallPurpose = isQuery ? "QUERY" : (isReminder ? "REMINDER" : "SALES");
             list.push({
               ...log,
               id: `${log.id}_h_${index}`,
@@ -352,7 +355,9 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
               attenderId: attId,
               attenderName: attName,
               status: canonicalStatus,
-              pipelineStage: log.pipelineStage || "",
+              pipelineStage: h.pipelineStage || h.stage || log.pipelineStage || "",
+              callPurpose: resolvedCallPurpose,
+              purpose: resolvedCallPurpose,
               remark: h.remark || "",
               callType: h.callType || h.callDirection || log.callType || log.callDirection || "outgoing",
               callDirection: h.callDirection || h.callType || log.callDirection || log.callType || "outgoing",
@@ -390,6 +395,9 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
             const canonicalStatus = getCanonicalStatus(state.status || "Pending");
             const attemptDate = getAttemptDate(state.lastCalledAt) || parseTimestamp(log.createdAt);
             const callDir = state.callType || state.callDirection || log.callType || log.callDirection || "outgoing";
+            const isStateQuery = canonicalStatus === "Query" || String(state.callPurpose || state.purpose || "").toUpperCase() === "QUERY";
+            const isStateReminder = canonicalStatus === "Reminder Given" || String(state.callPurpose || state.purpose || "").toUpperCase() === "REMINDER";
+            const stateCallPurpose = isStateQuery ? "QUERY" : (isStateReminder ? "REMINDER" : "SALES");
 
             list.push({
               ...log,
@@ -403,7 +411,9 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
               attenderId: attId,
               attenderName: stateAttName,
               status: canonicalStatus,
-              pipelineStage: log.pipelineStage || "",
+              pipelineStage: state.pipelineStage || state.stage || log.pipelineStage || "",
+              callPurpose: stateCallPurpose,
+              purpose: stateCallPurpose,
               remark: state.remark || "",
               callType: callDir,
               callDirection: callDir,
