@@ -668,12 +668,15 @@ export const CallEntryTab = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center relative z-20">
         {/* Call Direction */}
         <div className="space-y-1.5">
-          <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
-            Call Direction
+          <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+            <span>Call Direction <span className="text-rose-500 font-bold">*</span></span>
+            {!edited.callType && (
+              <span className="text-[10px] text-amber-600 font-bold lowercase tracking-normal">select call type</span>
+            )}
           </label>
-          <div className="flex gap-1.5 bg-slate-100/80 p-1.5 rounded-xl border border-slate-200/60">
+          <div className={`flex gap-1.5 p-1.5 rounded-xl border transition-all ${!edited.callType ? "bg-amber-50/40 border-amber-300 ring-1 ring-amber-300/30" : "bg-slate-100/80 border-slate-200/60"}`}>
             {["outgoing", "incoming"].map(opt => {
-              const isSelected = (edited.callType || "outgoing").toLowerCase().startsWith(opt);
+              const isSelected = Boolean(edited.callType) && String(edited.callType).toLowerCase().startsWith(opt);
               const activeColor = opt === "outgoing"
                 ? "bg-blue-600 text-white border-blue-600 shadow-xs font-extrabold"
                 : "bg-emerald-600 text-white border-emerald-600 shadow-xs font-extrabold";

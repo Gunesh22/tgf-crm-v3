@@ -82,11 +82,6 @@ export const EditModal = ({
   const getNormalizedRow = (customBase = null) => {
     const baseLead = customBase || freshSharedLead || row;
     const normalized = { ...baseLead, ...row };
-    const rawInitCallType = baseLead.callType || baseLead.callDirection || row?.callType || row?.callDirection || "";
-    if (rawInitCallType) {
-      normalized.callType = String(rawInitCallType).toLowerCase();
-      normalized.callDirection = normalized.callType;
-    }
     
     // Profile & Origin fields: whitelist and normalize from base record
     const profileFields = ["Name", "Phone", "Mobile", "Email", "City", "State", "Khoji", "Tags"];
@@ -103,10 +98,6 @@ export const EditModal = ({
     if (baseLead._isNew && !normalized.Khoji) {
       normalized.Khoji = "No";
     }
-    if (baseLead._isNew && !normalized.callType) {
-      normalized.callType = "incoming";
-      normalized.callDirection = "incoming";
-    }
     if (!normalized.Tags && Array.isArray(baseLead.tags) && baseLead.tags.length > 0) {
       normalized.Tags = baseLead.tags.join(", ");
     }
@@ -116,13 +107,10 @@ export const EditModal = ({
     const combinedHistory = combineContactHistories(normalized.history, attState?.history);
     normalized.history = combinedHistory;
 
-    if (attState && (attState.callType || attState.callDirection)) {
-      normalized.callType = String(attState.callType || attState.callDirection).toLowerCase();
-      normalized.callDirection = normalized.callType;
-    }
-
-    normalized.callType = normalized.callType || "outgoing";
-    normalized.callDirection = normalized.callDirection || normalized.callType;
+    // Call Direction & Call Type must NEVER default to incoming (or outgoing).
+    // The attender must explicitly select the call type for each call attempt.
+    normalized.callType = "";
+    normalized.callDirection = "";
 
     const rootCallbackDate = attState && attState.callbackDate !== undefined
       ? (attState.callbackDate ? getLocalDateString(attState.callbackDate) : null)
@@ -1308,8 +1296,8 @@ export const EditModal = ({
     const remarkChanged = oldRemark !== newRemark;
     const newRemarkEntered = newRemark !== "";
 
-    const oldCallType = String(savedRow.callType || "outgoing").toLowerCase();
-    const newCallType = String(targetEdited.callType || "outgoing").toLowerCase();
+    const oldCallType = String(savedRow.callType || "").toLowerCase();
+    const newCallType = String(targetEdited.callType || "").toLowerCase();
     const callTypeChanged = oldCallType !== newCallType;
 
     const oldCallbackDate = getLocalDateString(savedRow.callbackDate);
@@ -1420,6 +1408,11 @@ export const EditModal = ({
       if (!isQueryMode && (!statusVal || statusVal.toLowerCase() === "pending")) missingFields.push("Call Status / Outcome");
       if (isQueryMode && !targetEdited.queryStatus) missingFields.push("Query Status (Pending or Solved)");
       if (allowAttenderSelection && !activeAttenderId) missingFields.push("Attender Selection");
+
+      const isCallAttempt = isNew || isCallTab || isCallAttemptUpdated || Boolean(statusVal);
+      if (isCallAttempt && !String(targetEdited.callType || targetEdited.callDirection || "").trim()) {
+        missingFields.push("Call Type (Outgoing or Incoming)");
+      }
 
       if (!isUnconnected) {
         if (!khojiVal) missingFields.push("Khoji Status");
@@ -1846,7 +1839,8 @@ export const EditModal = ({
     if (modalScrollRef.current) modalScrollRef.current.scrollTop = 0;
   }, [row?.id]);
 
-  const isIncomingCall = String(edited.callType || "outgoing").toLowerCase().startsWith("incoming");
+  const isIncomingCall = String(edited.callType || "").toLowerCase().startsWith("incoming");
+  const isOutgoingCall = String(edited.callType || "").toLowerCase().startsWith("outgoing");
   
   const callTheme = isIncomingCall 
     ? {
@@ -1882,7 +1876,7 @@ export const EditModal = ({
         <div className={`px-5 py-3.5 flex items-center justify-between rounded-t-2xl shrink-0 ${isDueHeader ? "bg-rose-800 text-white shadow-xs" : isIncomingCall ? "bg-emerald-800 text-white shadow-xs" : "bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white shadow-md border-b border-blue-700/40"}`}>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-white/10 border border-white/20 rounded-lg flex items-center justify-center text-white shrink-0">
-              {edited.callType === "incoming" ? <PhoneIncoming size={18} /> : <PhoneOutgoing size={18} />}
+              {isIncomingCall ? <PhoneIncoming size={18} /> : (isOutgoingCall ? <PhoneOutgoing size={18} /> : <Phone size={18} />)}
             </div>
             <div>
               <div className="flex items-center gap-2.5">

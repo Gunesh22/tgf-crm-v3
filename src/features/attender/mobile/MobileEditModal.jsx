@@ -67,11 +67,10 @@ export default function MobileEditModal({
 
   const getNormalizedRow = () => {
     const normalized = { ...row };
-    const rawInitType = row?.callType || row?.callDirection || "";
-    if (rawInitType) {
-      normalized.callType = String(rawInitType).toLowerCase();
-      normalized.callDirection = normalized.callType;
-    }
+    // Call direction / type for the current call attempt must start unselected.
+    // The attender must explicitly select the call type before saving.
+    normalized.callType = "";
+    normalized.callDirection = "";
     
     const profileFields = ["Name", "Phone", "Mobile", "Email", "City", "State", "Khoji", "Tags", "Source"];
     profileFields.forEach(col => {
@@ -519,6 +518,14 @@ export default function MobileEditModal({
       const callbackStatusChanged = String(savedRow.callbackStatus || "").trim() !== String(targetEdited.callbackStatus || "").trim();
 
       const isCallAttemptUpdated = statusChanged || remarkChanged || purposeChanged || callStatusChanged || callbackDateChanged || callbackStatusChanged;
+      const isCallAttempt = row._isNew || isCallAttemptUpdated;
+      if (isCallAttempt && !String(targetEdited.callType || targetEdited.callDirection || "").trim()) {
+        toast.error("Please select Call Type (Outgoing or Incoming) before saving", { duration: 4000 });
+        isSavingRef.current = false;
+        setSaving(false);
+        return;
+      }
+
       if (isCallAttemptUpdated) {
         const resolvedLeadOrigin = targetEdited.leadOrigin || targetEdited.original_source || targetEdited.originalSource || targetEdited["Lead Origin"] || savedRow.leadOrigin || savedRow.original_source || "";
         const resolvedCurrentSource = targetEdited.source || targetEdited[sourceField] || targetEdited.Source || targetEdited.currentSource || "";
@@ -889,21 +896,24 @@ export default function MobileEditModal({
             <div className="space-y-4">
               {/* Call Type pills */}
               <div className="space-y-1.5">
-                <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
-                  CALL TYPE
+                <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+                  <span>CALL TYPE <span className="text-rose-500 font-bold">*</span></span>
+                  {!edited.callType && (
+                    <span className="text-[10px] text-amber-600 font-bold lowercase tracking-normal">select call type</span>
+                  )}
                 </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {["outgoing", "incoming", "outgoing f", "incoming f"].map(opt => {
-                    const isSelected = edited.callType === opt;
-                    const labelText = opt === "outgoing f" ? "Outgoing (F)" : opt === "incoming f" ? "Incoming (F)" : opt.charAt(0).toUpperCase() + opt.slice(1);
+                <div className={`grid grid-cols-2 gap-2 p-1 rounded-xl border transition-all ${!edited.callType ? "bg-amber-50/40 border-amber-300 ring-1 ring-amber-300/30" : "border-transparent"}`}>
+                  {["outgoing", "incoming"].map(opt => {
+                    const isSelected = Boolean(edited.callType) && String(edited.callType).toLowerCase().startsWith(opt);
+                    const labelText = opt.charAt(0).toUpperCase() + opt.slice(1);
                     return (
                       <button
                         key={opt}
                         type="button"
                         onClick={() => handleCallTypeChange(opt)}
-                        className={`py-2 px-3 rounded-full text-xs font-bold transition-all border ${
+                        className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
                           isSelected
-                            ? "bg-[#009669] text-white border-[#009669] shadow-md scale-[1.02]"
+                            ? (opt === "outgoing" ? "bg-blue-600 text-white border-blue-600 shadow-md scale-[1.02]" : "bg-emerald-600 text-white border-emerald-600 shadow-md scale-[1.02]")
                             : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                         }`}
                       >

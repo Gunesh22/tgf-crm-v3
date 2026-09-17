@@ -52,13 +52,17 @@ export default async function handler(req, res) {
       if (existingContact) {
         console.log(`[CREATE-INCOMING DUP MATCH] Merging incoming call into existing contact ${existingContact._id.toString()} (${existingContact.Name || existingContact.phone})`);
 
+        const rawCallType = updates.callType || updates.callDirection || 'outgoing';
+        const resolvedCallType = String(rawCallType).toLowerCase().startsWith('in') ? 'incoming' : 'outgoing';
+
         const logRes = await executeLogCall(db, {
           contactId: existingContact._id.toString(),
           attenderId: cleanAttenderId,
           attenderName: cleanAttenderName,
-          programId: programId || 'incoming',
-          programName: programName || 'Incoming Calls',
-          callType: updates.callType || 'incoming',
+          programId: programId || (resolvedCallType === 'incoming' ? 'incoming' : 'outgoing-calls'),
+          programName: programName || (resolvedCallType === 'incoming' ? 'Incoming Calls' : 'Outgoing Calls'),
+          callType: resolvedCallType,
+          callDirection: resolvedCallType,
           status: updates.status || 'Pending',
           remark: updates.remark || '',
           calledFor: updates.calledFor || updates['Called For'] || '',
@@ -103,6 +107,9 @@ export default async function handler(req, res) {
 
     const initialStage = evalResult.pipelineStage || '1. New Lead';
 
+    const rawCallType = updates.callType || updates.callDirection || 'outgoing';
+    const resolvedCallType = String(rawCallType).toLowerCase().startsWith('in') ? 'incoming' : 'outgoing';
+
     const historyItem = {
       callId,
       attenderId: cleanAttenderId,
@@ -111,8 +118,8 @@ export default async function handler(req, res) {
       callAttenderName:  cleanAttenderName || '',
       leadOwnerAtTime:   cleanAttenderId,
       leadOwnerNameAtTime: cleanAttenderName || '',
-      callDirection:     'incoming',
-      callType:          'incoming',
+      callDirection:     resolvedCallType,
+      callType:          resolvedCallType,
       callPurpose:       callPurposeVal,
       callStatus:        updates.callStatus || 'Connected',
       status:            updates.status || 'Pending',
@@ -139,10 +146,10 @@ export default async function handler(req, res) {
       leadOrigin: leadOriginVal,
       source:     currentSourceVal,
       calledFor:  targetCalledForVal,
-      callType:   'incoming',
-      callDirection: 'incoming',
-      programId:   programId   || 'incoming',
-      programName: programName || 'Incoming Calls',
+      callType:   resolvedCallType,
+      callDirection: resolvedCallType,
+      programId:   programId   || (resolvedCallType === 'incoming' ? 'incoming' : 'outgoing-calls'),
+      programName: programName || (resolvedCallType === 'incoming' ? 'Incoming Calls' : 'Outgoing Calls'),
       pipelineStage: initialStage,
       leadOwner:     cleanAttenderId,
       leadOwnerName: cleanAttenderName || '',
@@ -158,8 +165,8 @@ export default async function handler(req, res) {
         [cleanAttenderId]: {
           attenderId: cleanAttenderId,
           attenderName:  cleanAttenderName || '',
-          callDirection: 'incoming',
-          callType:      'incoming',
+          callDirection: resolvedCallType,
+          callType:      resolvedCallType,
           callPurpose:   callPurposeVal,
           callStatus:    updates.callStatus || 'Connected',
           status:        updates.status || 'Pending',
