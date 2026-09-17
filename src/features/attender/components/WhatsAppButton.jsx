@@ -1,6 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
 import { ChevronDown, Send } from "lucide-react";
-import { getSettingsOptions, DEFAULT_WHATSAPP_TEMPLATES } from "../../../lib/db";
+import {
+  getCachedWhatsAppTemplates,
+  subscribeWhatsAppTemplates,
+  syncWhatsAppTemplatesIfChanged
+} from "../../../lib/whatsappTemplateService";
 
 /**
  * Formats a phone number for WhatsApp wa.me links
@@ -57,17 +61,19 @@ const WhatsAppIcon = ({ className = "w-3.5 h-3.5 fill-current" }) => (
 
 export const WhatsAppButton = ({ phone, name = "", variant = "default" }) => {
   const [open, setOpen] = useState(false);
-  const [dbTemplates, setDbTemplates] = useState(DEFAULT_WHATSAPP_TEMPLATES);
+  const [dbTemplates, setDbTemplates] = useState(() => getCachedWhatsAppTemplates());
   const dropdownRef = useRef(null);
 
   useEffect(() => {
-    getSettingsOptions()
-      .then(options => {
-        if (options?.whatsappTemplates && options.whatsappTemplates.length > 0) {
-          setDbTemplates(options.whatsappTemplates);
-        }
-      })
-      .catch(() => {});
+    // 1. Subscribe to any cache updates across app
+    const unsub = subscribeWhatsAppTemplates((templates) => {
+      setDbTemplates(templates);
+    });
+
+    // 2. Perform initial background sync if needed
+    syncWhatsAppTemplatesIfChanged().catch(() => {});
+
+    return () => unsub();
   }, []);
 
   useEffect(() => {
@@ -86,6 +92,14 @@ export const WhatsAppButton = ({ phone, name = "", variant = "default" }) => {
   if (digits.length < 10) return null;
 
   const waPhone = formatPhoneForWhatsApp(phone);
+
+  const handleToggleOpen = () => {
+    const next = !open;
+    setOpen(next);
+    if (next) {
+      syncWhatsAppTemplatesIfChanged().catch(() => {});
+    }
+  };
 
   const handleOpenWA = (text = "") => {
     setOpen(false);
@@ -111,7 +125,7 @@ export const WhatsAppButton = ({ phone, name = "", variant = "default" }) => {
           </button>
           <button
             type="button"
-            onClick={() => setOpen(!open)}
+            onClick={handleToggleOpen}
             className="px-2 py-1.5 hover:bg-white/20 text-white/80 hover:text-white active:scale-[0.97] transition-all duration-150 border-l border-white/15 cursor-pointer"
             title="Message Templates"
           >
@@ -137,27 +151,33 @@ export const WhatsAppButton = ({ phone, name = "", variant = "default" }) => {
                 </div>
                 <Send size={11} className="text-emerald-600 group-hover:translate-x-0.5 transition-transform" />
               </button>
-              {dbTemplates.map((tpl, i) => {
-                const previewText = processTemplateText(tpl.text, name);
-                return (
-                  <button
-                    key={tpl.id || i}
-                    type="button"
-                    onClick={() => handleOpenWA(tpl.text)}
-                    className="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-slate-50 active:scale-[0.98] transition border border-transparent hover:border-slate-100 cursor-pointer"
-                  >
-                    <div className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                      {tpl.emoji ? (
-                        <span className="text-sm leading-none">{tpl.emoji}</span>
-                      ) : (
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                      )}
-                      <span>{tpl.title}</span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-2 leading-relaxed">{previewText}</div>
-                  </button>
-                );
-              })}
+              {dbTemplates.length === 0 ? (
+                <div className="px-2.5 py-2 text-[11px] text-slate-400 italic text-center">
+                  No templates created yet
+                </div>
+              ) : (
+                dbTemplates.map((tpl, i) => {
+                  const previewText = processTemplateText(tpl.text, name);
+                  return (
+                    <button
+                      key={tpl.id || i}
+                      type="button"
+                      onClick={() => handleOpenWA(tpl.text)}
+                      className="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-slate-50 active:scale-[0.98] transition border border-transparent hover:border-slate-100 cursor-pointer"
+                    >
+                      <div className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                        {tpl.emoji ? (
+                          <span className="text-sm leading-none">{tpl.emoji}</span>
+                        ) : (
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        )}
+                        <span>{tpl.title}</span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-2 leading-relaxed">{previewText}</div>
+                    </button>
+                  );
+                })
+              )}
             </div>
           </div>
         )}
@@ -179,7 +199,7 @@ export const WhatsAppButton = ({ phone, name = "", variant = "default" }) => {
       </button>
       <button
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={handleToggleOpen}
         className="px-1.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 active:scale-[0.97] text-white rounded-r-lg border-l border-emerald-500 text-xs font-semibold transition-all duration-150 cursor-pointer"
         title="Choose message template"
       >
@@ -195,32 +215,38 @@ export const WhatsAppButton = ({ phone, name = "", variant = "default" }) => {
             <button
               type="button"
               onClick={() => handleOpenWA()}
-              className="w-full text-left px-2 py-1.5 rounded-md text-xs font-semibold hover:bg-emerald-50 active:scale-[0.98] text-emerald-700 transition flex items-center justify-between cursor-pointer"
+              className="w-full text-left px-2.5 py-1.5 rounded-md text-xs font-semibold hover:bg-emerald-50 active:scale-[0.98] text-emerald-700 transition flex items-center justify-between cursor-pointer"
             >
               <span>Direct Chat (No Message)</span>
               <Send size={11} />
             </button>
-            {dbTemplates.map((tpl, i) => {
-              const previewText = processTemplateText(tpl.text, name);
-              return (
-                <button
-                  key={tpl.id || i}
-                  type="button"
-                  onClick={() => handleOpenWA(tpl.text)}
-                  className="w-full text-left px-2 py-1.5 rounded-md hover:bg-slate-50 active:scale-[0.98] transition cursor-pointer"
-                >
-                  <div className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                    {tpl.emoji ? (
-                      <span>{tpl.emoji}</span>
-                    ) : (
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    )}
-                    <span>{tpl.title}</span>
-                  </div>
-                  <div className="text-[11px] text-slate-500 truncate">{previewText}</div>
-                </button>
-              );
-            })}
+            {dbTemplates.length === 0 ? (
+              <div className="px-2.5 py-2 text-[11px] text-slate-400 italic text-center">
+                No templates created yet
+              </div>
+            ) : (
+              dbTemplates.map((tpl, i) => {
+                const previewText = processTemplateText(tpl.text, name);
+                return (
+                  <button
+                    key={tpl.id || i}
+                    type="button"
+                    onClick={() => handleOpenWA(tpl.text)}
+                    className="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-slate-50 active:scale-[0.98] transition cursor-pointer"
+                  >
+                    <div className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                      {tpl.emoji ? (
+                        <span>{tpl.emoji}</span>
+                      ) : (
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                      )}
+                      <span>{tpl.title}</span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 truncate">{previewText}</div>
+                  </button>
+                );
+              })
+            )}
           </div>
         </div>
       )}

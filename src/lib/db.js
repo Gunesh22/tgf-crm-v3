@@ -302,6 +302,13 @@ export const updateCallCenterOptions = async (options) => {
   await applyDynamicOptions(settingsCache);
   notifySettingsListeners(settingsCache);
 
+  if (options && options.whatsappTemplates !== undefined) {
+    try {
+      const { updateLocalWhatsAppTemplates } = await import("./whatsappTemplateService.js");
+      updateLocalWhatsAppTemplates(options.whatsappTemplates);
+    } catch (e) {}
+  }
+
   const res = await fetchAPI(`/api/admin/settings`, "POST", options);
   if (res && res.data) {
     settingsCache = res.data;
@@ -312,6 +319,13 @@ export const updateCallCenterOptions = async (options) => {
     } catch (e) {}
     await applyDynamicOptions(res.data);
     notifySettingsListeners(res.data);
+
+    if (res.data.whatsappTemplates !== undefined) {
+      try {
+        const { updateLocalWhatsAppTemplates } = await import("./whatsappTemplateService.js");
+        updateLocalWhatsAppTemplates(res.data.whatsappTemplates, res.data.whatsappTemplatesVersion);
+      } catch (e) {}
+    }
   }
   return res;
 };
@@ -808,3 +822,11 @@ export const fetchFreshSharedLead = async (row, attenderId, attenderName, force 
   if (!contactId && !phone) return null;
   return getSingleContact(contactId || phone);
 };
+
+export {
+  getCachedWhatsAppTemplates,
+  getCachedWhatsAppVersion,
+  subscribeWhatsAppTemplates,
+  updateLocalWhatsAppTemplates,
+  syncWhatsAppTemplatesIfChanged
+} from "./whatsappTemplateService.js";

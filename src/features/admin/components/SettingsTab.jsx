@@ -19,8 +19,7 @@ import {
   getLockedMonthlyReports,
   DEFAULT_CONNECTED_STATUSES,
   DEFAULT_NOT_CONNECTED_STATUSES,
-  DEFAULT_SALES_OUTCOME_OPTIONS,
-  DEFAULT_WHATSAPP_TEMPLATES
+  DEFAULT_SALES_OUTCOME_OPTIONS
 } from "../../../lib/db";
 import { 
   updateDynamicOptions,
@@ -470,7 +469,7 @@ export default function SettingsTab() {
           className="relative bg-white border border-[#E4E7EC] rounded-xl mb-6 shadow-[0_1px_3px_rgba(16,24,40,0.04)] scroll-mt-[90px] p-5 md:p-6 space-y-4"
         >
           <WhatsAppTemplatesCard
-            templates={options?.whatsappTemplates || DEFAULT_WHATSAPP_TEMPLATES}
+            templates={options?.whatsappTemplates || []}
             onSaveTemplates={handleSaveWhatsappTemplates}
           />
         </div>

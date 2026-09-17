@@ -1,11 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { MessageSquare, Plus, Edit2, Trash2, Save, X, Sparkles, User, HelpCircle } from "lucide-react";
+import { MessageSquare, Plus, Edit2, Trash2, Save, X, User, HelpCircle } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { DEFAULT_WHATSAPP_TEMPLATES } from "../../../lib/db";
 import { processTemplateText } from "../../attender/components/WhatsAppButton";
-
-const QUICK_EMOJIS = ["✨", "🌸", "📝", "🙏", "💬", "💚", "☀️", "⭐"];
 
 const renderTextWithVariableBadges = (text = "") => {
   if (!text) return null;
@@ -25,14 +22,24 @@ const renderTextWithVariableBadges = (text = "") => {
   });
 };
 
-export function WhatsAppTemplatesCard({ templates = DEFAULT_WHATSAPP_TEMPLATES, onSaveTemplates }) {
+export function WhatsAppTemplatesCard({ templates = [], onSaveTemplates }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState(null); // null when adding new
-  const [formData, setFormData] = useState({ title: "", text: "", emoji: "💬" });
+  const [editingTemplate, setEditingTemplate] = useState(null);
+  const [formData, setFormData] = useState({ title: "", text: "" });
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && isModalOpen) {
+        setIsModalOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isModalOpen]);
 
   const openAddModal = () => {
     setEditingTemplate(null);
-    setFormData({ title: "", text: "Happy Thoughts {Name} ji! ", emoji: "✨" });
+    setFormData({ title: "", text: "Happy Thoughts {Name} ji! " });
     setIsModalOpen(true);
   };
 
@@ -40,8 +47,7 @@ export function WhatsAppTemplatesCard({ templates = DEFAULT_WHATSAPP_TEMPLATES, 
     setEditingTemplate(tpl);
     setFormData({
       title: tpl.title || "",
-      text: tpl.text || "",
-      emoji: tpl.emoji || "💬"
+      text: tpl.text || ""
     });
     setIsModalOpen(true);
   };
@@ -58,18 +64,16 @@ export function WhatsAppTemplatesCard({ templates = DEFAULT_WHATSAPP_TEMPLATES, 
 
     let updatedList;
     if (editingTemplate) {
-      // Update existing
       updatedList = templates.map((t) =>
         t.id === editingTemplate.id
-          ? { ...t, title: formData.title.trim(), text: formData.text.trim(), emoji: formData.emoji }
+          ? { ...t, title: formData.title.trim(), text: formData.text.trim() }
           : t
       );
     } else {
-      // Add new
-      const newId = `tpl_${Date.now()}`;
+      const newId = "tpl_" + Date.now();
       updatedList = [
         ...templates,
-        { id: newId, title: formData.title.trim(), text: formData.text.trim(), emoji: formData.emoji }
+        { id: newId, title: formData.title.trim(), text: formData.text.trim() }
       ];
     }
 
@@ -84,10 +88,6 @@ export function WhatsAppTemplatesCard({ templates = DEFAULT_WHATSAPP_TEMPLATES, 
   };
 
   const handleDelete = async (idToDelete) => {
-    if (templates.length <= 1) {
-      toast.error("You must keep at least 1 template.");
-      return;
-    }
     if (!window.confirm("Are you sure you want to delete this template?")) return;
 
     const updatedList = templates.filter((t) => t.id !== idToDelete);
@@ -103,13 +103,13 @@ export function WhatsAppTemplatesCard({ templates = DEFAULT_WHATSAPP_TEMPLATES, 
   const insertNameTag = () => {
     setFormData((prev) => ({
       ...prev,
-      text: prev.text + " {Name}"
+      text: prev.text ? (prev.text.endsWith(" ") ? prev.text + "{Name} " : prev.text + " {Name} ") : "{Name} "
     }));
   };
 
   return (
-    <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-2xs space-y-4">
-      {/* Card Header */}
+    <div className="space-y-4">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-3.5">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200">
@@ -134,28 +134,38 @@ export function WhatsAppTemplatesCard({ templates = DEFAULT_WHATSAPP_TEMPLATES, 
 
       {/* Templates Grid */}
       <div className="grid md:grid-cols-3 gap-4">
-        {templates.map((tpl) => (
+        {templates.length === 0 ? (
+          <div className="col-span-full py-8 text-center bg-slate-50/60 rounded-xl border border-dashed border-slate-200 p-6 space-y-2">
+            <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+              <MessageSquare size={18} />
+            </div>
+            <p className="text-xs font-semibold text-slate-700">No custom templates created yet</p>
+            <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+              Click &quot;Add Template&quot; above to create quick message templates for attenders.
+            </p>
+          </div>
+        ) : (
+          templates.map((tpl) => (
           <div
             key={tpl.id}
-            className="bg-gray-50/60 rounded-2xl border border-gray-150 p-4 space-y-3 flex flex-col justify-between hover:border-emerald-200 hover:bg-emerald-50/20 transition group"
+            className="bg-slate-50/50 rounded-lg border border-slate-200 p-4 space-y-3 flex flex-col justify-between hover:border-slate-300 hover:bg-slate-50 transition group"
           >
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="text-lg leading-none">{tpl.emoji || "💬"}</span>
-                  <h4 className="font-bold text-gray-800 text-xs">{tpl.title}</h4>
+                  <h4 className="font-semibold text-slate-800 text-xs">{tpl.title}</h4>
                 </div>
                 <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition">
                   <button
                     onClick={() => openEditModal(tpl)}
-                    className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-100/60 rounded-lg transition"
+                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition cursor-pointer"
                     title="Edit Template"
                   >
                     <Edit2 size={13} />
                   </button>
                   <button
                     onClick={() => handleDelete(tpl.id)}
-                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-100/60 rounded-lg transition"
+                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition cursor-pointer"
                     title="Delete Template"
                   >
                     <Trash2 size={13} />
@@ -163,97 +173,74 @@ export function WhatsAppTemplatesCard({ templates = DEFAULT_WHATSAPP_TEMPLATES, 
                 </div>
               </div>
 
-              <div className="text-xs text-gray-700 leading-relaxed bg-white p-3 rounded-xl border border-gray-100 line-clamp-4">
+              <div className="text-xs text-slate-700 leading-relaxed bg-white p-3 rounded-md border border-slate-200 line-clamp-4">
                 {renderTextWithVariableBadges(tpl.text)}
               </div>
             </div>
 
-            <div className="text-[10px] text-gray-400 font-semibold flex items-center justify-between pt-1 border-t border-gray-100">
+            <div className="text-[11px] text-slate-500 font-medium flex items-center justify-between pt-2 border-t border-slate-100">
               <span className="flex items-center gap-1">
-                <User size={11} className="text-emerald-500" />
-                <span>Variable Tag: <strong className="text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded font-mono border border-emerald-100">{`{Name}`}</strong></span>
+                <User size={11} className="text-emerald-600" />
+                <span>Variable Tag: <strong className="text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded font-mono border border-emerald-200 text-[10px]">{'{Name}'}</strong></span>
               </span>
             </div>
           </div>
-        ))}
-      </div>
+        ))
+      )}
+    </div>
 
       {/* Edit / Add Modal */}
       {isModalOpen && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in" onClick={() => setIsModalOpen(false)}>
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in" onClick={() => setIsModalOpen(false)}>
           <div
-            className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-5 shadow-2xl animate-scale-up border border-gray-100"
+            className="bg-white rounded-xl w-full max-w-lg shadow-xl border border-slate-200 overflow-hidden animate-scale-up"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <div className="flex items-center gap-2">
-                <Sparkles size={18} className="text-emerald-600" />
-                <h3 className="font-bold text-gray-900 text-base">
-                  {editingTemplate ? "Edit WhatsApp Template" : "Add WhatsApp Template"}
-                </h3>
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200">
+                  <MessageSquare size={16} />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-900 text-sm">
+                    {editingTemplate ? "Edit WhatsApp Template" : "Add WhatsApp Template"}
+                  </h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Configure message text and dynamic placeholders for quick replies.
+                  </p>
+                </div>
               </div>
               <button
+                type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition"
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100 transition cursor-pointer"
               >
                 <X size={16} />
               </button>
             </div>
 
             {/* Form Fields */}
-            <div className="space-y-4">
-              {/* Title & Emoji */}
-              <div className="grid grid-cols-4 gap-3">
-                <div className="col-span-3 space-y-1">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                    Template Title <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="e.g. Follow-up Intro"
-                    className="w-full px-3 py-2 text-xs font-bold bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                    Emoji
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.emoji}
-                    onChange={(e) => setFormData({ ...formData, emoji: e.target.value })}
-                    maxLength={2}
-                    className="w-full px-3 py-2 text-xs font-bold text-center bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
-                  />
-                </div>
-              </div>
-
-              {/* Quick Emoji Bar */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                <span className="text-[10px] font-bold text-gray-400 shrink-0">Quick Emoji:</span>
-                {QUICK_EMOJIS.map((em) => (
-                  <button
-                    key={em}
-                    type="button"
-                    onClick={() => setFormData({ ...formData, emoji: em })}
-                    className={`w-7 h-7 rounded-lg text-xs flex items-center justify-center transition border ${
-                      formData.emoji === em
-                        ? "bg-emerald-100 border-emerald-400 text-emerald-900 scale-105 shadow-xs"
-                        : "bg-gray-50 hover:bg-gray-100 border-gray-200"
-                    }`}
-                  >
-                    {em}
-                  </button>
-                ))}
+            <div className="p-6 space-y-4">
+              {/* Template Title */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Template Title <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  placeholder="e.g. Follow-up Intro"
+                  className="w-full px-3 py-2 text-xs text-slate-900 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-2xs placeholder:text-slate-400"
+                />
               </div>
 
               {/* Message Text Area */}
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                  <label className="block text-xs font-semibold text-slate-700">
                     Message Text <span className="text-red-500">*</span>
                   </label>
                   
@@ -261,9 +248,9 @@ export function WhatsAppTemplatesCard({ templates = DEFAULT_WHATSAPP_TEMPLATES, 
                   <button
                     type="button"
                     onClick={insertNameTag}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-bold rounded-lg border border-emerald-200/60 transition active:scale-95 cursor-pointer"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-md border border-emerald-200 transition active:scale-95 cursor-pointer"
                   >
-                    <Plus size={11} />
+                    <Plus size={12} />
                     <span>Insert Contact Name</span>
                   </button>
                 </div>
@@ -273,34 +260,33 @@ export function WhatsAppTemplatesCard({ templates = DEFAULT_WHATSAPP_TEMPLATES, 
                   value={formData.text}
                   onChange={(e) => setFormData({ ...formData, text: e.target.value })}
                   placeholder="Happy Thoughts {Name} ji! ..."
-                  className="w-full px-3 py-2.5 text-xs font-medium leading-relaxed bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                  className="w-full px-3 py-2.5 text-xs text-slate-900 leading-relaxed bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-2xs placeholder:text-slate-400"
                 />
 
-                <div className="flex items-center justify-between text-[11px] text-gray-400">
-                  <span className="flex items-center gap-1">
-                    <HelpCircle size={12} className="text-emerald-500" />
-                    Use <strong className="text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded font-mono">{`{Name}`}</strong> tag to automatically insert contact's name.
-                  </span>
-                </div>
+                <p className="text-[11px] text-slate-500 flex items-center gap-1.5 pt-0.5">
+                  <HelpCircle size={13} className="text-emerald-600 shrink-0" />
+                  <span>Use <code className="text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded font-mono font-bold border border-emerald-200 text-[10px]">{'{Name}'}</code> tag to automatically insert contact's name.</span>
+                </p>
               </div>
 
               {/* Live Preview Box */}
-              <div className="bg-emerald-50/50 border border-emerald-150 rounded-2xl p-3.5 space-y-1.5">
-                <div className="text-[10px] font-black text-emerald-800 uppercase tracking-wider flex items-center gap-1">
-                  <span>📱 Live Message Preview (for "Namdev Kale")</span>
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3.5 space-y-2">
+                <div className="text-[11px] font-semibold text-slate-700 flex items-center gap-1.5">
+                  <MessageSquare size={13} className="text-emerald-600" />
+                  <span>Live Message Preview (for "Namdev Kale")</span>
                 </div>
-                <div className="text-xs text-gray-800 font-medium leading-relaxed bg-white p-3 rounded-xl border border-emerald-100 shadow-2xs">
-                  {processTemplateText(formData.text, "Namdev Kale") || <span className="italic text-gray-300">Type message above...</span>}
+                <div className="text-xs text-slate-800 font-medium leading-relaxed bg-white p-3 rounded-md border border-slate-200 shadow-2xs">
+                  {processTemplateText(formData.text, "Namdev Kale") || <span className="italic text-slate-400">Type message above...</span>}
                 </div>
               </div>
             </div>
 
             {/* Modal Actions */}
-            <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-4">
+            <div className="flex items-center justify-end gap-2.5 px-6 py-3.5 bg-slate-50 border-t border-slate-200">
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition cursor-pointer"
+                className="px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200/70 rounded-md border border-slate-300 transition cursor-pointer"
               >
                 Cancel
               </button>
@@ -309,7 +295,7 @@ export function WhatsAppTemplatesCard({ templates = DEFAULT_WHATSAPP_TEMPLATES, 
                 onClick={handleSave}
                 className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-md shadow-2xs transition active:scale-95 cursor-pointer"
               >
-                <Save size={14} />
+                <Save size={13} />
                 <span>Save Template</span>
               </button>
             </div>

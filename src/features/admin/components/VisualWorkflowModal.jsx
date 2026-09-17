@@ -312,33 +312,36 @@ export default function VisualWorkflowModal({
   const [simChosenOutcome, setSimChosenOutcome] = useState(null);
   const [simLog, setSimLog] = useState([]);
   const [simVisited, setSimVisited] = useState(new Set());
+  const [simIsPlayingPreset, setSimIsPlayingPreset] = useState(false);
 
-  // Store timer references to avoid orphaned callbacks
-  const simOuterTimer = useRef(null);
-  const simInnerTimer = useRef(null);
-
-  /* ---- clear timers helper ---- */
-  const clearSimTimers = useCallback(() => {
-    if (simOuterTimer.current) clearTimeout(simOuterTimer.current);
-    if (simInnerTimer.current) clearTimeout(simInnerTimer.current);
-    simOuterTimer.current = null;
-    simInnerTimer.current = null;
-  }, []);
+  const simTimerRef = useRef(null);
 
   /* ---- stop simulation helper ---- */
   const stopSim = useCallback(() => {
-    clearSimTimers();
+    if (simTimerRef.current) clearTimeout(simTimerRef.current);
+    simTimerRef.current = null;
     setSimRunning(false);
+    setSimIsPlayingPreset(false);
     setSimCurrentId(null);
     setSimCurrentEdgeId(null);
     setSimChosenOutcome(null);
     setSimLog([]);
     setSimVisited(new Set());
-  }, [clearSimTimers]);
+  }, []);
+
+  /* Clean up simulation timers on unmount */
+  useEffect(() => {
+    return () => {
+      if (simTimerRef.current) clearTimeout(simTimerRef.current);
+    };
+  }, []);
 
   /* ---- load / reset workflow on open ---- */
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      stopSim();
+      return;
+    }
     stopSim();
     setModalConfig(null);
 
@@ -792,10 +795,121 @@ export default function VisualWorkflowModal({
     });
   };
 
-  /* ---- SIMULATION ENGINE ---- */
-  const startSim = () => {
+  /* ---- PRESETS DEFINITION ---- */
+  const PRESETS = useMemo(() => [
+    {
+      id: 'won',
+      name: '🏆 Direct Won',
+      description: 'New Lead → Attempting Contact → Info Given → Nurture → Registered / Won',
+      path: [
+        { outcome: 'Attempting Contact', target: 'Attempting Contact' },
+        { outcome: 'Info Given', target: 'Information Given' },
+        { outcome: 'Interested', target: 'Nurture / Interested' },
+        { outcome: 'Reg.Done', target: 'Registered / Won' },
+      ],
+    },
+    {
+      id: 'alumni',
+      name: '🎓 Existing Alumni',
+      description: 'New Lead → Attempting Contact → Existing Alumni',
+      path: [
+        { outcome: 'Attempting Contact', target: 'Attempting Contact' },
+        { outcome: 'Shivir Done', target: 'Existing Alumni' },
+      ],
+    },
+    {
+      id: 'future',
+      name: '⏳ Future Pool',
+      description: 'New Lead → Attempting Contact → Info Given → Nurture → Future Pool → Registered / Won',
+      path: [
+        { outcome: 'Attempting Contact', target: 'Attempting Contact' },
+        { outcome: 'Info Given', target: 'Information Given' },
+        { outcome: 'Interested', target: 'Nurture / Interested' },
+        { outcome: 'Next Time', target: 'Future Pool' },
+        { outcome: 'Reg.Done', target: 'Registered / Won' },
+      ],
+    },
+    {
+      id: 'lost',
+      name: '❌ Closed Lost',
+      description: 'New Lead → Attempting Contact → Info Given → Nurture → Closed / Lost',
+      path: [
+        { outcome: 'Attempting Contact', target: 'Attempting Contact' },
+        { outcome: 'Info Given', target: 'Information Given' },
+        { outcome: 'Interested', target: 'Nurture / Interested' },
+        { outcome: 'Not Interested', target: 'Closed / Lost' },
+      ],
+    },
+    {
+      id: 'invalid',
+      name: '⚠️ Invalid Number',
+      description: 'New Lead → Attempting Contact → Closed / Invalid',
+      path: [
+        { outcome: 'Attempting Contact', target: 'Attempting Contact' },
+        { outcome: 'Invalid Number', target: 'Closed / Invalid' },
+      ],
+    },
+  ], []);
+
+  /* Current node in simulation */
+  const currentSimNode = useMemo(
+    () => nodes.find((n) => n.id === simCurrentId),
+    [nodes, simCurrentId]
+  );
+
+  /* Available transitions from current node */
+  const availableTransitions = useMemo(() => {
+    if (!simRunning || !simCurrentId) return [];
+    const outgoing = edges.filter(
+      (e) => e.source === simCurrentId && nodes.some((n) => n.id === e.target)
+    );
+    const list = [];
+    const seen = new Set();
+    outgoing.forEach((e) => {
+      const targetNode = nodes.find((n) => n.id === e.target);
+      const targetLabel = targetNode?.data?.label || e.target;
+      const opts = e.data?.options || (e.label ? e.label.split(', ') : ['Info Given']);
+      opts.forEach((opt) => {
+        const key = `${opt}:::${e.target}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          list.push({
+            outcome: opt,
+            targetId: e.target,
+            targetLabel,
+            edgeId: e.id,
+          });
+        }
+      });
+    });
+    return list;
+  }, [simRunning, simCurrentId, edges, nodes]);
+
+  /* Execute a single user-chosen step */
+  const executeStep = useCallback((transition) => {
+    if (simTimerRef.current) clearTimeout(simTimerRef.current);
+    setSimCurrentEdgeId(transition.edgeId);
+    setSimChosenOutcome(transition.outcome);
+
+    simTimerRef.current = setTimeout(() => {
+      setSimCurrentId(transition.targetId);
+      setSimVisited((prev) => new Set(prev).add(transition.targetId));
+      setSimLog((prev) => [
+        ...prev,
+        {
+          step: prev.length + 1,
+          node: transition.targetLabel,
+          outcome: transition.outcome,
+        },
+      ]);
+      setSimCurrentEdgeId(null);
+      setSimChosenOutcome(null);
+    }, 400);
+  }, []);
+
+  /* Start simulation */
+  const startSim = useCallback(() => {
     stopSim();
-    // Filter valid nodes that exist
     const startNode = nodes.find((n) => n.id === 'stage-0') || nodes[0];
     if (!startNode) {
       showToast('No stages available to simulate.', 'warning');
@@ -806,88 +920,141 @@ export default function VisualWorkflowModal({
     setSimCurrentId(startNode.id);
     setSimLog([{ step: 1, node: startNode.data.label, outcome: '—' }]);
     setSimVisited(new Set([startNode.id]));
-  };
+  }, [nodes, stopSim]);
 
-  /* auto-advance simulation with loop prevention and timer safety */
-  useEffect(() => {
-    if (!simRunning || !simCurrentId) return;
+  /* Play preset scenario automatically */
+  const playPreset = useCallback((preset) => {
+    if (simTimerRef.current) clearTimeout(simTimerRef.current);
+    const startNode = nodes.find((n) => n.id === 'stage-0') || nodes[0];
+    if (!startNode) return;
 
-    // Check maximum step guard to prevent infinite loops on circular paths
-    if (simLog.length >= MAX_SIM_STEPS) {
-      simOuterTimer.current = setTimeout(() => {
-        setSimLog((prev) => [
-          ...prev,
-          {
-            step: prev.length + 1,
-            node: '🔄 Pipeline Loop Completed (Max Steps Reached)',
-            outcome: '—',
-          },
-        ]);
-        setSimRunning(false);
-        setSimCurrentEdgeId(null);
-        setSimChosenOutcome(null);
-      }, 1000);
-      return () => clearSimTimers();
-    }
+    setSimRunning(true);
+    setSimIsPlayingPreset(true);
+    setSimCurrentId(startNode.id);
+    setSimVisited(new Set([startNode.id]));
+    setSimLog([{ step: 1, node: startNode.data.label, outcome: '—' }]);
 
-    // Find outgoing edges that point to valid existing target nodes
-    const validOutgoing = edges.filter(
-      (e) => e.source === simCurrentId && nodes.some((n) => n.id === e.target)
-    );
+    let stepIdx = 0;
+    let currId = startNode.id;
 
-    if (validOutgoing.length === 0) {
-      // Reached a terminal node or node with no further transitions
-      simOuterTimer.current = setTimeout(() => {
-        setSimLog((prev) => [
-          ...prev,
-          {
-            step: prev.length + 1,
-            node: '🏁 Pipeline End / Terminal Stage',
-            outcome: '—',
-          },
-        ]);
-        setSimRunning(false);
-        setSimCurrentEdgeId(null);
-        setSimChosenOutcome(null);
-      }, 1200);
-      return () => clearSimTimers();
-    }
-
-    // Pick a random outgoing edge and a random outcome from its options
-    simOuterTimer.current = setTimeout(() => {
-      const chosenEdge =
-        validOutgoing[Math.floor(Math.random() * validOutgoing.length)];
-      const targetNode = nodes.find((n) => n.id === chosenEdge.target);
-      if (!targetNode) {
-        setSimRunning(false);
+    const advanceStep = () => {
+      if (stepIdx >= preset.path.length) {
+        setSimIsPlayingPreset(false);
+        return;
+      }
+      const desired = preset.path[stepIdx];
+      const outgoing = edges.filter((e) => e.source === currId && nodes.some((n) => n.id === e.target));
+      if (outgoing.length === 0) {
+        setSimIsPlayingPreset(false);
         return;
       }
 
-      const opts =
-        chosenEdge.data?.options ||
-        (chosenEdge.label ? chosenEdge.label.split(', ') : [defaultOutcomes[0]]);
-      const chosenOutcome = opts[Math.floor(Math.random() * opts.length)] || '—';
+      const matchedEdge = outgoing.find((e) => {
+        const targetNode = nodes.find((n) => n.id === e.target);
+        const opts = e.data?.options || (e.label ? e.label.split(', ') : []);
+        return (
+          targetNode?.data?.label?.toLowerCase() === desired.target.toLowerCase() ||
+          opts.some((o) => o.toLowerCase() === desired.outcome.toLowerCase())
+        );
+      }) || outgoing[0];
+
+      const targetNode = nodes.find((n) => n.id === matchedEdge.target);
+      const targetLabel = targetNode?.data?.label || matchedEdge.target;
+      const opts = matchedEdge.data?.options || (matchedEdge.label ? matchedEdge.label.split(', ') : [desired.outcome]);
+      const chosenOutcome = opts.find((o) => o.toLowerCase() === desired.outcome.toLowerCase()) || opts[0] || desired.outcome;
+
+      setSimCurrentEdgeId(matchedEdge.id);
+      setSimChosenOutcome(chosenOutcome);
+
+      simTimerRef.current = setTimeout(() => {
+        currId = matchedEdge.target;
+        setSimCurrentId(matchedEdge.target);
+        setSimVisited((prev) => new Set(prev).add(matchedEdge.target));
+        setSimLog((prev) => [
+          ...prev,
+          {
+            step: prev.length + 1,
+            node: targetLabel,
+            outcome: chosenOutcome,
+          },
+        ]);
+        setSimCurrentEdgeId(null);
+        setSimChosenOutcome(null);
+
+        stepIdx++;
+        if (stepIdx < preset.path.length) {
+          simTimerRef.current = setTimeout(advanceStep, 700);
+        } else {
+          setSimIsPlayingPreset(false);
+        }
+      }, 500);
+    };
+
+    simTimerRef.current = setTimeout(advanceStep, 350);
+  }, [edges, nodes]);
+
+  /* Play random walk */
+  const playRandom = useCallback(() => {
+    if (simTimerRef.current) clearTimeout(simTimerRef.current);
+    const startNode = nodes.find((n) => n.id === 'stage-0') || nodes[0];
+    if (!startNode) return;
+
+    setSimRunning(true);
+    setSimIsPlayingPreset(true);
+    setSimCurrentId(startNode.id);
+    setSimVisited(new Set([startNode.id]));
+    setSimLog([{ step: 1, node: startNode.data.label, outcome: '—' }]);
+
+    let stepCount = 0;
+    let currId = startNode.id;
+
+    const advanceRandom = () => {
+      if (stepCount >= 10) {
+        setSimIsPlayingPreset(false);
+        return;
+      }
+      const outgoing = edges.filter((e) => e.source === currId && nodes.some((n) => n.id === e.target));
+      if (outgoing.length === 0) {
+        setSimIsPlayingPreset(false);
+        return;
+      }
+
+      const chosenEdge = outgoing[Math.floor(Math.random() * outgoing.length)];
+      const targetNode = nodes.find((n) => n.id === chosenEdge.target);
+      const targetLabel = targetNode?.data?.label || chosenEdge.target;
+      const opts = chosenEdge.data?.options || (chosenEdge.label ? chosenEdge.label.split(', ') : ['Info Given']);
+      const chosenOutcome = opts[Math.floor(Math.random() * opts.length)] || opts[0];
 
       setSimCurrentEdgeId(chosenEdge.id);
       setSimChosenOutcome(chosenOutcome);
 
-      // Advance after animated transition
-      simInnerTimer.current = setTimeout(() => {
+      simTimerRef.current = setTimeout(() => {
+        currId = chosenEdge.target;
         setSimCurrentId(chosenEdge.target);
         setSimVisited((prev) => new Set(prev).add(chosenEdge.target));
         setSimLog((prev) => [
           ...prev,
           {
             step: prev.length + 1,
-            node: targetNode.data.label,
+            node: targetLabel,
             outcome: chosenOutcome,
           },
         ]);
-      }, 600);
-    }, 1500);
+        setSimCurrentEdgeId(null);
+        setSimChosenOutcome(null);
 
-    return () => clearSimTimers();
-  }, [simRunning, simCurrentId, simLog.length, edges, nodes, clearSimTimers]);
+        stepCount++;
+        const nextOutgoing = edges.filter((e) => e.source === currId && nodes.some((n) => n.id === e.target));
+        if (nextOutgoing.length > 0 && stepCount < 10) {
+          simTimerRef.current = setTimeout(advanceRandom, 700);
+        } else {
+          setSimIsPlayingPreset(false);
+        }
+      }, 500);
+    };
+
+    simTimerRef.current = setTimeout(advanceRandom, 350);
+  }, [edges, nodes]);
 
   /* ---- render ---- */
   if (isOpen === false) return null;
@@ -993,21 +1160,98 @@ export default function VisualWorkflowModal({
           </button>
           <div style={{ flex: 1 }} />
           {!simRunning ? (
-            <button className="sim-btn" onClick={startSim} title="Start simulated lead flow">
+            <button className="sim-btn" onClick={startSim} title="Start interactive simulation">
               ▶ Simulate Flow
             </button>
           ) : (
-            <button className="sim-stop-btn" onClick={stopSim} title="Stop simulation">
-              ⏹ Stop Simulation
+            <button className="sim-stop-btn" onClick={stopSim} title="Exit simulation">
+              ⏹ Exit Simulation
             </button>
           )}
-          {simRunning && (
-            <div className="sim-info">
-              <span className="sim-dot" />
-              Simulating lead flow…
-            </div>
-          )}
         </div>
+
+        {/* Interactive Simulator Console Bar — Clean Light Theme */}
+        {simRunning && (
+          <div className="bg-slate-50 border-b border-slate-200 px-5 py-3 text-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0 shadow-xs">
+            {/* Left: Current Stage & Branching Statuses */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-medium">📍 Current Stage:</span>
+                <span className="px-2.5 py-1 text-xs font-bold rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-xs">
+                  {currentSimNode?.data?.label || 'New Lead'}
+                </span>
+              </div>
+
+              {availableTransitions.length > 0 ? (
+                <div className="flex items-center gap-1.5 flex-wrap ml-1">
+                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                    Select Status:
+                  </span>
+                  {availableTransitions.map((t, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => executeStep(t)}
+                      disabled={simIsPlayingPreset}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-white hover:bg-indigo-50 active:bg-indigo-100 text-slate-800 hover:text-indigo-700 border border-slate-200 hover:border-indigo-300 shadow-xs transition disabled:opacity-50 cursor-pointer"
+                      title={`Transition to stage: ${t.targetLabel}`}
+                    >
+                      <span className="text-emerald-600 font-bold">{t.outcome}</span>
+                      <span className="text-slate-400 text-[10px]">➔ {t.targetLabel}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 ml-1 text-emerald-700 text-xs font-medium">
+                  <span>🏁 Terminal Stage Reached ({currentSimNode?.data?.label})</span>
+                  <button
+                    type="button"
+                    onClick={startSim}
+                    className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 shadow-xs cursor-pointer transition"
+                  >
+                    ↺ Restart Flow
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Right: Presets & Controls */}
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                Presets:
+              </span>
+              <div className="flex items-center gap-1 flex-wrap">
+                {PRESETS.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => playPreset(p)}
+                    disabled={simIsPlayingPreset}
+                    className="px-2.5 py-1 text-xs font-medium rounded-lg bg-white hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 border border-slate-200 hover:border-indigo-200 shadow-xs transition disabled:opacity-50 cursor-pointer"
+                    title={p.description}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={playRandom}
+                  disabled={simIsPlayingPreset}
+                  className="px-2.5 py-1 text-xs font-medium rounded-lg bg-white hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 border border-slate-200 hover:border-indigo-200 shadow-xs transition disabled:opacity-50 cursor-pointer"
+                  title="Random simulation step through pipeline"
+                >
+                  🎲 Random
+                </button>
+              </div>
+
+              {simIsPlayingPreset && (
+                <span className="text-xs text-indigo-600 font-semibold animate-pulse ml-1">
+                  Playing...
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="editor-wrap flex-1" style={{ position: 'relative', height: '100%', minHeight: '400px' }}>
           <ReactFlow
@@ -1054,7 +1298,7 @@ export default function VisualWorkflowModal({
                   style={{
                     background: 'none',
                     border: 'none',
-                    color: '#fff',
+                    color: '#64748b',
                     cursor: 'pointer',
                     fontSize: '12px',
                   }}

@@ -86,14 +86,14 @@
 }
 
 .workflow-toolbar button.sim-btn {
-  background: #0d9488;
-  border-color: #0d9488;
+  background: #4f46e5;
+  border-color: #4f46e5;
   color: #fff;
 }
 
 .workflow-toolbar button.sim-btn:hover {
-  background: #0f766e;
-  border-color: #0f766e;
+  background: #4338ca;
+  border-color: #4338ca;
 }
 
 .workflow-toolbar button.sim-stop-btn {
@@ -783,8 +783,9 @@
 
 .sim-log-header {
   padding: 12px 16px;
-  background: #0d9488;
-  color: #fff;
+  background: #f8fafc;
+  color: #1e293b;
+  border-bottom: 1px solid #e2e8f0;
   font-weight: 700;
   font-size: 0.85rem;
   display: flex;

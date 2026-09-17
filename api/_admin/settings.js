@@ -84,12 +84,6 @@ const DEFAULT_CALLED_FOR_OPTIONS = [
   "Appointment"
 ];
 
-const DEFAULT_WHATSAPP_TEMPLATES = [
-  { id: "template_1", name: "CBT Basic Info", text: "Namaste! Here are the details for the CBT Basic program." },
-  { id: "template_2", name: "Registration Link", text: "Namaste! Please click the link below to complete your registration." },
-  { id: "template_3", name: "Callback Reminder", text: "Namaste! Trying to reach you regarding your inquiry. Please call back when free." }
-];
-
 export const DEFAULT_SETTINGS = {
   _id: "call_center_options",
   statusOptions: [...DEFAULT_CONNECTED_STATUSES, ...DEFAULT_NOT_CONNECTED_STATUSES],
@@ -98,7 +92,9 @@ export const DEFAULT_SETTINGS = {
   notConnectedStatuses: DEFAULT_NOT_CONNECTED_STATUSES,
   sourceOptions: DEFAULT_SOURCE_OPTIONS,
   calledForOptions: DEFAULT_CALLED_FOR_OPTIONS,
-  whatsappTemplates: DEFAULT_WHATSAPP_TEMPLATES,
+  whatsappTemplates: [],
+  whatsappTemplatesVersion: 1,
+  whatsappTemplatesUpdatedAt: new Date().toISOString(),
   optionalCompulsoryStatuses: DEFAULT_NOT_CONNECTED_STATUSES,
   updatedAt: new Date().toISOString()
 };
@@ -120,6 +116,39 @@ export default async function handler(req, res) {
         doc = DEFAULT_SETTINGS;
       }
 
+      // 1. Lightweight version check: ?field=whatsapp-version (or ?versionOnly=true)
+      if (req.query.field === 'whatsapp-version' || req.query.versionOnly === 'true') {
+        const version = doc.whatsappTemplatesVersion || 1;
+        const updatedAt = doc.whatsappTemplatesUpdatedAt || doc.updatedAt;
+        const etag = `"wa-tpl-v${version}"`;
+        res.setHeader('ETag', etag);
+        res.setHeader('Cache-Control', 'private, no-cache');
+        if (req.headers['if-none-match'] === etag) {
+          return res.status(304).end();
+        }
+        return res.status(200).json({
+          success: true,
+          version,
+          updatedAt
+        });
+      }
+
+      // 2. Full templates fetch: ?field=whatsapp-templates
+      if (req.query.field === 'whatsapp-templates') {
+        const version = doc.whatsappTemplatesVersion || 1;
+        const etag = `"wa-tpl-v${version}"`;
+        res.setHeader('ETag', etag);
+        res.setHeader('Cache-Control', 'private, no-cache');
+        if (req.headers['if-none-match'] === etag) {
+          return res.status(304).end();
+        }
+        return res.status(200).json({
+          success: true,
+          version,
+          whatsappTemplates: doc.whatsappTemplates || []
+        });
+      }
+
       // Return clean settings object (omit _id) — STRICTLY READ-ONLY
       const { _id, ...cleanData } = doc;
       if (!cleanData.salesOutcomeOptions) {
@@ -134,6 +163,12 @@ export default async function handler(req, res) {
       if (!cleanData.statusOptions) {
         cleanData.statusOptions = DEFAULT_SETTINGS.statusOptions;
       }
+      if (!cleanData.whatsappTemplates) {
+        cleanData.whatsappTemplates = [];
+      }
+      if (!cleanData.whatsappTemplatesVersion) {
+        cleanData.whatsappTemplatesVersion = 1;
+      }
       return res.status(200).json({ success: true, data: cleanData });
     }
 
@@ -147,6 +182,14 @@ export default async function handler(req, res) {
         ...updates,
         updatedAt: new Date().toISOString()
       };
+
+      // If updating whatsappTemplates, bump version and updatedAt timestamp
+      if (updates.whatsappTemplates !== undefined) {
+        const currentDoc = await collection.findOne({ _id: 'call_center_options' });
+        const nextVersion = ((currentDoc && currentDoc.whatsappTemplatesVersion) || 0) + 1;
+        setFields.whatsappTemplatesVersion = nextVersion;
+        setFields.whatsappTemplatesUpdatedAt = new Date().toISOString();
+      }
 
       await collection.updateOne(
         { _id: 'call_center_options' },
