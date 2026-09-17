@@ -604,24 +604,47 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
 
     // Populate canonical registrations per attender from programRegistrationsList (Single Source of Truth)
     programRegistrationsList.forEach(reg => {
-      const rawName = (reg.attenderName || reg.attender || reg.assignedTo || "").trim() || "Unknown Attender";
-      const normName = rawName.toLowerCase();
-      if (EXCLUDED_ATTENDER_NAMES.includes(normName)) return;
+      // Primary credit to Lead Owner
+      const rawOwnerName = (reg.leadOwnerName || reg.attenderName || reg.attender || reg.assignedTo || "").trim() || "Unknown Attender";
+      const normOwnerName = rawOwnerName.toLowerCase();
+      if (!EXCLUDED_ATTENDER_NAMES.includes(normOwnerName)) {
+        const foundAttender = (attenders || []).find(a =>
+          (a.name || "").toLowerCase().trim() === normOwnerName ||
+          (a.id && reg.leadOwnerId && String(a.id) === String(reg.leadOwnerId)) ||
+          (a.id && reg.attenderId && String(a.id) === String(reg.attenderId))
+        );
+        const canonicalName = foundAttender ? foundAttender.name : rawOwnerName;
+        const canonicalId = foundAttender ? foundAttender.id : (reg.leadOwnerId || reg.attenderId && reg.attenderId !== "unknown" && reg.attenderId !== "legacy" ? reg.leadOwnerId || reg.attenderId : normOwnerName);
 
-      const foundAttender = (attenders || []).find(a =>
-        (a.name || "").toLowerCase().trim() === normName ||
-        (a.id && reg.attenderId && String(a.id) === String(reg.attenderId))
-      );
-      const canonicalName = foundAttender ? foundAttender.name : rawName;
-      const canonicalId = foundAttender ? foundAttender.id : (reg.attenderId && reg.attenderId !== "unknown" && reg.attenderId !== "legacy" ? reg.attenderId : normName);
-
-      if (canonicalId === "admin" || EXCLUDED_ATTENDER_NAMES.includes(canonicalName.toLowerCase().trim())) return;
-
-      const key = canonicalId;
-      if (!map[key]) {
-        map[key] = { id: canonicalId, name: canonicalName, total: 0, outgoing: 0, incoming: 0, interested: 0, regDone: 0, pending: 0 };
+        if (canonicalId !== "admin" && !EXCLUDED_ATTENDER_NAMES.includes(canonicalName.toLowerCase().trim())) {
+          const key = canonicalId;
+          if (!map[key]) {
+            map[key] = { id: canonicalId, name: canonicalName, total: 0, outgoing: 0, incoming: 0, interested: 0, regDone: 0, teamAssists: 0, pending: 0 };
+          }
+          map[key].regDone++;
+        }
       }
-      map[key].regDone++;
+
+      // Converter gets team assist credit
+      if (reg.isSharedConversion && (reg.convertingAttenderName || reg.convertedBy)) {
+        const convRawName = String(reg.convertingAttenderName || reg.convertedBy).trim();
+        const convNorm = convRawName.toLowerCase();
+        if (!EXCLUDED_ATTENDER_NAMES.includes(convNorm)) {
+          const foundConv = (attenders || []).find(a =>
+            (a.name || "").toLowerCase().trim() === convNorm ||
+            (a.id && reg.convertingAttenderId && String(a.id) === String(reg.convertingAttenderId))
+          );
+          const convCanonicalName = foundConv ? foundConv.name : convRawName;
+          const convCanonicalId = foundConv ? foundConv.id : (reg.convertingAttenderId || convNorm);
+          if (convCanonicalId !== "admin" && !EXCLUDED_ATTENDER_NAMES.includes(convCanonicalName.toLowerCase().trim())) {
+            const convKey = convCanonicalId;
+            if (!map[convKey]) {
+              map[convKey] = { id: convCanonicalId, name: convCanonicalName, total: 0, outgoing: 0, incoming: 0, interested: 0, regDone: 0, teamAssists: 0, pending: 0 };
+            }
+            map[convKey].teamAssists = (map[convKey].teamAssists || 0) + 1;
+          }
+        }
+      }
     });
 
     // Final merge: collapse any duplicate name variants (e.g. legacy ID vs official ID for same person)
@@ -638,6 +661,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
         ex.incoming += entry.incoming;
         ex.interested += entry.interested;
         ex.regDone += entry.regDone;
+        ex.teamAssists = (ex.teamAssists || 0) + (entry.teamAssists || 0);
         ex.pending += entry.pending;
       }
     });
@@ -645,17 +669,68 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
     return Object.values(byName).sort((a, b) => b.total - a.total || b.regDone - a.regDone);
   }, [filteredLogs, attenders, programRegistrationsList]);
 
+  const attenderTotals = useMemo(() => {
+    return attenderStats.reduce((acc, a) => {
+      acc.total += Number(a.total) || 0;
+      acc.outgoing += Number(a.outgoing) || 0;
+      acc.incoming += Number(a.incoming) || 0;
+      acc.interested += Number(a.interested) || 0;
+      acc.regDone += Number(a.regDone) || 0;
+      acc.pending += Number(a.pending) || 0;
+      return acc;
+    }, { total: 0, outgoing: 0, incoming: 0, interested: 0, regDone: 0, pending: 0 });
+  }, [attenderStats]);
+
   const attenderModalLeads = useMemo(() => {
     if (!selectedAttenderDetails) return [];
     const targetObj = typeof selectedAttenderDetails === "object" ? selectedAttenderDetails : { id: null, name: selectedAttenderDetails };
-    const targetId = targetObj.id;
+    const targetId = targetObj.id ? String(targetObj.id).trim().toLowerCase() : "";
     const targetName = (targetObj.name || "").toLowerCase().trim();
 
-    const leads = filteredLogs.filter(log => {
-      const logAttender = (log.attenderName || "").toLowerCase().trim();
-      if (logAttender === targetName) return true;
-      if (targetId && targetId !== "unknown" && targetId !== "legacy" && log.attenderId === targetId) return true;
+    const isMatch = (attName, attId) => {
+      const aN = (attName || "").toLowerCase().trim();
+      const aI = attId ? String(attId).toLowerCase().trim() : "";
+      if (targetName && aN === targetName) return true;
+      if (targetId && targetId !== "unknown" && targetId !== "legacy" && aI === targetId) return true;
       return false;
+    };
+
+    const leads = filteredLogs.filter(log => {
+      if (isMatch(log.attenderName, log.attenderId)) return true;
+      if (isMatch(log.leadOwnerName, log.leadOwner)) return true;
+      return false;
+    });
+
+    // Also inject canonical registrations owned by this attender that might have been converted by another team member
+    programRegistrationsList.forEach(reg => {
+      if (isMatch(reg.leadOwnerName, reg.leadOwnerId) || isMatch(reg.attenderName, reg.attenderId)) {
+        const regLeadId = reg.contactId || reg.phone || reg.name;
+        const cf = (reg.calledFor || reg.programName || "").toLowerCase().trim();
+        const exists = leads.some(l => {
+          const lLeadId = l.contactId || l.Phone || l.Name;
+          const lCf = (l.calledFor || l.programName || "").toLowerCase().trim();
+          return lLeadId === regLeadId && lCf === cf;
+        });
+        if (!exists) {
+          leads.push({
+            id: reg.id,
+            contactId: reg.contactId,
+            Name: reg.contactName || reg.name,
+            Phone: reg.contactPhone || reg.phone,
+            status: "Reg.Done",
+            calledFor: reg.calledFor,
+            programName: reg.programName,
+            attenderName: reg.leadOwnerName,
+            attenderId: reg.leadOwnerId,
+            convertedBy: reg.convertedBy,
+            leadOwnerName: reg.leadOwnerName,
+            isSharedConversion: reg.isSharedConversion,
+            remark: reg.isSharedConversion ? `Registered by ${reg.convertedBy} on your behalf` : (reg.remark || "Reg.Done"),
+            timestamp: reg.registeredAt || reg.timestamp,
+            callType: reg.callType || "outgoing"
+          });
+        }
+      }
     });
 
     const seenRegs = new Set();
@@ -678,7 +753,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
       (l.status || "").toLowerCase().includes(q) ||
       (l.remark || "").toLowerCase().includes(q)
     );
-  }, [filteredLogs, selectedAttenderDetails, attenderModalSearch]);
+  }, [filteredLogs, selectedAttenderDetails, attenderModalSearch, programRegistrationsList]);
 
   const outcomeData = useMemo(() => {
     const map = {};
@@ -867,6 +942,8 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
         (c.Phone || "").toLowerCase().includes(term) ||
         (c.programName || "").toLowerCase().includes(term) ||
         (c.attenderName || "").toLowerCase().includes(term) ||
+        (c.leadOwnerName || "").toLowerCase().includes(term) ||
+        (c.convertedBy || "").toLowerCase().includes(term) ||
         (c.source || "").toLowerCase().includes(term) ||
         (c.calledFor || "").toLowerCase().includes(term) ||
         (c.feedback || "").toLowerCase().includes(term) ||
@@ -1412,6 +1489,34 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
                 <tr><td colSpan={8} className="py-8 text-center text-slate-400 font-medium">No data for this selection.</td></tr>
               )}
             </tbody>
+            {attenderStats.length > 0 && (
+              <tfoot className="bg-slate-100/90 border-t-2 border-slate-300 font-bold text-slate-900">
+                <tr>
+                  <td className="px-3.5 py-3 uppercase tracking-wider text-[11px] font-extrabold text-slate-900">
+                    Total
+                  </td>
+                  <td className="px-3.5 py-3 font-extrabold text-slate-900">{attenderTotals.total}</td>
+                  <td className="px-3.5 py-3 text-slate-800">{attenderTotals.outgoing}</td>
+                  <td className="px-3.5 py-3 text-slate-800">{attenderTotals.incoming}</td>
+                  <td className="px-3.5 py-3 text-amber-700 font-bold">{attenderTotals.interested}</td>
+                  <td className="px-3.5 py-3 text-emerald-700 font-extrabold">{attenderTotals.regDone}</td>
+                  <td className="px-3.5 py-3 text-slate-600">{attenderTotals.pending}</td>
+                  <td className="px-3.5 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden min-w-[70px]">
+                        <div
+                          className="h-full bg-indigo-600 rounded-full transition-all duration-300"
+                          style={{ width: `${attenderTotals.total ? Math.round(((attenderTotals.total - attenderTotals.pending) / attenderTotals.total) * 100) : 0}%` }}
+                        />
+                      </div>
+                      <span className="text-[11px] font-extrabold text-slate-900 whitespace-nowrap">
+                        {attenderTotals.total ? Math.round(((attenderTotals.total - attenderTotals.pending) / attenderTotals.total) * 100) : 0}%
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
@@ -1471,7 +1576,21 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
                     </td>
                     {/* Attender */}
                     <td className="px-3.5 py-2.5 font-medium text-slate-700">
-                      {attenderName}
+                      {c.isSharedConversion ? (
+                        <div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-semibold text-slate-900">{c.leadOwnerName || attenderName}</span>
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200" title="Shared Lead Conversion">
+                              🏆 Shared
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-slate-500 mt-0.5">
+                            Converted by: <span className="font-medium text-indigo-600">{c.convertedBy || c.convertingAttenderName || "Team"}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        attenderName
+                      )}
                     </td>
                     {/* Tag / Program */}
                     <td className="px-3.5 py-2.5">

@@ -39,6 +39,7 @@ import {
   parseTimestamp
 } from "./utils";
 import { normalizeProgramStates } from "../../utils/pipelineEngine";
+import { resolveRegistrationAttribution } from "../../utils/registrationEngine";
 import { EditModal } from "./components/EditModal";
 import { MyPerformanceDashboard } from "./components/MyPerformanceDashboard";
 import { ColumnsSelector } from "./components/ColumnsSelector";
@@ -268,7 +269,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
 
   const assistedNotifications = useMemo(() => {
     if (!attenderName || !callLogs || callLogs.length === 0) return [];
-    
+
     const currentAttenderLower = String(attenderName).trim().toLowerCase();
     const currentAttenderIdLower = String(attenderId || "").trim().toLowerCase();
     const notifications = [];
@@ -284,67 +285,54 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     callLogs.forEach(log => {
       if (log._deleted) return;
 
-      const regEvents = [];
-
+      // Extract all distinct registered programs on this contact
+      const regPrograms = new Set();
       if (Array.isArray(log.history)) {
         log.history.forEach(h => {
-          if (!h) return;
-          const status = getCanonicalStatus(h.status || "");
-          if (status === "Reg.Done" && h.attenderName && !isMe(h.attenderName) && !isMe(h.attenderId)) {
-            regEvents.push({
-              convertedBy: h.attenderName,
-              program: h.calledFor || h.called_for || h["Called For"] || h.program || "",
-              timestamp: h.timestamp || log.updatedAt
-            });
+          if (getCanonicalStatus(h?.status || "") === "Reg.Done") {
+            const prog = h.calledFor || h.called_for || h["Called For"] || h.program || "";
+            if (prog) regPrograms.add(prog);
           }
         });
       }
-
-      if (regEvents.length === 0 && log.attenderStates) {
+      if (log.attenderStates) {
         Object.values(log.attenderStates).forEach(st => {
-          if (!st) return;
-          const status = getCanonicalStatus(st.status || "");
-          if (status === "Reg.Done" && st.attenderName && !isMe(st.attenderName) && !isMe(st.attenderId)) {
-            regEvents.push({
-              convertedBy: st.attenderName,
-              program: st.calledFor || st["Called For"] || st.program || "",
-              timestamp: st.updatedAt || log.updatedAt
-            });
+          if (getCanonicalStatus(st?.status || "") === "Reg.Done") {
+            const prog = st.calledFor || st["Called For"] || st.program || "";
+            if (prog) regPrograms.add(prog);
           }
         });
       }
+      if (regPrograms.size === 0 && getCanonicalStatus(log.status || "") === "Reg.Done") {
+        const rootProg = log["Called For"] || log.calledFor || log.programName || "Program";
+        regPrograms.add(rootProg);
+      }
 
-      if (regEvents.length === 0) {
-        const rootStatus = getCanonicalStatus(log.status || "");
-        let convertedBy = log.convertedBy || "";
-        if (rootStatus === "Reg.Done" && convertedBy && !isMe(convertedBy)) {
-          regEvents.push({
-            convertedBy: convertedBy,
-            program: log["Called For"] || log["Sub Program"] || log.programName || "Program",
-            timestamp: log.registeredAt || log.lastCalledAt || log.updatedAt
+      regPrograms.forEach(progName => {
+        const progKey = progName.toLowerCase().replace(/[\s_-]+/g, "");
+        const attribution = resolveRegistrationAttribution(null, log, progKey);
+
+        // Core Rule:
+        // 1. Must be a true shared conversion (owner != converter)
+        // 2. Current attender must be the actual Lead Owner (amIOwner)
+        // 3. The converter who made the call must be someone else (!isMe)
+        if (!attribution.isSharedConversion) return;
+
+        const amIOwner = isMe(attribution.leadOwnerName) || isMe(attribution.leadOwnerId);
+        const someoneElseConverted = !isMe(attribution.converterName) && !isMe(attribution.converterId);
+
+        if (amIOwner && someoneElseConverted) {
+          const leadName = log.Name || log.name || log["Contact Name"] || "Lead";
+          notifications.push({
+            id: `${log.id || log._id}_${progKey}_${attribution.converterName}`,
+            leadName: leadName,
+            phone: log.Phone || log.phone || log.Mobile || log.mobile || "",
+            convertedBy: attribution.converterName,
+            program: progName,
+            registeredAt: log.registeredAt || log.updatedAt || log.createdAt,
+            log: log
           });
         }
-      }
-
-      const seenProgs = new Set();
-      regEvents.forEach(ev => {
-        const progName = ev.program || log["Called For"] || "Program";
-        const progKey = progName.toLowerCase().trim();
-        if (seenProgs.has(progKey)) return;
-        seenProgs.add(progKey);
-
-        const nameKey = Object.keys(log).find(k => ["name", "lead name", "caller name", "lead"].includes(k.toLowerCase())) || "Name";
-        const leadName = log[nameKey] || "Lead";
-
-        notifications.push({
-          id: `${log.id}_${progKey}_${ev.convertedBy}`,
-          leadName: leadName,
-          phone: log.Phone || log.phone || log.Mobile || log.mobile || "",
-          convertedBy: ev.convertedBy,
-          program: progName,
-          registeredAt: ev.timestamp || log.updatedAt || log.createdAt,
-          log: log
-        });
       });
     });
 

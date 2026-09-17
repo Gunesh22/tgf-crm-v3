@@ -19,7 +19,9 @@ export const PIPELINE_STAGES = {
   NURTURE_INTERESTED:       "4. Nurture / Interested",
   FUTURE_POOL:              "5. Future Pool",
   REGISTERED_WON:           "6. Registered / Won",
+  STAGE_6:                  "6. Registered / Won",
   EXISTING_ALUMNI:          "Existing Alumni",
+  ALUMNI:                   "Existing Alumni",
   CLOSED_LOST:              "Closed / Lost",
   CLOSED_INVALID:           "Closed / Invalid",
 };
@@ -233,6 +235,12 @@ export function canTransition(fromStage, toStage, event = {}) {
   // Existing Alumni transitions are always allowed (both to and from)
   if (fromStage === "Existing Alumni" || fromStage === PIPELINE_STAGES.EXISTING_ALUMNI ||
       toStage === "Existing Alumni" || toStage === PIPELINE_STAGES.EXISTING_ALUMNI) return true;
+
+  // Invariant: Once registered / won, a lead can NEVER be demoted to Closed / Lost or Closed / Invalid
+  const isRegWon = fromStage === "6. Registered / Won" || fromStage === "Registered / Won" || fromStage === "Reg.Done" || fromStage === "Registered";
+  if (isRegWon && (toStage === "Closed / Lost" || toStage === "Closed / Invalid" || toRank === 7)) {
+    return false;
+  }
 
   // Legacy non-pipeline stages: allow any Sales forward movement
   if (LEGACY_NON_PIPELINE_STAGES.has(fromStage)) return true;

@@ -429,6 +429,130 @@ export function isRawIdString(str) {
   return false;
 }
 
+// ── Canonical Attribution Resolver ──────────────────────────────────────────
+export function resolveRegistrationAttribution(reg = {}, contact = null, calledForKey = '') {
+  const r = reg || {};
+  // 1. Identify Converting Attender (the person who actually made the converting call)
+  let converterName = '';
+  let converterId = '';
+
+  if (r.convertedBy && String(r.convertedBy).trim() && !isRawIdString(r.convertedBy)) {
+    converterName = String(r.convertedBy).trim();
+  } else if (r.attenderName && String(r.attenderName).trim() && !isRawIdString(r.attenderName)) {
+    converterName = String(r.attenderName).trim();
+  }
+  if (r.attenderId && String(r.attenderId).trim()) {
+    converterId = String(r.attenderId).trim();
+  }
+
+  // Scan contact attenderStates and history for the specific program Reg.Done event
+  if (contact) {
+    const isStatusReg = (st) => {
+      const s = String(st || '').toLowerCase().trim();
+      return (s.includes('reg.done') || s.includes('registered')) && !s.includes('already reg') && !s.includes('shivir done') && !s.includes('alumni');
+    };
+
+    if (contact.attenderStates && typeof contact.attenderStates === 'object') {
+      for (const [stAttId, st] of Object.entries(contact.attenderStates)) {
+        if (!st) continue;
+        const stProg = st.calledFor || st.called_for || st.calledForKey || st.program || '';
+        const stKey = String(stProg).toLowerCase().replace(/[\s_-]+/g, '');
+        const matchesProg = !calledForKey || !stKey || stKey === calledForKey || stKey.includes(calledForKey) || calledForKey.includes(stKey);
+        if (matchesProg && isStatusReg(st.status || st.Status)) {
+          if (!converterName && st.attenderName && !isRawIdString(st.attenderName)) converterName = String(st.attenderName).trim();
+          if (!converterId && stAttId !== 'legacy') converterId = String(st.attenderId || stAttId).trim();
+        }
+      }
+    }
+
+    if ((!converterName || !converterId) && Array.isArray(contact.history)) {
+      for (let i = contact.history.length - 1; i >= 0; i--) {
+        const h = contact.history[i];
+        if (!h) continue;
+        const hProg = h.calledFor || h.called_for || h.calledForKey || h.program || '';
+        const hKey = String(hProg).toLowerCase().replace(/[\s_-]+/g, '');
+        const matchesProg = !calledForKey || !hKey || hKey === calledForKey || hKey.includes(calledForKey) || calledForKey.includes(hKey);
+        if (matchesProg && isStatusReg(h.status)) {
+          const hName = h.attenderName || h.user || h.attender;
+          if (!converterName && hName && !isRawIdString(hName)) {
+            converterName = String(hName).trim();
+          }
+          const hId = h.attenderId || h.userId;
+          if (!converterId && hId) {
+            converterId = String(hId).trim();
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  // 2. Identify Lead Owner (the person who owns the lead context / primary credit)
+  let leadOwnerId = '';
+  let leadOwnerName = '';
+
+  if (r.leadOwner && String(r.leadOwner).trim()) {
+    leadOwnerId = String(r.leadOwner).trim();
+  } else if (contact?.leadOwner && String(contact.leadOwner).trim()) {
+    leadOwnerId = String(contact.leadOwner).trim();
+  } else if (contact?.attenderId && String(contact.attenderId).trim()) {
+    leadOwnerId = String(contact.attenderId).trim();
+  }
+
+  if (r.leadOwnerName && String(r.leadOwnerName).trim() && !isRawIdString(r.leadOwnerName)) {
+    leadOwnerName = String(r.leadOwnerName).trim();
+  } else if (contact?.leadOwnerName && String(contact.leadOwnerName).trim() && !isRawIdString(contact.leadOwnerName)) {
+    leadOwnerName = String(contact.leadOwnerName).trim();
+  } else if (contact?.attenderName && String(contact.attenderName).trim() && !isRawIdString(contact.attenderName)) {
+    leadOwnerName = String(contact.attenderName).trim();
+  }
+
+  // Fallbacks
+  if (!leadOwnerId && converterId) leadOwnerId = converterId;
+  if (!leadOwnerName && converterName) leadOwnerName = converterName;
+  if (!converterId && leadOwnerId) converterId = leadOwnerId;
+  if (!converterName && leadOwnerName) converterName = leadOwnerName;
+
+  // 3. Shared conversion check
+  const cleanConvId = String(converterId || '').toLowerCase().trim();
+  const cleanOwnId = String(leadOwnerId || '').toLowerCase().trim();
+  const cleanConvName = String(converterName || '').toLowerCase().trim();
+  const cleanOwnName = String(leadOwnerName || '').toLowerCase().trim();
+
+  let isSharedConversion = false;
+  if (cleanConvId && cleanOwnId && cleanConvId !== cleanOwnId && cleanConvId !== 'unknown' && cleanOwnId !== 'unknown' && cleanConvId !== 'legacy' && cleanOwnId !== 'legacy') {
+    isSharedConversion = true;
+  } else if (cleanConvName && cleanOwnName && cleanConvName !== cleanOwnName && cleanConvName !== 'unknown' && cleanOwnName !== 'unknown' && cleanConvName !== 'unassigned' && cleanOwnName !== 'unassigned') {
+    isSharedConversion = true;
+  }
+
+  // Sets for lookup
+  const allAssociatedAttenderIds = new Set();
+  if (leadOwnerId) allAssociatedAttenderIds.add(String(leadOwnerId));
+  if (converterId) allAssociatedAttenderIds.add(String(converterId));
+  if (r.attenderId) allAssociatedAttenderIds.add(String(r.attenderId));
+  if (contact?.attenderId) allAssociatedAttenderIds.add(String(contact.attenderId));
+  if (Array.isArray(contact?.assignedTo)) contact.assignedTo.forEach(id => allAssociatedAttenderIds.add(String(id)));
+  if (Array.isArray(r.assignedTo)) r.assignedTo.forEach(id => allAssociatedAttenderIds.add(String(id)));
+
+  const allAssociatedAttenderNames = new Set();
+  if (leadOwnerName) allAssociatedAttenderNames.add(String(leadOwnerName).toLowerCase().trim());
+  if (converterName) allAssociatedAttenderNames.add(String(converterName).toLowerCase().trim());
+  if (r.attenderName) allAssociatedAttenderNames.add(String(r.attenderName).toLowerCase().trim());
+  if (contact?.attenderName) allAssociatedAttenderNames.add(String(contact.attenderName).toLowerCase().trim());
+
+  return {
+    leadOwnerId,
+    leadOwnerName: leadOwnerName || 'Unassigned',
+    converterId,
+    converterName: converterName || 'Unassigned',
+    convertedBy: converterName || 'Unassigned',
+    isSharedConversion,
+    allAssociatedAttenderIds: Array.from(allAssociatedAttenderIds),
+    allAssociatedAttenderNames: Array.from(allAssociatedAttenderNames),
+  };
+}
+
 /**
  * Single Source of Truth for Program Registrations.
  * Identity: (contactId + calledForKey).
@@ -442,6 +566,7 @@ export function getCanonicalRegistrations(registrations = [], contacts = [], fil
     selectedSources = [],
     selectedLeadOrigins = [],
     selectedCalledFors = [],
+    attenderRoleMode = 'any', // 'any' | 'owner' | 'converter'
   } = filters;
 
   const getLocalDateStr = (d) => {
@@ -475,13 +600,31 @@ export function getCanonicalRegistrations(registrations = [], contacts = [], fil
     return isLocalMatch || isUtcMatch;
   };
 
-  const matchesAttenderFilter = (attId, attName, contactAssigned) => {
+  const matchesAttenderFilter = (attId, attName, contactAssigned, attribution = null) => {
     if (!selectedAttenderIds || selectedAttenderIds.length === 0) return true;
-    if (attId && selectedAttenderIds.map(String).includes(String(attId))) return true;
-    if (Array.isArray(contactAssigned) && selectedAttenderIds.some(id => contactAssigned.map(String).includes(String(id)))) return true;
+    const targetIds = selectedAttenderIds.map(String);
+    const targetNames = selectedAttenderIds.map(id => String(id).toLowerCase().trim());
+
+    if (attenderRoleMode === 'converter') {
+      if (attribution?.converterId && targetIds.includes(String(attribution.converterId))) return true;
+      if (attribution?.converterName && targetNames.includes(String(attribution.converterName).toLowerCase().trim())) return true;
+      return false;
+    }
+
+    if (attenderRoleMode === 'owner') {
+      if (attribution?.leadOwnerId && targetIds.includes(String(attribution.leadOwnerId))) return true;
+      if (attribution?.leadOwnerName && targetNames.includes(String(attribution.leadOwnerName).toLowerCase().trim())) return true;
+      return false;
+    }
+
+    // Default 'any': Matches if attender is Lead Owner OR Converter OR in associated attenders
+    if (attribution?.allAssociatedAttenderIds?.some(id => targetIds.includes(String(id)))) return true;
+    if (attribution?.allAssociatedAttenderNames?.some(name => targetNames.includes(name))) return true;
+    if (attId && targetIds.includes(String(attId))) return true;
+    if (Array.isArray(contactAssigned) && contactAssigned.some(id => targetIds.includes(String(id)))) return true;
     if (attName) {
       const cleanName = String(attName).trim().toLowerCase();
-      return selectedAttenderIds.some(id => String(id).toLowerCase() === cleanName);
+      if (targetNames.includes(cleanName)) return true;
     }
     return false;
   };
@@ -551,7 +694,10 @@ export function getCanonicalRegistrations(registrations = [], contacts = [], fil
     let cleanCalledFor = renderVal(reg.calledFor || reg.programName, rawProg);
     if (isRawIdString(cleanCalledFor)) cleanCalledFor = 'Other';
 
-    if (!matchesAttenderFilter(attId, attName, reg.assignedTo)) return;
+    // Canonical attribution resolution (Primary Owner vs Converting Closer)
+    const attribution = resolveRegistrationAttribution(reg, contact, calledForKey);
+
+    if (!matchesAttenderFilter(attId, attName, reg.assignedTo, attribution)) return;
     if (!matchesProgramFilter(reg.programId, cleanCalledFor, calledForKey)) return;
     if (!matchesSourceFilter(resolvedSource)) return;
     if (!matchesLeadOriginFilter(resolvedLeadOrigin)) return;
@@ -575,9 +721,21 @@ export function getCanonicalRegistrations(registrations = [], contacts = [], fil
       khoji: resolvedKhoji,
       calledFor: cleanCalledFor,
       programName: cleanCalledFor,
-      attenderName: attName,
-      attender: attName,
-      attenderId: attId,
+      // Canonical attribution fields:
+      // attenderName is the Primary Lead Owner (receives +1 Primary Registration Credit)
+      attenderName: attribution.leadOwnerName,
+      attender: attribution.leadOwnerName,
+      attenderId: attribution.leadOwnerId || attId,
+      leadOwner: attribution.leadOwnerName,
+      leadOwnerName: attribution.leadOwnerName,
+      leadOwnerId: attribution.leadOwnerId,
+      // Converter fields: person who made the call
+      convertedBy: attribution.converterName,
+      converterName: attribution.converterName,
+      converterId: attribution.converterId,
+      convertingAttenderName: attribution.converterName,
+      convertingAttenderId: attribution.converterId,
+      isSharedConversion: attribution.isSharedConversion,
       source: resolvedSource,
       leadOrigin: resolvedLeadOrigin,
       status: 'Reg.Done',
@@ -691,7 +849,10 @@ export function getCanonicalRegistrations(registrations = [], contacts = [], fil
       let attName = renderVal(c.attenderName || c.assignedTo, 'Unassigned');
       if (isRawIdString(attName)) attName = 'Unassigned';
 
-      if (!matchesAttenderFilter(attId, attName, c.assignedTo)) return;
+      // Canonical attribution resolution (Primary Owner vs Converting Closer)
+      const attribution = resolveRegistrationAttribution(null, c, calledForKey);
+
+      if (!matchesAttenderFilter(attId, attName, c.assignedTo, attribution)) return;
       if (!matchesProgramFilter(c.programId, cleanCalledFor, calledForKey)) return;
       if (!matchesSourceFilter(resolvedSource)) return;
       if (!matchesLeadOriginFilter(resolvedLeadOrigin)) return;
@@ -713,9 +874,21 @@ export function getCanonicalRegistrations(registrations = [], contacts = [], fil
         khoji: renderVal(c.Khoji || c.khoji, '—'),
         calledFor: cleanCalledFor,
         programName: cleanCalledFor,
-        attenderName: attName,
-        attender: attName,
-        attenderId: attId,
+        // Canonical attribution fields:
+        // attenderName is the Primary Lead Owner (receives +1 Primary Registration Credit)
+        attenderName: attribution.leadOwnerName,
+        attender: attribution.leadOwnerName,
+        attenderId: attribution.leadOwnerId || attId,
+        leadOwner: attribution.leadOwnerName,
+        leadOwnerName: attribution.leadOwnerName,
+        leadOwnerId: attribution.leadOwnerId,
+        // Converter fields: person who made the call
+        convertedBy: attribution.converterName,
+        converterName: attribution.converterName,
+        converterId: attribution.converterId,
+        convertingAttenderName: attribution.converterName,
+        convertingAttenderId: attribution.converterId,
+        isSharedConversion: attribution.isSharedConversion,
         source: resolvedSource,
         leadOrigin: resolvedLeadOrigin,
         status: 'Reg.Done',

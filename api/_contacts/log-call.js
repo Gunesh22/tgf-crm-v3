@@ -42,9 +42,16 @@ function canTransitionServer(fromStage, toStage, event = {}) {
   const fromRank = fromStage ? (STAGE_RANKS[fromStage] || 0) : 0;
   const toRank   = toStage   ? (STAGE_RANKS[toStage]   || 0) : 0;
   if (fromStage === toStage || fromRank === toRank) return true;
+
   if (fromStage === "Previous Program Pending" || toStage === "Previous Program Pending") return true;
   if (fromStage === "Existing Alumni" || toStage === "Existing Alumni") return true;
   if (LEGACY_NON_PIPELINE_STAGES.has(fromStage)) return true;
+
+  // Invariant: Once registered / won, a lead can NEVER be demoted to Closed / Lost or Closed / Invalid
+  const isRegWon = fromStage === "6. Registered / Won" || fromStage === "Registered / Won" || fromStage === "Reg.Done" || fromStage === "Registered";
+  if (isRegWon && (toStage === "Closed / Lost" || toStage === "Closed / Invalid" || toRank === 7)) {
+    return false;
+  }
   const isConnected = event.callStatus === "Connected" ||
     ["Info Given", "Interested", "Reg.Done", "Next Time", "Previous Program Pending"].includes(event.purposeOutcome || event.status);
   if (fromRank === 7 && isConnected) return true;
@@ -467,10 +474,17 @@ export async function executeLogCall(db, payload) {
     setPayload.previousProgram = resolvedPreviousProgram;
   }
 
+  const isRegisteredLead = String(existingContact.pipelineStage || '').includes('Registered') ||
+                           String(existingContact.status || '').toLowerCase() === 'reg.done' ||
+                           (Array.isArray(existingContact.programRelationships) && existingContact.programRelationships.some(r => String(r?.status || '').toLowerCase().includes('reg')));
+  const isIncomingRegStatus = String(status || '').toLowerCase().includes('reg.done') || String(status || '').toLowerCase() === 'registered';
+
   if (!isNonOwnerSharedCall) {
     setPayload.callPurpose = callPurposeClean;
     setPayload.callStatus = callStatusClean;
-    setPayload.status = status || existingContact.status || 'Pending';
+    setPayload.status = (isRegisteredLead && !isIncomingRegStatus)
+      ? (existingContact.status || 'Reg.Done')
+      : (status || existingContact.status || 'Pending');
     setPayload.queryStatus = evalResult.queryStatus || queryStatus || existingContact.queryStatus || null;
     setPayload.queryDetails = queryDetails || existingContact.queryDetails || null;
     setPayload.source = currentCallSource;
@@ -486,7 +500,14 @@ export async function executeLogCall(db, payload) {
     // If working on the SAME program, update status/callPurpose on root for visibility
     setPayload.callPurpose = callPurposeClean;
     setPayload.callStatus = callStatusClean;
-    setPayload.status = status || existingContact.status || 'Pending';
+    setPayload.status = (isRegisteredLead && !isIncomingRegStatus)
+      ? (existingContact.status || 'Reg.Done')
+      : (status || existingContact.status || 'Pending');
+  } else {
+    // Non-owner shared call on DIFFERENT program: root status, callPurpose, callStatus must NOT be overwritten
+    delete setPayload.status;
+    delete setPayload.callPurpose;
+    delete setPayload.callStatus;
   }
 
   // Set leadOwner only on FIRST assignment (additive — never overwrites)

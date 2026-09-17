@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "react-hot-toast";
 import * as XLSX from "xlsx";
 import {
@@ -239,26 +240,27 @@ const parseDate = (val) => {
   return null;
 };
 
-// Option 3: Primary Assigned Attender Priority Helper (Assigned Lead Owner Priority)
+// Primary Assigned Attender Priority Helper (Assigned Lead Owner Priority)
 export const getRegistrationPrimaryAttender = (r) => {
   if (!r) return "Direct / Online";
 
-  // 1. Check convertedBy first (the attender who performed the registration/conversion)
-  if (r.convertedBy && String(r.convertedBy).trim() && String(r.convertedBy).trim() !== "Unknown" && String(r.convertedBy).trim() !== "Unassigned") {
-    return String(r.convertedBy).trim();
-  }
-
-  // 2. Check assigned lead owner (attenderName, assignedTo, assignedAttender, attender)
-  const assigned = r.attenderName || r.assignedTo || r.assignedAttender || r.attender;
+  // 1. Check assigned lead owner first (Lead Owner gets +1 PRIMARY REGISTRATION CREDIT)
+  const assigned = r.leadOwnerName || r.leadOwner || r.attenderName || r.assignedTo || r.assignedAttender || r.attender;
   if (assigned && String(assigned).trim() && String(assigned).trim() !== "Unknown" && String(assigned).trim() !== "Unassigned") {
     return String(assigned).trim();
+  }
+
+  // 2. Fallback to converter if no lead owner was recorded
+  const converter = r.convertedBy || r.convertingAttenderName;
+  if (converter && String(converter).trim() && String(converter).trim() !== "Unknown" && String(converter).trim() !== "Unassigned") {
+    return String(converter).trim();
   }
 
   // 3. Look back at prior call history array to find the primary nurturer
   if (Array.isArray(r.history) && r.history.length > 0) {
     for (let i = 0; i < r.history.length; i++) {
       const h = r.history[i];
-      const hAttender = h.convertedBy || h.attenderName || h.user || h.attender;
+      const hAttender = h.leadOwnerName || h.attenderName || h.assignedTo || h.user || h.attender || h.convertedBy;
       if (hAttender && String(hAttender).trim() && String(hAttender).trim() !== "Unknown" && String(hAttender).trim() !== "Unassigned") {
         return String(hAttender).trim();
       }
@@ -271,14 +273,14 @@ export const getRegistrationPrimaryAttender = (r) => {
 // Lead Owner helper specifically for identifying the original assigned owner (nurturer) vs assisting converter
 export const getRegistrationLeadOwner = (r) => {
   if (!r) return "Direct / Online";
-  const assigned = r.attenderName || r.assignedTo || r.assignedAttender || r.attender;
+  const assigned = r.leadOwnerName || r.leadOwner || r.attenderName || r.assignedTo || r.assignedAttender || r.attender;
   if (assigned && String(assigned).trim() && String(assigned).trim() !== "Unknown" && String(assigned).trim() !== "Unassigned") {
     return String(assigned).trim();
   }
   if (Array.isArray(r.history) && r.history.length > 0) {
     for (let i = 0; i < r.history.length; i++) {
       const h = r.history[i];
-      const hAttender = h.attenderName || h.user || h.attender;
+      const hAttender = h.leadOwnerName || h.attenderName || h.assignedTo || h.user || h.attender;
       if (hAttender && String(hAttender).trim() && String(hAttender).trim() !== "Unknown" && String(hAttender).trim() !== "Unassigned") {
         return String(hAttender).trim();
       }
@@ -334,6 +336,44 @@ export default function AbhivyaktiTab({
       return selectedCallTypes.some(t => cType.includes(t.toLowerCase()));
     });
   }, [canonicalRegistrations, selectedCallTypes]);
+
+  const [regSearch, setRegSearch] = useState("");
+
+  const displayedRegistrations = useMemo(() => {
+    if (!regSearch.trim()) return filteredRegistrations;
+    const q = regSearch.toLowerCase().trim();
+    return filteredRegistrations.filter(r => {
+      const name = String(r.Name || r.name || r.contactName || "").toLowerCase();
+      const phone = String(r.Phone || r.phone || r.normalizedPhone || "").toLowerCase();
+      const mobile = String(r.Mobile || r.mobile || "").toLowerCase();
+      const attender = String(r.attenderName || r.leadOwnerName || "").toLowerCase();
+      const closer = String(r.convertedBy || r.convertingAttenderName || "").toLowerCase();
+      const prog = String(r.calledFor || r.programName || "").toLowerCase();
+      return name.includes(q) || phone.includes(q) || mobile.includes(q) || attender.includes(q) || closer.includes(q) || prog.includes(q);
+    });
+  }, [filteredRegistrations, regSearch]);
+
+  // Simple drill-down modal for clicked rows
+  const [modalDetails, setModalDetails] = useState(null);
+  const [modalSearch, setModalSearch] = useState("");
+
+  const openModal = (title, leads) => {
+    setModalSearch("");
+    setModalDetails({ title, leads: leads || [] });
+  };
+
+  const filteredModalLeads = useMemo(() => {
+    if (!modalDetails?.leads) return [];
+    if (!modalSearch.trim()) return modalDetails.leads;
+    const q = modalSearch.toLowerCase().trim();
+    return modalDetails.leads.filter(r => {
+      const name = String(r.Name || r.name || r["Contact Name"] || r.contactName || "").toLowerCase();
+      const phone = String(r.Phone || r.phone || r["Phone Number"] || r.phoneNumber || r.Mobile || r.mobile || "").toLowerCase();
+      const att = String(r.leadOwnerName || r.attenderName || r.convertedBy || "").toLowerCase();
+      const prog = String(r.calledFor || r["Called For"] || r.programName || "").toLowerCase();
+      return name.includes(q) || phone.includes(q) || att.includes(q) || prog.includes(q);
+    });
+  }, [modalDetails, modalSearch]);
 
   // Derived filter options from canonical registrations dataset
   const callTypeOptions = useMemo(() => {
@@ -600,17 +640,27 @@ export default function AbhivyaktiTab({
   const sharedConversionsBreakdown = useMemo(() => {
     const map = {};
     filteredRegistrations.forEach(r => {
-      const primaryOwner = getRegistrationLeadOwner(r);
-      const finalRegistrar = (r.convertedBy || "").trim();
-
-      if (
+      const primaryOwner = (r.leadOwnerName || getRegistrationLeadOwner(r) || "").trim();
+      const finalRegistrar = (r.convertedBy || r.convertingAttenderName || "").trim();
+      const isShared = r.isSharedConversion || (
         finalRegistrar &&
         finalRegistrar !== "Unknown" &&
         finalRegistrar !== "Direct / Online" &&
         primaryOwner &&
         primaryOwner !== "Unknown" &&
         primaryOwner !== "Direct / Online" &&
-        finalRegistrar !== primaryOwner
+        finalRegistrar.toLowerCase() !== primaryOwner.toLowerCase()
+      );
+
+      if (
+        isShared &&
+        finalRegistrar &&
+        finalRegistrar !== "Unknown" &&
+        finalRegistrar !== "Direct / Online" &&
+        primaryOwner &&
+        primaryOwner !== "Unknown" &&
+        primaryOwner !== "Direct / Online" &&
+        finalRegistrar.toLowerCase() !== primaryOwner.toLowerCase()
       ) {
         const key = `${finalRegistrar}__${primaryOwner}`;
         if (!map[key]) {
@@ -736,7 +786,6 @@ export default function AbhivyaktiTab({
       const phoneVal = r.Phone || r.phone || "";
       const mobileVal = r.Mobile || r.mobile || "";
       const attenderVal = getRegistrationPrimaryAttender(r);
-      const callsDoneVal = r.callCount !== undefined ? r.callCount : (r.history ? r.history.length : 0);
       const calledForVal = r.calledFor || r["Called For"] || "";
       const khojiVal = getContactKhoji(r) || "No";
       const sourceVal = r.conversionSource || r.Source || r.source || "";
@@ -747,7 +796,9 @@ export default function AbhivyaktiTab({
         "Phone Number": phoneVal,
         "Mobile Number": mobileVal,
         "Attender Name": attenderVal,
-        "Calls Done": callsDoneVal,
+        "Shared Status": r.isSharedConversion ? "Shared" : "Direct",
+        "Lead Owner": r.leadOwnerName || attenderVal,
+        "Converted By": r.convertedBy || r.convertingAttenderName || (r.isSharedConversion ? "Team" : attenderVal),
         "Called For": calledForVal,
         "Khoji Type": khojiVal,
         "Source": sourceVal,
@@ -1060,7 +1111,7 @@ export default function AbhivyaktiTab({
         </div>
       </div>
 
-      {loading ? (
+      {loading && filteredRegistrations.length === 0 ? (
         <div className="py-16 text-center text-slate-400 text-xs font-medium">Loading registrations database...</div>
       ) : filteredRegistrations.length === 0 ? (
         <div className="py-16 text-center text-slate-400 text-xs font-medium">No registration records match the active filters.</div>
@@ -1185,10 +1236,21 @@ export default function AbhivyaktiTab({
                       const totRate = r["Overall Conversion Rate (%)"];
 
                       return (
-                        <tr key={i} className="hover:bg-slate-50/80 transition-colors duration-150">
+                        <tr
+                          key={i}
+                          onClick={() => openModal(
+                            `Attender: ${r["Attender Name"]}`,
+                            filteredRegistrations.filter(x => getRegistrationPrimaryAttender(x) === r["Attender Name"])
+                          )}
+                          className="hover:bg-indigo-50/60 transition-colors duration-150 cursor-pointer group"
+                          title={`Click to view ${totConv} registrations for ${r["Attender Name"]}`}
+                        >
                           {/* Sticky Attender Name Column */}
-                          <td className="px-4 py-2.5 font-semibold text-slate-900 sticky left-0 z-10 bg-white border-r border-slate-200">
-                            {r["Attender Name"]}
+                          <td className="px-4 py-2.5 font-semibold text-slate-900 sticky left-0 z-10 bg-white group-hover:bg-indigo-50/60 border-r border-slate-200">
+                            <div className="flex items-center justify-between gap-1.5">
+                              <span>{r["Attender Name"]}</span>
+                              <span className="text-[10px] text-indigo-600 font-normal opacity-0 group-hover:opacity-100 transition-opacity">🔍 Inspect</span>
+                            </div>
                           </td>
 
                           {/* Incoming */}
@@ -1246,9 +1308,22 @@ export default function AbhivyaktiTab({
                     })}
 
                     {/* Total Summary Row */}
-                    <tr className="bg-slate-100/90 backdrop-blur-xs border-t-2 border-slate-300 font-bold text-slate-900 sticky bottom-0 z-20">
+                    <tr
+                      onClick={() => openModal(
+                        "All Attender Assisted Registrations",
+                        filteredRegistrations.filter(x => {
+                          const p = getRegistrationPrimaryAttender(x);
+                          return p && p !== "Unknown" && p !== "Direct / Online";
+                        })
+                      )}
+                      className="bg-slate-100/90 backdrop-blur-xs border-t-2 border-slate-300 font-bold text-slate-900 sticky bottom-0 z-20 cursor-pointer hover:bg-slate-200/90 transition-colors"
+                      title="Click to view all attender assisted registrations"
+                    >
                       <td className="px-4 py-3 sticky left-0 z-30 bg-slate-100 border-r border-slate-300 font-bold">
-                        TOTAL ASSISTED
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span>TOTAL ASSISTED</span>
+                          <span className="text-[10px] text-slate-600 font-normal">🔍 View All</span>
+                        </div>
                       </td>
                       <td className="px-3 py-3 text-right text-slate-800">{attenderPerformanceTotals["Incoming Connected"]}</td>
                       <td className="px-3 py-3 text-right text-emerald-700">{attenderPerformanceTotals["Incoming Conversions"]}</td>
@@ -1283,12 +1358,24 @@ export default function AbhivyaktiTab({
                 <tbody className="divide-y divide-slate-100 bg-white font-medium text-slate-700">
                   {sharedConversionsBreakdown.length > 0 ? (
                     sharedConversionsBreakdown.map((item, idx) => (
-                      <tr key={idx} className="hover:bg-amber-50/20 transition-colors duration-150">
+                      <tr
+                        key={idx}
+                        onClick={() => openModal(
+                          `Shared: Converted by ${item.assistant} (Owner: ${item.primaryOwner})`,
+                          filteredRegistrations.filter(x => 
+                            (x.leadOwnerName || getRegistrationLeadOwner(x)) === item.primaryOwner &&
+                            (x.convertedBy || x.convertingAttenderName) === item.assistant
+                          )
+                        )}
+                        className="hover:bg-amber-100/60 transition-colors duration-150 cursor-pointer group"
+                        title={`Click to view ${item.count} shared registrations converted by ${item.assistant} for ${item.primaryOwner}`}
+                      >
                         <td className="px-4 py-2.5 font-bold text-slate-900">{item.assistant}</td>
                         <td className="px-4 py-2.5 font-bold text-indigo-700">{item.primaryOwner}</td>
                         <td className="px-4 py-2.5 text-right font-black text-amber-700">
-                          <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 rounded-full text-xs font-bold border border-amber-200">
-                            🤝 {item.count}
+                          <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 rounded-full text-xs font-bold border border-amber-200 inline-flex items-center gap-1.5 group-hover:bg-amber-200 transition-colors">
+                            <span>🤝 {item.count}</span>
+                            <span className="text-[10px] text-amber-800 font-normal">🔍 Inspect</span>
                           </span>
                         </td>
                       </tr>
@@ -1338,8 +1425,25 @@ export default function AbhivyaktiTab({
                     {groupedCalledForAttender.map((group, groupIdx) => (
                       <React.Fragment key={groupIdx}>
                         {group.rows.map((r, i) => (
-                          <tr key={i} className="hover:bg-slate-50/80 transition-colors duration-150">
-                            <td className="px-4 py-2.5 font-semibold text-slate-900">{r["Converted By (Attender)"]}</td>
+                          <tr
+                            key={i}
+                            onClick={() => openModal(
+                              `${r["Converted By (Attender)"]} • ${r["Called For"]} (${r["Khoji Type"]})`,
+                              filteredRegistrations.filter(x => 
+                                getRegistrationPrimaryAttender(x) === r["Converted By (Attender)"] &&
+                                String(x.calledFor || x["Called For"] || "").includes(r["Called For"]) &&
+                                (getContactKhoji(x) || "No") === r["Khoji Type"]
+                              )
+                            )}
+                            className="hover:bg-indigo-50/60 transition-colors duration-150 cursor-pointer group"
+                            title={`Click to view ${r["Total Conversions"]} registrations for ${r["Converted By (Attender)"]} - ${r["Called For"]} (${r["Khoji Type"]})`}
+                          >
+                            <td className="px-4 py-2.5 font-semibold text-slate-900 group-hover:text-indigo-600">
+                              <div className="flex items-center justify-between gap-1.5">
+                                <span>{r["Converted By (Attender)"]}</span>
+                                <span className="text-[10px] text-indigo-500 font-normal opacity-0 group-hover:opacity-100 transition-opacity">🔍</span>
+                              </div>
+                            </td>
                             <td className="px-4 py-2.5 font-medium text-slate-700">{r["Called For"]}</td>
                             <td className="px-4 py-2.5 text-slate-600">{r["Khoji Type"]}</td>
                             <td className="px-4 py-2.5 text-right font-semibold">
@@ -1356,13 +1460,23 @@ export default function AbhivyaktiTab({
                                 <span className="text-slate-400 font-normal">0</span>
                               )}
                             </td>
-                            <td className="px-4 py-2.5 text-right font-bold text-slate-900">{r["Total Conversions"]}</td>
+                            <td className="px-4 py-2.5 text-right font-bold text-slate-900 group-hover:text-indigo-600">{r["Total Conversions"]}</td>
                           </tr>
                         ))}
                         {/* Per-Attender Subtotal Row */}
-                        <tr className="bg-slate-50 border-t border-b border-slate-200 font-bold text-slate-900">
+                        <tr
+                          onClick={() => openModal(
+                            `Total for ${group.attenderName}`,
+                            filteredRegistrations.filter(x => getRegistrationPrimaryAttender(x) === group.attenderName)
+                          )}
+                          className="bg-slate-50 border-t border-b border-slate-200 font-bold text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                          title={`Click to view all ${group.totalConversions} registrations for ${group.attenderName}`}
+                        >
                           <td className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-800" colSpan={3}>
-                            TOTAL FOR {group.attenderName}
+                            <div className="flex items-center justify-between gap-1.5">
+                              <span>TOTAL FOR {group.attenderName}</span>
+                              <span className="text-[10px] text-slate-500 font-normal">🔍 Inspect All</span>
+                            </div>
                           </td>
                           <td className="px-4 py-2.5 text-right text-emerald-700 font-bold">{group.totalIncoming}</td>
                           <td className="px-4 py-2.5 text-right text-blue-700 font-bold">{group.totalOutgoing}</td>
@@ -1371,8 +1485,17 @@ export default function AbhivyaktiTab({
                       </React.Fragment>
                     ))}
                     {/* Grand Total Row */}
-                    <tr className="bg-slate-100 border-t-2 border-slate-300 font-bold text-slate-900">
-                      <td className="px-4 py-3 uppercase text-xs tracking-wider" colSpan={3}>GRAND TOTAL</td>
+                    <tr
+                      onClick={() => openModal("All Conversions by Called For & Attender", filteredRegistrations)}
+                      className="bg-slate-100 border-t-2 border-slate-300 font-bold text-slate-900 hover:bg-slate-200/90 transition-colors cursor-pointer"
+                      title="Click to view all registrations"
+                    >
+                      <td className="px-4 py-3 uppercase text-xs tracking-wider" colSpan={3}>
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span>GRAND TOTAL</span>
+                          <span className="text-[10px] text-slate-600 font-normal">🔍 View All</span>
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-right text-emerald-700 font-bold">{calledForAttenderTotals["Incoming Conversions"]}</td>
                       <td className="px-4 py-3 text-right text-blue-700 font-bold">{calledForAttenderTotals["Outgoing Conversions"]}</td>
                       <td className="px-4 py-3 text-right text-slate-900 font-bold">{calledForAttenderTotals["Total Conversions"]}</td>
@@ -1385,8 +1508,31 @@ export default function AbhivyaktiTab({
 
           {/* ── 5. DETAILED REGISTRATION DATA ────────────────────────────────── */}
           <ReportSection
-            title={`Registrations Table List (${filteredRegistrations.length})`}
+            title={`Registrations Table List (${displayedRegistrations.length}${regSearch ? ` of ${filteredRegistrations.length}` : ""})`}
             subtitle="Verify names and details before exporting sheet workbook"
+            action={
+              <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                <div className="relative flex items-center">
+                  <Search size={13} className="absolute left-2.5 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={regSearch}
+                    onChange={(e) => setRegSearch(e.target.value)}
+                    placeholder="Search registrations..."
+                    className="h-7 pl-7 pr-7 text-xs bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 w-48 sm:w-60 shadow-2xs font-normal"
+                  />
+                  {regSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setRegSearch("")}
+                      className="absolute right-2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            }
           >
             <div className="overflow-x-auto rounded-lg border border-slate-200 max-h-[480px] overflow-y-auto">
               <table className="w-full text-xs text-left border-collapse min-w-[900px]">
@@ -1395,8 +1541,8 @@ export default function AbhivyaktiTab({
                     <th className="px-4 py-2.5 bg-slate-50 sticky left-0 z-30 border-r border-slate-200">Name</th>
                     <th className="px-4 py-2.5">Phone Number</th>
                     <th className="px-4 py-2.5">Mobile Number</th>
-                    <th className="px-4 py-2.5">Attender Name</th>
-                    <th className="px-4 py-2.5 text-center">Calls Done</th>
+                    <th className="px-4 py-2.5">Lead Owner (Attender)</th>
+                    <th className="px-4 py-2.5">Shared Conversion</th>
                     <th className="px-4 py-2.5">Called For</th>
                     <th className="px-4 py-2.5">Khoji Type</th>
                     <th className="px-4 py-2.5">Lead Origin</th>
@@ -1405,61 +1551,229 @@ export default function AbhivyaktiTab({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white font-medium text-slate-700">
-                  {filteredRegistrations.map((r, i) => {
-                    const nameVal =
-                      r.Name ||
-                      r.name ||
-                      r["Contact Name"] ||
-                      r.contactName ||
-                      r.contact_name ||
-                      r["Full Name"] ||
-                      r.fullName ||
-                      r.full_name ||
-                      r["First Name"] ||
-                      r.first_name ||
-                      (Array.isArray(r.history) && r.history[0]?.name) ||
-                      "Unknown";
-                    const phoneVal = r.Phone || r.phone || r["Phone Number"] || r.phoneNumber || r.normalizedPhone || "N/A";
-                    const mobileVal = r.Mobile || r.mobile || r["Mobile Number"] || r.mobileNumber || r.normalizedMobile || "N/A";
-                    const attenderVal = getRegistrationPrimaryAttender(r);
-                    const callsDoneVal = r.callCount !== undefined ? r.callCount : (r.history ? r.history.length : 0);
-                    const calledForVal = r.calledFor || r["Called For"] || "N/A";
-                    const khojiVal = getContactKhoji(r) || "No";
-                    const leadOriginVal = r.leadOrigin || getContactLeadOrigin(r) || "Direct / Organic";
-                    const sourceVal = r.conversionSource || r.Source || r.source || "N/A";
-                    const callTypeVal = r.callType || "N/A";
+                  {displayedRegistrations.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="px-4 py-8 text-center text-slate-400 font-normal">
+                        No registrations found{regSearch ? ` matching "${regSearch}"` : ""}.
+                      </td>
+                    </tr>
+                  ) : (
+                    displayedRegistrations.map((r, i) => {
+                      const nameVal =
+                        r.Name ||
+                        r.name ||
+                        r["Contact Name"] ||
+                        r.contactName ||
+                        r.contact_name ||
+                        r["Full Name"] ||
+                        r.fullName ||
+                        r.full_name ||
+                        r["First Name"] ||
+                        r.first_name ||
+                        (Array.isArray(r.history) && r.history[0]?.name) ||
+                        "Unknown";
+                      const phoneVal = r.Phone || r.phone || r["Phone Number"] || r.phoneNumber || r.normalizedPhone || "N/A";
+                      const mobileVal = r.Mobile || r.mobile || r["Mobile Number"] || r.mobileNumber || r.normalizedMobile || "N/A";
+                      const attenderVal = getRegistrationPrimaryAttender(r);
+                      const calledForVal = r.calledFor || r["Called For"] || "N/A";
+                      const khojiVal = getContactKhoji(r) || "No";
+                      const leadOriginVal = r.leadOrigin || getContactLeadOrigin(r) || "Direct / Organic";
+                      const sourceVal = r.conversionSource || r.Source || r.source || "N/A";
+                      const callTypeVal = r.callType || "N/A";
 
-                    return (
-                      <tr key={i} className="hover:bg-slate-50/80 transition-colors duration-150">
-                        {/* Sticky Name Column */}
-                        <td className="px-4 py-2.5 font-semibold text-slate-900 sticky left-0 z-10 bg-white border-r border-slate-200">
-                          {nameVal}
-                        </td>
-                        <td className="px-4 py-2.5 font-mono text-[11px] text-slate-600">{phoneVal}</td>
-                        <td className="px-4 py-2.5 font-mono text-[11px] text-slate-600">{mobileVal}</td>
-                        <td className="px-4 py-2.5 font-medium text-slate-800">{attenderVal}</td>
-                        <td className="px-4 py-2.5 text-center font-bold text-slate-900">
-                          {callsDoneVal > 0 ? callsDoneVal : <span className="text-slate-400 font-normal">0</span>}
-                        </td>
-                        <td className="px-4 py-2.5 text-slate-700">{calledForVal}</td>
-                        <td className="px-4 py-2.5">
-                          {khojiVal === "Yes" ? (
-                            <span className="text-indigo-700 font-semibold">{khojiVal}</span>
-                          ) : (
-                            <span className="text-slate-500 font-normal">{khojiVal}</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2.5 text-indigo-700 font-medium">{leadOriginVal}</td>
-                        <td className="px-4 py-2.5 text-slate-600">{sourceVal}</td>
-                        <td className="px-4 py-2.5 text-slate-600 uppercase text-[11px]">{callTypeVal}</td>
-                      </tr>
-                    );
-                  })}
+                      return (
+                        <tr key={i} className="hover:bg-slate-50/80 transition-colors duration-150">
+                          {/* Sticky Name Column */}
+                          <td className="px-4 py-2.5 font-semibold text-slate-900 sticky left-0 z-10 bg-white border-r border-slate-200">
+                            {nameVal}
+                          </td>
+                          <td className="px-4 py-2.5 font-mono text-[11px] text-slate-600">{phoneVal}</td>
+                          <td className="px-4 py-2.5 font-mono text-[11px] text-slate-600">{mobileVal}</td>
+                          <td className="px-4 py-2.5 font-medium text-slate-800">
+                            <span className="font-semibold text-slate-900">{r.leadOwnerName || attenderVal}</span>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            {r.isSharedConversion ? (
+                              <div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200" title="Shared Lead Conversion">
+                                    🏆 Shared
+                                  </span>
+                                </div>
+                                <div className="text-[10px] text-slate-500 mt-0.5">
+                                  Owner: <span className="font-semibold text-slate-800">{r.leadOwnerName || attenderVal}</span>
+                                </div>
+                                <div className="text-[10px] text-slate-500">
+                                  Converted by: <span className="font-medium text-indigo-600">{r.convertedBy || r.convertingAttenderName || "Team"}</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 text-[11px] font-normal">Direct</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5 text-slate-700">{calledForVal}</td>
+                          <td className="px-4 py-2.5">
+                            {khojiVal === "Yes" ? (
+                              <span className="text-indigo-700 font-semibold">{khojiVal}</span>
+                            ) : (
+                              <span className="text-slate-500 font-normal">{khojiVal}</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5 text-indigo-700 font-medium">{leadOriginVal}</td>
+                          <td className="px-4 py-2.5 text-slate-600">{sourceVal}</td>
+                          <td className="px-4 py-2.5 text-slate-600 uppercase text-[11px]">{callTypeVal}</td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
           </ReportSection>
         </div>
+      )}
+
+      {/* Drill-down Modal for Selected Table Row People List */}
+      {modalDetails && createPortal(
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-5 sm:p-6 border-b border-slate-100 bg-gradient-to-r from-indigo-50/50 via-white to-slate-50 flex items-center justify-between">
+              <div>
+                <h3 className="font-extrabold text-lg sm:text-xl text-slate-900 flex items-center gap-2">
+                  <span>👥</span> {modalDetails.title}
+                </h3>
+                {modalDetails.subtitle && (
+                  <p className="text-xs text-slate-500 mt-1 font-medium">
+                    {modalDetails.subtitle}
+                  </p>
+                )}
+              </div>
+              <button 
+                onClick={() => setModalDetails(null)}
+                className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                title="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Search & Counter Bar */}
+            <div className="p-3.5 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="relative w-full sm:max-w-sm">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search by name, phone, program, owner..."
+                  value={modalSearch}
+                  onChange={e => setModalSearch(e.target.value)}
+                  className="w-full pl-9 pr-8 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-xs"
+                />
+                {modalSearch && (
+                  <button onClick={() => setModalSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                <span>Showing <strong className="text-indigo-600 font-extrabold">{filteredModalLeads.length}</strong> of {modalDetails.leads.length} registrations</span>
+              </div>
+            </div>
+
+            {/* Table Content */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+              {filteredModalLeads.length === 0 ? (
+                <div className="text-center py-16">
+                  <div className="text-4xl mb-2">🔍</div>
+                  <p className="text-slate-600 font-bold">No matching registrations found.</p>
+                  <p className="text-xs text-slate-400 mt-1">Try clearing or adjusting your search query.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-slate-200 rounded-xl shadow-xs">
+                  <table className="w-full text-xs text-left border-collapse min-w-[800px]">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-semibold text-slate-600 uppercase tracking-wider sticky top-0 z-10">
+                      <tr>
+                        <th className="px-3.5 py-2.5">#</th>
+                        <th className="px-3.5 py-2.5">Name</th>
+                        <th className="px-3.5 py-2.5">Phone / Mobile</th>
+                        <th className="px-3.5 py-2.5">Lead Owner</th>
+                        <th className="px-3.5 py-2.5">Shared Conversion</th>
+                        <th className="px-3.5 py-2.5">Called For</th>
+                        <th className="px-3.5 py-2.5">Khoji</th>
+                        <th className="px-3.5 py-2.5">Call Type</th>
+                        <th className="px-3.5 py-2.5">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium text-slate-700 bg-white">
+                      {filteredModalLeads.map((r, i) => {
+                        const nameVal = r.Name || r.name || r["Contact Name"] || r.contactName || "Unknown";
+                        const phoneVal = r.Phone || r.phone || r["Phone Number"] || r.phoneNumber || "—";
+                        const mobileVal = r.Mobile || r.mobile || "";
+                        const attenderVal = getRegistrationPrimaryAttender(r);
+                        const calledForVal = r.calledFor || r["Called For"] || "N/A";
+                        const khojiVal = getContactKhoji(r) || "No";
+                        const callTypeVal = r.callType || "N/A";
+                        const dVal = parseDate(r.registeredAt) || parseDate(r.createdAt);
+                        const dateStr = dVal ? dVal.toLocaleDateString("en-IN") : "—";
+
+                        return (
+                          <tr key={r.id ? `${r.id}_${i}` : i} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="px-3.5 py-2.5 text-slate-400 font-mono text-[11px]">{i + 1}</td>
+                            <td className="px-3.5 py-2.5 font-semibold text-slate-900">{nameVal}</td>
+                            <td className="px-3.5 py-2.5 font-mono text-[11px] text-slate-600">
+                              <div>{phoneVal}</div>
+                              {mobileVal && mobileVal !== phoneVal && (
+                                <div className="text-slate-400 text-[10px]">{mobileVal}</div>
+                              )}
+                            </td>
+                            <td className="px-3.5 py-2.5 font-medium text-slate-800">
+                              <span className="font-semibold text-slate-900">{r.leadOwnerName || attenderVal}</span>
+                            </td>
+                            <td className="px-3.5 py-2.5">
+                              {r.isSharedConversion ? (
+                                <div>
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                    🏆 Shared
+                                  </span>
+                                  <div className="text-[10px] text-slate-500 mt-0.5">
+                                    By: <span className="font-medium text-indigo-600">{r.convertedBy || r.convertingAttenderName || "Team"}</span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-slate-400 text-[11px] font-normal">Direct</span>
+                              )}
+                            </td>
+                            <td className="px-3.5 py-2.5 text-slate-700">{calledForVal}</td>
+                            <td className="px-3.5 py-2.5">
+                              {khojiVal === "Yes" ? (
+                                <span className="text-indigo-700 font-semibold">{khojiVal}</span>
+                              ) : (
+                                <span className="text-slate-400 font-normal">{khojiVal}</span>
+                              )}
+                            </td>
+                            <td className="px-3.5 py-2.5 text-slate-600 uppercase text-[11px]">{callTypeVal}</td>
+                            <td className="px-3.5 py-2.5 text-slate-500 whitespace-nowrap">{dateStr}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-3.5 border-t border-slate-100 bg-slate-50 flex justify-end">
+              <button
+                onClick={() => setModalDetails(null)}
+                className="px-4 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -597,11 +597,16 @@ export const subscribeToRegistrations = (programId, month, callback) => {
     try {
       const monthParam = (!targetMonth || targetMonth === 'ALL') ? '' : targetMonth;
       const res = await fetchAPI(`/api/registrations${monthParam ? `?month=${monthParam}` : ''}`);
-      if (isSubscribed && res.data) {
-        safeSetLocalStorage(cacheKey, res.data);
-        callback(res.data);
+      if (isSubscribed) {
+        if (res?.data) {
+          safeSetLocalStorage(cacheKey, res.data);
+          callback(res.data);
+        } else {
+          callback([]);
+        }
       }
     } catch (e) {
+      if (isSubscribed) callback([]);
       if (!e?.message?.includes("Unauthorized") && !e?.message?.includes("401")) {
         console.error("[subscribeToRegistrations polling error]", e);
       }

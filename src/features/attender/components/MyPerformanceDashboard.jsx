@@ -9,6 +9,7 @@ import {
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, getCanonicalStatus, classifyCallStatus } from "../utils";
 import { triggerRegistrationConfetti } from "../../../utils/confetti";
+import { resolveRegistrationAttribution } from "../../../utils/registrationEngine.js";
 
 // ─── Status Color Token System (Restrained Semantic Palette) ─────────────────
 const STATUS_THEMES = {
@@ -29,6 +30,7 @@ const STATUS_THEMES = {
   "Reminder Given": { bg: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-500", bar: "bg-amber-500", color: "#f59e0b" },
   "Previous Program Pending": { bg: "bg-amber-50 text-amber-800 border-amber-200", dot: "bg-amber-600", bar: "bg-amber-600", color: "#d97706" },
   "Query": { bg: "bg-slate-100 text-slate-700 border-slate-200", dot: "bg-slate-500", bar: "bg-slate-500", color: "#64748b" },
+  "Team Assist": { bg: "bg-purple-50 text-purple-700 border-purple-200", dot: "bg-purple-500", bar: "bg-purple-500", color: "#a855f7" },
   "Pending": { bg: "bg-slate-100 text-slate-600 border-slate-200", dot: "bg-slate-400", bar: "bg-slate-400", color: "#cbd5e1" }
 };
 
@@ -124,6 +126,17 @@ function getAttenderAttempts(logs, attenderName, attenderId) {
 
       const resolvedDir = callType || "outgoing";
 
+      let isTeamAssist = false;
+      let convertedFor = null;
+      if (canonicalStatus === "Reg.Done") {
+        const pKey = String(calledFor || log.calledFor || '').toLowerCase().replace(/[\s_-]+/g, '');
+        const attribution = resolveRegistrationAttribution(null, log, pKey);
+        if (attribution.isSharedConversion && isOurAttender(attribution.converterName, attribution.converterId)) {
+          isTeamAssist = true;
+          convertedFor = attribution.leadOwnerName;
+        }
+      }
+
       return {
         ...log,
         id: `${log.id}_${attId || "att"}_${isHistory ? `h_${index}` : "latest"}_${attemptDate.getTime()}`,
@@ -139,6 +152,9 @@ function getAttenderAttempts(logs, attenderName, attenderId) {
         remark: remark || "",
         callType: resolvedDir,
         callDirection: resolvedDir,
+        isTeamAssist,
+        convertedFor,
+        leadOwnerName: convertedFor,
         createdAt: parseTimestamp(log.createdAt) || attemptDate,
         timestamp: attemptDate,
         updatedAt: attemptDate,
@@ -264,6 +280,84 @@ function getAttenderAttempts(logs, attenderName, attenderId) {
           );
         }
       }
+    }
+
+    // Tier 4: Synthetic Attribution for Shared Leads Registered on our behalf (Lead Owner Primary Credit)
+    const checkSharedReg = (progKey, rawProgName, regDateVal, convertedByName) => {
+      const attribution = resolveRegistrationAttribution(null, log, progKey);
+      if (attribution.isSharedConversion && isOurAttender(attribution.leadOwnerName, attribution.leadOwnerId)) {
+        const d = parseTimestamp(regDateVal) || parseTimestamp(log.updatedAt) || parseTimestamp(log.createdAt);
+        if (!d) return;
+        const synthKey = `${log.id}_shared_reg_${progKey}`;
+        if (seenEventKeys.has(synthKey)) return;
+        seenEventKeys.add(synthKey);
+
+        const convName = attribution.converterName || convertedByName || "Team Member";
+        list.push({
+          ...log,
+          id: `synth_${synthKey}_${d.getTime()}`,
+          contactId: log.id,
+          Name: contactName,
+          Phone: contactPhone,
+          programId: log.programId,
+          programName: rawProgName || log.programName || "Program",
+          tags: log.tags || [],
+          attenderId: attenderId || attribution.leadOwnerId,
+          attenderName: attenderName || attribution.leadOwnerName,
+          status: "Reg.Done",
+          remark: `+1 Primary Credit — Registered by ${convName} on your behalf`,
+          callType: "shared_credit",
+          callDirection: "incoming",
+          isSharedCredit: true,
+          convertedBy: convName,
+          leadOwnerName: attribution.leadOwnerName,
+          createdAt: d,
+          timestamp: d,
+          updatedAt: d,
+          source: sourceVal,
+          calledFor: rawProgName || calledForVal
+        });
+      }
+    };
+
+    if (log.attenderStates && typeof log.attenderStates === "object") {
+      Object.values(log.attenderStates).forEach(st => {
+        if (!st) return;
+        const stStatus = getCanonicalStatus(st.status || "");
+        if (stStatus === "Reg.Done") {
+          const prog = st.calledFor || st["Called For"] || st.program || "";
+          const pKey = String(prog).toLowerCase().replace(/[\s_-]+/g, "");
+          checkSharedReg(pKey, prog, st.lastCalledAt || st.updatedAt, st.attenderName);
+        }
+      });
+    }
+
+    if (Array.isArray(log.history)) {
+      log.history.forEach(h => {
+        if (!h) return;
+        const hStatus = getCanonicalStatus(h.status || "");
+        if (hStatus === "Reg.Done") {
+          const prog = h.calledFor || h.called_for || h["Called For"] || h.program || "";
+          const pKey = String(prog).toLowerCase().replace(/[\s_-]+/g, "");
+          checkSharedReg(pKey, prog, h.timestamp || h.date, h.attenderName);
+        }
+      });
+    }
+
+    if (Array.isArray(log.registrations)) {
+      log.registrations.forEach(r => {
+        if (!r || r._deleted) return;
+        const prog = r.calledFor || r.programName || r.program || "";
+        const pKey = String(prog).toLowerCase().replace(/[\s_-]+/g, "");
+        checkSharedReg(pKey, prog, r.registeredAt || r.createdAt, r.convertedBy || r.attenderName);
+      });
+    }
+
+    const rootStatus = getCanonicalStatus(log.status || "");
+    if (rootStatus === "Reg.Done") {
+      const prog = log["Called For"] || log.calledFor || log.programName || "";
+      const pKey = String(prog).toLowerCase().replace(/[\s_-]+/g, "");
+      checkSharedReg(pKey, prog, log.registeredAt || log.lastCalledAt || log.updatedAt, log.convertedBy);
     }
   });
 
@@ -589,12 +683,33 @@ export function MyPerformanceDashboard({
     let infoGiven = 0;
     let nextTime = 0;
     let notInterested = 0;
+    let teamAssists = 0;
+    let sharedCredits = 0;
 
     const statusCounts = {};
     const uniqueRegKeys = new Set();
 
     filteredAttempts.forEach(att => {
       const s = getCanonicalStatus(att.status || "Pending");
+
+      // Converter team assist:
+      if (att.isTeamAssist) {
+        teamAssists++;
+        statusCounts["Team Assist"] = (statusCounts["Team Assist"] || 0) + 1;
+        const isUnconnected = classifyCallStatus(att.status || att.callStatus) === "NOT_CONNECTED";
+        if (isUnconnected) notConnected++; else connected++;
+        return;
+      }
+
+      // Lead Owner shared credit:
+      if (att.isSharedCredit) {
+        sharedCredits++;
+        statusCounts["Reg.Done"] = (statusCounts["Reg.Done"] || 0) + 1;
+        const prog = att.programId || att.calledFor || att["Called For"] || "default";
+        uniqueRegKeys.add(`${att.contactId || att.id}_${String(prog).toLowerCase().trim()}`);
+        return;
+      }
+
       statusCounts[s] = (statusCounts[s] || 0) + 1;
 
       const isUnconnected = classifyCallStatus(att.status || att.callStatus) === "NOT_CONNECTED";
@@ -622,7 +737,7 @@ export function MyPerformanceDashboard({
     });
 
     const totalLeads = filteredLogs.length;
-    const totalCalls = filteredAttempts.length;
+    const totalCalls = filteredAttempts.filter(a => !a.isSharedCredit).length;
     const registrations = uniqueRegKeys.size;
     const totalRegCount = statusCounts["Reg.Done"] || 0;
     const connectionRate = totalCalls > 0 ? Math.round((connected / totalCalls) * 100) : 0;
@@ -640,6 +755,8 @@ export function MyPerformanceDashboard({
       notConnected,
       registrations,
       totalRegCount,
+      teamAssists,
+      sharedCredits,
       interested,
       infoGiven,
       nextTime,
@@ -1147,9 +1264,19 @@ export function MyPerformanceDashboard({
               <Award size={16} />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
+          <div className="mt-3 flex items-baseline gap-2 flex-wrap">
             <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{stats.totalRegCount}</span>
             <span className="text-xs font-semibold text-slate-500">registrations</span>
+            {stats.sharedCredits > 0 && (
+              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded" title={`${stats.sharedCredits} lead(s) converted by team on your behalf`}>
+                🏆 {stats.sharedCredits} shared
+              </span>
+            )}
+            {stats.teamAssists > 0 && (
+              <span className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded" title={`${stats.teamAssists} conversion assist(s) on other owners' leads`}>
+                🤝 {stats.teamAssists} assists
+              </span>
+            )}
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
             <span>Goal: <span className="font-bold text-slate-700">{activeTarget.registrations}</span></span>
@@ -1356,6 +1483,7 @@ export function MyPerformanceDashboard({
             >
               <option value="ALL">All Statuses</option>
               <option value="Reg.Done">Reg.Done</option>
+              <option value="Team Assist">Team Assist</option>
               <option value="Interested">Interested</option>
               <option value="Info Given">Info Given</option>
               <option value="Next Time">Next Time</option>
@@ -1452,10 +1580,32 @@ export function MyPerformanceDashboard({
 
                       {/* Status */}
                       <td className="py-3 px-3">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${theme.bg}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${theme.dot}`}></span>
-                          {att.status}
-                        </span>
+                        {att.isSharedCredit ? (
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${theme.bg}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${theme.dot}`}></span>
+                              Reg.Done
+                            </span>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200" title={`Registered by ${att.convertedBy} on your behalf`}>
+                              🏆 Shared Credit ({att.convertedBy})
+                            </span>
+                          </div>
+                        ) : att.isTeamAssist ? (
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border bg-purple-50 text-purple-700 border-purple-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                              Team Assist
+                            </span>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200" title={`Converted for ${att.leadOwnerName || 'Lead Owner'}`}>
+                              🤝 For {att.leadOwnerName || 'Lead Owner'}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${theme.bg}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${theme.dot}`}></span>
+                            {att.status}
+                          </span>
+                        )}
                       </td>
 
                       {/* Called For / Program */}

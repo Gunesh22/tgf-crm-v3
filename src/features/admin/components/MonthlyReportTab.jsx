@@ -722,21 +722,40 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
 
     // Populate conversions from canonical programRegistrationsList
     programRegistrationsList.forEach(reg => {
-      const rawName = (reg.attenderName || reg.attender || reg.assignedTo || "").trim() || "Unknown Attender";
+      const rawName = (reg.leadOwnerName || reg.attenderName || reg.attender || reg.assignedTo || "").trim() || "Unknown Attender";
       const normName = rawName.toLowerCase();
       if (EXCLUDED_ATTENDER_NAMES.includes(normName)) return;
 
       const foundAttender = (attenders || []).find(a =>
         (a.name || "").toLowerCase().trim() === normName ||
-        (a.id && reg.attenderId && String(a.id) === String(reg.attenderId))
+        (a.id && (reg.leadOwnerId || reg.attenderId) && String(a.id) === String(reg.leadOwnerId || reg.attenderId))
       );
-      const attId = foundAttender ? foundAttender.id : (reg.attenderId || normName);
+      const attId = foundAttender ? foundAttender.id : (reg.leadOwnerId || reg.attenderId || normName);
       if (!attId || attId === "admin") return;
 
       if (!map[attId]) {
-        map[attId] = { name: foundAttender ? foundAttender.name : rawName, total: 0, connected: 0, notConnected: 0, incoming: 0, outgoing: 0, conversions: 0, incomingConversions: 0, outgoingConversions: 0, denominator: 0 };
+        map[attId] = { name: foundAttender ? foundAttender.name : rawName, total: 0, connected: 0, notConnected: 0, incoming: 0, outgoing: 0, conversions: 0, incomingConversions: 0, outgoingConversions: 0, teamAssists: 0, denominator: 0 };
       }
       map[attId].conversions++;
+
+      // If this is a shared conversion, credit team assist to the converter
+      if (reg.isSharedConversion && (reg.convertingAttenderName || reg.convertedBy)) {
+        const convRawName = (reg.convertingAttenderName || reg.convertedBy || "").trim();
+        const convNormName = convRawName.toLowerCase();
+        if (!EXCLUDED_ATTENDER_NAMES.includes(convNormName)) {
+          const foundConv = (attenders || []).find(a =>
+            (a.name || "").toLowerCase().trim() === convNormName ||
+            (a.id && reg.convertingAttenderId && String(a.id) === String(reg.convertingAttenderId))
+          );
+          const convId = foundConv ? foundConv.id : (reg.convertingAttenderId || convNormName);
+          if (convId && convId !== "admin") {
+            if (!map[convId]) {
+              map[convId] = { name: foundConv ? foundConv.name : convRawName, total: 0, connected: 0, notConnected: 0, incoming: 0, outgoing: 0, conversions: 0, incomingConversions: 0, outgoingConversions: 0, teamAssists: 0, denominator: 0 };
+            }
+            map[convId].teamAssists = (map[convId].teamAssists || 0) + 1;
+          }
+        }
+      }
     });
 
     return Object.values(map).map(a => ({
@@ -747,6 +766,7 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
       "Incoming": a.incoming,
       "Outgoing": a.outgoing,
       "Reg.Done (Conversions)": a.conversions,
+      "Team Assists": a.teamAssists || 0,
       "Incoming Conversions": a.incomingConversions,
       "Outgoing Conversions": a.outgoingConversions,
       "denominator": a.denominator,
@@ -768,6 +788,7 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
       "Incoming": 0, 
       "Outgoing": 0, 
       "Reg.Done (Conversions)": 0, 
+      "Team Assists": 0,
       "Incoming Conversions": 0,
       "Outgoing Conversions": 0,
       "Conversion Rate (%)": "0.0%" 
@@ -780,6 +801,7 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
       totals["Incoming"] += row["Incoming"];
       totals["Outgoing"] += row["Outgoing"];
       totals["Reg.Done (Conversions)"] += row["Reg.Done (Conversions)"];
+      totals["Team Assists"] += row["Team Assists"] || 0;
       totals["Incoming Conversions"] += row["Incoming Conversions"];
       totals["Outgoing Conversions"] += row["Outgoing Conversions"];
       totalDenominator += row["denominator"] || 0;
@@ -948,7 +970,10 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
       return {
         contactName: r.name || r.contactName || "Unnamed",
         contactPhone: r.phone || r.contactPhone || "—",
-        attenderName: r.attenderName || r.attender || r.assignedTo || "Unassigned",
+        attenderName: r.leadOwnerName || r.attenderName || r.attender || r.assignedTo || "Unassigned",
+        leadOwnerName: r.leadOwnerName,
+        convertedBy: r.convertedBy || r.convertingAttenderName,
+        isSharedConversion: r.isSharedConversion,
         programName: r.programName || r.calledFor || "—",
         source: r.source || "—",
         calledFor: r.calledFor || r.programName || "—",
@@ -968,6 +993,8 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
         (c.contactPhone || "").toLowerCase().includes(term) ||
         (c.programName || "").toLowerCase().includes(term) ||
         (c.attenderName || "").toLowerCase().includes(term) ||
+        (c.leadOwnerName || "").toLowerCase().includes(term) ||
+        (c.convertedBy || "").toLowerCase().includes(term) ||
         (c.source || "").toLowerCase().includes(term) ||
         (c.calledFor || "").toLowerCase().includes(term) ||
         (c.feedback || "").toLowerCase().includes(term) ||
@@ -1481,7 +1508,14 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
                         <div className="col-span-3 flex justify-between md:justify-end items-center gap-3 text-xs font-semibold text-slate-500">
                           <div className="text-right">
                             <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-wider">Conversions</span>
-                            <span className="text-sm font-black text-emerald-600">{row["Reg.Done (Conversions)"]}</span>
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-sm font-black text-emerald-600">{row["Reg.Done (Conversions)"]}</span>
+                              {row["Team Assists"] > 0 && (
+                                <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded" title={`${row["Team Assists"]} team assist${row["Team Assists"] > 1 ? 's' : ''} (conversions on other owners' leads)`}>
+                                  +{row["Team Assists"]} assist
+                                </span>
+                              )}
+                            </div>
                             <span className="block text-[9px] font-semibold text-emerald-500">({row["Incoming Conversions"]} In / {row["Outgoing Conversions"]} Out)</span>
                           </div>
                           <div className="text-right">
@@ -1550,9 +1584,25 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
                           </td>
                           {/* Attender */}
                           <td className="px-6 py-4">
-                            <span className="inline-flex items-center px-2.5 py-1 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl">
-                              👤 {c.attenderName}
-                            </span>
+                            {c.isSharedConversion ? (
+                              <div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="inline-flex items-center px-2.5 py-1 bg-slate-100 text-slate-800 text-xs font-bold rounded-xl">
+                                    👤 {c.leadOwnerName || c.attenderName}
+                                  </span>
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-50 text-amber-700 border border-amber-200" title="Shared Lead Conversion">
+                                    🏆 Shared
+                                  </span>
+                                </div>
+                                <div className="text-[10px] text-slate-500 mt-1 pl-1">
+                                  Converted by: <span className="font-semibold text-indigo-600">{c.convertedBy || c.convertingAttenderName || "Team"}</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-1 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl">
+                                👤 {c.attenderName}
+                              </span>
+                            )}
                           </td>
                           {/* Tag / Program */}
                           <td className="px-6 py-4">

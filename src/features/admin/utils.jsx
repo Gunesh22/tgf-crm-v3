@@ -185,7 +185,9 @@ export const getCanonicalStage = (stageOrContact) => {
     const hasRegHistory =
       isTrueReg(contact.status) ||
       (Array.isArray(contact.history) && contact.history.some(h => isTrueReg(h.status) || isTrueReg(h.pipelineStage))) ||
-      (contact.attenderStates && typeof contact.attenderStates === "object" && Object.values(contact.attenderStates).some(st => isTrueReg(st?.status) || isTrueReg(st?.pipelineStage)));
+      (contact.attenderStates && typeof contact.attenderStates === "object" && Object.values(contact.attenderStates).some(st => isTrueReg(st?.status) || isTrueReg(st?.pipelineStage))) ||
+      (Array.isArray(contact.registrations) && contact.registrations.some(r => isTrueReg(r?.status) || !r?._deleted)) ||
+      (Array.isArray(contact.programRelationships) && contact.programRelationships.some(r => isTrueReg(r?.status) || isTrueReg(r?.pipelineStage)));
 
     if (hasRegHistory) {
       return PIPELINE_STAGES.REGISTERED_WON;

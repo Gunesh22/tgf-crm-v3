@@ -27,6 +27,7 @@ export default async function handler(req, res) {
         const startD = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0));
         const endD = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
         queryFilter.$or = [
+          { monthKey: month },
           { registeredAt: { $gte: startD, $lte: endD } },
           { createdAt: { $gte: startD, $lte: endD } },
           { updatedAt: { $gte: startD, $lte: endD } },
@@ -37,6 +38,7 @@ export default async function handler(req, res) {
         ];
       } else {
         queryFilter.$or = [
+          { monthKey: month },
           { registeredAt: { $regex: `^${month}` } },
           { createdAt: { $regex: `^${month}` } },
           { updatedAt: { $regex: `^${month}` } }
