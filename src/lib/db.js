@@ -186,6 +186,23 @@ const notifySettingsListeners = (data) => {
   }
 };
 
+let settingsSyncedInSession = false;
+
+export const __resetSettingsCacheForTesting = () => {
+  settingsCache = null;
+  settingsFetchPromise = null;
+  settingsSyncedInSession = false;
+  try {
+    const localSettings = typeof window !== "undefined" ? localStorage.getItem(SETTINGS_CACHE_KEY) : (globalThis?.localStorage ? globalThis.localStorage.getItem(SETTINGS_CACHE_KEY) : null);
+    if (localSettings) {
+      settingsCache = JSON.parse(localSettings);
+      if (settingsCache && !settingsCache.salesOutcomeOptions) {
+        settingsCache.salesOutcomeOptions = DEFAULT_SALES_OUTCOME_OPTIONS;
+      }
+    }
+  } catch (e) {}
+};
+
 // Initialize settingsCache immediately from persistent local cache if present
 try {
   const localSettings = typeof window !== "undefined" ? localStorage.getItem(SETTINGS_CACHE_KEY) : null;
@@ -212,83 +229,116 @@ if (settingsCache) {
   applyDynamicOptions(settingsCache);
 }
 
-const fetchAndSyncSettings = async () => {
+const getTemporaryFallbackSettings = () => ({
+  statusOptions: [...DEFAULT_CONNECTED_STATUSES, ...DEFAULT_NOT_CONNECTED_STATUSES],
+  salesOutcomeOptions: DEFAULT_SALES_OUTCOME_OPTIONS,
+  connectedStatuses: DEFAULT_CONNECTED_STATUSES,
+  notConnectedStatuses: DEFAULT_NOT_CONNECTED_STATUSES,
+  sourceOptions: DEFAULT_SOURCE_OPTIONS,
+  calledForOptions: DEFAULT_CALLED_FOR_OPTIONS,
+  whatsappTemplates: DEFAULT_WHATSAPP_TEMPLATES,
+  revision: 1
+});
+
+const fetchAndSyncSettings = async (forceFull = false) => {
   try {
-    const res = await fetchAPI(`/api/admin/settings`);
-    if (res && res.data) {
-      if (!res.data.salesOutcomeOptions) {
-        res.data.salesOutcomeOptions = DEFAULT_SALES_OUTCOME_OPTIONS;
-      }
-      settingsCache = res.data;
-      try {
-        if (typeof window !== "undefined") {
-          localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(res.data));
+    let url = `/api/admin/settings`;
+    const cachedRevision = (!forceFull && settingsCache && typeof settingsCache.revision === 'number')
+      ? settingsCache.revision
+      : null;
+
+    if (cachedRevision !== null) {
+      url += `?sinceRevision=${encodeURIComponent(cachedRevision)}`;
+    }
+
+    const res = await fetchAPI(url);
+    if (res && res.success) {
+      if (res.modified === false) {
+        // Nothing changed on server!
+        if (typeof res.revision === 'number' && settingsCache) {
+          settingsCache.revision = res.revision;
         }
-      } catch (e) {}
-      await applyDynamicOptions(res.data);
-      notifySettingsListeners(res.data);
-      return res.data;
+        settingsSyncedInSession = true;
+        return settingsCache;
+      }
+
+      // Fields changed or initial full settings payload
+      if (res.data && typeof res.data === 'object') {
+        const incoming = res.data;
+        const base = settingsCache || {};
+
+        // Merge ONLY the returned fields into cached settings
+        const merged = {
+          ...base,
+          ...incoming,
+          revision: typeof res.revision === 'number' ? res.revision : (incoming.revision || base.revision || 1),
+          updatedAt: res.updatedAt || incoming.updatedAt || base.updatedAt || new Date().toISOString()
+        };
+
+        if (!merged.salesOutcomeOptions) {
+          merged.salesOutcomeOptions = DEFAULT_SALES_OUTCOME_OPTIONS;
+        }
+
+        settingsCache = merged;
+        settingsSyncedInSession = true;
+
+        try {
+          if (typeof window !== "undefined") {
+            localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(merged));
+          }
+        } catch (e) {}
+
+        await applyDynamicOptions(merged);
+        notifySettingsListeners(merged);
+        return merged;
+      }
     }
   } catch (e) {
-    if (!e?.message?.includes("Unauthorized") && !e?.message?.includes("401")) {
-      console.error("Failed to fetch settings from DB, using fallback/cache", e);
+    const isAuthError = e?.message?.includes("Unauthorized") || e?.message?.includes("401");
+    if (!isAuthError) {
+      console.error("Failed to sync settings from DB, using fallback/cache", e);
+    }
+    // 401 HANDLING:
+    // If request returns 401 (e.g. before login), DO NOT permanently store static fallback settings.
+    // Do not poison the cache. Do not set settingsSyncedInSession = true.
+    if (isAuthError) {
+      if (settingsCache) return settingsCache;
+      return getTemporaryFallbackSettings();
     }
   } finally {
     settingsFetchPromise = null;
   }
 
   if (settingsCache) return settingsCache;
-
-  const fallback = {
-    statusOptions: [...DEFAULT_CONNECTED_STATUSES, ...DEFAULT_NOT_CONNECTED_STATUSES],
-    salesOutcomeOptions: DEFAULT_SALES_OUTCOME_OPTIONS,
-    connectedStatuses: DEFAULT_CONNECTED_STATUSES,
-    notConnectedStatuses: DEFAULT_NOT_CONNECTED_STATUSES,
-    sourceOptions: DEFAULT_SOURCE_OPTIONS,
-    calledForOptions: DEFAULT_CALLED_FOR_OPTIONS,
-    whatsappTemplates: DEFAULT_WHATSAPP_TEMPLATES
-  };
-  settingsCache = fallback;
-  await applyDynamicOptions(fallback);
-  notifySettingsListeners(fallback);
-  return fallback;
+  return getTemporaryFallbackSettings();
 };
 
 export const getSettingsOptions = async (opts = {}) => {
   const forceRefresh = Boolean(opts && opts.forceRefresh);
+  const forceFull = Boolean(opts && opts.forceFull);
 
-  // If memory cache exists and forceRefresh is not requested: return 0ms immediately
-  if (settingsCache && !forceRefresh) {
+  if (forceRefresh || forceFull) {
+    return fetchAndSyncSettings(forceFull);
+  }
+
+  if (settingsFetchPromise) {
+    return settingsFetchPromise;
+  }
+
+  // If already synced during this active session and cache exists, return in 0ms
+  if (settingsSyncedInSession && settingsCache) {
     applyDynamicOptions(settingsCache);
     return settingsCache;
   }
 
-  // If local storage has it, use it for 0ms return
-  try {
-    const cachedStr = typeof window !== "undefined" ? localStorage.getItem(SETTINGS_CACHE_KEY) : null;
-    if (cachedStr && !forceRefresh) {
-      const parsed = JSON.parse(cachedStr);
-      if (parsed && typeof parsed === "object") {
-        if (!parsed.salesOutcomeOptions) {
-          parsed.salesOutcomeOptions = DEFAULT_SALES_OUTCOME_OPTIONS;
-        }
-        settingsCache = parsed;
-        applyDynamicOptions(parsed);
-        return parsed;
-      }
-    }
-  } catch (e) {}
-
-  if (settingsFetchPromise && !forceRefresh) {
-    return settingsFetchPromise;
-  }
-
-  settingsFetchPromise = fetchAndSyncSettings();
+  settingsFetchPromise = fetchAndSyncSettings(false);
   return settingsFetchPromise;
 };
 
 export const updateCallCenterOptions = async (options) => {
-  // Update memory and local cache immediately before API call so UI updates with 0ms delay!
+  const previousSnapshot = settingsCache ? JSON.parse(JSON.stringify(settingsCache)) : null;
+
+  // Optimistically update memory and local cache before API call for instant 0ms UI response
   if (settingsCache) {
     settingsCache = { ...settingsCache, ...options };
   } else {
@@ -302,18 +352,39 @@ export const updateCallCenterOptions = async (options) => {
   await applyDynamicOptions(settingsCache);
   notifySettingsListeners(settingsCache);
 
-  const res = await fetchAPI(`/api/admin/settings`, "POST", options);
-  if (res && res.data) {
-    settingsCache = res.data;
-    try {
-      if (typeof window !== "undefined") {
-        localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(res.data));
-      }
-    } catch (e) {}
-    await applyDynamicOptions(res.data);
-    notifySettingsListeners(res.data);
+  try {
+    const res = await fetchAPI(`/api/admin/settings`, "POST", options);
+    if (res && res.data) {
+      const updated = {
+        ...settingsCache,
+        ...res.data,
+        revision: typeof res.revision === 'number' ? res.revision : (res.data.revision || settingsCache?.revision || 1)
+      };
+      settingsCache = updated;
+      settingsSyncedInSession = true;
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(updated));
+        }
+      } catch (e) {}
+      await applyDynamicOptions(updated);
+      notifySettingsListeners(updated);
+    }
+    return res;
+  } catch (err) {
+    // Rollback optimistic update on failure so cache doesn't retain un-persisted state
+    if (previousSnapshot) {
+      settingsCache = previousSnapshot;
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(previousSnapshot));
+        }
+      } catch (e) {}
+      await applyDynamicOptions(previousSnapshot);
+      notifySettingsListeners(previousSnapshot);
+    }
+    throw err;
   }
-  return res;
 };
 
 export const getAttenders = async () => {

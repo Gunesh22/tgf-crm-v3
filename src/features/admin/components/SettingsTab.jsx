@@ -93,14 +93,28 @@ export default function SettingsTab() {
   }, [isLoading]);
 
   const loadOptions = async () => {
-    setIsLoading(true);
+    // 1. Instantly render from local cache if available (0ms delay)
     try {
-      const data = await getSettingsOptions();
-      setOptions(data);
-      updateDynamicOptions(data);
+      const cached = await getSettingsOptions();
+      if (cached) {
+        setOptions(cached);
+        updateDynamicOptions(cached);
+        setIsLoading(false);
+      }
+    } catch (e) {}
+
+    // 2. Force fresh differential sync in the background to ensure ground truth
+    try {
+      const freshData = await getSettingsOptions({ forceRefresh: true });
+      if (freshData) {
+        setOptions(freshData);
+        updateDynamicOptions(freshData);
+      }
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to load settings: " + err.message);
+      console.error("Settings background sync failed:", err);
+      if (!options) {
+        toast.error("Failed to load settings: " + err.message);
+      }
     } finally {
       setIsLoading(false);
     }

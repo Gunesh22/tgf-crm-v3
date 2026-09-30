@@ -120,6 +120,10 @@ function vercelApiPlugin() {
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss(), vercelApiPlugin()],
+  server: {
+    host: true,
+    port: 5173
+  },
   build: {
     rollupOptions: {
       output: {

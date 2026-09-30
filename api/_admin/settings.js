@@ -92,6 +92,8 @@ const DEFAULT_WHATSAPP_TEMPLATES = [
 
 export const DEFAULT_SETTINGS = {
   _id: "call_center_options",
+  revision: 1,
+  fieldRevisions: {},
   statusOptions: [...DEFAULT_CONNECTED_STATUSES, ...DEFAULT_NOT_CONNECTED_STATUSES],
   salesOutcomeOptions: DEFAULT_SALES_OUTCOME_OPTIONS,
   connectedStatuses: DEFAULT_CONNECTED_STATUSES,
@@ -120,8 +122,14 @@ export default async function handler(req, res) {
         doc = DEFAULT_SETTINGS;
       }
 
-      // Return clean settings object (omit _id) — STRICTLY READ-ONLY
+      const currentRevision = typeof doc.revision === 'number' ? doc.revision : 1;
+      const fieldRevisions = (doc.fieldRevisions && typeof doc.fieldRevisions === 'object') ? doc.fieldRevisions : {};
+
+      // Extract clean data without _id
       const { _id, ...cleanData } = doc;
+      cleanData.revision = currentRevision;
+      cleanData.fieldRevisions = fieldRevisions;
+
       if (!cleanData.salesOutcomeOptions) {
         cleanData.salesOutcomeOptions = DEFAULT_SALES_OUTCOME_OPTIONS;
       }
@@ -134,32 +142,111 @@ export default async function handler(req, res) {
       if (!cleanData.statusOptions) {
         cleanData.statusOptions = DEFAULT_SETTINGS.statusOptions;
       }
-      return res.status(200).json({ success: true, data: cleanData });
+
+      // Check for sinceRevision query parameter (with req.url fallback for all proxy environments)
+      const sinceRevisionRaw = req.query?.sinceRevision || (req.url && req.url.includes('?') ? new URL(req.url, 'http://localhost').searchParams.get('sinceRevision') : null);
+      const hasSinceRev = sinceRevisionRaw !== undefined && sinceRevisionRaw !== null && sinceRevisionRaw !== '' && !isNaN(Number(sinceRevisionRaw));
+      const sinceRevision = hasSinceRev ? parseInt(sinceRevisionRaw, 10) : null;
+
+      // 1. Initial Load / Invalid / Stale Future Revision -> Return full settings document
+      if (sinceRevision === null || sinceRevision < 1 || sinceRevision > currentRevision) {
+        return res.status(200).json({
+          success: true,
+          modified: true,
+          revision: currentRevision,
+          updatedAt: cleanData.updatedAt,
+          data: cleanData
+        });
+      }
+
+      // 2. Refresh with No Changes -> Return tiny modified: false response
+      if (sinceRevision === currentRevision) {
+        return res.status(200).json({
+          success: true,
+          modified: false,
+          revision: currentRevision,
+          updatedAt: cleanData.updatedAt
+        });
+      }
+
+      // 3. Differential Sync: Find which fields changed since client's revision
+      const changedData = {};
+      for (const [field, rev] of Object.entries(fieldRevisions)) {
+        if (typeof rev === 'number' && rev > sinceRevision && cleanData[field] !== undefined) {
+          changedData[field] = cleanData[field];
+        }
+      }
+
+      // If document revision was bumped but fieldRevisions was empty (legacy doc), return full data
+      if (Object.keys(changedData).length === 0) {
+        return res.status(200).json({
+          success: true,
+          modified: true,
+          revision: currentRevision,
+          updatedAt: cleanData.updatedAt,
+          data: cleanData
+        });
+      }
+
+      // Return ONLY changed fields
+      return res.status(200).json({
+        success: true,
+        modified: true,
+        revision: currentRevision,
+        updatedAt: cleanData.updatedAt,
+        data: changedData
+      });
     }
 
     if (req.method === 'POST' || req.method === 'PUT') {
       const session = requireAdmin(req, res);
       if (!session) return;
 
-      const { _id, ...updates } = req.body || {};
+      const { _id, revision: ignoredRev, fieldRevisions: ignoredFr, updatedAt: ignoredUpd, ...updates } = req.body || {};
+      const updatedKeys = Object.keys(updates);
+
+      let currentDoc = await collection.findOne({ _id: 'call_center_options' });
+      if (!currentDoc) {
+        await collection.insertOne({ ...DEFAULT_SETTINGS });
+        currentDoc = await collection.findOne({ _id: 'call_center_options' });
+      }
+
+      if (updatedKeys.length === 0) {
+        const { _id: unusedId, ...cleanData } = currentDoc || {};
+        return res.status(200).json({
+          success: true,
+          message: 'No updates provided',
+          revision: cleanData.revision || 1,
+          data: cleanData
+        });
+      }
+
+      const now = new Date().toISOString();
+      const currentRevision = typeof currentDoc?.revision === 'number' ? currentDoc.revision : 1;
+      const nextRevision = currentRevision + 1;
 
       const setFields = {
         ...updates,
-        updatedAt: new Date().toISOString()
+        revision: nextRevision,
+        updatedAt: now
       };
 
-      await collection.updateOne(
+      for (const key of updatedKeys) {
+        setFields[`fieldRevisions.${key}`] = nextRevision;
+      }
+
+      const updatedDoc = await collection.findOneAndUpdate(
         { _id: 'call_center_options' },
         { $set: setFields },
-        { upsert: true }
+        { returnDocument: 'after', upsert: true }
       );
 
-      const updatedDoc = await collection.findOne({ _id: 'call_center_options' });
       const { _id: unusedId, ...cleanData } = updatedDoc || {};
 
       return res.status(200).json({
         success: true,
         message: 'Settings updated successfully',
+        revision: cleanData.revision || nextRevision,
         data: cleanData
       });
     }

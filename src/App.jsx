@@ -1,10 +1,9 @@
-import React, { lazy, Suspense, useEffect } from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { useAutoUpdater } from './hooks/useAutoUpdater';
 import LoginScreen from './features/auth/LoginScreen';
-import { getSettingsOptions } from './lib/db';
 import './index.css';
 
 const AttenderWorkspace = lazy(() => import('./features/attender/AttenderWorkspace'));
@@ -50,10 +49,6 @@ function AppRoutes() {
   const auth = useAuth() || {};
   const { user, logout, loading } = auth;
   useAutoUpdater();
-
-  useEffect(() => {
-    getSettingsOptions().catch(() => {});
-  }, []);
 
   if (loading) {
     return <LoadingFallback />;
