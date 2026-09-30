@@ -578,7 +578,10 @@ export default function MobileEditModal({
         const existingContext = globalDup?.first
           ? { ...globalDup.first, ...row, ...targetEdited }
           : { ...row, ...targetEdited };
-        await updateCallLog(targetDocId, updates, attenderId, attenderName, existingContext);
+        const res = await updateCallLog(targetDocId, updates, attenderId, attenderName, existingContext);
+        if (res?.updatedContact) {
+          savedDocId = res.updatedContact.id || res.updatedContact._id || savedDocId;
+        }
       }
 
       const finalSavedPayload = {

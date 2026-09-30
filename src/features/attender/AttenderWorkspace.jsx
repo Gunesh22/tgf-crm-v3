@@ -52,9 +52,22 @@ import { ContactTable } from "./components/ContactTable";
 import MobileAttenderView from "./mobile/MobileAttenderView";
 import MobileEditModal from "./mobile/MobileEditModal";
 
+export function enrichSingleLogWithCallbackFlags(log, activeAttenderCtx) {
+  if (!log) return log;
+  const todayStr = getLocalDateString();
+  const view = getContactView(log, activeAttenderCtx);
+  const cbStatus = String(view.callbackStatus || log.callbackStatus || "").trim().toLowerCase();
+  const isDoneOrCancelled = cbStatus === "done" || cbStatus === "completed" || cbStatus === "cancelled";
+  const rawCbDate = view.callbackDate;
+  const cbDateStr = (!isDoneOrCancelled && rawCbDate) ? getLocalDateString(rawCbDate) : "";
+  const shouldBeDue = !!(cbDateStr && cbDateStr <= todayStr);
+
+  if (log._callbackDue === shouldBeDue) return log;
+  return { ...log, _callbackDue: shouldBeDue };
+}
+
 function enrichLogsWithCallbackFlags(logs, activeAttenderCtx) {
   if (!Array.isArray(logs)) return [];
-  const todayStr = getLocalDateString();
 
   const seenIds = new Set();
   const uniqueLogs = [];
@@ -67,17 +80,7 @@ function enrichLogsWithCallbackFlags(logs, activeAttenderCtx) {
     uniqueLogs.push(log);
   }
 
-  return uniqueLogs.map(log => {
-    const view = getContactView(log, activeAttenderCtx);
-    const cbStatus = String(view.callbackStatus || log.callbackStatus || "").trim().toLowerCase();
-    const isDoneOrCancelled = cbStatus === "done" || cbStatus === "completed" || cbStatus === "cancelled";
-    const rawCbDate = view.callbackDate;
-    const cbDateStr = (!isDoneOrCancelled && rawCbDate) ? getLocalDateString(rawCbDate) : "";
-    const shouldBeDue = !!(cbDateStr && cbDateStr <= todayStr);
-
-    if (log._callbackDue === shouldBeDue) return log;
-    return { ...log, _callbackDue: shouldBeDue };
-  });
+  return uniqueLogs.map(log => enrichSingleLogWithCallbackFlags(log, activeAttenderCtx));
 }
 
 // ─── Main Attender View ───────────────────────
@@ -215,8 +218,9 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
       const normList = rawData.map(c => normalizeProgramStates(c));
 
       if (isComponentMountedRef.current && !controller.signal.aborted && attenderId === requestAttenderId) {
-        setCallLogs(normList);
-        safeSetLocalStorage(`attender_call_logs_${requestAttenderId}`, normList);
+        const enrichedList = enrichLogsWithCallbackFlags(normList, attenderId || attenderName);
+        setCallLogs(enrichedList);
+        safeSetLocalStorage(`attender_call_logs_${requestAttenderId}`, enrichedList);
         toast.success(`Database synced! Downloaded ${normList.length} contacts.`, { id: toastId });
       }
     } catch (err) {
@@ -453,6 +457,24 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     setIsFetchingShared(false);
   }, [editingRow]);
 
+  // Handle Row Save with Immediate Callback Recalculation (PC & Mobile)
+  const handleSaveRow = useCallback((updated, isOptimistic) => {
+    const cleanUpdated = { ...updated };
+    if (cleanUpdated.id) delete cleanUpdated._isNew;
+    setCallLogs(prev => {
+      const index = prev.findIndex(l => (cleanUpdated.id && l.id === cleanUpdated.id) || (cleanUpdated._timestamp && l._timestamp === cleanUpdated._timestamp));
+      if (index >= 0) {
+        const next = [...prev];
+        const merged = { ...next[index], ...cleanUpdated };
+        if (merged.id) delete merged._isNew;
+        next[index] = enrichSingleLogWithCallbackFlags(merged, attenderId || attenderName);
+        return next;
+      }
+      return [enrichSingleLogWithCallbackFlags(cleanUpdated, attenderId || attenderName), ...prev];
+    });
+    if (!isOptimistic) handleCloseModal();
+  }, [attenderId, attenderName, handleCloseModal]);
+
   // Trigger 1: Handle Row Selection to open EditModal (On-demand fetch for shared leads)
   const handleSelectRow = useCallback(async (row) => {
     if (!row) return;
@@ -540,7 +562,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
           let hasNew = false;
           extraResults.forEach(item => {
             if (!existingMap.has(item.id)) {
-              existingMap.set(item.id, item);
+              existingMap.set(item.id, enrichSingleLogWithCallbackFlags(item, attenderId || attenderName));
               hasNew = true;
             }
           });
@@ -2317,22 +2339,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
           attenderId={attenderId}
           attenderName={attenderName}
           programs={programs.filter(p => p.id !== INCOMING_PROGRAM_ID && p.id !== OUTGOING_PROGRAM_ID)}
-          onSave={(updated, isOptimistic) => {
-            const cleanUpdated = { ...updated };
-            if (cleanUpdated.id) delete cleanUpdated._isNew;
-            setCallLogs(prev => {
-              const index = prev.findIndex(l => (cleanUpdated.id && l.id === cleanUpdated.id) || (cleanUpdated._timestamp && l._timestamp === cleanUpdated._timestamp));
-              if (index >= 0) {
-                const next = [...prev];
-                const merged = { ...next[index], ...cleanUpdated };
-                if (merged.id) delete merged._isNew;
-                next[index] = merged;
-                return next;
-              }
-              return [cleanUpdated, ...prev];
-            });
-            if (!isOptimistic) setEditingRow(null);
-          }}
+          onSave={handleSaveRow}
           onDelete={handleDeleteRow}
           onClose={handleCloseModal}
           onRefreshLead={handleRefreshSingleLead}
@@ -2347,22 +2354,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
           attenderId={attenderId}
           attenderName={attenderName}
           programs={programs.filter(p => p.id !== INCOMING_PROGRAM_ID && p.id !== OUTGOING_PROGRAM_ID)}
-          onSave={(updated, isOptimistic) => {
-            const cleanUpdated = { ...updated };
-            if (cleanUpdated.id) delete cleanUpdated._isNew;
-            setCallLogs(prev => {
-              const index = prev.findIndex(l => (cleanUpdated.id && l.id === cleanUpdated.id) || (cleanUpdated._timestamp && l._timestamp === cleanUpdated._timestamp));
-              if (index >= 0) {
-                const next = [...prev];
-                const merged = { ...next[index], ...cleanUpdated };
-                if (merged.id) delete merged._isNew;
-                next[index] = merged;
-                return next;
-              }
-              return [cleanUpdated, ...prev];
-            });
-            if (!isOptimistic) handleCloseModal();
-          }}
+          onSave={handleSaveRow}
           onDelete={handleDeleteRow}
           onClose={handleCloseModal}
           onRefreshLead={handleRefreshSingleLead}

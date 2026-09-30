@@ -1678,6 +1678,9 @@ export const EditModal = ({
           previousProgram: targetEdited.previousProgram || prevAttState.previousProgram || "",
           status: updates.status || prevAttState.status,
           remark: updates.remark !== undefined ? updates.remark : prevAttState.remark,
+          callbackDate: updates.callbackDate !== undefined ? updates.callbackDate : (prevAttState.callbackDate || null),
+          callbackTime: updates.callbackTime !== undefined ? updates.callbackTime : (prevAttState.callbackTime || null),
+          callbackStatus: updates.callbackStatus !== undefined ? updates.callbackStatus : (prevAttState.callbackStatus || null),
           history: updates.history || prevAttState.history || [],
           updatedAt: new Date().toISOString()
         };
