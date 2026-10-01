@@ -36,56 +36,36 @@ export function determineCallType(obj, linkedContact = null) {
     return false;
   };
 
-  // 1. Direct explicit call type on the registration record / object itself (only check callType/callDirection/isIncoming, NOT source)
-  const directType = String(obj?.callType || obj?.callDirection || obj?.type || obj?.call_type || obj?.call_direction || '').toLowerCase().trim();
-  if (directType === 'outgoing' || directType === 'out' || obj?.isIncoming === false) return 'outgoing';
-  if (directType === 'incoming' || directType === 'in' || obj?.isIncoming === true) return 'incoming';
-
-  // Helper to extract converting call or latest call from a history array
-  const evalHistory = (historyArr) => {
+  // 1. Prioritize the FIRST call entry in history (Lead Origin)
+  const evalFirstCall = (historyArr) => {
     if (!Array.isArray(historyArr) || historyArr.length === 0) return null;
-    
-    // Look for the call item where registration actually happened (Reg.Done / Registered)
-    const regCall = [...historyArr].reverse().find(h => {
-      const st = String(h?.status || '').toLowerCase();
-      if (st.includes('already reg') || st.includes('shivir done') || st.includes('alumni')) return false;
-      return st.includes('reg.done') || st.includes('registered');
-    });
-
-    if (regCall) {
-      if (checkOutgoing(regCall)) return 'outgoing';
-      if (checkIncoming(regCall)) return 'incoming';
+    const firstCall = historyArr[0];
+    if (firstCall) {
+      if (checkIncoming(firstCall)) return 'incoming';
+      if (checkOutgoing(firstCall)) return 'outgoing';
     }
-
-    // Fallback to the latest call entry
-    const latestCall = historyArr[historyArr.length - 1];
-    if (latestCall) {
-      if (checkOutgoing(latestCall)) return 'outgoing';
-      if (checkIncoming(latestCall)) return 'incoming';
-    }
-
     return null;
   };
 
-  // 2. Check history on obj itself or linkedContact
-  if (Array.isArray(obj?.history)) {
-    const histResult = evalHistory(obj.history);
+  if (linkedContact && Array.isArray(linkedContact.history)) {
+    const histResult = evalFirstCall(linkedContact.history);
     if (histResult) return histResult;
   }
 
-  if (linkedContact) {
-    if (Array.isArray(linkedContact.history)) {
-      const histResult = evalHistory(linkedContact.history);
-      if (histResult) return histResult;
-    }
-    const linkedType = String(linkedContact.callType || linkedContact.callDirection || linkedContact.type || linkedContact.call_type || linkedContact.call_direction || '').toLowerCase().trim();
-    if (linkedType === 'outgoing' || linkedContact.isIncoming === false) return 'outgoing';
-    if (linkedType === 'incoming' || linkedContact.isIncoming === true) return 'incoming';
+  if (Array.isArray(obj?.history)) {
+    const histResult = evalFirstCall(obj.history);
+    if (histResult) return histResult;
   }
 
-  // 3. Fallback check for source/incoming tags
+  // 2. Direct check on linkedContact origin
+  if (linkedContact) {
+    if (checkIncoming(linkedContact)) return 'incoming';
+    if (checkOutgoing(linkedContact)) return 'outgoing';
+  }
+
+  // 3. Direct check on obj
   if (checkIncoming(obj)) return 'incoming';
-  if (linkedContact && checkIncoming(linkedContact)) return 'incoming';
+  if (checkOutgoing(obj)) return 'outgoing';
 
   return 'outgoing';
 }
