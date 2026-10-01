@@ -371,7 +371,9 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
                 <AbhivyaktiTab
                   registrations={registrations}
                   callLogs={callLogs}
-                  loading={registrationsLoading && (!registrations || registrations.length === 0)}
+                  loading={registrationsLoading || callLogsLoading}
+                  selectedMonth={selectedMonth}
+                  setSelectedMonth={setSelectedMonth}
                 />
               )}
               {activeTab === "settings" && <SettingsTab />}

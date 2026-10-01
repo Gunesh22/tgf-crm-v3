@@ -293,7 +293,9 @@ export const getRegistrationLeadOwner = (r) => {
 export default function AbhivyaktiTab({
   registrations = [],
   callLogs = [],
-  loading = false
+  loading = false,
+  selectedMonth,
+  setSelectedMonth
 }) {
   // Local filter states
   const [selectedCallTypes, setSelectedCallTypes] = useState([]);
@@ -302,20 +304,59 @@ export default function AbhivyaktiTab({
   const [selectedLeadOrigins, setSelectedLeadOrigins] = useState([]);
   const [sourceDimension, setSourceDimension] = useState("currentSource");
   const [selectedAttenders, setSelectedAttenders] = useState([]);
-  const [dateFrom, setDateFrom] = useState(() => {
-    const todayObj = new Date();
-    const yr = todayObj.getFullYear();
-    const mn = String(todayObj.getMonth() + 1).padStart(2, "0");
-    return `${yr}-${mn}-01`;
-  });
-  const [dateTo, setDateTo] = useState(() => {
-    const todayObj = new Date();
-    const yr = todayObj.getFullYear();
-    const mn = todayObj.getMonth();
-    const lastDay = new Date(yr, mn + 1, 0).getDate();
-    const mnStr = String(mn + 1).padStart(2, "0");
-    return `${yr}-${mnStr}-${lastDay}`;
-  });
+
+  const getMonthBounds = (mKey) => {
+    if (!mKey || mKey === 'ALL') return null;
+    const [yrStr, mnStr] = mKey.split('-');
+    const yr = parseInt(yrStr, 10);
+    const mn = parseInt(mnStr, 10);
+    if (isNaN(yr) || isNaN(mn)) return null;
+    const start = `${yr}-${String(mn).padStart(2, '0')}-01`;
+    const lastDay = new Date(yr, mn, 0).getDate();
+    const end = `${yr}-${String(mn).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    return { start, end };
+  };
+
+  const initialBounds = (selectedMonth && selectedMonth !== 'ALL' && getMonthBounds(selectedMonth)) || {
+    start: (() => {
+      const todayObj = new Date();
+      const yr = todayObj.getFullYear();
+      const mn = String(todayObj.getMonth() + 1).padStart(2, "0");
+      return `${yr}-${mn}-01`;
+    })(),
+    end: (() => {
+      const todayObj = new Date();
+      const yr = todayObj.getFullYear();
+      const mn = todayObj.getMonth();
+      const lastDay = new Date(yr, mn + 1, 0).getDate();
+      const mnStr = String(mn + 1).padStart(2, "0");
+      return `${yr}-${mnStr}-${lastDay}`;
+    })()
+  };
+
+  const [dateFrom, setDateFrom] = useState(initialBounds.start);
+  const [dateTo, setDateTo] = useState(initialBounds.end);
+
+  // Sync dateFrom and dateTo when parent selectedMonth changes
+  useEffect(() => {
+    if (!selectedMonth || selectedMonth === 'ALL') return;
+    const bounds = getMonthBounds(selectedMonth);
+    if (bounds && (dateFrom.slice(0, 7) !== selectedMonth || dateTo.slice(0, 7) !== selectedMonth)) {
+      setDateFrom(bounds.start);
+      setDateTo(bounds.end);
+    }
+  }, [selectedMonth]);
+
+  // Sync parent selectedMonth when user changes dateFrom or dateTo
+  useEffect(() => {
+    if (!setSelectedMonth || !dateFrom || !dateTo) return;
+    const sM = dateFrom.slice(0, 7);
+    const eM = dateTo.slice(0, 7);
+    const target = sM === eM ? sM : 'ALL';
+    if (selectedMonth !== target) {
+      setSelectedMonth(target);
+    }
+  }, [dateFrom, dateTo, selectedMonth, setSelectedMonth]);
 
   // Single Source of Truth for Program Registrations via Canonical Engine
   const canonicalRegistrations = useMemo(() => {
@@ -1029,6 +1070,7 @@ export default function AbhivyaktiTab({
                     onClick={() => {
                       setDateFrom(firstDayStr);
                       setDateTo(lastDayStr);
+                      if (setSelectedMonth) setSelectedMonth(firstDayStr.slice(0, 7));
                     }}
                     className={`h-8 px-2.5 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
                       isThisMonthSelected
@@ -1043,6 +1085,7 @@ export default function AbhivyaktiTab({
                     onClick={() => {
                       setDateFrom(prevFirstDayStr);
                       setDateTo(prevLastDayStr);
+                      if (setSelectedMonth) setSelectedMonth(prevFirstDayStr.slice(0, 7));
                     }}
                     className={`h-8 px-2.5 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
                       isLastMonthSelected
