@@ -29,19 +29,20 @@ export default async function handler(req, res) {
         queryFilter.$or = [
           { monthKey: month },
           { registeredAt: { $gte: startD, $lte: endD } },
+          { 'evidence.timestamp': { $gte: startD, $lte: endD } },
           { createdAt: { $gte: startD, $lte: endD } },
-          { updatedAt: { $gte: startD, $lte: endD } },
+          { 'evidence.timestamp': { $gte: `${month}-01`, $lte: `${month}-31T23:59:59.999Z` } },
           { createdAt: { $gte: `${month}-01`, $lte: `${month}-31T23:59:59.999Z` } },
           { registeredAt: { $regex: `^${month}` } },
-          { createdAt: { $regex: `^${month}` } },
-          { updatedAt: { $regex: `^${month}` } }
+          { 'evidence.timestamp': { $regex: `^${month}` } },
+          { createdAt: { $regex: `^${month}` } }
         ];
       } else {
         queryFilter.$or = [
           { monthKey: month },
           { registeredAt: { $regex: `^${month}` } },
-          { createdAt: { $regex: `^${month}` } },
-          { updatedAt: { $regex: `^${month}` } }
+          { 'evidence.timestamp': { $regex: `^${month}` } },
+          { createdAt: { $regex: `^${month}` } }
         ];
       }
     }

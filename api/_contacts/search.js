@@ -44,22 +44,34 @@ export default async function handler(req, res) {
       if (y && m) {
         const startD = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0));
         const endD = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
+        const isoStart = startD.toISOString();
+        const isoEnd = endD.toISOString();
         queryFilter.$or = [
           { monthKey: month },
           { registeredAt: { $gte: startD, $lte: endD } },
           { registeredAt: monthRegex },
           { createdAt: { $gte: startD, $lte: endD } },
-          { lastCalledAt: { $gte: startD, $lte: endD } },
-          { updatedAt: { $gte: startD, $lte: endD } },
           { createdAt: monthRegex },
-          { lastCalledAt: monthRegex }
+          { lastCalledAt: { $gte: startD, $lte: endD } },
+          { lastCalledAt: monthRegex },
+          { updatedAt: { $gte: startD, $lte: endD } },
+          { updatedAt: monthRegex },
+          { 'history.timestamp': monthRegex },
+          { 'history.timestamp': { $gte: isoStart, $lte: isoEnd } },
+          { 'history.timestamp': { $gte: startD, $lte: endD } },
+          { 'history.date': monthRegex },
+          { 'history.createdAt': monthRegex }
         ];
       } else {
         queryFilter.$or = [
           { monthKey: month },
           { registeredAt: monthRegex },
           { createdAt: monthRegex },
-          { lastCalledAt: monthRegex }
+          { lastCalledAt: monthRegex },
+          { updatedAt: monthRegex },
+          { 'history.timestamp': monthRegex },
+          { 'history.date': monthRegex },
+          { 'history.createdAt': monthRegex }
         ];
       }
     }

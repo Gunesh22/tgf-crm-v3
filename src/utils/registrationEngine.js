@@ -590,9 +590,10 @@ export function getCanonicalRegistrations(registrations = [], contacts = [], fil
   };
 
   const inDateRange = (ts) => {
-    if (!ts) return true;
+    if (!startDate && !endDate) return true;
+    if (!ts) return false;
     const parsed = parseTimestamp(ts);
-    if (!parsed || isNaN(parsed.getTime())) return true;
+    if (!parsed || isNaN(parsed.getTime())) return false;
     const localStr = getLocalDateStr(parsed);
     const utcStr = getUTCDateStr(parsed);
     const isLocalMatch = (!startDate || localStr >= startDate) && (!endDate || localStr <= endDate);
@@ -673,7 +674,7 @@ export function getCanonicalRegistrations(registrations = [], contacts = [], fil
     const regKey = `${contactId}_${calledForKey}`;
     if (seenRegKeys.has(regKey)) return;
 
-    const regDate = reg.registeredAt || reg.updatedAt || reg.createdAt || reg.timestamp || reg.date;
+    const regDate = reg.registeredAt || reg.evidence?.timestamp || reg.timestamp || reg.createdAt || reg.date;
     if (!inDateRange(regDate)) return;
 
     const contact = (contacts || []).find(c => {
@@ -780,7 +781,7 @@ export function getCanonicalRegistrations(registrations = [], contacts = [], fil
           if (k) {
             programMap.set(k, {
               rawCalledFor: relProg,
-              date: (typeof rel === 'object' && rel.updatedAt) || c.registeredAt || c.updatedAt || c.lastCalledAt || c.createdAt
+              date: (typeof rel === 'object' && rel.registeredAt) || c.registeredAt || (typeof rel === 'object' && rel.createdAt) || c.createdAt
             });
           }
         }
@@ -797,7 +798,7 @@ export function getCanonicalRegistrations(registrations = [], contacts = [], fil
           if (k && !programMap.has(k)) {
             programMap.set(k, {
               rawCalledFor: hProg,
-              date: h.timestamp || h.date || h.createdAt || c.registeredAt || c.updatedAt || c.createdAt
+              date: h.timestamp || h.date || h.createdAt || c.registeredAt || c.createdAt
             });
           }
         }
@@ -814,7 +815,7 @@ export function getCanonicalRegistrations(registrations = [], contacts = [], fil
             if (k && !programMap.has(k)) {
               programMap.set(k, {
                 rawCalledFor: stProg,
-                date: stObj.updatedAt || stObj.lastCalledAt || c.registeredAt || c.updatedAt || c.createdAt
+                date: stObj.registeredAt || (stObj.history && stObj.history[0]?.timestamp) || c.registeredAt || c.createdAt
               });
             }
           }
@@ -828,7 +829,7 @@ export function getCanonicalRegistrations(registrations = [], contacts = [], fil
       if (k && (!programMap.has(k) && (programMap.size === 0 || isStatusRegDone(c.status || c.pipelineStage)))) {
         programMap.set(k, {
           rawCalledFor: rootCalledFor,
-          date: c.registeredAt || c.updatedAt || c.lastCalledAt || c.createdAt
+          date: c.registeredAt || c.lastCalledAt || c.createdAt || c.updatedAt
         });
       }
     }

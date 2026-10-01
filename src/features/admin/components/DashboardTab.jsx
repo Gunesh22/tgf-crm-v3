@@ -115,7 +115,19 @@ function MultiSelect({ options, selected, onChange, placeholder, allLabel = "All
 }
 
 // ── Main Dashboard ─────────────────────────────────────────────────────────
-export default function DashboardTab({ programs, attenders, settingsOptions = { statusOptions: [], sourceOptions: [], calledForOptions: [] }, callLogs = [], registrations = [], callLogsLoading = false, secondsAgo = 0, nextFetchIn = 45, lastSyncedAt }) {
+export default function DashboardTab({
+  programs,
+  attenders,
+  settingsOptions = { statusOptions: [], sourceOptions: [], calledForOptions: [] },
+  callLogs = [],
+  registrations = [],
+  callLogsLoading = false,
+  secondsAgo = 0,
+  nextFetchIn = 45,
+  lastSyncedAt,
+  selectedMonth,
+  setSelectedMonth
+}) {
   const { user } = useAuth();
   const todayStr = getLocalDateStr();
 
@@ -135,8 +147,44 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
     const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     return `${todayStr.slice(0, 7)}-${String(lastDay).padStart(2, "0")}`;
   })();
-  const [dateFrom, setDateFrom] = useState(currentMonthFirstDay);
-  const [dateTo, setDateTo] = useState(currentMonthLastDay);
+
+  const getMonthBounds = (mKey) => {
+    if (!mKey || mKey === 'ALL') return null;
+    const [yrStr, mnStr] = mKey.split('-');
+    const yr = parseInt(yrStr, 10);
+    const mn = parseInt(mnStr, 10);
+    if (isNaN(yr) || isNaN(mn)) return null;
+    const start = `${yr}-${String(mn).padStart(2, '0')}-01`;
+    const lastDay = new Date(yr, mn, 0).getDate();
+    const end = `${yr}-${String(mn).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    return { start, end };
+  };
+
+  const initialBounds = (selectedMonth && selectedMonth !== 'ALL' && getMonthBounds(selectedMonth)) || { start: currentMonthFirstDay, end: currentMonthLastDay };
+
+  const [dateFrom, setDateFrom] = useState(initialBounds.start);
+  const [dateTo, setDateTo] = useState(initialBounds.end);
+
+  // Sync dateFrom and dateTo when parent selectedMonth changes
+  useEffect(() => {
+    if (!selectedMonth || selectedMonth === 'ALL') return;
+    const bounds = getMonthBounds(selectedMonth);
+    if (bounds && (dateFrom.slice(0, 7) !== selectedMonth || dateTo.slice(0, 7) !== selectedMonth)) {
+      setDateFrom(bounds.start);
+      setDateTo(bounds.end);
+    }
+  }, [selectedMonth]);
+
+  // Sync parent selectedMonth when user changes dateFrom or dateTo
+  useEffect(() => {
+    if (!setSelectedMonth || !dateFrom || !dateTo) return;
+    const sM = dateFrom.slice(0, 7);
+    const eM = dateTo.slice(0, 7);
+    const target = sM === eM ? sM : 'ALL';
+    if (selectedMonth !== target) {
+      setSelectedMonth(target);
+    }
+  }, [dateFrom, dateTo, selectedMonth, setSelectedMonth]);
   const [conversionSearch, setConversionSearch] = useState("");
   const [convPage, setConvPage] = useState(1);
   const [selectedAttenderDetails, setSelectedAttenderDetails] = useState(null);
@@ -555,9 +603,29 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
     return res;
   }, [flattenedLogs, selectedProgramIds, selectedAttenderIds, selectedSources, selectedLeadOrigins, selectedCalledFors, selectedStatuses, selectedCallTypes, selectedKhojiStatuses, dateFrom, dateTo, programs, attenders]);
 
+  // Helper to extract the true registration event date (ignoring updatedAt modifications)
+  const getTrueRegistrationDate = (reg) => {
+    if (!reg) return null;
+    if (reg.evidence?.timestamp) return reg.evidence.timestamp;
+    if (reg.registeredAt && typeof reg.registeredAt !== 'object') return reg.registeredAt;
+    const contactId = reg.contactId || reg.leadId || reg.id;
+    if (contactId && Array.isArray(callLogs)) {
+      const c = callLogs.find(x => String(x.id || x._id) === String(contactId) || (x.Phone && x.Phone === reg.phone));
+      if (c && Array.isArray(c.history)) {
+        const hMatch = c.history.find(h => {
+          const s = String(h.status || h.callStatus || '').toLowerCase();
+          return s.includes('reg.done') || s.includes('registered') || s.includes('won');
+        });
+        if (hMatch?.timestamp || hMatch?.date) return hMatch.timestamp || hMatch.date;
+      }
+    }
+    if (reg.createdAt) return reg.createdAt;
+    return reg.timestamp || reg.date || null;
+  };
+
   // CANONICAL REGISTRATION DERIVATIONS (SINGLE SOURCE OF TRUTH)
   const programRegistrationsList = useMemo(() => {
-    return getCanonicalRegistrations(registrations, callLogs, {
+    const list = getCanonicalRegistrations(registrations, callLogs, {
       startDate: dateFrom,
       endDate: dateTo,
       selectedAttenderIds,
@@ -566,13 +634,35 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
       selectedLeadOrigins,
       selectedCalledFors
     });
+
+    return list
+      .map(reg => {
+        const trueDate = getTrueRegistrationDate(reg);
+        return {
+          ...reg,
+          registeredAt: trueDate || reg.registeredAt,
+          timestamp: trueDate || reg.timestamp,
+        };
+      })
+      .filter(reg => {
+        if (!dateFrom && !dateTo) return true;
+        const rawDate = reg.registeredAt || reg.timestamp;
+        if (!rawDate) return false;
+        const parsed = parseTimestamp(rawDate);
+        if (!parsed || isNaN(parsed.getTime())) return false;
+        const localStr = getLocalDateStr(parsed);
+        const isLocalMatch = (!dateFrom || localStr >= dateFrom) && (!dateTo || localStr <= dateTo);
+        return isLocalMatch;
+      });
   }, [registrations, callLogs, dateFrom, dateTo, selectedAttenderIds, selectedProgramIds, selectedSources, selectedLeadOrigins, selectedCalledFors]);
+
 
   const attenderStats = useMemo(() => {
     const map = {};
     const EXCLUDED_ATTENDER_NAMES = ["admin", "super admin", "administrator", "agent"];
 
     filteredLogs.forEach(log => {
+      if (!log.isHistory) return;
       const rawName = (log.attenderName || "").trim() || "Unknown Attender";
       const normName = rawName.toLowerCase();
       // Skip admin and test entries
@@ -760,19 +850,14 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
     filteredLogs.forEach(l => {
       if (!l.isHistory) return;
       const canonical = getCanonicalStatus(l.status) || "Pending";
-      if (canonical === "Reg.Done") return;
       map[canonical] = (map[canonical] || 0) + 1;
     });
 
-    if (programRegistrationsList.length > 0) {
-      map["Reg.Done"] = programRegistrationsList.length;
-    }
-
     return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-  }, [filteredLogs, programRegistrationsList]);
+  }, [filteredLogs]);
 
   const registeredPeopleList = useMemo(() => {
-    return getCanonicalRegisteredPeople(registrations, callLogs, {
+    const list = getCanonicalRegisteredPeople(registrations, callLogs, {
       startDate: dateFrom,
       endDate: dateTo,
       selectedAttenderIds,
@@ -780,6 +865,16 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
       selectedSources,
       selectedLeadOrigins,
       selectedCalledFors
+    });
+    if (!dateFrom && !dateTo) return list;
+    return list.filter(person => {
+      const rawDate = getTrueRegistrationDate(person);
+      if (!rawDate) return false;
+      const parsed = parseTimestamp(rawDate);
+      if (!parsed || isNaN(parsed.getTime())) return false;
+      const localStr = getLocalDateStr(parsed);
+      const isLocalMatch = (!dateFrom || localStr >= dateFrom) && (!dateTo || localStr <= dateTo);
+      return isLocalMatch;
     });
   }, [registrations, callLogs, dateFrom, dateTo, selectedAttenderIds, selectedProgramIds, selectedSources, selectedLeadOrigins, selectedCalledFors]);
 
@@ -791,6 +886,11 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
   }, [callLogs, dateFrom, dateTo]);
 
   const conversionsList = programRegistrationsList;
+
+  const isDataLoading = Boolean(
+    callLogsLoading ||
+    (selectedMonth && selectedMonth !== 'ALL' && dateFrom && dateFrom.slice(0, 7) !== selectedMonth)
+  );
 
   const totalPhysicalCalls = useMemo(() => {
     return filteredLogs.filter(l => l.isHistory).length;
@@ -1149,7 +1249,11 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 font-medium">{filteredLogs.length} total activities ({totalPhysicalCalls} physical calls)</span>
+            {isDataLoading ? (
+              <span className="text-xs text-indigo-600 font-semibold animate-pulse">Syncing calls...</span>
+            ) : (
+              <span className="text-xs text-slate-500 font-medium">{filteredLogs.length} total activities ({totalPhysicalCalls} physical calls)</span>
+            )}
 
             {activeFilters > 0 && (
               <button
@@ -1227,7 +1331,7 @@ export default function DashboardTab({ programs, attenders, settingsOptions = { 
                   </button>
                 )}
               </div>
-              {callLogsLoading && callLogs.length === 0 ? (
+              {isDataLoading ? (
                 <div className="h-8 w-24 bg-slate-200 animate-pulse rounded-md mt-1" />
               ) : (
                 <p className={`text-2xl font-bold ${s.color || "text-slate-900"} mt-1`}>{s.value}</p>

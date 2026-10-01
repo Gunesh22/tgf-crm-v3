@@ -773,7 +773,7 @@ export default function CallIntelligenceTab({
       const isContactInterested = isContactReg || hasInterest;
       const isContactInfo = isContactInterested || hasInfo;
       const isContactConnected = isContactInfo || hasConnected;
-      const isContactAttempted = isContactConnected || count > 0 || true;
+      const isContactAttempted = isContactConnected || count > 0;
 
       if (isContactAttempted) attemptingContact++;
       if (isContactConnected) connectedPeopleCount++;
@@ -787,10 +787,6 @@ export default function CallIntelligenceTab({
         const aObj = getOrCreateAttender(closerName);
         aObj.registeredCount++;
         aObj.peopleCalledIds.add(cId);
-        if (aObj.interestedCount < aObj.registeredCount) aObj.interestedCount = aObj.registeredCount;
-        if (aObj.infoGivenCount < aObj.interestedCount) aObj.infoGivenCount = aObj.interestedCount;
-        if (aObj.connectedCalls < aObj.registeredCount) aObj.connectedCalls = aObj.registeredCount;
-        if (aObj.totalCalls < aObj.connectedCalls) aObj.totalCalls = aObj.connectedCalls;
       }
 
       // Yield Curve Calculation

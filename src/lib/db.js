@@ -1,4 +1,5 @@
 import { normalizeProgramStates } from "../utils/pipelineEngine.js";
+import { get as idbGet, set as idbSet } from "idb-keyval";
 
 export const normalizePhone = (p) => String(p || '').replace(/\D/g, '');
 
@@ -603,19 +604,17 @@ export const subscribeToCallLogs = (attenderId, nameOrCb, cbOrErr, optionalErr) 
   };
 };
 
-export const subscribeToAllCallLogs = (programId, month, callback, forceRefresh = false, includeHistory = false) => {
+export const subscribeToAllCallLogs = (programId, month, callback, forceRefresh = false, includeHistory = true) => {
   let isSubscribed = true;
-  const cacheKey = `all_call_logs_${programId || 'all'}_${month || 'all'}`;
+  const cacheKey = `all_call_logs_v3_${programId || 'all'}_${month || 'all'}`;
 
-  try {
-    const cachedData = localStorage.getItem(cacheKey);
-    if (cachedData) {
-      const parsed = JSON.parse(cachedData);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        callback(parsed, false);
+  // 1. Read full, non-truncated cache directly from IndexedDB
+  if (!forceRefresh) {
+    idbGet(cacheKey).then(cachedData => {
+      if (isSubscribed && Array.isArray(cachedData) && cachedData.length > 0) {
+        callback(cachedData, false);
       }
-    }
-  } catch (e) {
+    }).catch(() => {});
   }
 
   const fetchAll = async () => {
@@ -626,7 +625,7 @@ export const subscribeToAllCallLogs = (programId, month, callback, forceRefresh 
       const historyParam = includeHistory ? '&includeHistory=true' : '';
       const res = await fetchAPI(`/api/contacts/search?${monthParam ? `month=${monthParam}&` : ''}limit=10000${historyParam}`);
       if (isSubscribed && res.data) {
-        safeSetLocalStorage(cacheKey, res.data);
+        idbSet(cacheKey, res.data).catch(() => {});
         callback(res.data, true);
       }
     } catch (e) {
@@ -650,17 +649,14 @@ export const subscribeToRegistrations = (programId, month, callback) => {
     month = 'ALL';
   }
   const targetMonth = month || 'ALL';
-  const cacheKey = `registrations_cache_${programId || 'all'}_${targetMonth}`;
+  const cacheKey = `registrations_cache_v3_${programId || 'all'}_${targetMonth}`;
 
-  try {
-    const cachedData = localStorage.getItem(cacheKey);
-    if (cachedData) {
-      const parsed = JSON.parse(cachedData);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        callback(parsed);
-      }
+  // 1. Read full cache from IndexedDB
+  idbGet(cacheKey).then(cachedData => {
+    if (isSubscribed && Array.isArray(cachedData) && cachedData.length > 0) {
+      callback(cachedData);
     }
-  } catch (e) {}
+  }).catch(() => {});
 
   const fetchRegs = async () => {
     if (!isSubscribed) return;
@@ -670,7 +666,7 @@ export const subscribeToRegistrations = (programId, month, callback) => {
       const res = await fetchAPI(`/api/registrations${monthParam ? `?month=${monthParam}` : ''}`);
       if (isSubscribed) {
         if (res?.data) {
-          safeSetLocalStorage(cacheKey, res.data);
+          idbSet(cacheKey, res.data).catch(() => {});
           callback(res.data);
         } else {
           callback([]);
@@ -684,9 +680,8 @@ export const subscribeToRegistrations = (programId, month, callback) => {
     }
   };
 
-  
   fetchRegs();
-  
+
   return () => {
     isSubscribed = false;
   };

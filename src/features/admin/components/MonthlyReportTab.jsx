@@ -384,7 +384,15 @@ const shouldGoToEnd = (sourceName) => {
   );
 };
 
-export default function MonthlyReportTab({ callLogs = [], registrations = [], programs = [], attenders = [], settingsOptions = {} }) {
+export default function MonthlyReportTab({
+  callLogs = [],
+  registrations = [],
+  programs = [],
+  attenders = [],
+  settingsOptions = {},
+  selectedMonth,
+  setSelectedMonth
+}) {
   const todayObj = new Date();
   const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, "0")}-${String(todayObj.getDate()).padStart(2, "0")}`;
   const currentMonthFirstDay = `${todayStr.slice(0, 7)}-01`;
@@ -393,10 +401,45 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
     return `${todayStr.slice(0, 7)}-${String(lastDay).padStart(2, "0")}`;
   })();
 
+  const getMonthBounds = (mKey) => {
+    if (!mKey || mKey === 'ALL') return null;
+    const [yrStr, mnStr] = mKey.split('-');
+    const yr = parseInt(yrStr, 10);
+    const mn = parseInt(mnStr, 10);
+    if (isNaN(yr) || isNaN(mn)) return null;
+    const start = `${yr}-${String(mn).padStart(2, '0')}-01`;
+    const lastDay = new Date(yr, mn, 0).getDate();
+    const end = `${yr}-${String(mn).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    return { start, end };
+  };
+
+  const initialBounds = (selectedMonth && selectedMonth !== 'ALL' && getMonthBounds(selectedMonth)) || { start: currentMonthFirstDay, end: currentMonthLastDay };
+
   const [selectedProgramIds, setSelectedProgramIds] = useState([]); // empty = ALL
   const [selectedAttenderIds, setSelectedAttenderIds] = useState([]); // empty = ALL
-  const [startDate, setStartDate] = useState(currentMonthFirstDay);
-  const [endDate, setEndDate] = useState(currentMonthLastDay);
+  const [startDate, setStartDate] = useState(initialBounds.start);
+  const [endDate, setEndDate] = useState(initialBounds.end);
+
+  // Sync startDate and endDate when parent selectedMonth changes
+  useEffect(() => {
+    if (!selectedMonth || selectedMonth === 'ALL') return;
+    const bounds = getMonthBounds(selectedMonth);
+    if (bounds && (startDate.slice(0, 7) !== selectedMonth || endDate.slice(0, 7) !== selectedMonth)) {
+      setStartDate(bounds.start);
+      setEndDate(bounds.end);
+    }
+  }, [selectedMonth]);
+
+  // Sync parent selectedMonth when user changes startDate or endDate
+  useEffect(() => {
+    if (!setSelectedMonth || !startDate || !endDate) return;
+    const sM = startDate.slice(0, 7);
+    const eM = endDate.slice(0, 7);
+    const target = sM === eM ? sM : 'ALL';
+    if (selectedMonth !== target) {
+      setSelectedMonth(target);
+    }
+  }, [startDate, endDate, selectedMonth, setSelectedMonth]);
   const [selectedLeadOrigins, setSelectedLeadOrigins] = useState([]);
   const [selectedSources, setSelectedSources] = useState([]);
   const [selectedCalledFors, setSelectedCalledFors] = useState([]);
@@ -567,7 +610,7 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
   }, [callLogs, allAttempts]);
 
   const programRegistrationsList = React.useMemo(() => {
-    return getCanonicalRegistrations(registrations, callLogs, {
+    const list = getCanonicalRegistrations(registrations, callLogs, {
       startDate,
       endDate,
       selectedAttenderIds,
@@ -575,6 +618,16 @@ export default function MonthlyReportTab({ callLogs = [], registrations = [], pr
       selectedSources,
       selectedLeadOrigins,
       selectedCalledFors
+    });
+    if (!startDate && !endDate) return list;
+    return list.filter(reg => {
+      const rawDate = reg.evidence?.timestamp || reg.registeredAt || reg.createdAt || reg.timestamp || reg.date;
+      if (!rawDate) return false;
+      const parsed = parseTimestamp(rawDate);
+      if (!parsed || isNaN(parsed.getTime())) return false;
+      const localStr = getLocalDateStr(parsed);
+      const isLocalMatch = (!startDate || localStr >= startDate) && (!endDate || localStr <= endDate);
+      return isLocalMatch;
     });
   }, [registrations, callLogs, startDate, endDate, selectedAttenderIds, selectedProgramIds, selectedSources, selectedLeadOrigins, selectedCalledFors]);
 

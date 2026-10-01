@@ -68,12 +68,13 @@ export default async function handler(req, res) {
           contactFilter.$or = monthOr;
         }
         regFilter.$or = [
+          { monthKey: month },
           { registeredAt: { $gte: startD, $lte: endD } },
+          { 'evidence.timestamp': { $gte: startD, $lte: endD } },
           { createdAt: { $gte: startD, $lte: endD } },
-          { updatedAt: { $gte: startD, $lte: endD } },
           { registeredAt: monthRegex },
-          { createdAt: monthRegex },
-          { updatedAt: monthRegex }
+          { 'evidence.timestamp': monthRegex },
+          { createdAt: monthRegex }
         ];
       }
     }
@@ -124,21 +125,52 @@ export default async function handler(req, res) {
       else pipelinePeople['Unknown / Legacy'] += row.count;
     }
 
+    // Base filter for leads (program & attender without month restriction)
+    const baseContactFilter = {};
+    if (programId && programId !== 'ALL') {
+      baseContactFilter.$or = [
+        { programId },
+        { source: programId },
+        { tags: programId },
+      ];
+    }
+    if (attenderId && attenderId !== 'ALL') {
+      baseContactFilter.assignedTo = attenderId;
+    }
+
     // ── B: CALL EVENTS — from history[] arrays. Unit: one callId per event ─
     // Source: contacts.history[]. Each entry with a callId/id = one call event.
     const callEventPipeline = [
-      { $match: contactFilter },
+      { $match: baseContactFilter },
       { $unwind: '$history' }
     ];
 
+    if (attenderId && attenderId !== 'ALL') {
+      callEventPipeline.push({
+        $match: {
+          $or: [
+            { 'history.attenderId': attenderId },
+            { 'history.callAttenderId': attenderId }
+          ]
+        }
+      });
+    }
+
     if (month && month !== 'ALL') {
+      const monthRegex = new RegExp(`^${month}`);
       const [y, m] = month.split('-').map(v => parseInt(v, 10));
       if (y && m) {
         const startD = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0));
         const endD = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
+        const isoStart = startD.toISOString();
+        const isoEnd = endD.toISOString();
         callEventPipeline.push({
           $match: {
             $or: [
+              { 'history.timestamp': monthRegex },
+              { 'history.date': monthRegex },
+              { 'history.createdAt': monthRegex },
+              { 'history.timestamp': { $gte: isoStart, $lte: isoEnd } },
               { 'history.timestamp': { $gte: startD, $lte: endD } },
               { 'history.date': { $gte: startD, $lte: endD } },
               { 'history.createdAt': { $gte: startD, $lte: endD } }

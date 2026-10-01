@@ -69,7 +69,7 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
       if (isServerFresh || (Array.isArray(logs) && logs.length > 0)) {
         setCallLogsLoading(false);
       }
-    }, refreshTrigger > 0);
+    }, refreshTrigger > 0, true);
     return () => {
       if (unsubLogs) unsubLogs();
     };
@@ -299,6 +299,8 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
                   callLogs={callLogs}
                   registrations={registrations}
                   callLogsLoading={callLogsLoading}
+                  selectedMonth={selectedMonth}
+                  setSelectedMonth={setSelectedMonth}
                 />
               )}
               {activeTab === "call-intelligence" && (
@@ -351,7 +353,15 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
                     <p className="text-slate-600 font-bold text-xs">Loading analytics database...</p>
                   </div>
                 ) : (
-                  <MonthlyReportTab programs={programs} attenders={attenders} settingsOptions={settingsOptions} callLogs={callLogs} registrations={registrations} />
+                  <MonthlyReportTab
+                    programs={programs}
+                    attenders={attenders}
+                    settingsOptions={settingsOptions}
+                    callLogs={callLogs}
+                    registrations={registrations}
+                    selectedMonth={selectedMonth}
+                    setSelectedMonth={setSelectedMonth}
+                  />
                 )
               )}
               {activeTab === "programs" && <ProgramsTab programs={programs} attenders={attenders} onReloadPrograms={refreshAll} />}
