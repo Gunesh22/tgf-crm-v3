@@ -1618,7 +1618,7 @@ export default function MonthlyReportTab({
                 <table className="w-full text-sm bg-white">
                   <thead className="bg-gray-50 border-b border-gray-100">
                     <tr>
-                      {["Name & Contact", "Attender", "Tag / Program", "Source / Called For", "Date & Time", "User Feedback", "Remarks"].map(h => (
+                      {["Name & Contact", "Attender", "Tag / Program", "Call Type", "Source / Called For", "Date & Time", "User Feedback", "Remarks"].map(h => (
                         <th key={h} className="px-6 py-3.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
@@ -1628,6 +1628,9 @@ export default function MonthlyReportTab({
                       const dateStr = c.timestamp instanceof Date && !isNaN(c.timestamp.getTime())
                         ? c.timestamp.toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })
                         : "N/A";
+                      const rawType = String(c.callType || c.callDirection || c.type || c.direction || "").toLowerCase().trim();
+                      const isInc = rawType === "incoming" || rawType === "in" || rawType.includes("incoming") || rawType.includes("inbound");
+
                       return (
                         <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
                           {/* Name & Contact */}
@@ -1641,7 +1644,7 @@ export default function MonthlyReportTab({
                               <div>
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                   <span className="inline-flex items-center px-2.5 py-1 bg-slate-100 text-slate-800 text-xs font-bold rounded-xl">
-                                    👤 {c.leadOwnerName || c.attenderName}
+                                    {c.leadOwnerName || c.attenderName}
                                   </span>
                                   <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-50 text-amber-700 border border-amber-200" title="Shared Lead Conversion">
                                     🏆 Shared
@@ -1653,7 +1656,7 @@ export default function MonthlyReportTab({
                               </div>
                             ) : (
                               <span className="inline-flex items-center px-2.5 py-1 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl">
-                                👤 {c.attenderName}
+                                {c.attenderName}
                               </span>
                             )}
                           </td>
@@ -1672,6 +1675,14 @@ export default function MonthlyReportTab({
                                 )}
                               </div>
                             )}
+                          </td>
+                          {/* Call Type */}
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                              isInc ? "bg-emerald-100 text-emerald-800 border border-emerald-300" : "bg-blue-100 text-blue-800 border border-blue-300"
+                            }`}>
+                              {isInc ? "Incoming (Inc)" : "Outgoing (Out)"}
+                            </span>
                           </td>
                           {/* Source / Called For */}
                           <td className="px-6 py-4 text-xs text-gray-600">
@@ -1699,7 +1710,7 @@ export default function MonthlyReportTab({
                     })}
                     {paginatedConversions.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="py-12 text-center text-gray-400 font-medium bg-white">
+                        <td colSpan={8} className="py-12 text-center text-gray-400 font-medium bg-white">
                           No conversions match the current filters and search query in this period.
                         </td>
                       </tr>

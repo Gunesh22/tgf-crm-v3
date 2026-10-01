@@ -1651,7 +1651,7 @@ export default function DashboardTab({
           <table className="w-full text-xs text-left">
             <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
               <tr>
-                {["Name & Contact", "Attender", "Tag / Program", "Source / Called For", "Date & Time", "User Feedback", "Remarks"].map(h => (
+                {["Name & Contact", "Attender", "Tag / Program", "Call Type", "Source / Called For", "Date & Time", "User Feedback", "Remarks"].map(h => (
                   <th key={h} className="px-3.5 py-2.5">{h}</th>
                 ))}
               </tr>
@@ -1669,6 +1669,8 @@ export default function DashboardTab({
                 const calledForVal = renderVal(c.calledFor || c.programName, "—");
                 const feedbackVal = renderVal(c.feedback || c.userFeedback, "—");
                 const remarkVal = renderVal(c.remark || c.Remark, "—");
+                const rawType = String(c.callType || c.callDirection || c.type || c.direction || "").toLowerCase().trim();
+                const isInc = rawType === "incoming" || rawType === "in" || rawType.includes("incoming") || rawType.includes("inbound");
 
                 return (
                   <tr key={idx} className="hover:bg-slate-50 transition-colors">
@@ -1712,6 +1714,14 @@ export default function DashboardTab({
                         </div>
                       )}
                     </td>
+                    {/* Call Type */}
+                    <td className="px-3.5 py-2.5 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                        isInc ? "bg-emerald-100 text-emerald-800 border border-emerald-300" : "bg-blue-100 text-blue-800 border border-blue-300"
+                      }`}>
+                        {isInc ? "Incoming (Inc)" : "Outgoing (Out)"}
+                      </span>
+                    </td>
                     {/* Source / Called For */}
                     <td className="px-3.5 py-2.5">
                       <div className="font-medium text-slate-700">{sourceVal}</div>
@@ -1738,7 +1748,7 @@ export default function DashboardTab({
               })}
               {paginatedConversions.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-400 font-medium">
+                  <td colSpan={8} className="py-8 text-center text-slate-400 font-medium">
                     No conversions match the current filters and search query.
                   </td>
                 </tr>
