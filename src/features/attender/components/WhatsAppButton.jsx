@@ -176,7 +176,7 @@ export const WhatsAppButton = ({ phone, name = "", variant = "default", attender
   const isHeader = variant === "header";
 
   return (
-    <div className="relative inline-flex items-center shrink-0" ref={dropdownRef}>
+    <div className={`relative inline-flex items-center shrink-0 ${open ? "z-[60]" : ""}`} ref={dropdownRef}>
       {/* Trigger Buttons */}
       {isHeader ? (
         <div className="inline-flex items-center bg-white/20 hover:bg-white/30 text-white rounded-lg text-xs font-semibold transition-all duration-150 border border-white/15 overflow-hidden shadow-2xs">
@@ -225,7 +225,7 @@ export const WhatsAppButton = ({ phone, name = "", variant = "default", attender
         <div
           className={`absolute top-full ${
             isHeader ? "left-0 w-84" : "right-0 w-80"
-          } mt-1.5 bg-white rounded-2xl shadow-2xl border border-slate-200 p-2.5 z-50 animate-fade-in text-slate-800`}
+          } mt-1.5 bg-white rounded-2xl shadow-2xl border border-slate-200 p-2.5 z-[70] animate-fade-in text-slate-800`}
         >
           <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-2 py-1 mb-1.5 border-b border-slate-100 flex items-center justify-between">
             <span>WhatsApp Templates</span>
