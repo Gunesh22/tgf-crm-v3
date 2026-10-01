@@ -6,7 +6,7 @@ import {
   Edit3, X, Save, FileText, Calendar, Tag, User, MapPin, MessageSquare,
   Hash, Clock, PhoneOff, CheckCircle2, AlertCircle, Trash2,
   PhoneIncoming, PhoneOutgoing, CalendarDays, Loader, Flame, SlidersHorizontal, FileSpreadsheet, CheckSquare,
-  Bell, Sparkles, UserCheck, RefreshCw, Info, Eye
+  Bell, Sparkles, UserCheck, RefreshCw, Info, Settings
 } from "lucide-react";
 import {
   subscribeToCallLogs, getAssignedContacts, safeSetLocalStorage,
@@ -44,11 +44,11 @@ import { EditModal } from "./components/EditModal";
 import { MyPerformanceDashboard } from "./components/MyPerformanceDashboard";
 import { ColumnsSelector } from "./components/ColumnsSelector";
 import StageInfoModal from "./components/edit-modal/StageInfoModal";
-import QuickGuideModal from "./components/QuickGuideModal";
 import CommandPalette from "../../components/ui/CommandPalette";
 import { Pagination } from "./components/Pagination";
 import { AttenderFilters } from "./components/AttenderFilters";
 import { ContactTable } from "./components/ContactTable";
+import AttenderSettings from "./components/AttenderSettings";
 import MobileAttenderView from "./mobile/MobileAttenderView";
 import MobileEditModal from "./mobile/MobileEditModal";
 
@@ -167,7 +167,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   const [programSearch, setProgramSearch] = useState("");
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [showStageInfoModal, setShowStageInfoModal] = useState(false);
-  const [isQuickGuideOpen, setIsQuickGuideOpen] = useState(false);
+  const [showSettingsView, setShowSettingsView] = useState(false);
   const [isSyncingDB, setIsSyncingDB] = useState(false);
   const isSyncingRef = useRef(false);
   const syncAbortControllerRef = useRef(null);
@@ -461,12 +461,27 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   const handleSaveRow = useCallback((updated, isOptimistic) => {
     const cleanUpdated = { ...updated };
     if (cleanUpdated.id) delete cleanUpdated._isNew;
+    const targetId = cleanUpdated.id || cleanUpdated._id;
     setCallLogs(prev => {
-      const index = prev.findIndex(l => (cleanUpdated.id && l.id === cleanUpdated.id) || (cleanUpdated._timestamp && l._timestamp === cleanUpdated._timestamp));
+      const index = prev.findIndex(l => (targetId && (l.id === targetId || l._id === targetId)) || (cleanUpdated._timestamp && l._timestamp === cleanUpdated._timestamp));
       if (index >= 0) {
         const next = [...prev];
         const merged = { ...next[index], ...cleanUpdated };
         if (merged.id) delete merged._isNew;
+
+        // Keep active attenderState in sync with updated callback fields
+        if (attenderId && merged.attenderStates && merged.attenderStates[attenderId] && cleanUpdated.callbackDate !== undefined) {
+          merged.attenderStates = {
+            ...merged.attenderStates,
+            [attenderId]: {
+              ...merged.attenderStates[attenderId],
+              callbackDate: cleanUpdated.callbackDate,
+              callbackTime: cleanUpdated.callbackTime !== undefined ? cleanUpdated.callbackTime : merged.attenderStates[attenderId].callbackTime,
+              callbackStatus: cleanUpdated.callbackStatus !== undefined ? cleanUpdated.callbackStatus : merged.attenderStates[attenderId].callbackStatus,
+            }
+          };
+        }
+
         next[index] = enrichSingleLogWithCallbackFlags(merged, attenderId || attenderName);
         return next;
       }
@@ -1727,6 +1742,16 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
 
   const getCallbackStr = (log) => getLocalDateString(log.callbackDate);
 
+  if (showSettingsView) {
+    return (
+      <AttenderSettings
+        attenderId={attenderId}
+        attenderName={attenderName}
+        onBack={() => setShowSettingsView(false)}
+      />
+    );
+  }
+
   return (
     <>
       {/* Mobile-Only Dedicated Layout (< 768px) */}
@@ -1969,14 +1994,16 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
               )}
             </div>
 
-            {/* Quick Guide Eye Button */}
+
+            {/* Attender Settings Button */}
             <button
               type="button"
-              onClick={() => setIsQuickGuideOpen(true)}
-              className="p-2 rounded-xl border border-gray-200 bg-white hover:bg-slate-50 text-gray-500 hover:text-indigo-600 transition-all flex items-center justify-center cursor-pointer shadow-2xs"
-              title="CRM Quick Guide & Stage Definitions (English / Hindi / Marathi)"
+              onClick={() => setShowSettingsView(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 active:scale-[0.98] text-slate-700 rounded-lg font-bold text-xs transition shadow-2xs cursor-pointer shrink-0"
+              title="Personal Settings & WhatsApp Templates"
             >
-              <Eye size={18} />
+              <Settings size={14} className="text-slate-500" />
+              <span>Settings</span>
             </button>
           </div>
 
@@ -2371,19 +2398,13 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
         contacts={callLogs}
         onSelectContact={(c) => setEditingRow(c)}
         onOpenCallEntry={openCallEntryDialog}
-        onOpenStageInfo={() => setIsQuickGuideOpen(true)}
+        onOpenStageInfo={() => setShowStageInfoModal(true)}
       />
 
       {/* Stage Definitions Info Modal */}
       <StageInfoModal
         isOpen={showStageInfoModal}
         onClose={() => setShowStageInfoModal(false)}
-      />
-
-      {/* Attender Quick Reference Guide Modal (English / Hindi / Marathi) */}
-      <QuickGuideModal
-        isOpen={isQuickGuideOpen}
-        onClose={() => setIsQuickGuideOpen(false)}
       />
     </>
   );

@@ -568,12 +568,20 @@ export default function MobileEditModal({
       });
 
       let savedDocId = targetDocId;
+      let finalSavedPayload = null;
       if (isNewWithoutDoc) {
         delete updates._isNew;
         const resId = await addIncomingCallLog(
           attenderId || row.attenderId, attenderName || row.attenderName, updates, targetEdited.programId, targetEdited.programName
         );
         savedDocId = resId;
+        finalSavedPayload = {
+          ...targetEdited,
+          ...updates,
+          id: savedDocId,
+          _id: savedDocId,
+          history: updates.history || baseHistory
+        };
       } else {
         const existingContext = globalDup?.first
           ? { ...globalDup.first, ...row, ...targetEdited }
@@ -582,14 +590,31 @@ export default function MobileEditModal({
         if (res?.updatedContact) {
           savedDocId = res.updatedContact.id || res.updatedContact._id || savedDocId;
         }
-      }
 
-      const finalSavedPayload = {
-        ...targetEdited,
-        ...updates,
-        id: savedDocId,
-        history: updates.history || baseHistory
-      };
+        const currentAttStates = { ...(targetEdited.attenderStates || savedRow.attenderStates || {}) };
+        if (attenderId) {
+          const prevAttState = currentAttStates[attenderId] || {};
+          currentAttStates[attenderId] = {
+            ...prevAttState,
+            status: updates.status || prevAttState.status,
+            remark: updates.remark !== undefined ? updates.remark : prevAttState.remark,
+            callbackDate: updates.callbackDate !== undefined ? updates.callbackDate : (prevAttState.callbackDate || null),
+            callbackTime: updates.callbackTime !== undefined ? updates.callbackTime : (prevAttState.callbackTime || null),
+            callbackStatus: updates.callbackStatus !== undefined ? updates.callbackStatus : (prevAttState.callbackStatus || null),
+            history: updates.history || baseHistory
+          };
+        }
+
+        finalSavedPayload = res?.updatedContact
+          ? { ...res.updatedContact, id: savedDocId, _id: savedDocId }
+          : {
+              ...targetEdited,
+              ...updates,
+              id: savedDocId,
+              attenderStates: currentAttStates,
+              history: updates.history || baseHistory
+            };
+      }
 
       if (onSave) onSave(finalSavedPayload, false);
 

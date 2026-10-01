@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect } from "react";
-import { ChevronDown, Send } from "lucide-react";
-import { getSettingsOptions, DEFAULT_WHATSAPP_TEMPLATES } from "../../../lib/db";
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import { ChevronDown, Send, Search, X, Copy, Check, Image as ImageIcon } from "lucide-react";
+import { toast } from "react-hot-toast";
+import { getLocalTemplates, copyImageToClipboard } from "../../../lib/localTemplates";
 
 /**
  * Formats a phone number for WhatsApp wa.me links
@@ -9,16 +10,8 @@ import { getSettingsOptions, DEFAULT_WHATSAPP_TEMPLATES } from "../../../lib/db"
 export const formatPhoneForWhatsApp = (phone) => {
   if (!phone) return "";
   let cleaned = String(phone).replace(/[^0-9]/g, "");
-  
-  if (cleaned.startsWith("0")) {
-    cleaned = cleaned.substring(1);
-  }
-  
-  if (cleaned.length === 10) {
-    return `91${cleaned}`;
-  }
-  
-  return cleaned;
+  if (cleaned.startsWith("0")) cleaned = cleaned.substring(1);
+  return cleaned.length === 10 ? `91${cleaned}` : cleaned;
 };
 
 /**
@@ -26,25 +19,20 @@ export const formatPhoneForWhatsApp = (phone) => {
  */
 export const processTemplateText = (rawText, name) => {
   if (!rawText) return "";
-  const cleanName = String(name || "").trim();
-  
-  if (cleanName) {
-    return rawText
-      .replace(/\{Name\}/gi, () => cleanName)
-      .replace(/\[Contact Name\]/gi, () => cleanName)
-      .replace(/\[Name\]/gi, () => cleanName)
-      .replace(/\{cleanName\}/gi, () => cleanName)
-      .replace(/\$\{cleanName\}/gi, () => cleanName);
+  let cleanName = String(name || "").trim();
+  const lowerName = cleanName.toLowerCase();
+  if (lowerName === "unknown" || lowerName === "unknown lead" || lowerName === "unknown name") {
+    cleanName = "";
   }
-  
-  // If no name is present, clean up "{Name} ji", "{Name}", etc.
+  const namePlaceholder = /\{Name\}|\[Contact Name\]|\[Name\]|\$?\{cleanName\}/gi;
+
+  if (cleanName) {
+    return rawText.replace(namePlaceholder, cleanName);
+  }
+
   return rawText
-    .replace(/\{Name\}\s*ji!?/gi, "")
-    .replace(/\[Contact Name\]\s*ji!?/gi, "")
-    .replace(/\[Name\]\s*ji!?/gi, "")
-    .replace(/\{Name\}/gi, "")
-    .replace(/\[Contact Name\]/gi, "")
-    .replace(/\[Name\]/gi, "")
+    .replace(/(\{Name\}|\[Contact Name\]|\[Name\])\s*ji!?/gi, "")
+    .replace(namePlaceholder, "")
     .replace(/\s+/g, " ")
     .trim();
 };
@@ -55,30 +43,60 @@ const WhatsAppIcon = ({ className = "w-3.5 h-3.5 fill-current" }) => (
   </svg>
 );
 
-export const WhatsAppButton = ({ phone, name = "", variant = "default" }) => {
+export const WhatsAppButton = ({ phone, name = "", variant = "default", attenderId = "" }) => {
   const [open, setOpen] = useState(false);
-  const [dbTemplates, setDbTemplates] = useState(DEFAULT_WHATSAPP_TEMPLATES);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [copiedTextId, setCopiedTextId] = useState(null);
+  const [copiedImageId, setCopiedImageId] = useState(null);
+  const [templates, setTemplates] = useState([]);
   const dropdownRef = useRef(null);
 
   useEffect(() => {
-    getSettingsOptions()
-      .then(options => {
-        if (options?.whatsappTemplates && options.whatsappTemplates.length > 0) {
-          setDbTemplates(options.whatsappTemplates);
-        }
-      })
-      .catch(() => {});
-  }, []);
+    let isMounted = true;
+    const fetchTemplates = async () => {
+      try {
+        const data = await getLocalTemplates(attenderId);
+        if (isMounted) setTemplates(data);
+      } catch (err) {
+        console.error("Failed to load local templates", err);
+      }
+    };
+
+    fetchTemplates();
+
+    const handleUpdate = () => {
+      fetchTemplates();
+    };
+
+    window.addEventListener("local-wa-templates-updated", handleUpdate);
+    return () => {
+      isMounted = false;
+      window.removeEventListener("local-wa-templates-updated", handleUpdate);
+    };
+  }, [attenderId]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setOpen(false);
+        setSearchQuery("");
+        setCopiedTextId(null);
+        setCopiedImageId(null);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  const filteredTemplates = useMemo(() => {
+    if (!searchQuery.trim()) return templates;
+    const q = searchQuery.toLowerCase().trim();
+    return templates.filter((tpl) => {
+      const titleMatch = tpl?.title?.toLowerCase().includes(q);
+      const textMatch = tpl?.text?.toLowerCase().includes(q);
+      return titleMatch || textMatch;
+    });
+  }, [templates, searchQuery]);
 
   if (!phone) return null;
 
@@ -87,140 +105,284 @@ export const WhatsAppButton = ({ phone, name = "", variant = "default" }) => {
 
   const waPhone = formatPhoneForWhatsApp(phone);
 
-  const handleOpenWA = (text = "") => {
+  const handleOpenDirectWA = () => {
     setOpen(false);
-    const processedText = processTemplateText(text, name);
-    const url = processedText 
-      ? `https://wa.me/${waPhone}?text=${encodeURIComponent(processedText)}`
-      : `https://wa.me/${waPhone}`;
+    setSearchQuery("");
+    setCopiedTextId(null);
+    setCopiedImageId(null);
+    const url = `https://wa.me/${waPhone}`;
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  if (variant === "header") {
-    return (
-      <div className="relative inline-flex items-center" ref={dropdownRef}>
+  const handleCopyTemplate = async (rawText, title = "Template", id = null) => {
+    const textToCopy = processTemplateText(rawText, name);
+    if (!textToCopy) return;
+
+    try {
+      let copied = false;
+      if (navigator?.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(textToCopy);
+          copied = true;
+        } catch {
+          // Fall back to execCommand below
+        }
+      }
+      if (!copied) {
+        const textarea = document.createElement("textarea");
+        textarea.value = textToCopy;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      if (id !== null) {
+        setCopiedTextId(id);
+        setTimeout(() => setCopiedTextId(null), 2000);
+      }
+      toast.success(`Copied "${title}" to clipboard!`, { id: "wa-template-copied" });
+    } catch (err) {
+      console.error("Failed to copy template", err);
+      toast.error("Failed to copy template to clipboard");
+    }
+  };
+
+  const handleCopyImage = async (e, imageData, id) => {
+    e.stopPropagation();
+    if (!imageData) return;
+
+    try {
+      await copyImageToClipboard(imageData);
+      setCopiedImageId(id);
+      setTimeout(() => setCopiedImageId(null), 2000);
+      toast.success("Image copied! Press Ctrl+V in WhatsApp.", { id: "wa-img-copied" });
+    } catch (err) {
+      console.error("Failed to copy image", err);
+      toast.error("Failed to copy image: " + err.message);
+    }
+  };
+
+  const toggleDropdown = () => {
+    if (open) {
+      setSearchQuery("");
+      setCopiedTextId(null);
+      setCopiedImageId(null);
+    }
+    setOpen((prev) => !prev);
+  };
+
+  const isHeader = variant === "header";
+
+  return (
+    <div className="relative inline-flex items-center shrink-0" ref={dropdownRef}>
+      {/* Trigger Buttons */}
+      {isHeader ? (
         <div className="inline-flex items-center bg-white/20 hover:bg-white/30 text-white rounded-lg text-xs font-semibold transition-all duration-150 border border-white/15 overflow-hidden shadow-2xs">
           <button
             type="button"
-            onClick={() => handleOpenWA()}
+            onClick={handleOpenDirectWA}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 hover:bg-emerald-500/30 active:scale-[0.97] transition-all duration-150 text-white cursor-pointer"
-            title={`WhatsApp ${waPhone}`}
+            title={`WhatsApp ${waPhone} (Direct Chat)`}
           >
             <WhatsAppIcon className="w-3.5 h-3.5 fill-emerald-300" />
             <span>WhatsApp</span>
           </button>
           <button
             type="button"
-            onClick={() => setOpen(!open)}
+            onClick={toggleDropdown}
             className="px-2 py-1.5 hover:bg-white/20 text-white/80 hover:text-white active:scale-[0.97] transition-all duration-150 border-l border-white/15 cursor-pointer"
             title="Message Templates"
           >
             <ChevronDown size={12} className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
           </button>
         </div>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={handleOpenDirectWA}
+            className="inline-flex items-center justify-center px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 active:scale-[0.97] text-white rounded-l-lg text-xs font-semibold transition-all duration-150 border border-emerald-600 shadow-2xs cursor-pointer"
+            title={`WhatsApp ${waPhone} (Direct Chat)`}
+          >
+            <WhatsAppIcon className="w-3.5 h-3.5 fill-white mr-1" />
+            WA
+          </button>
+          <button
+            type="button"
+            onClick={toggleDropdown}
+            className="px-1.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 active:scale-[0.97] text-white rounded-r-lg border-l border-emerald-500 text-xs font-semibold transition-all duration-150 cursor-pointer"
+            title="Choose message template"
+          >
+            <ChevronDown size={12} className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+          </button>
+        </>
+      )}
 
-        {open && (
-          <div className="absolute top-full left-0 mt-1.5 w-72 bg-white rounded-lg shadow-xl border border-slate-200 p-2 z-50 animate-fade-in text-slate-800">
-            <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-2 py-1 mb-1 border-b border-slate-100 flex items-center justify-between">
-              <span>Send WhatsApp Message</span>
-              <span className="text-[9px] bg-emerald-50 text-emerald-600 px-1.5 py-0.2 rounded font-semibold">{waPhone}</span>
-            </div>
-            <div className="space-y-1">
+      {/* Unified Templates Dropdown */}
+      {open && (
+        <div
+          className={`absolute top-full ${
+            isHeader ? "left-0 w-84" : "right-0 w-80"
+          } mt-1.5 bg-white rounded-2xl shadow-2xl border border-slate-200 p-2.5 z-50 animate-fade-in text-slate-800`}
+        >
+          <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-2 py-1 mb-1.5 border-b border-slate-100 flex items-center justify-between">
+            <span>WhatsApp Templates</span>
+            {isHeader && (
+              <span className="text-[9px] bg-emerald-50 text-emerald-600 px-1.5 py-0.2 rounded font-semibold font-mono">
+                {waPhone}
+              </span>
+            )}
+          </div>
+
+          {/* Template Search Bar */}
+          <div className="relative mb-2">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search templates..."
+              autoFocus
+              className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-slate-800 placeholder-slate-400 transition"
+            />
+            {searchQuery && (
               <button
                 type="button"
-                onClick={() => handleOpenWA()}
-                className="w-full text-left px-2.5 py-1.5 rounded-md text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 active:scale-[0.98] text-emerald-800 transition flex items-center justify-between group cursor-pointer"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer"
+                title="Clear search"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-1.5 max-h-72 overflow-y-auto pr-0.5">
+            {/* Direct Chat (Open WhatsApp) */}
+            {!searchQuery && (
+              <button
+                type="button"
+                onClick={handleOpenDirectWA}
+                className="w-full text-left px-2.5 py-2 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 active:scale-[0.98] text-emerald-800 transition flex items-center justify-between group cursor-pointer mb-1"
               >
                 <div className="flex items-center gap-2">
                   <WhatsAppIcon className="w-3.5 h-3.5 fill-emerald-600" />
-                  <span>Direct Chat (No Message)</span>
+                  <span>Direct Chat (Open WhatsApp)</span>
                 </div>
                 <Send size={11} className="text-emerald-600 group-hover:translate-x-0.5 transition-transform" />
               </button>
-              {dbTemplates.map((tpl, i) => {
+            )}
+
+            {filteredTemplates.length > 0 ? (
+              filteredTemplates.map((tpl, i) => {
+                const tplId = tpl.id || i;
+                const isCopiedText = copiedTextId === tplId;
+                const isCopiedImg = copiedImageId === tplId;
                 const previewText = processTemplateText(tpl.text, name);
+
                 return (
-                  <button
-                    key={tpl.id || i}
-                    type="button"
-                    onClick={() => handleOpenWA(tpl.text)}
-                    className="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-slate-50 active:scale-[0.98] transition border border-transparent hover:border-slate-100 cursor-pointer"
+                  <div
+                    key={tplId}
+                    className={`w-full flex items-stretch gap-1.5 p-1 rounded-xl transition border ${
+                      isCopiedText
+                        ? "bg-emerald-50/70 border-emerald-200"
+                        : "hover:bg-slate-50 border-slate-100/80 hover:border-slate-200"
+                    }`}
                   >
-                    <div className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                      {tpl.emoji ? (
-                        <span className="text-sm leading-none">{tpl.emoji}</span>
-                      ) : (
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                      )}
-                      <span>{tpl.title}</span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-2 leading-relaxed">{previewText}</div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
+                    {/* Text Copy Button */}
+                    <button
+                      type="button"
+                      onClick={() => handleCopyTemplate(tpl.text, tpl.title, tplId)}
+                      className="flex-1 text-left px-2 py-1.5 rounded-lg cursor-pointer group/item min-w-0"
+                      title="Click to copy message text"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5 truncate">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                          <span className="truncate">{tpl.title}</span>
+                        </div>
+                        <span
+                          className={`text-[10px] flex items-center gap-1 font-medium shrink-0 ml-1 transition-opacity ${
+                            isCopiedText
+                              ? "opacity-100 text-emerald-600 font-bold"
+                              : "opacity-0 group-hover/item:opacity-100 text-slate-400 group-hover/item:text-emerald-600"
+                          }`}
+                        >
+                          {isCopiedText ? (
+                            <>
+                              <Check size={11} className="text-emerald-600" />
+                              <span>Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy size={11} />
+                              <span>Copy</span>
+                            </>
+                          )}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-2 leading-relaxed">
+                        {previewText}
+                      </div>
+                    </button>
 
-  // Default variant for form inputs
-  return (
-    <div className="relative inline-flex items-center shrink-0" ref={dropdownRef}>
-      <button
-        type="button"
-        onClick={() => handleOpenWA()}
-        className="inline-flex items-center justify-center px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 active:scale-[0.97] text-white rounded-l-lg text-xs font-semibold transition-all duration-150 border border-emerald-600 shadow-2xs cursor-pointer"
-        title={`WhatsApp ${waPhone}`}
-      >
-        <WhatsAppIcon className="w-3.5 h-3.5 fill-white mr-1" />
-        WA
-      </button>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="px-1.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 active:scale-[0.97] text-white rounded-r-lg border-l border-emerald-500 text-xs font-semibold transition-all duration-150 cursor-pointer"
-        title="Choose message template"
-      >
-        <ChevronDown size={12} />
-      </button>
-
-      {open && (
-        <div className="absolute top-full right-0 mt-1.5 w-64 bg-white rounded-lg shadow-xl border border-slate-200 p-2 z-50 animate-fade-in text-slate-800">
-          <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-2 py-1">
-            Send WhatsApp Message
-          </div>
-          <div className="space-y-1">
-            <button
-              type="button"
-              onClick={() => handleOpenWA()}
-              className="w-full text-left px-2 py-1.5 rounded-md text-xs font-semibold hover:bg-emerald-50 active:scale-[0.98] text-emerald-700 transition flex items-center justify-between cursor-pointer"
-            >
-              <span>Direct Chat (No Message)</span>
-              <Send size={11} />
-            </button>
-            {dbTemplates.map((tpl, i) => {
-              const previewText = processTemplateText(tpl.text, name);
-              return (
-                <button
-                  key={tpl.id || i}
-                  type="button"
-                  onClick={() => handleOpenWA(tpl.text)}
-                  className="w-full text-left px-2 py-1.5 rounded-md hover:bg-slate-50 active:scale-[0.98] transition cursor-pointer"
-                >
-                  <div className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                    {tpl.emoji ? (
-                      <span>{tpl.emoji}</span>
-                    ) : (
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    {/* Image Thumbnail Box */}
+                    {tpl.image && (
+                      <button
+                        type="button"
+                        onClick={(e) => handleCopyImage(e, tpl.image, tplId)}
+                        className={`relative w-12 h-12 self-center shrink-0 rounded-lg border overflow-hidden cursor-pointer transition shadow-2xs group/img ${
+                          isCopiedImg
+                            ? "border-emerald-500 ring-2 ring-emerald-500"
+                            : "border-slate-200 hover:border-emerald-400"
+                        }`}
+                        title="Click to copy original-quality image to clipboard"
+                      >
+                        <img
+                          src={tpl.image}
+                          alt="Template"
+                          className="w-full h-full object-cover"
+                        />
+                        <div
+                          className={`absolute inset-0 flex flex-col items-center justify-center transition-opacity ${
+                            isCopiedImg
+                              ? "opacity-100 bg-emerald-600/90 text-white"
+                              : "opacity-0 group-hover/img:opacity-100 bg-slate-900/70 text-white"
+                          }`}
+                        >
+                          {isCopiedImg ? (
+                            <>
+                              <Check size={13} className="stroke-[3]" />
+                              <span className="text-[7.5px] font-black uppercase">Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy size={11} />
+                              <span className="text-[7.5px] font-bold uppercase mt-0.5">Image</span>
+                            </>
+                          )}
+                        </div>
+                      </button>
                     )}
-                    <span>{tpl.title}</span>
                   </div>
-                  <div className="text-[11px] text-slate-500 truncate">{previewText}</div>
-                </button>
-              );
-            })}
+                );
+              })
+            ) : (
+              <div className="py-6 px-3 text-center text-xs text-slate-400">
+                {searchQuery ? (
+                  <>No templates match &quot;{searchQuery}&quot;</>
+                ) : (
+                  <div className="space-y-1.5">
+                    <p className="font-bold text-slate-600">No templates created yet</p>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Click the <span className="font-semibold text-slate-600">Settings</span> button in the top header to create your own WhatsApp templates with uncompressed images.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
