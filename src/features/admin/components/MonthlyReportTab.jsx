@@ -1618,7 +1618,7 @@ export default function MonthlyReportTab({
                 <table className="w-full text-sm bg-white">
                   <thead className="bg-gray-50 border-b border-gray-100">
                     <tr>
-                      {["Name & Contact", "Attender", "Tag / Program", "Call Type", "Source / Called For", "Date & Time", "User Feedback", "Remarks"].map(h => (
+                      {["Name & Contact", "Attender", "Tag / Program", "Call Type", "Source / Called For", "Date & Time", "Remarks"].map(h => (
                         <th key={h} className="px-6 py-3.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
@@ -1693,12 +1693,6 @@ export default function MonthlyReportTab({
                           <td className="px-6 py-4 text-xs text-gray-500 whitespace-nowrap">
                             {dateStr}
                           </td>
-                          {/* User Feedback */}
-                          <td className="px-6 py-4">
-                            <p className="text-xs text-gray-600 max-w-[200px] truncate" title={c.feedback}>
-                              {c.feedback || <span className="text-gray-300 italic">No feedback</span>}
-                            </p>
-                          </td>
                           {/* Remarks */}
                           <td className="px-6 py-4">
                             <p className="text-xs text-gray-600 max-w-[200px] truncate" title={c.remark}>
@@ -1710,7 +1704,7 @@ export default function MonthlyReportTab({
                     })}
                     {paginatedConversions.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="py-12 text-center text-gray-400 font-medium bg-white">
+                        <td colSpan={7} className="py-12 text-center text-gray-400 font-medium bg-white">
                           No conversions match the current filters and search query in this period.
                         </td>
                       </tr>

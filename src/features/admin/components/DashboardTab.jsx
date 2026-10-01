@@ -1651,7 +1651,7 @@ export default function DashboardTab({
           <table className="w-full text-xs text-left">
             <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
               <tr>
-                {["Name & Contact", "Attender", "Tag / Program", "Call Type", "Source / Called For", "Date & Time", "User Feedback", "Remarks"].map(h => (
+                {["Name & Contact", "Attender", "Tag / Program", "Call Type", "Source / Called For", "Date & Time", "Remarks"].map(h => (
                   <th key={h} className="px-3.5 py-2.5">{h}</th>
                 ))}
               </tr>
@@ -1731,12 +1731,6 @@ export default function DashboardTab({
                     <td className="px-3.5 py-2.5 text-slate-500 whitespace-nowrap">
                       {dateStr}
                     </td>
-                    {/* User Feedback */}
-                    <td className="px-3.5 py-2.5">
-                      <p className="max-w-[180px] truncate text-slate-600" title={feedbackVal}>
-                        {feedbackVal}
-                      </p>
-                    </td>
                     {/* Remarks */}
                     <td className="px-3.5 py-2.5">
                       <p className="max-w-[180px] truncate text-slate-600" title={remarkVal}>
@@ -1748,7 +1742,7 @@ export default function DashboardTab({
               })}
               {paginatedConversions.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-400 font-medium">
+                  <td colSpan={7} className="py-8 text-center text-slate-400 font-medium">
                     No conversions match the current filters and search query.
                   </td>
                 </tr>
