@@ -94,6 +94,34 @@ export function ContactTable({
   attenderId,
   attenderName
 }) {
+  const [fullRowHighlight, setFullRowHighlight] = React.useState(() => {
+    try {
+      return localStorage.getItem(`row_highlight_${attenderId || "default"}`) === "full";
+    } catch {
+      return false;
+    }
+  });
+
+  React.useEffect(() => {
+    const readPref = () => {
+      try {
+        return localStorage.getItem(`row_highlight_${attenderId || "default"}`) === "full";
+      } catch {
+        return false;
+      }
+    };
+    setFullRowHighlight(readPref());
+
+    const handleUpdate = (e) => {
+      if (!e?.detail?.attenderId || e.detail.attenderId === attenderId) {
+        setFullRowHighlight(readPref());
+      }
+    };
+
+    window.addEventListener("attender-appearance-updated", handleUpdate);
+    return () => window.removeEventListener("attender-appearance-updated", handleUpdate);
+  }, [attenderId]);
+
   const getStatusBadge = (log, activeAttenderCtx) => {
     let rawStatus = getAttenderStatus(log, activeAttenderCtx);
     const status = getCanonicalStatus(rawStatus || "");
@@ -183,22 +211,39 @@ export function ContactTable({
               const isCalled = !!(view.status || view.callbackDate || view.remark);
 
               let statusBorder = "border-l-2 border-l-transparent";
+              let rowBg = "bg-white hover:bg-slate-50";
+
               if (isDue) {
                 statusBorder = "border-l-4 border-l-rose-500";
+                if (fullRowHighlight) {
+                  rowBg = "bg-rose-50/60 hover:bg-rose-100/50";
+                }
               } else if (isHot) {
                 statusBorder = "border-l-4 border-l-amber-500";
+                if (fullRowHighlight) {
+                  rowBg = "bg-amber-50/60 hover:bg-amber-100/50";
+                }
               } else if (hasFollowup) {
                 statusBorder = "border-l-4 border-l-sky-500";
+                if (fullRowHighlight) {
+                  rowBg = "bg-sky-50/60 hover:bg-sky-100/50";
+                }
               } else if (isUnanswered) {
                 statusBorder = "border-l-4 border-l-indigo-400";
+                if (fullRowHighlight) {
+                  rowBg = "bg-indigo-50/60 hover:bg-indigo-100/50";
+                }
               } else if (isCalled) {
                 statusBorder = "border-l-4 border-l-emerald-500";
+                if (fullRowHighlight) {
+                  rowBg = "bg-emerald-50/60 hover:bg-emerald-100/50";
+                }
               }
 
               return (
                 <tr
                   key={`${log.id || 'log'}_${idx}`}
-                  className={`cursor-pointer transition-colors bg-white hover:bg-slate-50 border-b border-slate-100 ${statusBorder}`}
+                  className={`cursor-pointer transition-colors ${rowBg} border-b border-slate-100 ${statusBorder}`}
                   onClick={() => {
                     if (!didDrag.current) {
                       console.log("[DEBUG] Selected Row:", log);

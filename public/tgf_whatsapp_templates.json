@@ -1,0 +1,63 @@
+{
+  "exportedAt": "2026-10-01T14:30:00.000Z",
+  "version": 1,
+  "templatesCount": 7,
+  "templates": [
+    {
+      "id": "tpl_welcome_program_inquiry",
+      "title": "Welcome - Program Inquiry",
+      "text": "Happy Thoughts {Name} ji! 🙏\n\nTej Gyan Foundation ki taraf se aapka swagat hai.\n\nAapne hamare aane wale {Program} ke baare mein jaankari lene ke liye sampark kiya tha.\n\nHum aapko is jeevan-parivartankari karyakram ke sabhi details yahan bhej rahe hain. Kripya niche diye gaye vivaran ko padhein aur kisi bhi prashna ke liye hume turant reply karein.\n\n✨ *Aapka ek nirnay, aapke jeevan ki disha badal sakta hai.*\n\nDhanyawad,\n*{Attender}* 🌸\n*Tej Gyan Foundation*",
+      "image": null,
+      "imageName": "",
+      "createdAt": 1727780000001
+    },
+    {
+      "id": "tpl_details_program_full_info",
+      "title": "Details - Program Full Info",
+      "text": "Happy Thoughts {Name} ji! 🌸\n\nJaisa ki hamari baat hui, yahan hai *{Program}* ke sabhi mukhya details:\n\n📅 *Date:* [Date e.g. 15th to 18th Oct]\n⏰ *Time:* [e.g. 6:30 AM to 8:00 AM]\n📍 *Venue / Mode:* [Online Zoom / Offline Center Name]\n🎙️ *Margadarshan:* Sirshree ke divya pravachan aur dhyan vidhiyan\n\n✨ *Is {Program} se aapko kya prapt hoga?*\n• Mansik shanti aur tanav mukti (Stress Relief)\n• Sambandhon mein prem aur samvaad\n• Swa-vichaar aur aatmgayan ki samajh\n\nSeats seemit hain, isliye kripya samay par apna registration nishchit karein.\n\n*Registration Link:* [Insert Link]\n\nDhanyawad,\n*{Attender}* 🙏\n*Tej Gyan Foundation*",
+      "image": null,
+      "imageName": "",
+      "createdAt": 1727780000002
+    },
+    {
+      "id": "tpl_confirmation_registration_successful",
+      "title": "Confirmation - Registration Successful",
+      "text": "Happy Thoughts {Name} ji! 🎉🙏\n\nBadhai ho! Aapka *{Program}* ke liye registration safaltapoorvak poora ho gaya hai!\n\n📋 *Aapke Registration Details:*\n• *Name:* {Name}\n• *Program:* {Program}\n• *Attender / Coordinator:* {Attender}\n• *Status:* Confirmed (Purna)\n\n📌 *Agle Kadam (Next Steps):*\n1. Program shuru hone se 10 minute pehle shant sthan par baithein.\n2. Ek notebook aur pen apne paas zaroor rakhein.\n3. Karyakram ka Zoom/Venue link aapko jald hi is WhatsApp number par prapt hoga.\n\nHum aapke is aatm-anveshan ki yatra mein aapka swagat karte hain! ✨\n\n*{Attender}*\n*Tej Gyan Foundation* 🌸",
+      "image": null,
+      "imageName": "",
+      "createdAt": 1727780000003
+    },
+    {
+      "id": "tpl_join_group_community_link",
+      "title": "Join Group - Official Community Link",
+      "text": "Happy Thoughts {Name} ji! 🌿\n\nHamare *{Program}* ke sabhi mahatvapoorna updates, Zoom links, aur daily audio guidance prapt karne ke liye, kripya niche diye gaye link par click karke hamare official WhatsApp Group se jud jayein:\n\n👉 *Click karke group join karein:*\n[Insert WhatsApp Group Link]\n\n⚠️ *Kripya dhyan dein:*\nIs group mein sirf authorized coordinators dwara hi mahatvapoorna jaankari bheji jayegi (Zero spam).\n\nAapke aane ka intezar rahega! 🙏\n\nDhanyawad,\n*{Attender}*\n*Tej Gyan Foundation*",
+      "image": null,
+      "imageName": "",
+      "createdAt": 1727780000004
+    },
+    {
+      "id": "tpl_reminder_complete_registration",
+      "title": "Reminder - Complete Your Registration",
+      "text": "Happy Thoughts {Name} ji! ⏳\n\nAsha hai aap kushal-mangal hain.\n\nHum aapko yaad dilana chahte hain ki hamara *{Program}* jald hi shuru hone ja raha hai, aur seemit seats bachi hain.\n\nKisi bhi sahayata ke liye aap is message ka reply kar sakte hain ya hume call kar sakte hain.\n\nDhanyawad,\n*{Attender}* 🙏\n*Tej Gyan Foundation*",
+      "image": null,
+      "imageName": "",
+      "createdAt": 1727780000005
+    },
+    {
+      "id": "tpl_reminder_session_starting_1hr",
+      "title": "Reminder - Session Starting in 1 Hour",
+      "text": "Happy Thoughts {Name} ji! 🔔\n\nAaj ka mahatvapoorna satra (session) *{Program}* agle *1 ghante mein shuru ho raha hai!*\n\n⏰ *Time:* [e.g. 7:00 PM]\n🔗 *Joining Link:* [Insert Zoom Link]\n🔑 *Meeting ID:* [Meeting ID]\n🔒 *Passcode:* [Passcode]\n\n*Sujhav:*\n• Kripya samay se 5 minute pehle login karein.\n• Earphones ka upyog karein taaki aap bina kisi rukawat ke shravan kar sakein.\n\nAapke saath is anokhe anubhav ke liye hum utsuk hain! ✨\n\n*{Attender}*\n*Tej Gyan Foundation* 🙏",
+      "image": null,
+      "imageName": "",
+      "createdAt": 1727780000006
+    },
+    {
+      "id": "tpl_followup_call_missed_busy",
+      "title": "Follow-up - Call Missed / Busy",
+      "text": "Happy Thoughts {Name} ji! 📞\n\nMaine aapko *Tej Gyan Foundation* ki taraf se aane wale *{Program}* ke sandarbh mein call kiya tha, parantu lagta hai aap vyast the.\n\nAapki suvidha ke liye program details niche di gayi hain.\n\nJab bhi aap free hon, aap hume is number par call ya WhatsApp message kar sakte hain.\n\nDhanyawad aur Shubh Din! 🌸\n*{Attender}*\n*Tej Gyan Foundation*",
+      "image": null,
+      "imageName": "",
+      "createdAt": 1727780000007
+    }
+  ]
+}

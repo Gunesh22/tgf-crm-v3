@@ -1,7 +1,7 @@
 import React from "react";
 import {
   ArrowLeft, Search, Plus, MapPin, PhoneOutgoing, Flame, Clock, CheckCircle2, AlertCircle,
-  Bell, Sparkles, UserCheck, Download, Users, RefreshCw, Loader
+  Bell, Sparkles, UserCheck, Download, Users, RefreshCw, Loader, Settings
 } from "lucide-react";
 import { formatContactName, getSharedAttenders } from "../utils";
 import { AttenderFilters } from "../components/AttenderFilters";
@@ -16,6 +16,7 @@ export default function MobileAttenderView({
   filterStatus,
   setFilterStatus,
   onExit,
+  onOpenSettings,
   openCallEntryDialog,
   handleSyncDB,
   isSyncingDB,
@@ -222,6 +223,17 @@ export default function MobileAttenderView({
           >
             <RefreshCw size={16} className={(isSyncingDB || isRebuildingCache) ? "animate-spin text-indigo-400" : ""} />
           </button>
+
+          {onOpenSettings && (
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition active:scale-95"
+              title="Settings & Appearance"
+            >
+              <Settings size={17} />
+            </button>
+          )}
 
           <button
             type="button"

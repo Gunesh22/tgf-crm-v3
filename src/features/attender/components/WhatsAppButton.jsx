@@ -15,26 +15,89 @@ export const formatPhoneForWhatsApp = (phone) => {
 };
 
 /**
- * Replaces name tags like {Name}, [Contact Name], or {cleanName} with actual attender name
+ * Replaces tags like {Name}, {Program}, {City}, and {Attender} with actual contact/attender details
  */
-export const processTemplateText = (rawText, name) => {
+export const processTemplateText = (rawText, name, context = {}) => {
   if (!rawText) return "";
-  let cleanName = String(name || "").trim();
+  let cleanName = String(name || context?.name || "").trim();
   const lowerName = cleanName.toLowerCase();
   if (lowerName === "unknown" || lowerName === "unknown lead" || lowerName === "unknown name") {
     cleanName = "";
   }
   const namePlaceholder = /\{Name\}|\[Contact Name\]|\[Name\]|\$?\{cleanName\}/gi;
 
+  let text = rawText;
   if (cleanName) {
-    return rawText.replace(namePlaceholder, cleanName);
+    text = text.replace(namePlaceholder, cleanName);
+  } else {
+    text = text
+      .replace(/(\{Name\}|\[Contact Name\]|\[Name\])\s*ji!?/gi, "")
+      .replace(namePlaceholder, "")
+      .replace(/\s+/g, " ")
+      .trim();
   }
 
-  return rawText
-    .replace(/(\{Name\}|\[Contact Name\]|\[Name\])\s*ji!?/gi, "")
-    .replace(namePlaceholder, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  // Handle {Program}, {City}, {Attender}
+  const programVal = String(
+    context?.program ||
+    context?.calledFor ||
+    context?.["Called For"] ||
+    context?.programName ||
+    ""
+  ).trim();
+  const cityVal = String(context?.city || context?.City || "").trim();
+  const attenderVal = String(context?.attender || context?.attenderName || "").trim();
+
+  if (programVal) {
+    text = text.replace(/\{Program\}|\[Program\]|\$\{program\}/gi, programVal);
+    // Replace any legacy literal "Maha Shivir" in saved templates with current contact's program
+    text = text.replace(/(\*?)Maha\s+Shivir(\*?)/gi, `$1${programVal}$2`);
+  } else {
+    text = text.replace(/\{Program\}|\[Program\]|\$\{program\}/gi, "Program");
+  }
+
+  if (cityVal) {
+    text = text.replace(/\{City\}|\[City\]|\$\{city\}/gi, cityVal);
+  } else {
+    // Cleanly remove empty city placeholders and avoid leaving blank lines
+    text = text
+      .replace(/•\s*\*City\s*\/\s*Kendra:\*\s*\{City\}\n?/gi, "")
+      .replace(/•\s*\*City\s*\/\s*Kendra:\*\s*\n?/gi, "")
+      .replace(/📍\s*\*Sthal\s*\/\s*City:\*\s*\{City\}\n?/gi, "")
+      .replace(/\s*,\s*\{City\}/gi, "")
+      .replace(/\s*\(\s*\{City\}\s*\)/gi, "")
+      .replace(/\(?\{City\}\)?|\[City\]|\$\{city\}/gi, "");
+  }
+
+  if (attenderVal) {
+    text = text.replace(/\{Attender\}|\[Attender\]|\$\{attender\}/gi, attenderVal);
+  } else {
+    // Avoid repeating "*Tej Gyan Foundation*\n*Tej Gyan Foundation*"
+    text = text
+      .replace(/\*?\{Attender\}\*?\s*\n(?=\s*\*Tej Gyan Foundation)/gi, "")
+      .replace(/•\s*\*Attender\s*\/\s*Coordinator:\*\s*\{Attender\}\n?/gi, "")
+      .replace(/\{Attender\}|\[Attender\]|\$\{attender\}/gi, "Tej Gyan Foundation Team");
+  }
+
+  // Standardize Date, Time, Venue into clean English
+  text = text
+    .replace(/📅\s*\*Tarikh\s*\(Date\):\*/gi, "📅 *Date:*")
+    .replace(/⏰\s*\*Samay\s*\(Time\):\*/gi, "⏰ *Time:*")
+    .replace(/⏰\s*\*Samay:\*/gi, "⏰ *Time:*")
+    .replace(/📍\s*\*Sthal\s*\(Venue\s*\/\s*Mode\):\*/gi, "📍 *Venue / Mode:*")
+    .replace(/📍\s*\*Sthal\s*\(Venue\s*\/\s*City\):\*/gi, "📍 *Venue / Mode:*")
+    .replace(/📍\s*\*Sthal:\*/gi, "📍 *Venue / Mode:*")
+    .replace(/•\s*\*Naam:\*/gi, "• *Name:*")
+    .replace(/panjikaran\s*\(registration\)/gi, "registration")
+    .replace(/panjikaran/gi, "registration")
+    .replace(/^Namaste\s+/gim, "Happy Thoughts ")
+    .replace(/^Hari\s+Om\s+/gim, "Happy Thoughts ")
+    .replace(/Agar aapne abhi tak apna (?:panjikaran|registration) poora nahi kiya hai[^\n]*\n+/gi, "")
+    .replace(/🔗\s*\*Register Now:\*\s*\[Insert Link\]\n+/gi, "")
+    .replace(/Aapki suvidha ke liye hum yahan karyakram ke sankshipt vivaran bhej rahe hain\.?/gi, "Aapki suvidha ke liye program details niche di gayi hain.")
+    .replace(/Shubhkaamnayein,?\s*/gi, "Dhanyawad,\n");
+
+  return text;
 };
 
 const WhatsAppIcon = ({ className = "w-3.5 h-3.5 fill-current" }) => (
@@ -43,7 +106,16 @@ const WhatsAppIcon = ({ className = "w-3.5 h-3.5 fill-current" }) => (
   </svg>
 );
 
-export const WhatsAppButton = ({ phone, name = "", variant = "default", attenderId = "" }) => {
+export const WhatsAppButton = ({
+  phone,
+  name = "",
+  program = "",
+  city = "",
+  attenderName = "",
+  context = {},
+  variant = "default",
+  attenderId = ""
+}) => {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [copiedTextId, setCopiedTextId] = useState(null);
@@ -115,7 +187,7 @@ export const WhatsAppButton = ({ phone, name = "", variant = "default", attender
   };
 
   const handleCopyTemplate = async (rawText, title = "Template", id = null) => {
-    const textToCopy = processTemplateText(rawText, name);
+    const textToCopy = processTemplateText(rawText, name, { program, city, attender: attenderName, ...context });
     if (!textToCopy) return;
 
     try {
@@ -280,7 +352,7 @@ export const WhatsAppButton = ({ phone, name = "", variant = "default", attender
                 const tplId = tpl.id || i;
                 const isCopiedText = copiedTextId === tplId;
                 const isCopiedImg = copiedImageId === tplId;
-                const previewText = processTemplateText(tpl.text, name);
+                const previewText = processTemplateText(tpl.text, name, { program, city, attender: attenderName, ...context });
 
                 return (
                   <div

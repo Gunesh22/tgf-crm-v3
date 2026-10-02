@@ -41,6 +41,7 @@ crm_analytics_code_dump.txt
 !.oxlintrc.json
 !src/assets/*.json
 !vercel.json
+!public/*.json
 
 
 

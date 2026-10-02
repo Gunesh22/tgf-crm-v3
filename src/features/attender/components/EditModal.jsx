@@ -1885,7 +1885,22 @@ export const EditModal = ({
               <div className="flex items-center gap-2.5">
                 <h3 className="text-white font-bold text-lg leading-none">{getLogName() || "Unknown Lead"}</h3>
                 <CallButton phone={edited.Phone || edited.Mobile} variant="header" />
-                <WhatsAppButton phone={edited.Phone || edited.Mobile} name={getLogName()} variant="header" attenderId={activeAttenderId} />
+                <WhatsAppButton
+                  phone={edited.Phone || edited.Mobile}
+                  name={getLogName()}
+                  program={
+                    edited.calledFor ||
+                    edited["Called For"] ||
+                    edited.program ||
+                    row?.calledFor ||
+                    row?.["Called For"] ||
+                    ""
+                  }
+                  city={edited.City || edited.city || row?.City || row?.city || ""}
+                  attenderName={activeAttenderName || attenderName || ""}
+                  variant="header"
+                  attenderId={activeAttenderId}
+                />
               </div>
               <div className="flex items-center gap-2.5 mt-1">
                 {edited.createdAt && (

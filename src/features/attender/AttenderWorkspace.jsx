@@ -1766,6 +1766,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
           filterStatus={filterStatus}
           setFilterStatus={setFilterStatus}
           onExit={onExit}
+          onOpenSettings={() => setShowSettingsView(true)}
           openCallEntryDialog={openCallEntryDialog}
           handleSyncDB={handleSyncDB}
           isSyncingDB={isSyncingDB}
