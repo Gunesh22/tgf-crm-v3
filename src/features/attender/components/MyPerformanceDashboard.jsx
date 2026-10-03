@@ -7,8 +7,8 @@ import {
   Layers, CheckCircle2, Target, Trophy, Flame, Edit3, Save, RotateCcw, X, ChevronRight,
   UserCheck, ChevronLeft
 } from "lucide-react";
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
-import { CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, getCanonicalStatus, classifyCallStatus, parseTimestamp } from "../utils";
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import { CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, getCanonicalStatus, classifyCallStatus, parseTimestamp, getContactView, getLocalDateString } from "../utils";
 import { triggerRegistrationConfetti } from "../../../utils/confetti";
 import { resolveRegistrationAttribution } from "../../../utils/registrationEngine.js";
 
@@ -37,10 +37,13 @@ const STATUS_THEMES = {
 
 // ─── Date Filter Options ──────────────────────────────────────────────────────
 const DATE_FILTERS = [
-  { label: "Today",      key: "today" },
-  { label: "This Week",  key: "week" },
-  { label: "This Month", key: "month" },
-  { label: "Custom",     key: "custom" },
+  { label: "Today",        key: "today" },
+  { label: "This Week",    key: "week" },
+  { label: "Last 7 Days",  key: "7days" },
+  { label: "Last 14 Days", key: "14days" },
+  { label: "This Month",   key: "month" },
+  { label: "All Time",     key: "all" },
+  { label: "Custom",       key: "custom" },
 ];
 
 // ─── Extract Attender Call Attempts (Strict Isolation Logic) ──────────────────
@@ -366,8 +369,25 @@ function filterAttemptsByDate(attempts, range, customStart, customEnd) {
     end = new Date(now);
     end.setHours(23, 59, 59, 999);
   } else if (range === "week") {
+    // Current ISO week: Monday through Sunday
     start = new Date(now);
-    start.setDate(now.getDate() - now.getDay()); // Sunday
+    const dayOfWeek = now.getDay(); // 0 is Sun, 1 is Mon...
+    const diffToMonday = (dayOfWeek + 6) % 7; // Mon -> 0, Tue -> 1, ..., Sun -> 6
+    start.setDate(now.getDate() - diffToMonday);
+    start.setHours(0, 0, 0, 0);
+    end = new Date(now);
+    end.setHours(23, 59, 59, 999);
+  } else if (range === "7days") {
+    // Rolling 7-day window
+    start = new Date(now);
+    start.setDate(now.getDate() - 6);
+    start.setHours(0, 0, 0, 0);
+    end = new Date(now);
+    end.setHours(23, 59, 59, 999);
+  } else if (range === "14days") {
+    // Rolling 14-day window (matches 14-Day Performance Radar default)
+    start = new Date(now);
+    start.setDate(now.getDate() - 13);
     start.setHours(0, 0, 0, 0);
     end = new Date(now);
     end.setHours(23, 59, 59, 999);
@@ -402,7 +422,24 @@ function filterLogsByDate(logs, range, customStart, customEnd, attenderName, att
     start = new Date(now); start.setHours(0, 0, 0, 0);
     end = new Date(now); end.setHours(23, 59, 59, 999);
   } else if (range === "week") {
-    start = new Date(now); start.setDate(now.getDate() - now.getDay()); start.setHours(0, 0, 0, 0);
+    // Current ISO week: Monday through Sunday
+    start = new Date(now);
+    const dayOfWeek = now.getDay();
+    const diffToMonday = (dayOfWeek + 6) % 7;
+    start.setDate(now.getDate() - diffToMonday);
+    start.setHours(0, 0, 0, 0);
+    end = new Date(now); end.setHours(23, 59, 59, 999);
+  } else if (range === "7days") {
+    // Rolling 7-day window
+    start = new Date(now);
+    start.setDate(now.getDate() - 6);
+    start.setHours(0, 0, 0, 0);
+    end = new Date(now); end.setHours(23, 59, 59, 999);
+  } else if (range === "14days") {
+    // Rolling 14-day window
+    start = new Date(now);
+    start.setDate(now.getDate() - 13);
+    start.setHours(0, 0, 0, 0);
     end = new Date(now); end.setHours(23, 59, 59, 999);
   } else if (range === "month") {
     start = new Date(now); start.setDate(1); start.setHours(0, 0, 0, 0);
@@ -526,6 +563,14 @@ export function MyPerformanceDashboard({
   attenderId = ""
 }) {
   const [dateRange, setDateRange] = useState("today");
+
+  const handleDateRangeChange = (newRange) => {
+    setDateRange(newRange);
+  };
+
+  // Radar Chart Horizon Selector: 7, 14, or 30 days (defaults to 14)
+  const [radarDays, setRadarDays] = useState(14);
+
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -637,27 +682,113 @@ export function MyPerformanceDashboard({
     return allAttempts.filter(att => att.timestamp >= start && att.timestamp <= end).length;
   }, [allAttempts]);
 
-  // Callbacks Due (all time)
-  const callbacksDueCount = useMemo(() => {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    return logs.filter(l => {
-      if (l._deleted) return false;
-      let callbackDate = l.callbackDate;
-      let callbackStatus = l.callbackStatus;
+  // ─── Performance & Overdue Velocity Radar (Configurable 7, 14, 30 Days) ────
+  const unifiedPerformanceRadar = useMemo(() => {
+    const now = new Date();
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
 
-      if (attenderId && l.attenderStates?.[attenderId]) {
-        const state = l.attenderStates[attenderId];
-        if (state.callbackDate) callbackDate = state.callbackDate;
-        if (state.callbackStatus) callbackStatus = state.callbackStatus;
+    const numDays = Number(radarDays) || 14;
+
+    // 1. Build calendar day slots for the selected days (earliest to today)
+    const days = [];
+    for (let i = numDays - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const dateKey = `${year}-${month}-${day}`;
+      
+      const dayLabel = d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+      const isToday = i === 0;
+
+      days.push({
+        dateKey,
+        label: isToday ? `${dayLabel} (Today)` : dayLabel,
+        shortLabel: dayLabel,
+        completed: 0,
+        connected: 0,
+        notConnected: 0,
+        registrations: 0,
+        overdue: 0,
+        isToday,
+      });
+    }
+
+    const dayMap = new Map(days.map(d => [d.dateKey, d]));
+
+    // 2. Tally completed attempts across these days
+    let totalCompleted = 0;
+    allAttempts.forEach(att => {
+      if (att.isSharedCredit) return;
+      const ts = att.timestamp || att.updatedAt;
+      if (!ts || isNaN(ts.getTime())) return;
+
+      const year = ts.getFullYear();
+      const month = String(ts.getMonth() + 1).padStart(2, "0");
+      const day = String(ts.getDate()).padStart(2, "0");
+      const key = `${year}-${month}-${day}`;
+
+      const entry = dayMap.get(key);
+      if (entry) {
+        entry.completed += 1;
+        totalCompleted += 1;
+        const isUnconnected = classifyCallStatus(att.status || att.callStatus) === "NOT_CONNECTED";
+        if (isUnconnected) {
+          entry.notConnected += 1;
+        } else {
+          entry.connected += 1;
+        }
+        if (getCanonicalStatus(att.status) === "Reg.Done") {
+          entry.registrations += 1;
+        }
       }
+    });
 
-      if (!callbackDate) return false;
-      const d = parseTimestamp(callbackDate);
-      if (!d || isNaN(d.getTime())) return false;
-      const cbDay = new Date(d); cbDay.setHours(0, 0, 0, 0);
-      return cbDay <= today && callbackStatus !== "done";
-    }).length;
-  }, [logs, attenderId]);
+    // 3. Tally overdue callbacks cumulatively till each day (Strict Attender View matching Call Sheet)
+    let totalOverdue = 0;
+
+    const todayStr = getLocalDateString();
+    const activeCtx = attenderId || attenderName;
+
+    logs.forEach(l => {
+      if (l._deleted) return;
+      const view = getContactView(l, activeCtx);
+      const rawCbDate = view.callbackDate;
+      if (!rawCbDate) return;
+
+      const cbStatus = String(view.callbackStatus || l.callbackStatus || "").trim().toLowerCase();
+      const isDone = cbStatus === "done" || cbStatus === "completed" || cbStatus === "cancelled";
+      if (isDone) return;
+
+      const cbDateStr = getLocalDateString(rawCbDate);
+      if (!cbDateStr) return;
+
+      if (cbDateStr <= todayStr) {
+        totalOverdue++;
+        // Accumulate into every day where this callback was due on or before that date
+        days.forEach(d => {
+          if (cbDateStr <= d.dateKey) {
+            d.overdue += 1;
+          }
+        });
+      }
+    });
+
+    // Follow-up resolution efficiency ratio
+    const totalActivity = totalCompleted + totalOverdue;
+    const efficiencyRate = totalActivity > 0 ? Math.round((totalCompleted / totalActivity) * 100) : 100;
+
+    return {
+      chartData: days,
+      totalCompleted,
+      total7DaysCompleted: totalCompleted,
+      totalOverdue,
+      efficiencyRate,
+      numDays,
+    };
+  }, [allAttempts, logs, attenderId, attenderName, radarDays]);
 
   // Total assigned contacts in list for this attender
   const totalAssignedLeadsCount = useMemo(() => {
@@ -768,13 +899,22 @@ export function MyPerformanceDashboard({
         registrations: Math.max(1, Number(goals.dailyRegistrations) || 2),
       };
     }
-    if (dateRange === "week") {
+    if (dateRange === "week" || dateRange === "7days") {
       return {
-        periodLabel: "This Week's Target",
-        periodShort: "Weekly",
+        periodLabel: dateRange === "7days" ? "Last 7 Days Target" : "This Week's Target",
+        periodShort: dateRange === "7days" ? "7-Day" : "Weekly",
         calls: Math.max(1, Number(goals.weeklyCalls) || (Number(goals.dailyCalls) || 50) * 5),
         connected: Math.max(1, Number(goals.weeklyConnected) || (Number(goals.dailyConnected) || 25) * 5),
         registrations: Math.max(1, Number(goals.weeklyRegistrations) || (Number(goals.dailyRegistrations) || 2) * 5),
+      };
+    }
+    if (dateRange === "14days") {
+      return {
+        periodLabel: "Last 14 Days Target",
+        periodShort: "14-Day",
+        calls: Math.max(1, (Number(goals.dailyCalls) || 50) * 10),
+        connected: Math.max(1, (Number(goals.dailyConnected) || 25) * 10),
+        registrations: Math.max(1, (Number(goals.dailyRegistrations) || 2) * 10),
       };
     }
     if (dateRange === "month") {
@@ -987,7 +1127,7 @@ export function MyPerformanceDashboard({
               return (
                 <button
                   key={filter.key}
-                  onClick={() => setDateRange(filter.key)}
+                  onClick={() => handleDateRangeChange(filter.key)}
                   className={`px-3 py-1.5 rounded-lg text-xs transition-all duration-150 ${
                     isActive
                       ? "bg-indigo-600 text-white font-bold shadow-xs"
@@ -1022,47 +1162,47 @@ export function MyPerformanceDashboard({
       </div>
 
       {/* ─── Personal Targets & Milestones Tracker (Option A) ─────────────── */}
-      <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3.5 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200/70 text-amber-600 flex items-center justify-center shadow-2xs">
-              <Target size={20} />
+      <div className="bg-white rounded-xl p-3.5 sm:p-4 border border-slate-200/80 shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-2.5 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200/70 text-amber-600 flex items-center justify-center shadow-2xs">
+              <Target size={16} />
             </div>
             <div>
-              <div className="flex items-center gap-2.5">
-                <h2 className="text-sm font-bold text-slate-900 tracking-tight">Personal Targets & Milestones</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight">Personal Targets & Milestones</h2>
                 {goalProgress.isAllMet ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    <Trophy size={12} className="text-emerald-600" />
-                    All Goals Crushed! 🎉
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <Trophy size={11} className="text-emerald-600" />
+                    All Crushed! 🎉
                   </span>
                 ) : goalProgress.isAnyMet ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                    <Sparkles size={12} className="text-indigo-600" />
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    <Sparkles size={11} className="text-indigo-600" />
                     Milestone Reached!
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                    <Flame size={12} className="text-amber-500" />
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                    <Flame size={11} className="text-amber-500" />
                     In Progress
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                {activeTarget.periodLabel} • Real-time progress towards your personalized goals
+              <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                {activeTarget.periodLabel} • Real-time progress towards your goals
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-start sm:self-auto">
+          <div className="flex items-center gap-1.5 self-start sm:self-auto">
             {goalProgress.isAnyMet && (
               <button
                 type="button"
                 onClick={() => triggerRegistrationConfetti(attenderName || "Champion")}
-                className="px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+                className="px-2.5 py-1 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs transition-all flex items-center gap-1 cursor-pointer shadow-2xs active:scale-95"
                 title="Celebrate your milestones with confetti!"
               >
-                <Sparkles size={13} className="text-emerald-600" />
+                <Sparkles size={12} className="text-emerald-600" />
                 <span>Celebrate 🎉</span>
               </button>
             )}
@@ -1070,28 +1210,28 @@ export function MyPerformanceDashboard({
             <button
               type="button"
               onClick={() => setShowGoalModal(true)}
-              className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs hover:border-slate-300 active:scale-95"
+              className="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs transition-all flex items-center gap-1 cursor-pointer shadow-2xs hover:border-slate-300 active:scale-95"
               title="Customize your personal performance targets"
             >
-              <Edit3 size={13} className="text-slate-500" />
+              <Edit3 size={12} className="text-slate-500" />
               <span>Edit Targets</span>
             </button>
           </div>
         </div>
 
-        {/* 3 Interactive Goal Progress Meters */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+        {/* 3 Interactive Goal Progress Meters (Compact) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-0.5">
           
           {/* Target 1: Calls Dialed */}
-          <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-100 hover:border-slate-200 transition-all flex flex-col justify-between space-y-3">
+          <div className="p-3 rounded-lg bg-slate-50/80 border border-slate-100 hover:border-slate-200 transition-all flex flex-col justify-between space-y-2">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                  <PhoneCall size={14} />
+              <div className="flex items-center gap-1.5">
+                <div className="w-6 h-6 rounded-md bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <PhoneCall size={12} />
                 </div>
-                <span className="text-xs font-bold text-slate-700">Calls Dialed Target</span>
+                <span className="text-xs font-bold text-slate-700">Calls Dialed</span>
               </div>
-              <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full border ${
+              <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full border ${
                 goalProgress.isCallsMet 
                   ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
                   : "bg-indigo-50 text-indigo-700 border-indigo-200"
@@ -1101,18 +1241,18 @@ export function MyPerformanceDashboard({
             </div>
 
             <div className="flex items-baseline justify-between">
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{stats.totalCalls}</span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-xl font-extrabold text-slate-900 tracking-tight">{stats.totalCalls}</span>
                 <span className="text-xs font-semibold text-slate-400">/ {activeTarget.calls} calls</span>
               </div>
               {goalProgress.isCallsMet && (
                 <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
-                  <CheckCircle2 size={13} /> Achieved
+                  <CheckCircle2 size={12} /> Achieved
                 </span>
               )}
             </div>
 
-            <div className="w-full h-2 rounded-full bg-slate-200/70 overflow-hidden">
+            <div className="w-full h-1.5 rounded-full bg-slate-200/70 overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-700 ${
                   goalProgress.isCallsMet ? "bg-emerald-500" : "bg-indigo-600"
@@ -1121,25 +1261,25 @@ export function MyPerformanceDashboard({
               />
             </div>
 
-            <div className="text-[11px] font-medium text-slate-500 flex items-center justify-between">
+            <div className="text-[10px] font-medium text-slate-500 flex items-center justify-between">
               {goalProgress.isCallsMet ? (
-                <span className="text-emerald-700 font-bold">🎉 Target achieved! (+{stats.totalCalls - activeTarget.calls} extra dials)</span>
+                <span className="text-emerald-700 font-bold">🎉 Target achieved!</span>
               ) : (
-                <span>{activeTarget.calls - stats.totalCalls} more calls needed for target</span>
+                <span>{activeTarget.calls - stats.totalCalls} more calls needed</span>
               )}
             </div>
           </div>
 
           {/* Target 2: Connected Calls */}
-          <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-100 hover:border-slate-200 transition-all flex flex-col justify-between space-y-3">
+          <div className="p-3 rounded-lg bg-slate-50/80 border border-slate-100 hover:border-slate-200 transition-all flex flex-col justify-between space-y-2">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-                  <TrendingUp size={14} />
+              <div className="flex items-center gap-1.5">
+                <div className="w-6 h-6 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <TrendingUp size={12} />
                 </div>
-                <span className="text-xs font-bold text-slate-700">Connected Calls Target</span>
+                <span className="text-xs font-bold text-slate-700">Connected Calls</span>
               </div>
-              <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full border ${
+              <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full border ${
                 goalProgress.isConnectedMet 
                   ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
                   : "bg-blue-50 text-blue-700 border-blue-200"
@@ -1149,18 +1289,18 @@ export function MyPerformanceDashboard({
             </div>
 
             <div className="flex items-baseline justify-between">
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{stats.connected}</span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-xl font-extrabold text-slate-900 tracking-tight">{stats.connected}</span>
                 <span className="text-xs font-semibold text-slate-400">/ {activeTarget.connected} connected</span>
               </div>
               {goalProgress.isConnectedMet && (
                 <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
-                  <CheckCircle2 size={13} /> Achieved
+                  <CheckCircle2 size={12} /> Achieved
                 </span>
               )}
             </div>
 
-            <div className="w-full h-2 rounded-full bg-slate-200/70 overflow-hidden">
+            <div className="w-full h-1.5 rounded-full bg-slate-200/70 overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-700 ${
                   goalProgress.isConnectedMet ? "bg-emerald-500" : "bg-blue-600"
@@ -1169,7 +1309,7 @@ export function MyPerformanceDashboard({
               />
             </div>
 
-            <div className="text-[11px] font-medium text-slate-500 flex items-center justify-between">
+            <div className="text-[10px] font-medium text-slate-500 flex items-center justify-between">
               {goalProgress.isConnectedMet ? (
                 <span className="text-emerald-700 font-bold">🎉 Connection goal achieved!</span>
               ) : (
@@ -1179,15 +1319,15 @@ export function MyPerformanceDashboard({
           </div>
 
           {/* Target 3: Registrations Won */}
-          <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-100 hover:border-slate-200 transition-all flex flex-col justify-between space-y-3">
+          <div className="p-3 rounded-lg bg-slate-50/80 border border-slate-100 hover:border-slate-200 transition-all flex flex-col justify-between space-y-2">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                  <Award size={14} />
+              <div className="flex items-center gap-1.5">
+                <div className="w-6 h-6 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <Award size={12} />
                 </div>
-                <span className="text-xs font-bold text-slate-700">Registrations Won Target</span>
+                <span className="text-xs font-bold text-slate-700">Registrations Won</span>
               </div>
-              <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full border ${
+              <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full border ${
                 goalProgress.isRegMet 
                   ? "bg-emerald-100 text-emerald-800 border-emerald-300" 
                   : "bg-emerald-50 text-emerald-700 border-emerald-200"
@@ -1197,29 +1337,29 @@ export function MyPerformanceDashboard({
             </div>
 
             <div className="flex items-baseline justify-between">
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{stats.totalRegCount}</span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-xl font-extrabold text-slate-900 tracking-tight">{stats.totalRegCount}</span>
                 <span className="text-xs font-semibold text-slate-400">/ {activeTarget.registrations} won</span>
               </div>
               {goalProgress.isRegMet && (
                 <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
-                  <Trophy size={13} /> Crushed!
+                  <Trophy size={12} /> Crushed!
                 </span>
               )}
             </div>
 
-            <div className="w-full h-2 rounded-full bg-slate-200/70 overflow-hidden">
+            <div className="w-full h-1.5 rounded-full bg-slate-200/70 overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-700 bg-emerald-500"
                 style={{ width: `${Math.min(100, goalProgress.regPct)}%` }}
               />
             </div>
 
-            <div className="text-[11px] font-medium text-slate-500 flex items-center justify-between">
+            <div className="text-[10px] font-medium text-slate-500 flex items-center justify-between">
               {goalProgress.isRegMet ? (
-                <span className="text-emerald-700 font-bold">🏆 Registration Goal Crushed! Great work!</span>
+                <span className="text-emerald-700 font-bold">🏆 Goal Crushed! Great work!</span>
               ) : (
-                <span>{activeTarget.registrations - stats.totalRegCount} more registration(s) needed</span>
+                <span>{activeTarget.registrations - stats.totalRegCount} more needed</span>
               )}
             </div>
           </div>
@@ -1227,24 +1367,24 @@ export function MyPerformanceDashboard({
         </div>
       </div>
 
-      {/* ─── Top 4 KPI Unified White Cards Grid ──────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* ─── Top 4 KPI Unified White Cards Grid (Compact) ───────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         
         {/* Card 1: Total Call Pulses */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
+        <div className="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold tracking-wider uppercase text-slate-400">Total Call Pulses</span>
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <PhoneCall size={16} />
+            <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400">Total Call Pulses</span>
+            <div className="w-6 h-6 rounded-md bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <PhoneCall size={13} />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{stats.totalCalls}</span>
-            <span className="text-xs font-semibold text-slate-500">attempts</span>
+          <div className="mt-1.5 flex items-baseline gap-1.5">
+            <span className="text-xl font-extrabold text-slate-900 tracking-tight">{stats.totalCalls}</span>
+            <span className="text-xs font-semibold text-slate-400">attempts</span>
           </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
             <span>Goal: <span className="font-bold text-slate-700">{activeTarget.calls}</span></span>
-            <span className={`font-bold px-2 py-0.5 rounded-md text-[11px] border ${
+            <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] border ${
               goalProgress.isCallsMet 
                 ? "text-emerald-700 bg-emerald-50 border-emerald-200" 
                 : "text-indigo-700 bg-indigo-50 border-indigo-200"
@@ -1255,30 +1395,30 @@ export function MyPerformanceDashboard({
         </div>
 
         {/* Card 2: Registrations */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
+        <div className="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold tracking-wider uppercase text-slate-400">Registrations</span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <Award size={16} />
+            <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400">Registrations</span>
+            <div className="w-6 h-6 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <Award size={13} />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2 flex-wrap">
-            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{stats.totalRegCount}</span>
-            <span className="text-xs font-semibold text-slate-500">registrations</span>
+          <div className="mt-1.5 flex items-baseline gap-1.5 flex-wrap">
+            <span className="text-xl font-extrabold text-slate-900 tracking-tight">{stats.totalRegCount}</span>
+            <span className="text-xs font-semibold text-slate-400">won</span>
             {stats.sharedCredits > 0 && (
-              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded" title={`${stats.sharedCredits} lead(s) converted by team on your behalf`}>
-                🏆 {stats.sharedCredits} shared
+              <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1 py-0.2 rounded" title={`${stats.sharedCredits} lead(s) converted by team on your behalf`}>
+                🏆 {stats.sharedCredits}
               </span>
             )}
             {stats.teamAssists > 0 && (
-              <span className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded" title={`${stats.teamAssists} conversion assist(s) on other owners' leads`}>
-                🤝 {stats.teamAssists} assists
+              <span className="text-[9px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-1 py-0.2 rounded" title={`${stats.teamAssists} conversion assist(s) on other owners' leads`}>
+                🤝 {stats.teamAssists}
               </span>
             )}
           </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
             <span>Goal: <span className="font-bold text-slate-700">{activeTarget.registrations}</span></span>
-            <span className={`font-bold px-2 py-0.5 rounded-md text-[11px] border ${
+            <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] border ${
               goalProgress.isRegMet 
                 ? "text-emerald-700 bg-emerald-50 border-emerald-200" 
                 : "text-emerald-700 bg-emerald-50 border-emerald-100"
@@ -1289,20 +1429,20 @@ export function MyPerformanceDashboard({
         </div>
 
         {/* Card 3: Connected Calls */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
+        <div className="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold tracking-wider uppercase text-slate-400">Connected Calls</span>
-            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-              <TrendingUp size={16} />
+            <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400">Connected Calls</span>
+            <div className="w-6 h-6 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center">
+              <TrendingUp size={13} />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{stats.connected}</span>
-            <span className="text-xs font-semibold text-slate-500">/ {stats.totalCalls} calls</span>
+          <div className="mt-1.5 flex items-baseline gap-1.5">
+            <span className="text-xl font-extrabold text-slate-900 tracking-tight">{stats.connected}</span>
+            <span className="text-xs font-semibold text-slate-400">/ {stats.totalCalls} calls</span>
           </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
             <span>Goal: <span className="font-bold text-slate-700">{activeTarget.connected}</span></span>
-            <span className={`font-bold px-2 py-0.5 rounded-md text-[11px] border ${
+            <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] border ${
               goalProgress.isConnectedMet 
                 ? "text-emerald-700 bg-emerald-50 border-emerald-200" 
                 : "text-blue-700 bg-blue-50 border-blue-200"
@@ -1312,72 +1452,251 @@ export function MyPerformanceDashboard({
           </div>
         </div>
 
-        {/* Card 4: Callbacks Due */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
+        {/* Card 4: Callbacks Overdue */}
+        <div className="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold tracking-wider uppercase text-slate-400">Callbacks Due</span>
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${callbacksDueCount > 0 ? "bg-rose-50 text-rose-600" : "bg-slate-100 text-slate-500"}`}>
-              <Clock size={16} />
+            <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400">Callbacks Overdue</span>
+            <div className={`w-6 h-6 rounded-md flex items-center justify-center ${unifiedPerformanceRadar.totalOverdue > 0 ? "bg-rose-50 text-rose-600" : "bg-slate-100 text-slate-500"}`}>
+              <Clock size={13} />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{callbacksDueCount}</span>
-            <span className="text-xs font-semibold text-slate-500">pending</span>
+          <div className="mt-1.5 flex items-baseline gap-1.5">
+            <span className="text-xl font-extrabold text-slate-900 tracking-tight">{unifiedPerformanceRadar.totalOverdue}</span>
+            <span className="text-xs font-semibold text-slate-400">pending</span>
           </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>Total Assigned Pool:</span>
-            <span className="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md text-[11px]">{totalAssignedLeadsCount}</span>
+          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+            <span>Assigned Pool:</span>
+            <span className="font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">{totalAssignedLeadsCount}</span>
           </div>
         </div>
 
       </div>
 
-      {/* ─── Middle Section: Analytics & Status Distribution ──────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* ─── Unified 7-Day Performance & Follow-Up Radar (Compact) ─────────── */}
+      <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200/80 shadow-xs space-y-3">
+        {/* Header with Title and Motivation Stat Pills */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2.5 pb-2.5 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200/70 text-indigo-600 flex items-center justify-center shadow-2xs">
+              <TrendingUp size={16} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight">Performance & Follow-Up Radar</h3>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <Flame size={11} className="text-amber-500" />
+                  {unifiedPerformanceRadar.efficiencyRate}% Work Efficiency
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                Last {radarDays} days call activity compared with cumulative callbacks due till date
+              </p>
+            </div>
+          </div>
+
+          {/* Motivation Stats Badges & Days Selector Toggle */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Horizon Toggle: 7D | 14D | 30D */}
+            <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200/80 shadow-2xs">
+              {[
+                { label: "7D", days: 7 },
+                { label: "14D", days: 14 },
+                { label: "30D", days: 30 },
+              ].map(opt => (
+                <button
+                  key={opt.days}
+                  type="button"
+                  onClick={() => setRadarDays(opt.days)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                    radarDays === opt.days
+                      ? "bg-indigo-600 text-white shadow-2xs"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-1.5 bg-indigo-50/80 border border-indigo-200/70 px-2.5 py-1 rounded-lg">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
+              <span className="text-[11px] font-semibold text-slate-600">{radarDays}-Day Completed:</span>
+              <span className="text-xs font-extrabold text-indigo-900">{unifiedPerformanceRadar.totalCompleted}</span>
+            </div>
+
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${
+              unifiedPerformanceRadar.totalOverdue > 0
+                ? "bg-rose-50/80 border-rose-200/70 text-rose-900"
+                : "bg-emerald-50/80 border-emerald-200/70 text-emerald-900"
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${unifiedPerformanceRadar.totalOverdue > 0 ? "bg-rose-500" : "bg-emerald-500"}`}></span>
+              <span className="text-[11px] font-semibold text-slate-600">Total Overdue Till Date:</span>
+              <span className="text-xs font-extrabold">{unifiedPerformanceRadar.totalOverdue}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Unified Dual-Bar Chart (Compact 200px) */}
+        <div className="w-full h-[200px] pt-0.5">
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={unifiedPerformanceRadar.chartData} margin={{ top: 8, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis
+                dataKey="shortLabel"
+                tick={{ fontSize: radarDays === 30 ? 9 : 10, fill: '#64748b', fontWeight: 600 }}
+                axisLine={{ stroke: '#e2e8f0' }}
+                tickLine={false}
+                interval={radarDays === 30 ? "preserveStartEnd" : 0}
+              />
+              <YAxis
+                allowDecimals={false}
+                tick={{ fontSize: 10, fill: '#94a3b8' }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip
+                cursor={{ fill: 'rgba(99, 102, 241, 0.03)' }}
+                content={({ active, payload }) => {
+                  if (!active || !payload || !payload.length) return null;
+                  const item = payload[0].payload;
+                  return (
+                    <div className="bg-white/95 backdrop-blur-xs text-slate-800 text-xs p-3 rounded-xl shadow-lg border border-slate-200/90 space-y-2 min-w-[185px]">
+                      <div className="font-bold text-slate-900 border-b border-slate-100 pb-1.5 flex items-center justify-between text-xs">
+                        <span>{item.label}</span>
+                        {item.isToday && <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 font-bold px-1.5 py-0.2 rounded-md">Today</span>}
+                      </div>
+                      <div className="space-y-1.5 text-[11px]">
+                        <div className="flex justify-between items-center text-slate-700">
+                          <span className="flex items-center gap-1.5 font-semibold text-slate-700">
+                            <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
+                            Calls Completed:
+                          </span>
+                          <span className="font-extrabold text-indigo-600 text-xs">{item.completed}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-500 pl-3.5 text-[10px]">
+                          <span>Connected:</span>
+                          <span className="font-bold text-emerald-600">{item.connected}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-500 pl-3.5 text-[10px]">
+                          <span>Not Connected:</span>
+                          <span className="font-semibold text-slate-600">{item.notConnected}</span>
+                        </div>
+                        {item.registrations > 0 && (
+                          <div className="flex justify-between items-center text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold">
+                            <span>Registrations Won:</span>
+                            <span className="font-extrabold text-emerald-700">+{item.registrations} 🏆</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center text-slate-700 pt-1.5 border-t border-slate-100">
+                          <span className="flex items-center gap-1.5 font-semibold text-slate-700">
+                            <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                            Due Till This Date:
+                          </span>
+                          <span className={`font-extrabold text-xs ${item.overdue > 0 ? "text-rose-600" : "text-slate-400"}`}>{item.overdue}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }}
+              />
+              <Bar
+                dataKey="completed"
+                name="Calls Completed"
+                fill="#4f46e5"
+                radius={[4, 4, 0, 0]}
+                maxBarSize={radarDays === 30 ? 11 : radarDays === 14 ? 18 : 22}
+              />
+              <Bar
+                dataKey="overdue"
+                name="Due Till Date"
+                fill="#f43f5e"
+                radius={[4, 4, 0, 0]}
+                maxBarSize={radarDays === 30 ? 11 : radarDays === 14 ? 18 : 22}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Legend & Summary Footer */}
+        <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-[11px] text-slate-500">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-sm bg-indigo-600"></span>
+              <span className="font-semibold text-slate-700">Calls Completed</span>
+              <span className="text-[10px] text-slate-400">({unifiedPerformanceRadar.totalCompleted} total)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-sm bg-rose-500"></span>
+              <span className="font-semibold text-slate-700">Due Till Date</span>
+              <span className="text-[10px] text-slate-400">({unifiedPerformanceRadar.totalOverdue} as of today)</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-[10px] text-slate-400">
+            <span>Daily Avg: <strong className="text-slate-700">{Math.round((unifiedPerformanceRadar.totalCompleted / radarDays) * 10) / 10} calls/day</strong></span>
+            <span>·</span>
+            <span>Today's Calls: <strong className="text-indigo-600 font-bold">{unifiedPerformanceRadar.chartData[unifiedPerformanceRadar.chartData.length - 1]?.completed || 0}</strong></span>
+          </div>
+        </div>
+
+      </div>
+
+      {/* ─── Middle Section: Analytics & Status Distribution (Compact) ────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         
-        {/* Call Result Breakdown Progress List (2 Columns Wide) */}
-        <div className="lg:col-span-2 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-lg bg-slate-100 text-slate-600">
-                <BarChart3 size={16} />
+        {/* Call Result Breakdown Progress List (2 Columns Wide, Compact) */}
+        <div className="lg:col-span-2 bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200/80 shadow-xs space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-md bg-slate-100 text-slate-600">
+                <BarChart3 size={14} />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-slate-900">Call Outcome Analytics</h3>
-                <p className="text-[11px] text-slate-500 font-medium">Distribution of call attempt results for this attender</p>
+                <h3 className="text-xs sm:text-sm font-bold text-slate-900">Call Outcome Analytics</h3>
+                <p className="text-[10px] text-slate-500 font-medium">Distribution of call attempt results for this attender</p>
               </div>
             </div>
-            <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200/60">
+            <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/60">
               {stats.totalCalls} Total Events
             </span>
           </div>
 
           {stats.statusChartData.length === 0 ? (
-            <div className="py-10 flex flex-col items-center justify-center text-slate-400 text-xs">
-              <FileText size={28} className="stroke-[1.5] mb-2 opacity-40" />
-              <span>No call attempts found for the selected date range.</span>
+            <div className="py-8 flex flex-col items-center justify-center text-slate-400 text-xs text-center px-4">
+              <FileText size={24} className="stroke-[1.5] mb-1.5 opacity-40" />
+              <span>No call attempts found for {dateRange === "today" ? "today" : "the selected date range"}.</span>
+              {allAttempts.length > 0 && dateRange === "today" && (
+                <button
+                  type="button"
+                  onClick={() => handleDateRangeChange("7days")}
+                  className="mt-2.5 px-3 py-1 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-semibold text-[11px] transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Sparkles size={12} className="text-indigo-600" />
+                  <span>View Last 7 Days ({unifiedPerformanceRadar.total7DaysCompleted} calls)</span>
+                </button>
+              )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
               {stats.statusChartData.map((item) => {
                 const theme = STATUS_THEMES[item.name] || STATUS_THEMES["Pending"];
                 const percentage = stats.totalCalls > 0 ? Math.round((item.value / stats.totalCalls) * 100) : 0;
                 
                 return (
-                  <div key={item.name} className="p-3 rounded-xl bg-slate-50 border border-slate-100 hover:border-slate-200 transition-all">
-                    <div className="flex items-center justify-between text-xs mb-1.5">
-                      <div className="flex items-center gap-2 font-semibold text-slate-700">
-                        <span className={`w-2 h-2 rounded-full ${theme.dot}`}></span>
-                        <span>{item.name}</span>
+                  <div key={item.name} className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 hover:border-slate-200 transition-all">
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <div className="flex items-center gap-1.5 font-semibold text-slate-700">
+                        <span className={`w-1.5 h-1.5 rounded-full ${theme.dot}`}></span>
+                        <span className="text-xs">{item.name}</span>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-slate-900">{item.value}</span>
-                        <span className="text-[10px] text-slate-400 font-medium">({percentage}%)</span>
+                      <div className="flex items-center gap-1">
+                        <span className="font-bold text-slate-900 text-xs">{item.value}</span>
+                        <span className="text-[9px] text-slate-400 font-medium">({percentage}%)</span>
                       </div>
                     </div>
 
                     {/* Progress Bar */}
-                    <div className="w-full h-1.5 rounded-full bg-slate-200/70 overflow-hidden">
+                    <div className="w-full h-1 rounded-full bg-slate-200/70 overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${theme.bar}`}
                         style={{ width: `${percentage}%` }}
@@ -1390,30 +1709,41 @@ export function MyPerformanceDashboard({
           )}
         </div>
 
-        {/* Status Distribution Donut Chart */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-4">
-          <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3.5">
-            <div className="p-2 rounded-lg bg-slate-100 text-slate-600">
-              <PieIcon size={16} />
+        {/* Status Distribution Donut Chart (Compact) */}
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-2.5">
+          <div className="flex items-center gap-2 border-b border-slate-100 pb-2.5">
+            <div className="p-1.5 rounded-md bg-slate-100 text-slate-600">
+              <PieIcon size={14} />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Outcome Share</h3>
-              <p className="text-[11px] text-slate-500 font-medium">Visual proportion of call statuses</p>
+              <h3 className="text-xs sm:text-sm font-bold text-slate-900">Outcome Share</h3>
+              <p className="text-[10px] text-slate-500 font-medium">Visual proportion of call statuses</p>
             </div>
           </div>
 
-          <div className="w-full h-[200px] flex items-center justify-center">
+          <div className="w-full h-[155px] flex items-center justify-center">
             {stats.statusChartData.length === 0 ? (
-              <span className="text-xs text-slate-400 font-medium">No data to display</span>
+              <div className="text-center px-2">
+                <span className="text-xs text-slate-400 font-medium block">No data for selected period</span>
+                {allAttempts.length > 0 && dateRange === "today" && (
+                  <button
+                    type="button"
+                    onClick={() => handleDateRangeChange("7days")}
+                    className="mt-2 text-[11px] text-indigo-600 hover:underline font-semibold cursor-pointer inline-flex items-center gap-1"
+                  >
+                    <span>Switch to Last 7 Days →</span>
+                  </button>
+                )}
+              </div>
             ) : (
-              <ResponsiveContainer width="100%" height={200}>
+              <ResponsiveContainer width="100%" height={155}>
                 <PieChart>
                   <Pie
                     data={stats.statusChartData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={50}
-                    outerRadius={75}
+                    innerRadius={42}
+                    outerRadius={65}
                     paddingAngle={3}
                     dataKey="value"
                   >
@@ -1425,14 +1755,14 @@ export function MyPerformanceDashboard({
                     })}
                   </Pie>
                   <Tooltip
-                    contentStyle={{ borderRadius: "10px", border: "1px solid #e2e8f0", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05)", fontSize: "12px" }}
+                    contentStyle={{ borderRadius: "8px", border: "1px solid #e2e8f0", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05)", fontSize: "11px", padding: "6px 10px" }}
                   />
                 </PieChart>
               </ResponsiveContainer>
             )}
           </div>
 
-          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
             <span>Connection Efficiency:</span>
             <span className="font-bold text-slate-800">{stats.connectionRate}%</span>
           </div>
@@ -1552,7 +1882,21 @@ export function MyPerformanceDashboard({
             <div className="py-14 text-center text-slate-400 text-xs flex flex-col items-center justify-center space-y-2">
               <FileText size={32} className="stroke-[1.5] text-slate-300" />
               <span className="font-semibold text-slate-600">No call records found matching criteria</span>
-              <span className="text-[11px] text-slate-400">Try adjusting your date range, search query, or status filter.</span>
+              <span className="text-[11px] text-slate-400">
+                {dateRange === "today" && allAttempts.length > 0
+                  ? `No calls dialed yet today. You have ${unifiedPerformanceRadar.total7DaysCompleted} calls logged in the last 7 days.`
+                  : "Try adjusting your date range, search query, or status filter."}
+              </span>
+              {allAttempts.length > 0 && dateRange === "today" && (
+                <button
+                  type="button"
+                  onClick={() => handleDateRangeChange("7days")}
+                  className="mt-2 px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-bold text-xs transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Sparkles size={12} />
+                  <span>View Last 7 Days Activity ({unifiedPerformanceRadar.total7DaysCompleted} Calls)</span>
+                </button>
+              )}
             </div>
           ) : (
             <table className="w-full text-left text-xs border-collapse min-w-[960px]">
