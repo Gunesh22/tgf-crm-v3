@@ -1483,10 +1483,6 @@ export function MyPerformanceDashboard({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight">Performance & Follow-Up Radar</h3>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  <Flame size={11} className="text-amber-500" />
-                  {unifiedPerformanceRadar.efficiencyRate}% Work Efficiency
-                </span>
               </div>
               <p className="text-[10px] text-slate-500 font-medium mt-0.5">
                 Last {radarDays} days call activity compared with cumulative callbacks due till date
