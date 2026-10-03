@@ -8,7 +8,7 @@ import {
   UserCheck, ChevronLeft
 } from "lucide-react";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
-import { CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, getCanonicalStatus, classifyCallStatus } from "../utils";
+import { CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, getCanonicalStatus, classifyCallStatus, parseTimestamp } from "../utils";
 import { triggerRegistrationConfetti } from "../../../utils/confetti";
 import { resolveRegistrationAttribution } from "../../../utils/registrationEngine.js";
 
@@ -42,18 +42,6 @@ const DATE_FILTERS = [
   { label: "This Month", key: "month" },
   { label: "Custom",     key: "custom" },
 ];
-
-// ─── Date & Timestamp Parser ─────────────────────────────────────────────────
-function parseTimestamp(t) {
-  if (!t) return null;
-  if (t instanceof Date) return isNaN(t.getTime()) ? null : t;
-  if (typeof t.toDate === "function") return t.toDate();
-  if (typeof t === "object" && t.seconds !== undefined) {
-    return new Date(t.seconds * 1000 + Math.round((t.nanoseconds || 0) / 1000000));
-  }
-  const parsed = new Date(t);
-  return isNaN(parsed.getTime()) ? null : parsed;
-}
 
 // ─── Extract Attender Call Attempts (Strict Isolation Logic) ──────────────────
 function getAttenderAttempts(logs, attenderName, attenderId) {

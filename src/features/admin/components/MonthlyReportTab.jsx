@@ -575,7 +575,7 @@ export default function MonthlyReportTab({
     return Array.from(statuses).filter(s => s !== "Pending").sort().map(s => ({ value: s, label: s }));
   }, [callLogs, settingsOptions]);
 
-  const allHistoricalAttempts = React.useMemo(() => {
+  const allAttempts = React.useMemo(() => {
     return getCanonicalPhysicalCalls(callLogs, {
       startDate,
       endDate,
@@ -590,8 +590,6 @@ export default function MonthlyReportTab({
     });
   }, [callLogs, startDate, endDate, selectedAttenderIds, selectedProgramIds, selectedSources, selectedLeadOrigins, selectedCalledFors, selectedStatuses, selectedCallTypes, selectedKhojiStatuses]);
 
-
-
   const attenderOptions = React.useMemo(() => {
     const EXCLUDED_ATTENDER_NAMES = ["admin", "super admin", "administrator", "agent"];
     return attenders
@@ -601,8 +599,6 @@ export default function MonthlyReportTab({
         label: a.name
       }));
   }, [attenders]);
-
-  const allAttempts = allHistoricalAttempts;
 
   const monthFiltered = React.useMemo(() => {
     const contactIds = new Set(allAttempts.map(a => String(a.contactId)));
@@ -790,6 +786,14 @@ export default function MonthlyReportTab({
         map[attId] = { name: foundAttender ? foundAttender.name : rawName, total: 0, connected: 0, notConnected: 0, incoming: 0, outgoing: 0, conversions: 0, incomingConversions: 0, outgoingConversions: 0, teamAssists: 0, denominator: 0 };
       }
       map[attId].conversions++;
+
+      const type = String(reg.callType || reg.type || "").toLowerCase().trim();
+      const isIncoming = type === "incoming" || type === "in" || type.includes("incoming");
+      if (isIncoming) {
+        map[attId].incomingConversions = (map[attId].incomingConversions || 0) + 1;
+      } else {
+        map[attId].outgoingConversions = (map[attId].outgoingConversions || 0) + 1;
+      }
 
       // If this is a shared conversion, credit team assist to the converter
       if (reg.isSharedConversion && (reg.convertingAttenderName || reg.convertedBy)) {
@@ -1495,11 +1499,11 @@ export default function MonthlyReportTab({
               <div className="text-center py-6 text-slate-400 font-bold text-sm">No attender history logs found for this period.</div>
             ) : (
               <div className="space-y-4">
-                <div className="hidden md:grid grid-cols-12 text-[10px] font-black text-slate-400 uppercase tracking-wider px-6 py-2">
+                <div className="hidden md:grid grid-cols-12 text-[10px] font-black text-slate-400 uppercase tracking-wider px-6 py-2 items-center">
                   <div className="col-span-1">Rank</div>
-                  <div className="col-span-4">Attender Name</div>
-                  <div className="col-span-4 text-center">Conversion Rate & Efficiency</div>
-                  <div className="col-span-3 text-right">Metrics</div>
+                  <div className="col-span-2">Attender Name</div>
+                  <div className="col-span-3 text-center">Conversion Rate & Efficiency</div>
+                  <div className="col-span-6 text-right pr-2">Metrics</div>
                 </div>
                 
                 <div className="space-y-2.5">
@@ -1534,12 +1538,12 @@ export default function MonthlyReportTab({
                         </div>
 
                         {/* Name */}
-                        <div className="col-span-4 font-black text-slate-800 text-base">
+                        <div className="col-span-2 font-black text-slate-800 text-base truncate" title={row["Attender Name"]}>
                           {row["Attender Name"]}
                         </div>
 
                         {/* Progress Bar & Conv Rate */}
-                        <div className="col-span-4 flex items-center gap-3">
+                        <div className="col-span-3 flex items-center gap-2.5 pr-3 border-r border-slate-200/80">
                           <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
                             <div 
                               className={`h-full rounded-full transition-all duration-500 ${
@@ -1552,40 +1556,42 @@ export default function MonthlyReportTab({
                               style={{ width: `${Math.min(convRate || 0, 100)}%` }}
                             />
                           </div>
-                          <span className="text-sm font-black text-slate-700 whitespace-nowrap">
+                          <span className="text-xs font-black text-slate-700 whitespace-nowrap bg-slate-100 px-2 py-0.5 rounded-md shrink-0">
                             {row["Conversion Rate (%)"]}
                           </span>
                         </div>
 
                         {/* Metrics details */}
-                        <div className="col-span-3 flex justify-between md:justify-end items-center gap-3 text-xs font-semibold text-slate-500">
-                          <div className="text-right">
-                            <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-wider">Conversions</span>
-                            <div className="flex items-center justify-end gap-1">
-                              <span className="text-sm font-black text-emerald-600">{row["Reg.Done (Conversions)"]}</span>
+                        <div className="col-span-6 flex justify-between md:justify-end items-center gap-3 sm:gap-5 text-xs font-semibold text-slate-500 pl-2">
+                          <div className="text-right min-w-[110px] shrink-0">
+                            <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Conversions</span>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <span className="text-sm font-black text-emerald-600 leading-none">{row["Reg.Done (Conversions)"]}</span>
                               {row["Team Assists"] > 0 && (
-                                <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded" title={`${row["Team Assists"]} team assist${row["Team Assists"] > 1 ? 's' : ''} (conversions on other owners' leads)`}>
+                                <span className="inline-flex items-center text-[9px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1 py-0.5 rounded whitespace-nowrap" title={`${row["Team Assists"]} team assist${row["Team Assists"] > 1 ? 's' : ''} (conversions on other owners' leads)`}>
                                   +{row["Team Assists"]} assist
                                 </span>
                               )}
                             </div>
-                            <span className="block text-[9px] font-semibold text-emerald-500">({row["Incoming Conversions"]} In / {row["Outgoing Conversions"]} Out)</span>
+                            <span className="block text-[9px] font-semibold text-emerald-600/80 mt-0.5 whitespace-nowrap">
+                              ({row["Incoming Conversions"]} In / {row["Outgoing Conversions"]} Out)
+                            </span>
                           </div>
-                          <div className="text-right">
-                            <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-wider">Incoming</span>
+                          <div className="text-right min-w-[45px] shrink-0">
+                            <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Incoming</span>
                             <span className="text-xs font-bold text-slate-700">{row["Incoming"]}</span>
                           </div>
-                          <div className="text-right">
-                            <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-wider">Outgoing</span>
+                          <div className="text-right min-w-[45px] shrink-0">
+                            <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Outgoing</span>
                             <span className="text-xs font-bold text-slate-700">{row["Outgoing"]}</span>
                           </div>
-                          <div className="text-right">
-                            <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-wider">Connected</span>
+                          <div className="text-right min-w-[50px] shrink-0">
+                            <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Connected</span>
                             <span className="text-xs font-bold text-slate-700">{row["Connected"]}</span>
                           </div>
-                          <div className="text-right font-medium">
-                            <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-wider">Total</span>
-                            <span className="text-xs font-bold text-slate-700">{row["Total Calls"]}</span>
+                          <div className="text-right min-w-[40px] shrink-0 font-medium">
+                            <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Total</span>
+                            <span className="text-xs font-extrabold text-slate-800">{row["Total Calls"]}</span>
                           </div>
                         </div>
                       </div>
