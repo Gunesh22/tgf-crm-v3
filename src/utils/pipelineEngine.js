@@ -422,7 +422,7 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null, attender
 export function evaluatePipeline(contact = {}, callEvent = {}) {
   const calledFor = callEvent.calledFor || callEvent["Called For"] || contact["Called For"] || contact.calledFor || null;
   const attenderId = callEvent.attenderId || callEvent.callAttenderId || contact.attenderId || contact.leadOwner || null;
-  const currentStage = getEffectiveStage(contact, calledFor, attenderId) || normalizeStageStr(contact.pipelineStage);
+  const currentStage = getEffectiveStage(contact, calledFor, attenderId) || (calledFor ? null : normalizeStageStr(contact.pipelineStage));
   const currentRank  = currentStage ? (STAGE_RANKS[currentStage] || 0) : 0;
 
   const purpose    = (callEvent.callPurpose || "SALES").toUpperCase();

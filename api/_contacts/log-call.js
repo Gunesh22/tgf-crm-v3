@@ -106,7 +106,16 @@ function getEffectiveStageServer(lead, targetProgram = null) {
       if (hRank > highestRank) { highestRank = hRank; stage = hStage; }
     }
   }
-  return stage || lead.pipelineStage || lead.status || null;
+  if (stage) return stage;
+  if (programKey) {
+    const rootProg = lead['Called For'] || lead.calledFor || lead.called_for;
+    const rootKey = rootProg ? normalizeCalledForKey(rootProg) : null;
+    if (rootKey && rootKey === programKey) {
+      return lead.pipelineStage || lead.status || null;
+    }
+    return null;
+  }
+  return lead.pipelineStage || lead.status || null;
 }
 
 export function evaluateStageServer(lead, callEvent) {

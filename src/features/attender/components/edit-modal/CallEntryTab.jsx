@@ -262,10 +262,12 @@ export const CallEntryTab = ({
 
   const dbStage = getEffectiveStage(stageSource, selectedProgram, activeAttenderId)
     || getEffectiveStage(stageSource, selectedProgram)
-    || getEffectiveStage(stageSource)
-    || normalizeStageStr(stageSource?.pipelineStage)
-    || normalizeStageStr(edited?.pipelineStage)
-    || normalizeStageStr(row?.pipelineStage)
+    || (selectedProgram ? null : (
+        getEffectiveStage(stageSource)
+        || normalizeStageStr(stageSource?.pipelineStage)
+        || normalizeStageStr(edited?.pipelineStage)
+        || normalizeStageStr(row?.pipelineStage)
+       ))
     || PIPELINE_STAGES.NEW_LEAD;
   const isFormDirtyCall = Boolean(activeCallStatus && edited.status);
   const displayStage = isFormDirtyCall ? evalResult.pipelineStage : dbStage;
