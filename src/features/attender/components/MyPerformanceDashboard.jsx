@@ -686,8 +686,7 @@ export function MyPerformanceDashboard({
   const unifiedPerformanceRadar = useMemo(() => {
     const now = new Date();
     const todayStart = new Date(now);
-    todayStart.setHours(0, 0, 0, 0);
-
+    const todayStr = getLocalDateString();
     const numDays = Number(radarDays) || 14;
 
     // 1. Build calendar day slots for the selected days (earliest to today)
@@ -695,13 +694,10 @@ export function MyPerformanceDashboard({
     for (let i = numDays - 1; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      const dateKey = `${year}-${month}-${day}`;
+      const dateKey = getLocalDateString(d);
       
-      const dayLabel = d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
-      const isToday = i === 0;
+      const dayLabel = d.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short" });
+      const isToday = dateKey === todayStr;
 
       days.push({
         dateKey,
@@ -720,15 +716,22 @@ export function MyPerformanceDashboard({
 
     // 2. Tally completed attempts across these days
     let totalCompleted = 0;
+    let total7DaysCompleted = 0;
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    const sevenDaysCutoff = getLocalDateString(sevenDaysAgo);
+
     allAttempts.forEach(att => {
       if (att.isSharedCredit) return;
       const ts = att.timestamp || att.updatedAt;
       if (!ts || isNaN(ts.getTime())) return;
 
-      const year = ts.getFullYear();
-      const month = String(ts.getMonth() + 1).padStart(2, "0");
-      const day = String(ts.getDate()).padStart(2, "0");
-      const key = `${year}-${month}-${day}`;
+      const key = getLocalDateString(ts);
+      if (!key) return;
+
+      if (key >= sevenDaysCutoff && key <= todayStr) {
+        total7DaysCompleted += 1;
+      }
 
       const entry = dayMap.get(key);
       if (entry) {
@@ -748,9 +751,25 @@ export function MyPerformanceDashboard({
 
     // 3. Tally overdue callbacks cumulatively till each day (Strict Attender View matching Call Sheet)
     let totalOverdue = 0;
-
-    const todayStr = getLocalDateString();
     const activeCtx = attenderId || attenderName;
+
+    // Index latest call timestamps made by THIS attender per lead (by ID and Phone)
+    const lastCallByLead = new Map();
+    allAttempts.forEach(att => {
+      const ts = att.timestamp || att.updatedAt;
+      if (!ts || isNaN(ts.getTime())) return;
+
+      const keys = [att.contactId, att.id, att.Phone, att.phone, att.Mobile, att.mobile]
+        .filter(Boolean)
+        .map(k => String(k).trim().toLowerCase());
+
+      keys.forEach(k => {
+        const prev = lastCallByLead.get(k);
+        if (!prev || ts > prev) {
+          lastCallByLead.set(k, ts);
+        }
+      });
+    });
 
     logs.forEach(l => {
       if (l._deleted) return;
@@ -758,22 +777,50 @@ export function MyPerformanceDashboard({
       const rawCbDate = view.callbackDate;
       if (!rawCbDate) return;
 
-      const cbStatus = String(view.callbackStatus || l.callbackStatus || "").trim().toLowerCase();
-      const isDone = cbStatus === "done" || cbStatus === "completed" || cbStatus === "cancelled";
-      if (isDone) return;
-
       const cbDateStr = getLocalDateString(rawCbDate);
       if (!cbDateStr) return;
 
-      if (cbDateStr <= todayStr) {
+      const cbStatus = String(view.callbackStatus || l.callbackStatus || "").trim().toLowerCase();
+      const isDone = cbStatus === "done" || cbStatus === "completed" || cbStatus === "cancelled";
+
+      // If resolved, determine when the resolution happened so past days are frozen accurately
+      let resolvedDateStr = null;
+      if (isDone) {
+        const leadKeys = [l._id, l.id, l.Phone, l.phone, l.Mobile, l.mobile]
+          .filter(Boolean)
+          .map(k => String(k).trim().toLowerCase());
+
+        let lastCallTs = null;
+        for (const k of leadKeys) {
+          const t = lastCallByLead.get(k);
+          if (t && (!lastCallTs || t > lastCallTs)) {
+            lastCallTs = t;
+          }
+        }
+
+        if (!lastCallTs) {
+          lastCallTs = parseTimestamp(view.lastCalledAt || l.lastCalledAt || l.updatedAt);
+        }
+
+        resolvedDateStr = lastCallTs ? getLocalDateString(lastCallTs) : todayStr;
+      }
+
+      // If still active today, increment current active backlog
+      if (!isDone && cbDateStr <= todayStr) {
         totalOverdue++;
-        // Accumulate into every day where this callback was due on or before that date
-        days.forEach(d => {
-          if (cbDateStr <= d.dateKey) {
+      }
+
+      // Populate daily bars
+      days.forEach(d => {
+        // Was it due on or before day d?
+        if (cbDateStr <= d.dateKey) {
+          // If not resolved: it was overdue on day d.
+          // If resolved: it was overdue on day d only if resolution happened AFTER day d.
+          if (!isDone || (resolvedDateStr && d.dateKey < resolvedDateStr)) {
             d.overdue += 1;
           }
-        });
-      }
+        }
+      });
     });
 
     // Follow-up resolution efficiency ratio
@@ -783,7 +830,7 @@ export function MyPerformanceDashboard({
     return {
       chartData: days,
       totalCompleted,
-      total7DaysCompleted: totalCompleted,
+      total7DaysCompleted,
       totalOverdue,
       efficiencyRate,
       numDays,
@@ -1791,7 +1838,7 @@ export function MyPerformanceDashboard({
                 const rawPhone = String(a.Phone || "");
                 const cleanPhone = rawPhone.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "");
                 const dateStr = a.timestamp
-                  ? a.timestamp.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+                  ? a.timestamp.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric" })
                   : "";
                 return (
                   <div key={a.id} className="flex items-center gap-4 px-5 py-3 hover:bg-purple-50/40 transition-colors">
@@ -1912,7 +1959,7 @@ export function MyPerformanceDashboard({
                 {pagedAttempts.map((att, idx) => {
                   const theme = STATUS_THEMES[att.status] || STATUS_THEMES["Pending"];
                   const dateFormatted = att.timestamp
-                    ? att.timestamp.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+                    ? att.timestamp.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
                     : "Unknown";
                   const targetId = attenderId || att.attenderId;
                   const targetName = (attenderName || att.attenderName || "").toLowerCase().trim();
