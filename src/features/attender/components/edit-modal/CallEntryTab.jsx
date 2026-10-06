@@ -36,6 +36,7 @@ const CORE_OVERRIDE_STAGES = [
   PIPELINE_STAGES.REGISTERED_WON,
   PIPELINE_STAGES.CLOSED_LOST,
   PIPELINE_STAGES.CLOSED_INVALID,
+  "Query Desk",
 ];
 
 export const CallEntryTab = ({
@@ -61,6 +62,7 @@ export const CallEntryTab = ({
   activeAttenderName = "Attender",
   isAdmin = false,
   onRefreshLead,
+  onContactUpdated,
   programsList = [],
   activeProgram = "",
   onSelectProgram = () => {}
@@ -99,6 +101,7 @@ export const CallEntryTab = ({
   // Stage Override states
   const [showStageOverridePicker, setShowStageOverridePicker] = useState(false);
   const [selectedTargetStage, setSelectedTargetStage] = useState(null);
+  const [selectedQueryOutcome, setSelectedQueryOutcome] = useState("Query Solved");
   const [overrideReason, setOverrideReason] = useState("");
   const [isSubmittingOverride, setIsSubmittingOverride] = useState(false);
 
@@ -161,6 +164,7 @@ export const CallEntryTab = ({
     setIsSubmittingOverride(true);
     try {
       const contactId = edited._id || edited.id || row._id || row.id;
+      const isTargetQuery = selectedTargetStage === "Query Desk";
       const res = await overridePipelineStage(
         contactId,
         selectedTargetStage,
@@ -168,43 +172,29 @@ export const CallEntryTab = ({
         activeAttenderName,
         isAdmin ? "admin" : "attender",
         overrideReason,
-        activeProgram
+        activeProgram,
+        isTargetQuery ? selectedQueryOutcome : ""
       );
       if (res && res.success) {
-        toast.success(`Pipeline stage updated to "${res.newStage}"`);
-        const targetProg = activeProgram || selectedProgram;
-        const targetProgKey = targetProg ? String(targetProg).toLowerCase().replace(/[^a-z0-9]/g, "-") : "";
-        setEdited(prev => {
-          const rels = Array.isArray(prev.programRelationships) ? [...prev.programRelationships] : [];
-          const existingIdx = rels.findIndex(r => {
-            if (!r) return false;
-            const rKey = String(r.calledForKey || r.calledFor || r.program || "").toLowerCase().replace(/[^a-z0-9]/g, "-");
-            return rKey === targetProgKey;
-          });
-          const newRelEntry = {
-            program: targetProg,
-            calledForKey: targetProgKey,
-            status: res.newStage,
-            pipelineStage: res.newStage,
-            updatedAt: new Date().toISOString()
-          };
-          if (existingIdx >= 0) {
-            rels[existingIdx] = { ...rels[existingIdx], ...newRelEntry };
-          } else if (targetProg) {
-            rels.push(newRelEntry);
-          }
-          return {
-            ...prev,
-            programRelationships: rels,
-            closedReason: res.contact?.closedReason ?? prev.closedReason,
-            history: res.auditHistoryItem ? [res.auditHistoryItem, ...(prev.history || [])] : prev.history
-          };
-        });
-        if (typeof onRefreshLead === "function") {
-          onRefreshLead();
+        toast.success(isTargetQuery ? `Converted to Query Desk (${selectedQueryOutcome})` : `Pipeline stage updated to "${res.newStage}"`);
+        const updatedLead = res.contact || {
+          ...edited,
+          pipelineStage: isTargetQuery ? "Query Desk" : res.newStage,
+          queryStatus: isTargetQuery ? selectedQueryOutcome : edited.queryStatus,
+          status: isTargetQuery ? selectedQueryOutcome : (edited.status || res.newStage),
+          callPurpose: isTargetQuery ? "QUERY" : edited.callPurpose,
+          isQuery: isTargetQuery ? true : edited.isQuery,
+        };
+
+        if (typeof onContactUpdated === "function") {
+          onContactUpdated(updatedLead);
+        } else {
+          setEdited(prev => ({ ...prev, ...updatedLead }));
         }
+
         setShowStageOverridePicker(false);
         setSelectedTargetStage(null);
+        setSelectedQueryOutcome("Query Solved");
         setOverrideReason("");
       } else {
         toast.error(res?.error || "Failed to override pipeline stage");
@@ -638,6 +628,41 @@ export const CallEntryTab = ({
                       <span className="text-indigo-700 font-black">{getPipelineStageConfig(selectedTargetStage).label}</span>
                     </div>
 
+                    {selectedTargetStage === "Query Desk" && (
+                      <div className="bg-white/90 border border-indigo-200/80 rounded-xl p-2.5 space-y-2">
+                        <div className="text-[11px] font-bold text-slate-700">Select Query Outcome:</div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedQueryOutcome("Query Solved")}
+                            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                              selectedQueryOutcome === "Query Solved"
+                                ? "bg-emerald-600 text-white border-emerald-600 shadow-2xs"
+                                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                            }`}
+                          >
+                            <Check size={13} />
+                            <span>Query Solved</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedQueryOutcome("Query Pending")}
+                            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                              selectedQueryOutcome === "Query Pending"
+                                ? "bg-amber-500 text-white border-amber-600 shadow-2xs"
+                                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                            }`}
+                          >
+                            <Clock size={13} />
+                            <span>Query Pending</span>
+                          </button>
+                        </div>
+                        <div className="text-[10px] text-slate-500 italic">
+                          Correction only: converts call purpose to Query and updates stage without recording a new call.
+                        </div>
+                      </div>
+                    )}
+
                     <input
                       type="text"
                       value={overrideReason}
@@ -651,6 +676,7 @@ export const CallEntryTab = ({
                         type="button"
                         onClick={() => {
                           setSelectedTargetStage(null);
+                          setSelectedQueryOutcome("Query Solved");
                           setOverrideReason("");
                         }}
                         className="px-2.5 py-1 text-[11px] font-bold text-slate-600 hover:text-slate-800 bg-slate-200 hover:bg-slate-300 rounded-lg transition cursor-pointer"
@@ -664,7 +690,11 @@ export const CallEntryTab = ({
                         className="px-3.5 py-1.5 text-[11px] font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition flex items-center gap-1 disabled:opacity-50 cursor-pointer"
                       >
                         {isSubmittingOverride ? <Loader size={11} className="animate-spin" /> : <CheckCircle2 size={11} />}
-                        <span>Move to {getPipelineStageConfig(selectedTargetStage).label.split(". ")[1] || getPipelineStageConfig(selectedTargetStage).label}</span>
+                        <span>
+                          {selectedTargetStage === "Query Desk"
+                            ? `Convert to ${selectedQueryOutcome}`
+                            : `Move to ${getPipelineStageConfig(selectedTargetStage).label.split(". ")[1] || getPipelineStageConfig(selectedTargetStage).label}`}
+                        </span>
                       </button>
                     </div>
                   </div>

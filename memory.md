@@ -1330,6 +1330,57 @@ The discrepancy is caused by two conflicting definitions of "Incoming" in `Month
      - Their registrations are counted under **Incoming Conversions**.
    - As a result, the table row displays **2 Incoming Calls** (only direct incoming calls in the month) alongside **6 Incoming Registrations** (all 6 converted leads who originated from the incoming channel).
 
+---
+
+## 57. Info Given to Query Desk Stage Correction Architecture (Zero New Calls)
+
+### 1. Problem Statement & User Requirement
+- Attenders mistakenly logged inquiry/doubt calls as Sales calls with status `"Info Given"`, incorrectly placing contacts in the Sales pipeline (`3. Information Given`).
+- Required a correction tool inside the Edit Modal's Stage Change popover to convert these leads to **Query Desk**, allowing attenders to select between **"Query Solved"** or **"Query Pending"**.
+- **Critical Invariant**: Because this is a correction of an existing call entry rather than making a new phone call, **NO new call attempt must be created or recorded in history**. Call counts must not be inflated.
+
+### 2. Implementation Summary
+1. **Frontend Popover (`CallEntryTab.jsx`)**:
+   - Added `"Query Desk"` to `CORE_OVERRIDE_STAGES`.
+   - When `"Query Desk"` is chosen, displays a clean selection toggle for Query Outcome:
+     - **✓ Query Solved** (default)
+     - **⏳ Query Pending**
+   - Updates local state cleanly upon confirm without triggering the call logging form.
+2. **Client DB Layer (`src/lib/db.js`)**:
+   - Updated `overridePipelineStage` to accept and forward `queryStatus` in the request payload.
+3. **Server-Side Correction Endpoint (`api/_contacts/override-stage.js`)**:
+   - Added `"Query Desk"` to `VALID_STAGES` and `normalizeStageInput`.
+   - When target stage is `"Query Desk"`:
+     - Updates `pipelineStage = "Query Desk"`, `callPurpose = "QUERY"`, `queryStatus = targetQueryStatus`, `status = targetQueryStatus`, and `isQuery = true`.
+     - Updates `attenderStates[attenderId]` with the same Query properties.
+     - Locates the existing call entry in `contact.history` (most recent "Info Given" or latest call attempt) and corrects it **in-place** (`callPurpose = "QUERY"`, `status = targetQueryStatus`, appends `[Corrected to ${targetQueryStatus}]` to remark).
+     - **Skips `$push: { history: ... }`**, guaranteeing that the total number of calls in `contact.history` remains 100% unchanged.
+4. **Verification**:
+   - Full automated test suite: 100% passed (`npm test`).
+   - Targeted in-place update test (`test_query_desk.mjs`): Verified in-place history update and zero `$push` calls.
+   - Production Build: `npm run build` passed in 31.07s with 0 errors.
+
+---
+
+## 58. Query Desk Immediate Table State Synchronization & Filter Fixes
+
+### 1. Root Causes for Required Page Refresh
+1. **Modal to Table Disconnect**: `CallEntryTab.jsx` only modified local tab state and called `onRefreshLead()` with no arguments. `AttenderWorkspace.jsx` never updated the outer `callLogs` array driving `ContactTable.jsx`.
+2. **Hardcoded Table Badge**: `ContactTable.jsx` had `if (stageToUse === "Query Desk" || isQueryActive)` hardcoded to return a `Query Pending` badge, ignoring whether `isQuerySolved` was true.
+
+### 2. Solutions Implemented
+1. **Zero-Latency In-Memory Propagation**:
+   - `CallEntryTab.jsx` returns the updated lead to `onContactUpdated(updatedLead)` upon stage override.
+   - `EditModal.jsx` passes `updatedLead` to `onSave(updatedLead, true)`, which updates `setCallLogs` in `AttenderWorkspace.jsx` immediately without closing the modal.
+2. **API Response Normalization**:
+   - `api/_contacts/override-stage.js` ensures `cleanAttenderId` updates `attenderStates[cleanAttenderId]` reliably, and returns the updated document with normalized string `id` and `_id`.
+3. **Table & Mobile Badge Rendering**:
+   - `ContactTable.jsx` and `MobileAttenderView.jsx` accurately render emerald **Query Solved** and sky **Query Pending** badges.
+4. **General Status Filter Fix**:
+   - In `AttenderWorkspace.jsx`, updated `filterGeneralStatus` to match both `"Solved"` and `"Query Solved"`, and both `"Pending"` and `"Query Pending"`.
+
+
+
 
 
 

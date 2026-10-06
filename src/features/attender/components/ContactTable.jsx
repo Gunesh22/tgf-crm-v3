@@ -369,10 +369,10 @@ export function ContactTable({
                   {!hiddenColumns.includes("Status") && (
                     <td className="py-2.5 px-3 align-top">
                       {(() => {
-                        const stageToUse = view.pipelineStage;
-                        const rawQ = String(view.queryStatus || "").trim();
-                        const isQueryActive = (rawQ === "Pending" || rawQ === "Query Pending" || rawQ === "Attempting Query") && (String(view.callPurpose || "").toUpperCase() === "QUERY" || view.status === "Query" || stageToUse === "Query Desk");
+                        const stageToUse = view.pipelineStage || log.pipelineStage;
+                        const rawQ = String(view.queryStatus || view.status || "").trim();
                         const isQuerySolved = rawQ === "Query Solved" || rawQ === "Solved";
+                        const isQueryActive = !isQuerySolved && (rawQ === "Pending" || rawQ === "Query Pending" || rawQ === "Attempting Query" || stageToUse === "Query Desk");
 
                         const getStageBadgeStyle = (stage) => {
                           if (stage?.includes("Registered") || stage?.includes("Won")) return "bg-emerald-50 text-emerald-700 border-emerald-200";
@@ -412,13 +412,17 @@ export function ContactTable({
                           );
                         }
 
-                        if (stageToUse === "Query Desk" || isQueryActive) {
+                        if (stageToUse === "Query Desk" || isQueryActive || isQuerySolved) {
                           return (
                             <div className="flex flex-col gap-0.5 items-start">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-sky-50 text-sky-700 border border-sky-200">
-                                Query Pending
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${
+                                isQuerySolved
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                  : "bg-sky-50 text-sky-700 border-sky-200"
+                              }`}>
+                                {isQuerySolved ? "Query Solved" : "Query Pending"}
                               </span>
-                              {view.status && (
+                              {view.status && view.status !== (isQuerySolved ? "Query Solved" : "Query Pending") && view.status !== "Query" && (
                                 <span className="text-[10px] text-slate-500 font-medium ml-0.5">
                                   {view.status}
                                 </span>

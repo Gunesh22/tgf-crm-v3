@@ -703,7 +703,7 @@ export const addIncomingCallLog = async (attenderId, attenderName, updates = {},
   return res;
 };
 
-export const overridePipelineStage = async (contactId, newStage, attenderId, attenderName, role = "attender", reason = "", program = "") => {
+export const overridePipelineStage = async (contactId, newStage, attenderId, attenderName, role = "attender", reason = "", program = "", queryStatus = "") => {
   const payload = {
     contactId,
     newStage,
@@ -711,7 +711,8 @@ export const overridePipelineStage = async (contactId, newStage, attenderId, att
     changedBy: attenderName,
     role,
     reason,
-    program
+    program,
+    queryStatus
   };
   return fetchAPI(`/api/contacts/override-stage`, "POST", payload);
 };

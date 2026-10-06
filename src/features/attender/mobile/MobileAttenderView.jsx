@@ -362,6 +362,20 @@ export default function MobileAttenderView({
                   <CheckCircle2 size={10} /> Reg.Done
                 </span>
               );
+            } else if (status === "Query Solved") {
+              cardBg = "bg-emerald-50/90 border-emerald-200 text-emerald-950";
+              statusBadge = (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-600 text-white shrink-0">
+                  Query Solved
+                </span>
+              );
+            } else if (status === "Query Pending") {
+              cardBg = "bg-sky-50/90 border-sky-200 text-sky-950";
+              statusBadge = (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-sky-600 text-white shrink-0">
+                  Query Pending
+                </span>
+              );
             } else if (status.toLowerCase() === "interested" || status.toLowerCase() === "info given" || status.toLowerCase() === "information given") {
               cardBg = "bg-blue-50/90 border-blue-200 text-blue-950";
               statusBadge = (

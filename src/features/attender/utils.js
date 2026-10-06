@@ -820,7 +820,7 @@ export function getContactView(contact, currentAttenderIdOrName) {
   const source = getFieldWithFallback(contact, "Source", activeAttender);
   const status = getAttenderStatus(contact, activeAttender);
   const remark = getAttenderRemark(contact, activeAttender);
-  const pipelineStage = getEffectiveStage(contact, calledFor);
+  const pipelineStage = getEffectiveStage(contact, calledFor) || contact.attenderStates?.[activeAttender]?.pipelineStage || contact.pipelineStage || "";
   // Check if attender has an existing state record on this lead
   const hasAttState = !!(contact.attenderStates && (
     (activeAttender && contact.attenderStates[activeAttender]) ||

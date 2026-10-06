@@ -257,6 +257,15 @@ export const EditModal = ({
     }));
   };
 
+  const handleExternalContactUpdate = (updatedContact) => {
+    if (!updatedContact) return;
+    setSavedRow(prev => ({ ...prev, ...updatedContact }));
+    setEdited(prev => ({ ...prev, ...updatedContact }));
+    if (typeof onSave === "function") {
+      onSave(updatedContact, true);
+    }
+  };
+
   useEffect(() => {
     setLocalPrograms(programs);
   }, [programs]);
@@ -2063,6 +2072,7 @@ export const EditModal = ({
               activeAttenderName={selectedAttenderName || attenderName}
               isAdmin={allowAttenderSelection}
               onRefreshLead={onRefreshLead}
+              onContactUpdated={handleExternalContactUpdate}
               programsList={programsList}
               activeProgram={activeProgram}
               onSelectProgram={handleSelectProgram}

@@ -538,6 +538,13 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
       if (fresh) {
         setFreshSharedLead(fresh);
         setEditingRow(fresh);
+        setCallLogs(prev => prev.map(l => {
+          const lId = l.id || l._id;
+          if (lId && (lId === contactId || lId === fresh.id || lId === fresh._id)) {
+            return enrichSingleLogWithCallbackFlags({ ...l, ...fresh }, attenderId || attenderName);
+          }
+          return l;
+        }));
         toast.success(`Updated shared activity for ${leadName}!`, { id: `sync-${contactId}` });
       } else {
         toast.dismiss(`sync-${contactId}`);
@@ -1352,8 +1359,8 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
         const logQueryStatus = activeView.queryStatus || log.queryStatus || "Pending";
 
         const matched = filterGeneralStatus.some(f => {
-          if (f === "Query Pending") return (logStatus === "Query" || logStage === "Query Desk") && logQueryStatus === "Pending";
-          if (f === "Query Solved")  return (logStatus === "Query" || logStage === "Query Desk") && logQueryStatus === "Solved";
+          if (f === "Query Pending") return (logStatus === "Query" || logStatus === "Query Pending" || logStage === "Query Desk") && (logQueryStatus === "Pending" || logQueryStatus === "Query Pending");
+          if (f === "Query Solved")  return (logStatus === "Query" || logStatus === "Query Solved" || logStage === "Query Desk") && (logQueryStatus === "Solved" || logQueryStatus === "Query Solved");
 
           // Match by status (raw or canonical)
           if (f === logStatus || (logStatus && getCanonicalStatus(f) === getCanonicalStatus(logStatus))) return true;

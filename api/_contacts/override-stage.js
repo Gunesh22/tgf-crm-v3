@@ -13,6 +13,7 @@ const VALID_STAGES = new Set([
   PIPELINE_STAGES.REGISTERED_WON,
   PIPELINE_STAGES.CLOSED_LOST,
   PIPELINE_STAGES.CLOSED_INVALID,
+  "Query Desk",
 ]);
 
 export function normalizeStageInput(s) {
@@ -22,6 +23,7 @@ export function normalizeStageInput(s) {
 
   const lower = str.toLowerCase().trim();
 
+  if (lower === "query desk" || lower === "query" || lower === "querydesk") return "Query Desk";
   if (lower === "closed / invalid" || lower === "closed invalid" || lower === "invalid" || lower === "invalid number" || lower === "invalid no") return PIPELINE_STAGES.CLOSED_INVALID;
   if (lower === "closed / lost" || lower === "closed lost" || lower === "lost" || lower === "not interested") return PIPELINE_STAGES.CLOSED_LOST;
   if (lower === "1. new lead" || lower === "new lead" || lower === "new") return PIPELINE_STAGES.NEW_LEAD;
@@ -117,9 +119,53 @@ export async function executeOverrideStage(db, payload) {
     updatedAt: nowIso,
   };
 
-  if (existingContact.attenderStates && existingContact.attenderStates[cleanAttenderId]) {
-    setFields[`attenderStates.${cleanAttenderId}.pipelineStage`] = canonicalNewStage;
-    setFields[`attenderStates.${cleanAttenderId}.updatedAt`] = nowIso;
+  const isQueryDesk = canonicalNewStage === "Query Desk";
+  const targetQueryStatus = payload.queryStatus === "Query Pending" ? "Query Pending" : "Query Solved";
+
+  if (isQueryDesk) {
+    setFields.pipelineStage = "Query Desk";
+    setFields.callPurpose = "QUERY";
+    setFields.queryStatus = targetQueryStatus;
+    setFields.isQuery = true;
+    setFields.status = targetQueryStatus;
+
+    if (cleanAttenderId) {
+      setFields[`attenderStates.${cleanAttenderId}.pipelineStage`] = "Query Desk";
+      setFields[`attenderStates.${cleanAttenderId}.callPurpose`] = "QUERY";
+      setFields[`attenderStates.${cleanAttenderId}.queryStatus`] = targetQueryStatus;
+      setFields[`attenderStates.${cleanAttenderId}.status`] = targetQueryStatus;
+      setFields[`attenderStates.${cleanAttenderId}.updatedAt`] = nowIso;
+    }
+
+    // In-place correction of historical call:
+    // Update the last "Info Given" or latest call attempt to QUERY and targetQueryStatus WITHOUT adding a new call
+    let updatedHistory = Array.isArray(existingContact.history) ? [...existingContact.history] : [];
+    let targetIdx = -1;
+    for (let i = updatedHistory.length - 1; i >= 0; i--) {
+      const s = String(updatedHistory[i]?.status || "").toLowerCase().trim();
+      if (s.includes("info given") || s.includes("information given")) {
+        targetIdx = i;
+        break;
+      }
+    }
+    if (targetIdx === -1 && updatedHistory.length > 0) {
+      targetIdx = updatedHistory.length - 1;
+    }
+    if (targetIdx >= 0) {
+      const orig = updatedHistory[targetIdx];
+      updatedHistory[targetIdx] = {
+        ...orig,
+        callPurpose: "QUERY",
+        status: targetQueryStatus,
+        remark: orig.remark ? `${orig.remark} [Corrected to ${targetQueryStatus}]` : `[Corrected to ${targetQueryStatus}]`
+      };
+      setFields.history = updatedHistory;
+    }
+  } else {
+    if (cleanAttenderId) {
+      setFields[`attenderStates.${cleanAttenderId}.pipelineStage`] = canonicalNewStage;
+      setFields[`attenderStates.${cleanAttenderId}.updatedAt`] = nowIso;
+    }
   }
 
   // Clear closedReason if reopening from Closed to active
@@ -133,12 +179,13 @@ export async function executeOverrideStage(db, payload) {
     setFields.isAttenderCreditEligible = true;
   }
 
+  const updateDoc = isQueryDesk
+    ? { $set: setFields }
+    : { $set: setFields, $push: { history: auditHistoryItem } };
+
   const result = await db.collection("contacts").findOneAndUpdate(
     { _id: existingContact._id },
-    {
-      $set: setFields,
-      $push: { history: auditHistoryItem }
-    },
+    updateDoc,
     { returnDocument: "after" }
   );
 
@@ -149,7 +196,7 @@ export async function executeOverrideStage(db, payload) {
     if (calledForKey) {
       const relEntry = {
         program: targetProg,
-        status: canonicalNewStage,
+        status: isQueryDesk ? targetQueryStatus : canonicalNewStage,
         pipelineStage: canonicalNewStage,
         calledForKey,
         updatedAt: nowIso,
@@ -170,7 +217,13 @@ export async function executeOverrideStage(db, payload) {
     }
   }
 
-  const updatedContact = result.value || result;
+  const finalDoc = await db.collection("contacts").findOne({ _id: existingContact._id });
+  const rawUpdated = finalDoc || result.value || result || {};
+  const updatedContact = {
+    ...rawUpdated,
+    id: String(rawUpdated._id || existingContact._id),
+    _id: String(rawUpdated._id || existingContact._id)
+  };
 
   return {
     success: true,
