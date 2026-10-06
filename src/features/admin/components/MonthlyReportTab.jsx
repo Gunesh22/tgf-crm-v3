@@ -9,6 +9,7 @@ import { subscribeToAllCallLogs } from "../../../lib/db";
 import { CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, parseTimestamp, getCanonicalStatus, getContactPhone, getContactName, getContactCity, getContactKhoji, renderVal, classifyCallStatus, getCanonicalPhysicalCalls, getLocalDateStr, getCanonicalRegistrations, getContactLeadOrigin, getContactSource } from "../utils.jsx";
 import { isKhojiAffirmative, isKhojiNegative } from "../../attender/utils.js";
 import { getAllPresets } from "../../../utils/presetEngine.js";
+import { determineCallType } from "../../../utils/registrationEngine.js";
 import { PresetBarWidget } from "./PresetBarWidget.jsx";
 import { PresetSummaryCards } from "./PresetSummaryCards.jsx";
 import { PresetBuilderModal } from "./PresetBuilderModal.jsx";
@@ -869,7 +870,7 @@ export default function MonthlyReportTab({
 
   const calledForVsSourceBreakdown = React.useMemo(() => {
     const map = {};
-    const seenRegs = new Set();
+
     allAttempts.forEach(c => {
       const src = String((sourceDimension === "leadOrigin" ? c.leadOrigin : c.source) || "").trim() || "Unknown";
       const calledFors = String(c.calledFor || "").trim()
@@ -891,8 +892,8 @@ export default function MonthlyReportTab({
             conversions: 0, 
             incomingConversions: 0, 
             outgoingConversions: 0, 
-            incomingDenominator: 0, 
-            outgoingDenominator: 0 
+            incomingLeadsSet: new Set(),
+            outgoingLeadsSet: new Set()
           };
         }
         const item = map[key];
@@ -907,11 +908,16 @@ export default function MonthlyReportTab({
           item.outgoing++;
         }
 
-        const denom = getConversionDenominator(c.status);
-        if (isIncoming) {
-          item.incomingDenominator += denom;
-        } else {
-          item.outgoingDenominator += denom;
+        // Track unique leads by their 1st call type
+        const contactId = c.contactId ? String(c.contactId) : null;
+        if (contactId) {
+          const leadLog = callLogs.find(l => String(l._id || l.id) === contactId);
+          const firstCallType = leadLog ? String(determineCallType(leadLog, leadLog) || "").toLowerCase() : (isIncoming ? "incoming" : "outgoing");
+          if (firstCallType.startsWith("incoming") || firstCallType === "in") {
+            item.incomingLeadsSet.add(contactId);
+          } else {
+            item.outgoingLeadsSet.add(contactId);
+          }
         }
       });
     });
@@ -931,8 +937,8 @@ export default function MonthlyReportTab({
           conversions: 0, 
           incomingConversions: 0, 
           outgoingConversions: 0, 
-          incomingDenominator: 0, 
-          outgoingDenominator: 0 
+          incomingLeadsSet: new Set(),
+          outgoingLeadsSet: new Set()
         };
       }
       const item = map[key];
@@ -941,27 +947,37 @@ export default function MonthlyReportTab({
       item.conversions++;
       if (isIncoming) {
         item.incomingConversions++;
+        if (reg.contactId) item.incomingLeadsSet.add(String(reg.contactId));
       } else {
         item.outgoingConversions++;
+        if (reg.contactId) item.outgoingLeadsSet.add(String(reg.contactId));
       }
     });
 
     const calledForTotals = {};
-    const sourceColName = sourceDimension === "leadOrigin" ? "Lead Origin" : "Source";
     const rows = Object.values(map).map(a => {
+      // Direct and intuitive Call Center conversion rate:
+      // If calls = 0, conversion rate is strictly 0.0% (never 100% on 0 calls).
+      // If calls > 0, (conversions / calls) * 100, capped at 100.0%.
+      const incomingRate = a.incoming > 0 
+        ? Math.min(100, (a.incomingConversions / a.incoming) * 100) 
+        : 0;
+
+      const outgoingRate = a.outgoing > 0 
+        ? Math.min(100, (a.outgoingConversions / a.outgoing) * 100) 
+        : 0;
+
       const row = {
         "Called For": a.calledFor,
-        [sourceColName]: a.source,
+        "Source": a.source,
         "Total Calls": a.total,
         "Incoming Calls": a.incoming,
         "Outgoing Calls": a.outgoing,
         "Total Conversions": a.conversions,
         "Incoming Conversions": a.incomingConversions,
         "Outgoing Conversions": a.outgoingConversions,
-        "Incoming Denominator": a.incomingDenominator,
-        "Outgoing Denominator": a.outgoingDenominator,
-        "Incoming Conversion Rate (%)": a.incomingDenominator ? `${((a.incomingConversions / a.incomingDenominator) * 100).toFixed(1)}%` : "0.0%",
-        "Outgoing Conversion Rate (%)": a.outgoingDenominator ? `${((a.outgoingConversions / a.outgoingDenominator) * 100).toFixed(1)}%` : "0.0%"
+        "Incoming Conversion Rate (%)": `${incomingRate.toFixed(1)}%`,
+        "Outgoing Conversion Rate (%)": `${outgoingRate.toFixed(1)}%`
       };
       const prog = row["Called For"];
       calledForTotals[prog] = (calledForTotals[prog] || 0) + row["Total Calls"];
@@ -989,7 +1005,7 @@ export default function MonthlyReportTab({
       
       return b["Total Calls"] - a["Total Calls"];
     });
-  }, [allAttempts, selectedCalledFors, programRegistrationsList, sourceDimension]);
+  }, [allAttempts, selectedCalledFors, programRegistrationsList, sourceDimension, callLogs]);
 
   const calledForVsSourceBreakdownTotals = React.useMemo(() => {
     const totals = { 
@@ -999,13 +1015,11 @@ export default function MonthlyReportTab({
       "Incoming Calls": 0, 
       "Outgoing Calls": 0, 
       "Total Conversions": 0, 
-      "Incoming Conversions": 0,
-      "Outgoing Conversions": 0,
+      "Incoming Conversions": 0, 
+      "Outgoing Conversions": 0, 
       "Incoming Conversion Rate (%)": "0.0%", 
       "Outgoing Conversion Rate (%)": "0.0%" 
     };
-    let totalIncomingDenominator = 0;
-    let totalOutgoingDenominator = 0;
     calledForVsSourceBreakdown.forEach(row => {
       totals["Total Calls"] += row["Total Calls"];
       totals["Incoming Calls"] += row["Incoming Calls"];
@@ -1013,11 +1027,15 @@ export default function MonthlyReportTab({
       totals["Total Conversions"] += row["Total Conversions"];
       totals["Incoming Conversions"] += row["Incoming Conversions"];
       totals["Outgoing Conversions"] += row["Outgoing Conversions"];
-      totalIncomingDenominator += row["Incoming Denominator"] || 0;
-      totalOutgoingDenominator += row["Outgoing Denominator"] || 0;
     });
-    totals["Incoming Conversion Rate (%)"] = totalIncomingDenominator ? `${((totals["Incoming Conversions"] / totalIncomingDenominator) * 100).toFixed(1)}%` : "0.0%";
-    totals["Outgoing Conversion Rate (%)"] = totalOutgoingDenominator ? `${((totals["Outgoing Conversions"] / totalOutgoingDenominator) * 100).toFixed(1)}%` : "0.0%";
+    const incomingOverallRate = totals["Incoming Calls"] > 0 
+      ? Math.min(100, (totals["Incoming Conversions"] / totals["Incoming Calls"]) * 100) 
+      : 0;
+    const outgoingOverallRate = totals["Outgoing Calls"] > 0 
+      ? Math.min(100, (totals["Outgoing Conversions"] / totals["Outgoing Calls"]) * 100) 
+      : 0;
+    totals["Incoming Conversion Rate (%)"] = `${incomingOverallRate.toFixed(1)}%`;
+    totals["Outgoing Conversion Rate (%)"] = `${outgoingOverallRate.toFixed(1)}%`;
     return totals;
   }, [calledForVsSourceBreakdown]);
 
@@ -1461,12 +1479,13 @@ export default function MonthlyReportTab({
                 formulas={[
                   {
                     label: "Incoming Conversion Rate (%)",
-                    formula: "(Incoming Conversions ÷ Incoming Valid Responded Attempts*) × 100"
+                    formula: "(Incoming Conversions ÷ Incoming Calls) × 100",
+                    note: "*Shows 0.0% if Incoming Calls = 0. Capped at 100.0%."
                   },
                   {
                     label: "Outgoing Conversion Rate (%)",
-                    formula: "(Outgoing Conversions ÷ Outgoing Valid Responded Attempts*) × 100",
-                    note: "*Valid Responded Attempts include: Reg.Done, Info Given, Interested, Next Time, Not Interested."
+                    formula: "(Outgoing Conversions ÷ Outgoing Calls) × 100",
+                    note: "*Shows 0.0% if Outgoing Calls = 0. Capped at 100.0%."
                   }
                 ]}
               />

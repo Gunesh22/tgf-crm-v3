@@ -38,7 +38,7 @@ import {
   getLocalDateString,
   parseTimestamp
 } from "./utils";
-import { normalizeProgramStates } from "../../utils/pipelineEngine";
+import { normalizeProgramStates, normalizeStageStr } from "../../utils/pipelineEngine";
 import { resolveRegistrationAttribution } from "../../utils/registrationEngine";
 import { EditModal } from "./components/EditModal";
 import { MyPerformanceDashboard } from "./components/MyPerformanceDashboard";
