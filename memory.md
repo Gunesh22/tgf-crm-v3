@@ -1224,6 +1224,60 @@ Enable administrators to visually inspect the exact list of canonical registrati
 - **Targeted Lifecycle Suite**: **6 / 6 PASSED** (`test_settings_lifecycle.mjs`).
 - **Production Build**: Built cleanly with **0 errors in 26.14s** (`npm run build`).
 
+---
+
+## 52. Multi-Program Pipeline Stage Isolation Fix
+
+### 1. Root Cause Analysis & Problem Overview
+- **Symptom**: When a contact had existing history for one program (e.g., "Other" in Future Pool or Closed Lost) and a new call was logged for a different program (e.g., "TGF Info"), an unconnected call event caused the new program to incorrectly jump to "Future Pool" instead of staying in "Attempting Contact".
+- **Root Cause**:
+  1. **Cross-Program Stage Contamination (`api/_contacts/log-call.js`)**: Server-side transition logic evaluated stage transitions against the contact's overall `pipelineStage` rather than isolating the state of the specific `programKey` / `calledFor`.
+  2. **Pipeline Engine Ambiguity (`src/utils/pipelineEngine.js`)**: In `evaluateContactPipeline` and `determineFinalStage`, unconnected calls fell back to the root `contact.pipelineStage` if previous history existed, even if that history belonged to an entirely different program.
+  3. **Attender Modal Program State Leakage (`src/features/attender/components/edit-modal/CallEntryTab.jsx`)**: When switching between programs in the call entry dropdown, previous program pipeline stages leaked into the active form state.
+
+### 2. Architectural Fixes Implemented
+1. **Isolated Program Relationship Evaluation (`api/_contacts/log-call.js`)**:
+   - Ensured `programRelationships[]` maintains strictly isolated stage tracking per program key.
+   - Evaluated call outcomes and uncompleted attempts specifically against the target program's history.
+2. **Pipeline Engine Scoped History Filtering (`src/utils/pipelineEngine.js`)**:
+   - Scoped history events to the active program when evaluating attempt counts and stage progression.
+   - Prevented non-connected calls on a new program from inheriting terminal stages (e.g., Future Pool or Closed Lost) from other programs.
+3. **Clean Program Selection in Call Entry (`CallEntryTab.jsx`)**:
+   - Isolated program state selection so each program's pipeline stage initializes independently.
+
+### 3. Verification & Compliance
+- **Commit**: `0548cc9`
+- **Result**: Contacts with multi-program history now maintain independent, isolated pipelines for each program without cross-contamination.
+
+---
+
+## 53. Admin Dashboard Callback Compliance Inspection & Modular Inspect Modal
+
+### 1. Root Cause Analysis & Problem Overview
+- **Symptom**: The Admin Dashboard's "Callback Compliance & Follow-ups" card displayed aggregated metrics (Total: 152, Completed: 18, Overdue: 14, Upcoming: 120, Compliance Rate: 56%), but administrators had no way to inspect which leads constituted those numbers, nor could they filter callbacks by status or date.
+- **Architectural Debt**: The inline inspect dialog box inside `DashboardTab.jsx` was over 400 lines of JSX and state handlers, bloating `DashboardTab.jsx` to over 2,500 lines and making it difficult to maintain.
+
+### 2. Architectural Fixes & Modularization Implemented
+1. **Dedicated Modular Component (`src/features/admin/components/inspect-modal/`)**:
+   - Created `InspectModal.jsx` and `index.js`.
+   - Encapsulated search, status filtering, date filtering, keyboard handling, and Excel export within the component.
+   - Reduced `DashboardTab.jsx` by 400+ lines (from 2,521 lines down to 2,093 lines).
+2. **Simple Filter Buttons for Callbacks**:
+   - **Status Buttons**: **All**, **Overdue**, **Upcoming**, and **Completed** with dynamic, real-time count badges.
+   - **Date Filter**: Integrated date picker `<input type="date" />`, **Today** shortcut button, **Tomorrow** shortcut button, and **All Dates** clear button.
+3. **Card-Level Quick Inspection**:
+   - Added an **Inspect** button to the "Callback Compliance & Follow-ups" card header.
+   - Made the 3 metric pills (**Completed**, **Overdue**, **Upcoming**) clickable, opening the modal pre-filtered to that respective status while still allowing 1-click tab switching inside the dialog.
+4. **UX & Sorting Polish**:
+   - **Chronological Upcoming Sort**: Upcoming callbacks are sorted ascending (`ta - tb`), placing the soonest upcoming follow-ups at the top.
+   - **Dismissal Ergonomics**: Added `Escape` key listener and backdrop click-to-close (`e.target === e.currentTarget`).
+   - **Adaptive Excel Export**: Export column headers dynamically switch to `Callback Date` and `Callback Status` for callback inspections.
+
+### 3. Verification & Compliance
+- **Commit**: `f520d98`
+- **Status**: Committed and pushed to `main`.
+
+
 
 
 
