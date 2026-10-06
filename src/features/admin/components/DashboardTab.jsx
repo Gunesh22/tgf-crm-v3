@@ -12,6 +12,7 @@ import { getAllPresets } from "../../../utils/presetEngine.js";
 import { PresetBarWidget } from "./PresetBarWidget.jsx";
 import { PresetSummaryCards } from "./PresetSummaryCards.jsx";
 import { PresetBuilderModal } from "./PresetBuilderModal.jsx";
+import { InspectModal } from "./inspect-modal";
 
 // ── Multi-select dropdown ──────────────────────────────────────────────────
 
@@ -189,8 +190,7 @@ export default function DashboardTab({
   const [convPage, setConvPage] = useState(1);
   const [selectedAttenderDetails, setSelectedAttenderDetails] = useState(null);
   const [attenderModalSearch, setAttenderModalSearch] = useState("");
-  const [inspectModal, setInspectModal] = useState(null); // { title: string, subtitle: string, items: Array, type: string }
-  const [inspectSearch, setInspectSearch] = useState("");
+  const [inspectModal, setInspectModal] = useState(null); // { title: string, subtitle: string, items: Array, type: string, defaultFilter?: string }
   const [serverStats, setServerStats] = useState(null);
 
   // Dynamic Preset Engine State
@@ -978,18 +978,27 @@ export default function DashboardTab({
     let overdue = 0;
     let upcoming = 0;
 
+    const allItems = [];
+    const completedItems = [];
+    const overdueItems = [];
+    const upcomingItems = [];
+
     const todayStr = getLocalDateStr(new Date());
 
-    filteredLogs.forEach(l => {
+    filteredLogs.forEach((l, idx) => {
       let cbDateRaw = l.callbackDate || l.callback_date;
+      let matchedState = null;
       if (!cbDateRaw && l.attenderStates) {
         Object.values(l.attenderStates).forEach(st => {
-          if (st?.callbackDate) cbDateRaw = st.callbackDate;
+          if (st?.callbackDate) {
+            cbDateRaw = st.callbackDate;
+            matchedState = st;
+          }
         });
       }
       if (!cbDateRaw) return;
 
-      const cbStatus = String(l.callbackStatus || l.callback_status || "").toLowerCase().trim();
+      const cbStatus = String(matchedState?.callbackStatus || l.callbackStatus || l.callback_status || "").toLowerCase().trim();
       const isCompleted = cbStatus === "completed" || cbStatus === "done" || cbStatus === "called";
       const isCancelled = cbStatus === "cancelled";
 
@@ -1000,24 +1009,85 @@ export default function DashboardTab({
       const parsedCb = parseTimestamp(cbDateRaw);
       const cbDateStr = parsedCb ? getLocalDateStr(parsedCb) : "";
 
+      let category = "upcoming";
+      let statusLabel = "Upcoming";
+
       if (isCompleted) {
         completed++;
+        category = "completed";
+        statusLabel = "Completed";
       } else if (cbDateStr && cbDateStr < todayStr) {
         overdue++;
+        category = "overdue";
+        statusLabel = "Overdue";
       } else {
         upcoming++;
+        category = "upcoming";
+        statusLabel = "Upcoming";
+      }
+
+      const cbTimeRaw = matchedState?.callbackTime || l.callbackTime || "";
+      let dateTimeFormatted = parsedCb ? formatDateTimeNoSeconds(parsedCb) : (String(cbDateRaw) || "—");
+      if (cbTimeRaw && dateTimeFormatted !== "—" && !dateTimeFormatted.includes(":")) {
+        dateTimeFormatted += ` (${cbTimeRaw})`;
+      }
+
+      const item = {
+        id: l.id || `cb_${idx}`,
+        name: renderVal(l.Name || l.contactName || l.name, "Unknown"),
+        phone: renderVal(getContactPhone(l) || l.Phone || l.phone, "—"),
+        city: renderVal(l.city || l.City, "—"),
+        khoji: renderVal(l.Khoji || l.khoji, "—"),
+        calledFor: renderVal(matchedState?.program || matchedState?.calledFor || l.calledFor || l.programName, "—"),
+        callType: l.callType || l.callDirection || "outgoing",
+        attender: renderVal(matchedState?.attenderName || l.attenderName || l.assignedTo, "Unassigned"),
+        status: statusLabel,
+        dateTime: dateTimeFormatted,
+        timestamp: parsedCb,
+        dateStr: cbDateStr,
+        remark: renderVal(matchedState?.callbackRemark || matchedState?.remark || l.callbackRemark || l.callbackNote || l.remark || l.comment, "—"),
+        category
+      };
+
+      allItems.push(item);
+      if (category === "completed") {
+        completedItems.push(item);
+      } else if (category === "overdue") {
+        overdueItems.push(item);
+      } else {
+        upcomingItems.push(item);
       }
     });
 
     const evaluated = completed + overdue;
     const complianceRate = evaluated > 0 ? Math.round((completed / evaluated) * 100) : 100;
 
+    const sortByDateDesc = (a, b) => {
+      const ta = a.timestamp ? a.timestamp.getTime() : 0;
+      const tb = b.timestamp ? b.timestamp.getTime() : 0;
+      return tb - ta;
+    };
+    const sortByDateAsc = (a, b) => {
+      const ta = a.timestamp ? a.timestamp.getTime() : 0;
+      const tb = b.timestamp ? b.timestamp.getTime() : 0;
+      return ta - tb;
+    };
+
+    allItems.sort(sortByDateDesc);
+    completedItems.sort(sortByDateDesc);
+    overdueItems.sort(sortByDateDesc);
+    upcomingItems.sort(sortByDateAsc);
+
     return {
       totalScheduled,
       completed,
       overdue,
       upcoming,
-      complianceRate
+      complianceRate,
+      allItems,
+      completedItems,
+      overdueItems,
+      upcomingItems
     };
   }, [filteredLogs]);
 
@@ -1465,7 +1535,25 @@ export default function DashboardTab({
           <div>
             <h3 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2 flex items-center justify-between">
               <span>Callback Compliance & Follow-ups</span>
-              <span className="text-[10px] text-slate-400 font-normal">Attender Follow-up Rate</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-slate-400 font-normal hidden sm:inline">Attender Follow-up Rate</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInspectModal({
+                      title: "Scheduled Callbacks — All Follow-up Leads",
+                      subtitle: `All scheduled callbacks in the selected period (${callbackComplianceMetrics.totalScheduled} total)`,
+                      type: "callbacks",
+                      items: callbackComplianceMetrics.allItems,
+                      defaultFilter: "all"
+                    });
+                  }}
+                  className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                  title="Inspect all scheduled callbacks"
+                >
+                  <Eye size={12} /> Inspect
+                </button>
+              </div>
             </h3>
 
             {/* Compliance KPI Banner */}
@@ -1524,18 +1612,68 @@ export default function DashboardTab({
 
             {/* 3 Metric Pill Grid */}
             <div className="grid grid-cols-3 gap-2">
-              <div className="bg-emerald-50/60 border border-emerald-100 p-2 rounded text-center">
-                <p className="text-[10px] text-emerald-700 font-medium">Completed</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setInspectModal({
+                    title: "Completed Callbacks — Follow-up Leads",
+                    subtitle: `Follow-ups that were successfully called or completed (${callbackComplianceMetrics.completed} leads)`,
+                    type: "callbacks",
+                    items: callbackComplianceMetrics.allItems,
+                    defaultFilter: "completed"
+                  });
+                }}
+                className="bg-emerald-50/60 hover:bg-emerald-100/80 border border-emerald-100 hover:border-emerald-300 p-2 rounded text-center transition-all cursor-pointer group"
+                title="Click to inspect completed callbacks"
+              >
+                <div className="flex items-center justify-center gap-1">
+                  <p className="text-[10px] text-emerald-700 font-medium">Completed</p>
+                  <Eye size={10} className="text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
                 <p className="text-base font-bold text-emerald-800 mt-0.5">{callbackComplianceMetrics.completed}</p>
-              </div>
-              <div className="bg-rose-50/60 border border-rose-100 p-2 rounded text-center">
-                <p className="text-[10px] text-rose-700 font-medium">Overdue</p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setInspectModal({
+                    title: "Overdue Callbacks — Follow-up Leads",
+                    subtitle: `Follow-ups past their scheduled callback date (${callbackComplianceMetrics.overdue} leads)`,
+                    type: "callbacks",
+                    items: callbackComplianceMetrics.allItems,
+                    defaultFilter: "overdue"
+                  });
+                }}
+                className="bg-rose-50/60 hover:bg-rose-100/80 border border-rose-100 hover:border-rose-300 p-2 rounded text-center transition-all cursor-pointer group"
+                title="Click to inspect overdue callbacks"
+              >
+                <div className="flex items-center justify-center gap-1">
+                  <p className="text-[10px] text-rose-700 font-medium">Overdue</p>
+                  <Eye size={10} className="text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
                 <p className="text-base font-bold text-rose-800 mt-0.5">{callbackComplianceMetrics.overdue}</p>
-              </div>
-              <div className="bg-sky-50/60 border border-sky-100 p-2 rounded text-center">
-                <p className="text-[10px] text-sky-700 font-medium">Upcoming</p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setInspectModal({
+                    title: "Upcoming Callbacks — Follow-up Leads",
+                    subtitle: `Follow-ups scheduled for today or future dates (${callbackComplianceMetrics.upcoming} leads)`,
+                    type: "callbacks",
+                    items: callbackComplianceMetrics.allItems,
+                    defaultFilter: "upcoming"
+                  });
+                }}
+                className="bg-sky-50/60 hover:bg-sky-100/80 border border-sky-100 hover:border-sky-300 p-2 rounded text-center transition-all cursor-pointer group"
+                title="Click to inspect upcoming callbacks"
+              >
+                <div className="flex items-center justify-center gap-1">
+                  <p className="text-[10px] text-sky-700 font-medium">Upcoming</p>
+                  <Eye size={10} className="text-sky-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
                 <p className="text-base font-bold text-sky-800 mt-0.5">{callbackComplianceMetrics.upcoming}</p>
-              </div>
+              </button>
             </div>
           </div>
         </div>
@@ -1927,199 +2065,11 @@ export default function DashboardTab({
         document.body
       )}
 
-      {/* INSPECT REGISTRATIONS / PEOPLE MODAL */}
-      {inspectModal && createPortal(
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-5xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-            {/* Header */}
-            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50 shrink-0">
-              <div>
-                <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
-                  <Eye size={18} className="text-emerald-600" /> {inspectModal.title}
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">{inspectModal.subtitle}</p>
-              </div>
-              <button
-                onClick={() => setInspectModal(null)}
-                className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Search and Action Bar */}
-            <div className="p-3 border-b border-slate-100 bg-white flex items-center justify-between gap-3 shrink-0">
-              <div className="relative flex-1">
-                <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search by contact name, phone, program, or attender..."
-                  value={inspectSearch}
-                  onChange={(e) => setInspectSearch(e.target.value)}
-                  className="w-full h-9 pl-9 pr-3 bg-slate-50 border border-slate-200 rounded-md text-xs font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                />
-              </div>
-              <button
-                onClick={() => {
-                  const filteredItems = inspectModal.items.filter(item => {
-                    if (!inspectSearch.trim()) return true;
-                    const q = inspectSearch.toLowerCase();
-                    return (
-                      (item.name || "").toLowerCase().includes(q) ||
-                      (item.phone || "").toLowerCase().includes(q) ||
-                      (item.calledFor || "").toLowerCase().includes(q) ||
-                      (item.attender || "").toLowerCase().includes(q) ||
-                      (item.city || "").toLowerCase().includes(q) ||
-                      (item.remark || "").toLowerCase().includes(q)
-                    );
-                  });
-                  const ws = XLSX.utils.json_to_sheet(filteredItems.map((item, idx) => {
-                    const cType = String(item.callType || item.type || "").toLowerCase();
-                    const isInc = cType === "incoming" || cType === "in" || cType.includes("incoming");
-                    return {
-                      "#": idx + 1,
-                      "Name": item.name,
-                      "Phone": item.phone,
-                      "Date & Time": item.dateTime || "",
-                      "City": item.city,
-                      "Khoji": item.khoji,
-                      "Called For / Program": item.calledFor,
-                      "Call Type": isInc ? "Incoming (Inc)" : "Outgoing (Out)",
-                      "Attender": item.attender,
-                      "Stage / Status": item.status,
-                      "Remark": item.remark || ""
-                    };
-                  }));
-                  const wb = XLSX.utils.book_new();
-                  XLSX.utils.book_append_sheet(wb, ws, "Inspected List");
-                  XLSX.writeFile(wb, `${inspectModal.type}_contacts_export.xlsx`);
-                  toast.success("Inspected list exported to Excel!");
-                }}
-                className="flex items-center gap-1.5 h-9 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-bold transition-colors cursor-pointer shrink-0"
-              >
-                <Download size={14} /> Export List
-              </button>
-            </div>
-
-            {/* Table View */}
-            <div className="overflow-y-auto overflow-x-hidden flex-1 text-xs">
-              {(() => {
-                const filtered = inspectModal.items.filter(item => {
-                  if (!inspectSearch.trim()) return true;
-                  const q = inspectSearch.toLowerCase();
-                  return (
-                    (item.name || "").toLowerCase().includes(q) ||
-                    (item.phone || "").toLowerCase().includes(q) ||
-                    (item.calledFor || "").toLowerCase().includes(q) ||
-                    (item.attender || "").toLowerCase().includes(q) ||
-                    (item.city || "").toLowerCase().includes(q) ||
-                    (item.remark || "").toLowerCase().includes(q) ||
-                    (item.callType || "").toLowerCase().includes(q)
-                  );
-                });
-
-                if (filtered.length === 0) {
-                  return (
-                    <div className="py-12 text-center text-slate-400">
-                      No matching records found.
-                    </div>
-                  );
-                }
-
-                return (
-                  <table className="w-full text-left border-collapse table-fixed">
-                    <thead className="bg-slate-100 text-slate-700 font-extrabold uppercase text-[10px] border-b border-slate-200 sticky top-0 z-10 shadow-2xs">
-                      <tr>
-                        <th className="py-2.5 px-3 w-8">#</th>
-                        <th className="py-2.5 px-3 w-36">Name & Phone</th>
-                        {inspectModal.type === "interested_calls" && <th className="py-2.5 px-3 w-36">Date & Time</th>}
-                        <th className="py-2.5 px-3 w-24">City / Khoji</th>
-                        <th className="py-2.5 px-3 w-28">Program / Called For</th>
-                        {inspectModal.type === "registered_programs" && <th className="py-2.5 px-3 w-24">Call Type</th>}
-                        <th className="py-2.5 px-3 w-24">Attender</th>
-                        <th className="py-2.5 px-3 w-28">Stage Status</th>
-                        {inspectModal.type === "interested_calls" && <th className="py-2.5 px-3">Remark</th>}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                      {filtered.map((item, idx) => {
-                        const cType = String(item.callType || item.type || "").toLowerCase();
-                        const isInc = cType === "incoming" || cType === "in" || cType.includes("incoming");
-                        return (
-                          <tr key={item.id + "_" + idx} className="hover:bg-slate-50 transition-colors">
-                            <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
-                            <td className="py-2.5 px-3 font-bold text-slate-900 truncate" title={`${item.name} (${item.phone})`}>
-                              <div className="truncate">{item.name}</div>
-                              <div className="text-[11px] font-normal text-slate-500 font-mono truncate">{item.phone}</div>
-                            </td>
-                            {inspectModal.type === "interested_calls" && (
-                              <td className="py-2.5 px-3 text-slate-600 font-mono text-[11px] whitespace-nowrap">
-                                {item.dateTime}
-                              </td>
-                            )}
-                            <td className="py-2.5 px-3 text-slate-600 truncate">
-                              <div className="truncate">{item.city}</div>
-                              {item.khoji !== "—" && <span className="text-[10px] text-slate-400 block truncate">{item.khoji}</span>}
-                            </td>
-                            <td className="py-2.5 px-3 text-indigo-700 font-semibold truncate" title={item.calledFor}>{item.calledFor}</td>
-                            {inspectModal.type === "registered_programs" && (
-                              <td className="py-2.5 px-3">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider ${
-                                  isInc ? "bg-emerald-100 text-emerald-800 border border-emerald-300" : "bg-blue-100 text-blue-800 border border-blue-300"
-                                }`}>
-                                  {isInc ? "Incoming (Inc)" : "Outgoing (Out)"}
-                                </span>
-                              </td>
-                            )}
-                            <td className="py-2.5 px-3 text-slate-700 font-medium truncate" title={item.attender}>{item.attender}</td>
-                            <td className="py-2.5 px-3">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
-                                inspectModal.type === "stage6"
-                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                  : "bg-amber-50 text-amber-700 border border-amber-200"
-                              }`}>
-                                {item.status}
-                              </span>
-                            </td>
-                            {inspectModal.type === "interested_calls" && (
-                              <td className="py-2.5 px-3 text-slate-600 truncate max-w-0" title={item.remark}>
-                                {item.remark}
-                              </td>
-                            )}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                );
-              })()}
-            </div>
-
-            {/* Footer */}
-            <div className="p-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
-              <span>
-                Showing {inspectModal.items.filter(item => {
-                  if (!inspectSearch.trim()) return true;
-                  const q = inspectSearch.toLowerCase();
-                  return (
-                    (item.name || "").toLowerCase().includes(q) ||
-                    (item.phone || "").toLowerCase().includes(q) ||
-                    (item.calledFor || "").toLowerCase().includes(q) ||
-                    (item.attender || "").toLowerCase().includes(q)
-                  );
-                }).length} of {inspectModal.items.length} {inspectModal.type === "registered_programs" ? "registration records" : "unique contacts"}
-              </span>
-              <button
-                onClick={() => setInspectModal(null)}
-                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold text-xs transition-colors cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+      {/* Universal Inspect Modal */}
+      <InspectModal
+        modal={inspectModal}
+        onClose={() => setInspectModal(null)}
+      />
 
       {/* Custom Preset Builder Modal */}
       {isBuilderOpen && (
