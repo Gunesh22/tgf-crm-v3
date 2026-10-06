@@ -128,6 +128,10 @@ export async function executeOverrideStage(db, payload) {
     setFields.queryStatus = targetQueryStatus;
     setFields.isQuery = true;
     setFields.status = targetQueryStatus;
+    setFields.closedReason = null;
+
+    const targetProg = program || existingContact["Called For"] || existingContact.calledFor;
+    const progKey = targetProg ? String(targetProg).trim().toLowerCase().replace(/[^a-z0-9]/g, "") : "";
 
     if (cleanAttenderId) {
       setFields[`attenderStates.${cleanAttenderId}.pipelineStage`] = "Query Desk";
@@ -135,6 +139,14 @@ export async function executeOverrideStage(db, payload) {
       setFields[`attenderStates.${cleanAttenderId}.queryStatus`] = targetQueryStatus;
       setFields[`attenderStates.${cleanAttenderId}.status`] = targetQueryStatus;
       setFields[`attenderStates.${cleanAttenderId}.updatedAt`] = nowIso;
+      if (progKey) {
+        setFields[`programStates.${cleanAttenderId}.${progKey}.pipelineStage`] = "Query Desk";
+        setFields[`programStates.${cleanAttenderId}.${progKey}.status`] = targetQueryStatus;
+        setFields[`programStates.${cleanAttenderId}.${progKey}.queryStatus`] = targetQueryStatus;
+        setFields[`programs.${progKey}.${cleanAttenderId}.pipelineStage`] = "Query Desk";
+        setFields[`programs.${progKey}.${cleanAttenderId}.status`] = targetQueryStatus;
+        setFields[`programs.${progKey}.${cleanAttenderId}.queryStatus`] = targetQueryStatus;
+      }
     }
 
     // In-place correction of historical call:

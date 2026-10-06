@@ -369,7 +369,8 @@ export function ContactTable({
                   {!hiddenColumns.includes("Status") && (
                     <td className="py-2.5 px-3 align-top">
                       {(() => {
-                        const stageToUse = view.pipelineStage || log.pipelineStage;
+                        const isQueryLead = log.pipelineStage === "Query Desk" || view.pipelineStage === "Query Desk" || String(view.callPurpose || "").toUpperCase() === "QUERY" || view.status === "Query Solved" || view.status === "Query Pending";
+                        const stageToUse = isQueryLead ? "Query Desk" : (view.pipelineStage || log.pipelineStage);
                         const rawQ = String(view.queryStatus || view.status || "").trim();
                         const isQuerySolved = rawQ === "Query Solved" || rawQ === "Solved";
                         const isQueryActive = !isQuerySolved && (rawQ === "Pending" || rawQ === "Query Pending" || rawQ === "Attempting Query" || stageToUse === "Query Desk");

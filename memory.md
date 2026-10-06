@@ -1379,6 +1379,26 @@ The discrepancy is caused by two conflicting definitions of "Incoming" in `Month
 4. **General Status Filter Fix**:
    - In `AttenderWorkspace.jsx`, updated `filterGeneralStatus` to match both `"Solved"` and `"Query Solved"`, and both `"Pending"` and `"Query Pending"`.
 
+---
+
+## 59. Query Desk Stage Isolation & Stale Sales Stage Overwrite Fix
+
+### 1. Root Cause
+- When a contact was converted to `Query Desk`, `getEffectiveStage()` would evaluate legacy unconnected call history or old `programStates` and return stale sales stages (such as `Closed / Invalid`).
+- In `EditModal.jsx` and `CallEntryTab.jsx`, `getEffectiveStage()` was called on modal open and program change, overwriting `pipelineStage` with the stale sales stage.
+- In `CallEntryTab.jsx`, a secondary label `(Sales Stage: ...)` was displayed alongside the Query Status banner, showing the old closed stage even after the attender changed the stage to Query Desk.
+- In `api/_contacts/override-stage.js`, `closedReason` was only conditionally cleared if rank was strictly $< 7$, and stale `programStates` were not updated to Query Desk.
+
+### 2. Solutions Implemented
+1. **Explicit Query Desk Priority**:
+   - In `EditModal.jsx`, `CallEntryTab.jsx`, `utils.js` (`getContactView`), and `ContactTable.jsx`: if the lead is in `Query Desk`, it strictly evaluates to `Query Desk` without allowing stale sales stages to overwrite it.
+2. **Visual Cleanliness in CallEntryTab Header**:
+   - Suppressed the redundant `(Sales Stage: ...)` tag when the contact is in Query Desk.
+   - `Current Stage` in the Change Stage popover now cleanly displays `Query Desk`.
+3. **Backend Database Consistency**:
+   - In `api/_contacts/override-stage.js`, unconditionally clears `closedReason` to `null` and updates `programStates` and `programs` to `Query Desk`.
+
+
 
 
 

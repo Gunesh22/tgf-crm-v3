@@ -226,7 +226,12 @@ export const EditModal = ({
       if (programOrigin) {
         freshNorm.leadOrigin = programOrigin;
       }
-      freshNorm.pipelineStage = getEffectiveStage(freshNorm, firstProg, attId) || getEffectiveStage(baseLead, firstProg) || getEffectiveStage(baseLead) || PIPELINE_STAGES.NEW_LEAD;
+      const isLeadQueryDesk = baseLead?.pipelineStage === "Query Desk" || freshNorm.pipelineStage === "Query Desk" || baseLead?.callPurpose === "QUERY";
+      if (isLeadQueryDesk) {
+        freshNorm.pipelineStage = "Query Desk";
+      } else {
+        freshNorm.pipelineStage = getEffectiveStage(freshNorm, firstProg, attId) || getEffectiveStage(baseLead, firstProg) || getEffectiveStage(baseLead) || baseLead?.pipelineStage || PIPELINE_STAGES.NEW_LEAD;
+      }
     }
 
     setSavedRow(freshNorm);
@@ -246,7 +251,10 @@ export const EditModal = ({
     const attId = activeAttenderId || edited.attenderId || row?.attenderId || null;
     const targetStatus = getProgramSpecificStatus(savedRow || row || edited, targetProg, attId);
     const targetSource = getContactSource(savedRow || row || edited, targetProg);
-    const targetStage = getEffectiveStage(savedRow || row || edited, targetProg, attId) || PIPELINE_STAGES.NEW_LEAD;
+    const isLeadQueryDesk = edited.pipelineStage === "Query Desk" || savedRow?.pipelineStage === "Query Desk";
+    const targetStage = isLeadQueryDesk
+      ? "Query Desk"
+      : (getEffectiveStage(savedRow || row || edited, targetProg, attId) || PIPELINE_STAGES.NEW_LEAD);
 
     setEdited(prev => ({
       ...prev,

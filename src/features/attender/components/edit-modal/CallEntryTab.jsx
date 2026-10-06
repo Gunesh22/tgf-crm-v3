@@ -186,10 +186,18 @@ export const CallEntryTab = ({
           isQuery: isTargetQuery ? true : edited.isQuery,
         };
 
+        setEdited(prev => ({
+          ...prev,
+          ...updatedLead,
+          pipelineStage: isTargetQuery ? "Query Desk" : res.newStage,
+          callPurpose: isTargetQuery ? "QUERY" : updatedLead.callPurpose,
+          queryStatus: isTargetQuery ? selectedQueryOutcome : updatedLead.queryStatus,
+          status: isTargetQuery ? selectedQueryOutcome : updatedLead.status,
+          isQuery: isTargetQuery ? true : updatedLead.isQuery
+        }));
+
         if (typeof onContactUpdated === "function") {
           onContactUpdated(updatedLead);
-        } else {
-          setEdited(prev => ({ ...prev, ...updatedLead }));
         }
 
         setShowStageOverridePicker(false);
@@ -294,17 +302,23 @@ export const CallEntryTab = ({
     { attemptingCallThreshold }
   );
 
-  const dbStage = getEffectiveStage(stageSource, selectedProgram, activeAttenderId)
-    || getEffectiveStage(stageSource, selectedProgram)
-    || (selectedProgram ? null : (
-        getEffectiveStage(stageSource)
-        || normalizeStageStr(stageSource?.pipelineStage)
-        || normalizeStageStr(edited?.pipelineStage)
-        || normalizeStageStr(row?.pipelineStage)
-       ))
-    || PIPELINE_STAGES.NEW_LEAD;
+  const isQueryDeskStage = stageSource?.pipelineStage === "Query Desk" || edited?.pipelineStage === "Query Desk" || row?.pipelineStage === "Query Desk" || activePurpose === "QUERY";
+
+  const dbStage = (stageSource?.pipelineStage === "Query Desk" || edited?.pipelineStage === "Query Desk" || row?.pipelineStage === "Query Desk")
+    ? "Query Desk"
+    : (getEffectiveStage(stageSource, selectedProgram, activeAttenderId)
+      || getEffectiveStage(stageSource, selectedProgram)
+      || (selectedProgram ? null : (
+          getEffectiveStage(stageSource)
+          || normalizeStageStr(stageSource?.pipelineStage)
+          || normalizeStageStr(edited?.pipelineStage)
+          || normalizeStageStr(row?.pipelineStage)
+         ))
+      || PIPELINE_STAGES.NEW_LEAD);
   const isFormDirtyCall = Boolean(activeCallStatus && edited.status);
-  const displayStage = isFormDirtyCall ? evalResult.pipelineStage : dbStage;
+  const displayStage = (stageSource?.pipelineStage === "Query Desk" || edited?.pipelineStage === "Query Desk" || row?.pipelineStage === "Query Desk")
+    ? "Query Desk"
+    : (isFormDirtyCall ? evalResult.pipelineStage : dbStage);
   const stageConfig = getPipelineStageConfig(displayStage);
 
   // Whether this contact qualifies for "Convert to Sales" (only for new/query-only contacts)
@@ -516,9 +530,11 @@ export const CallEntryTab = ({
                   ? "📞 Attempting Query"
                   : "⏳ Query Pending"}
               </span>
-              <span className="text-[10px] text-slate-400 font-medium ml-1">
-                (Sales Stage: {stageConfig.label})
-              </span>
+              {stageConfig?.label && stageConfig.label !== "Query Desk" && !isQueryDeskStage && (
+                <span className="text-[10px] text-slate-400 font-medium ml-1">
+                  (Sales Stage: {stageConfig.label})
+                </span>
+              )}
             </div>
           ) : activePurpose === "REMINDER" ? (
             <div className="flex items-center gap-1.5 flex-wrap">
