@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { toast } from "react-hot-toast";
 import { 
-  ShieldCheck, Tag, HelpCircle, Loader, Archive, PhoneCall, PhoneOff, GitBranch
+  ShieldCheck, Tag, HelpCircle, Loader, Archive, PhoneCall, PhoneOff, GitBranch, AlertTriangle
 } from "lucide-react";
 import { OptionsManagerCard } from "./OptionsManagerCard";
 import { WhatsAppTemplatesCard } from "./WhatsAppTemplatesCard";
@@ -388,6 +388,21 @@ export default function SettingsTab() {
     }, 800);
   };
 
+  const handleUpdateAttemptingThreshold = async (val) => {
+    const num = parseInt(val, 10);
+    if (isNaN(num) || num < 1) return;
+    try {
+      await updateCallCenterOptions({ attemptingCallThreshold: num });
+      setOptions(prev => ({ ...(prev || {}), attemptingCallThreshold: num }));
+      if (typeof window !== "undefined") {
+        localStorage.setItem("admin_attempting_call_threshold", String(num));
+      }
+      toast.success(`Attempting threshold set to ${num} calls`);
+    } catch (e) {
+      toast.error("Failed to update threshold");
+    }
+  };
+
   const sectionTitles = {
     security: { title: "Security & Master Password", desc: "Manage administrative access, authentication credentials, and security settings." },
     "call-center": { title: "Call Center Options", desc: "Configure global dropdown options for Program (Called For), Source (Lead Origin / Current Source), and Connected Outcome." },
@@ -529,6 +544,69 @@ export default function SettingsTab() {
               <GitBranch size={15} />
               <span>Edit Pipeline (Visual Flow)</span>
             </button>
+          </div>
+
+          {/* Attempting Contact Call Alert Threshold */}
+          <div className="mt-4 pt-4 border-t border-[#E4E7EC] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-lg bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
+                <AlertTriangle size={18} />
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-[#172033] flex items-center gap-2">
+                  Attempting Contact Call Limit
+                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                    Pipeline Alert
+                  </span>
+                </h4>
+                <p className="text-xs text-[#667085] mt-1 max-w-xl">
+                  Flag leads stuck in "2. Attempting Contact" stage when call attempts reach or exceed this limit (default: 5 calls).
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 self-start sm:self-auto shadow-2xs">
+              <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">
+                Limit:
+              </span>
+              <div className="flex items-center bg-white border border-slate-200 rounded-md overflow-hidden shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cur = options?.attemptingCallThreshold || 5;
+                    if (cur > 1) handleUpdateAttemptingThreshold(cur - 1);
+                  }}
+                  className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 font-bold text-sm cursor-pointer transition-colors"
+                  title="Decrease threshold by 1"
+                >
+                  −
+                </button>
+                <input
+                  type="number"
+                  min="1"
+                  max="99"
+                  value={options?.attemptingCallThreshold || 5}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (!isNaN(val) && val >= 1) handleUpdateAttemptingThreshold(val);
+                  }}
+                  className="w-12 h-7 text-center font-bold text-xs text-rose-600 bg-white border-x border-slate-200 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                  title="Enter threshold number of calls"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cur = options?.attemptingCallThreshold || 5;
+                    handleUpdateAttemptingThreshold(cur + 1);
+                  }}
+                  className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 font-bold text-sm cursor-pointer transition-colors"
+                  title="Increase threshold by 1"
+                >
+                  +
+                </button>
+              </div>
+              <span className="text-xs font-semibold text-slate-500">calls</span>
+            </div>
           </div>
         </div>
 

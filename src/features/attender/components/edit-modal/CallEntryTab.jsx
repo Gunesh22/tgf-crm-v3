@@ -66,10 +66,30 @@ export const CallEntryTab = ({
   onSelectProgram = () => {}
 }) => {
   const [localSettingsVer, setLocalSettingsVer] = useState(0);
+  const [attemptingCallThreshold, setAttemptingCallThreshold] = useState(() => {
+    try {
+      const cached = localStorage.getItem("crm_settings_options_cache");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.attemptingCallThreshold && typeof parsed.attemptingCallThreshold === 'number') {
+          return parsed.attemptingCallThreshold;
+        }
+      }
+      const direct = localStorage.getItem("admin_attempting_call_threshold");
+      if (direct) {
+        const val = parseInt(direct, 10);
+        if (!isNaN(val) && val > 0) return val;
+      }
+    } catch (e) {}
+    return 5;
+  });
 
   useEffect(() => {
-    const unsub = subscribeToSettingsOptions(() => {
+    const unsub = subscribeToSettingsOptions((settings) => {
       setLocalSettingsVer(v => v + 1);
+      if (settings?.attemptingCallThreshold && typeof settings.attemptingCallThreshold === 'number') {
+        setAttemptingCallThreshold(settings.attemptingCallThreshold);
+      }
     });
     return () => unsub();
   }, []);
@@ -229,22 +249,45 @@ export const CallEntryTab = ({
     return Array.from(new Set(
       tagsArr
         .map(t => String(t || "").trim().replace(/^#+/, ""))
-        .filter(t => t.length > 0 && t !== "[object Object]")
+        .filter(t => {
+          if (!t || t.length === 0 || t === "[object Object]") return false;
+          const lower = t.toLowerCase();
+          return !["outgoing calls", "outgoing call", "outgoing", "outgoing-calls", "incoming calls", "incoming call", "incoming", "incoming-calls"].includes(lower);
+        })
     ));
   }, [edited.Tags, edited.tags, row?.Tags, row?.tags]);
 
+  const isCallDirectionOption = (opt) => {
+    if (!opt) return true;
+    const l = String(opt).trim().toLowerCase();
+    return ["outgoing calls", "outgoing call", "outgoing", "outgoing-calls", "incoming calls", "incoming call", "incoming", "incoming-calls"].includes(l);
+  };
+
+  const cleanSourceVal = (val) => {
+    if (!val) return "";
+    const s = String(val).trim();
+    if (isCallDirectionOption(s)) return "";
+    return s;
+  };
+
   const callSourceOptionsList = useMemo(() => {
-    return [...CALL_SOURCE_OPTIONS];
+    return CALL_SOURCE_OPTIONS.filter(opt => !isCallDirectionOption(opt));
   }, [optionsVersion, localSettingsVer, CALL_SOURCE_OPTIONS.length, CALL_SOURCE_OPTIONS.join(",")]);
 
   const currentSourceDropdownOptions = useMemo(() => {
-    // Top N tags first, followed by all standard source options
+    // Top N tags first, followed by all standard source options (excluding call directions)
     const combined = new Set([...contactTagsList, ...callSourceOptionsList]);
-    return Array.from(combined);
+    return Array.from(combined).filter(opt => !isCallDirectionOption(opt));
   }, [contactTagsList, callSourceOptionsList]);
 
-  const fallbackProgFromCtx = (extractProgramsList(row || edited || {})[0]) || "";
-  const selectedProgram = String(activeProgram || edited[calledForField] || row?.[calledForField] || fallbackProgFromCtx || "").split(",")[0].trim();
+  const cleanProg = (str) => {
+    if (!str) return "";
+    const s = String(str).split(",")[0].trim();
+    return s.toLowerCase() === "general" ? "" : s;
+  };
+
+  const fallbackProgFromCtx = cleanProg(extractProgramsList(row || edited || {})[0]) || "";
+  const selectedProgram = cleanProg(activeProgram) || cleanProg(edited[calledForField]) || cleanProg(row?.[calledForField]) || fallbackProgFromCtx || "";
 
   const stageSource = edited || row;
 
@@ -257,7 +300,8 @@ export const CallEntryTab = ({
       queryStatus: edited.queryStatus,
       calledFor: selectedProgram,
       attenderId: activeAttenderId
-    }
+    },
+    { attemptingCallThreshold }
   );
 
   const dbStage = getEffectiveStage(stageSource, selectedProgram, activeAttenderId)
@@ -727,7 +771,7 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={salesCalledForOptions}
-              selected={String(activeProgram || (edited[calledForField] ? String(edited[calledForField]).split(",")[0].trim() : "") || (row?.[calledForField] ? String(row[calledForField]).split(",")[0].trim() : "") || fallbackProgFromCtx || "")}
+              selected={selectedProgram}
               onChange={val => handleChange(calledForField, val)}
               placeholder="Select program..."
               isMulti={false}
@@ -743,7 +787,7 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={callSourceOptionsList}
-              selected={String(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || getContactLeadOrigin(edited, selectedProgram) || getContactLeadOrigin(row, selectedProgram) || "")}
+              selected={cleanSourceVal(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || getContactLeadOrigin(edited, selectedProgram) || getContactLeadOrigin(row, selectedProgram) || "")}
               onChange={val => {
                 handleChange("leadOrigin", val);
               }}
@@ -760,7 +804,7 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={currentSourceDropdownOptions}
-              selected={String(edited[sourceField] || edited.Source || edited.source || getContactSource(edited, selectedProgram) || getContactSource(row, selectedProgram) || "")}
+              selected={cleanSourceVal(edited[sourceField] || edited.Source || edited.source || getContactSource(edited, selectedProgram) || getContactSource(row, selectedProgram) || "")}
               onChange={val => handleChange(sourceField, val)}
               placeholder="Select Current Source..."
               colorClass="amber"
@@ -793,7 +837,7 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={salesCalledForOptions}
-              selected={String(activeProgram || (edited[calledForField] ? String(edited[calledForField]).split(",")[0].trim() : "") || (row?.[calledForField] ? String(row[calledForField]).split(",")[0].trim() : "") || fallbackProgFromCtx || "")}
+              selected={selectedProgram}
               onChange={val => handleChange(calledForField, val)}
               placeholder="Which program is this reminder for?"
               isMulti={false}
@@ -809,7 +853,7 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={callSourceOptionsList}
-              selected={String(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || getContactLeadOrigin(edited, selectedProgram) || getContactLeadOrigin(row, selectedProgram) || "")}
+              selected={cleanSourceVal(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || getContactLeadOrigin(edited, selectedProgram) || getContactLeadOrigin(row, selectedProgram) || "")}
               onChange={val => {
                 handleChange("leadOrigin", val);
               }}
@@ -826,7 +870,7 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={currentSourceDropdownOptions}
-              selected={String(edited[sourceField] || edited.Source || edited.source || getContactSource(edited, selectedProgram) || getContactSource(row, selectedProgram) || "")}
+              selected={cleanSourceVal(edited[sourceField] || edited.Source || edited.source || getContactSource(edited, selectedProgram) || getContactSource(row, selectedProgram) || "")}
               onChange={val => handleChange(sourceField, val)}
               placeholder="Select Current Source..."
               colorClass="amber"
@@ -846,7 +890,7 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={salesCalledForOptions}
-              selected={String(activeProgram || (edited[calledForField] ? String(edited[calledForField]).split(",")[0].trim() : "") || (row?.[calledForField] ? String(row[calledForField]).split(",")[0].trim() : "") || fallbackProgFromCtx || "")}
+              selected={selectedProgram}
               onChange={val => handleChange(calledForField, val)}
               placeholder="Which program is this query about?"
               colorClass="orange"
@@ -861,7 +905,7 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={callSourceOptionsList}
-              selected={String(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || getContactLeadOrigin(edited, selectedProgram) || getContactLeadOrigin(row, selectedProgram) || "")}
+              selected={cleanSourceVal(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || getContactLeadOrigin(edited, selectedProgram) || getContactLeadOrigin(row, selectedProgram) || "")}
               onChange={val => {
                 handleChange("leadOrigin", val);
               }}

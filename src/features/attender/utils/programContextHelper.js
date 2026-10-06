@@ -28,7 +28,8 @@ export function extractProgramsList(contact = {}) {
   const NON_PROGRAM_LABELS = new Set([
     "incoming", "incoming call", "incoming calls", "incoming-calls",
     "outgoing", "outgoing call", "outgoing calls", "outgoing-calls",
-    "reminder", "query", "na", "none", "null", "undefined", "[object object]"
+    "reminder", "query", "na", "none", "null", "undefined", "[object object]",
+    "general"
   ]);
 
   const addProgram = (rawProg) => {

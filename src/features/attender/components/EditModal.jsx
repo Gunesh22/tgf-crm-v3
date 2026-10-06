@@ -43,6 +43,12 @@ import { getEffectiveStage, PIPELINE_STAGES, getProgramSpecificStatus } from "..
 import { extractProgramsList, getProgramContext, getProgramRegistrationInfo } from "../utils/programContextHelper";
 import { triggerRegistrationConfetti } from "../../../utils/confetti";
 
+const isNonProgStr = (str) => {
+  if (!str) return true;
+  const l = String(str).trim().toLowerCase();
+  return ["incoming", "incoming call", "incoming calls", "incoming-calls", "outgoing", "outgoing call", "outgoing calls", "outgoing-calls", "reminder", "query", "na", "none", "null", "undefined", "general"].includes(l);
+};
+
 export const EditModal = ({
   row,
   optionsVersion = 0,
@@ -127,12 +133,6 @@ export const EditModal = ({
     const cleanAttStatus = String(rawAttStatus).toLowerCase() === "pending" ? "" : rawAttStatus;
 
     const rawRootProg = baseLead?.["Called For"] || baseLead?.calledFor || baseLead?.called_for || "";
-    const isNonProgStr = (str) => {
-      if (!str) return true;
-      const l = String(str).trim().toLowerCase();
-      return ["incoming", "incoming call", "incoming calls", "incoming-calls", "outgoing", "outgoing call", "outgoing calls", "outgoing-calls", "reminder", "query", "na", "none", "null", "undefined"].includes(l);
-    };
-
     const validRootProg = !isNonProgStr(rawRootProg) ? rawRootProg : "";
     const fallbackProgram = validRootProg || (extractProgramsList(baseLead || {})[0]) || "";
     const rawAttProg = attState?.calledFor || attState?.["Called For"] || "";
@@ -210,7 +210,8 @@ export const EditModal = ({
     setValidationErrors([]);
 
     const list = extractProgramsList(baseLead || {});
-    const candidateProg = freshNorm["Called For"] || freshNorm.calledFor || freshNorm.called_for || list[0] || "";
+    const rawCandidate = freshNorm["Called For"] || freshNorm.calledFor || freshNorm.called_for || list[0] || "";
+    const candidateProg = !isNonProgStr(rawCandidate) ? rawCandidate : "";
     const firstProg = candidateProg ? String(candidateProg).split(",")[0].trim() : "";
 
     if (firstProg) {
@@ -1177,8 +1178,9 @@ export const EditModal = ({
       if (isCalledFor) {
         const singleProg = String(val || "").split(",")[0].trim();
         next[CONTACT_FIELDS.CALLED_FOR] = singleProg;
+        next.calledFor = singleProg;
+        setActiveProgram(singleProg);
         if (singleProg) {
-          setActiveProgram(singleProg);
           const attId = activeAttenderId || prev.attenderId || row?.attenderId || null;
           next.pipelineStage = getEffectiveStage(row || prev, singleProg, attId) || PIPELINE_STAGES.NEW_LEAD;
         }
@@ -1192,42 +1194,10 @@ export const EditModal = ({
   };
 
   const handleCallTypeChange = (newCallType) => {
-    setEdited(prev => {
-      const updated = { ...prev, callType: newCallType };
-      
-      // Only auto-update program/tag defaults if this is a new entry
-      if (row._isNew) {
-        const isIncoming = newCallType === "incoming" || newCallType === "incoming f";
-        const currentProgId = prev.programId;
-        
-        // Only update if current program is the default incoming-calls or outgoing-calls,
-        // or if it's empty (untagged). This avoids overwriting custom tags chosen by user.
-        if (!currentProgId || currentProgId === "incoming-calls" || currentProgId === "outgoing-calls" || currentProgId === "Incoming Calls" || currentProgId === "Outgoing Calls") {
-          const defaultProgId = isIncoming ? "incoming-calls" : "outgoing-calls";
-          const defaultProgName = isIncoming ? "Incoming Calls" : "Outgoing Calls";
-          
-          updated.programId = defaultProgId;
-          updated.programName = defaultProgName;
-          updated["Sub Program"] = defaultProgName;
-          updated.subProgram = defaultProgName;
-
-          // Sync Tags string for display in the modal
-          const currentTags = prev.Tags || "";
-          const tagsList = currentTags.split(",").map(t => t.trim()).filter(Boolean);
-          
-          // Remove the other default tag if it exists
-          const tagToRemove = isIncoming ? "Outgoing Calls" : "Incoming Calls";
-          const tagToAdd = isIncoming ? "Incoming Calls" : "Outgoing Calls";
-          
-          let filteredTags = tagsList.filter(t => t !== tagToRemove);
-          if (!filteredTags.includes(tagToAdd)) {
-            filteredTags.push(tagToAdd);
-          }
-          updated.Tags = filteredTags.join(", ");
-        }
-      }
-      return updated;
-    });
+    setEdited(prev => ({
+      ...prev,
+      callType: newCallType
+    }));
   };
 
   // Canonical field identifiers
@@ -1417,7 +1387,7 @@ export const EditModal = ({
       if (!isUnconnected) {
         if (!khojiVal) missingFields.push("Khoji Status");
         if (!cityVal) missingFields.push("City");
-        if (!calledForVal) missingFields.push("Called For");
+        if (!calledForVal || calledForVal.toLowerCase() === "general") missingFields.push("Called For");
         if (!sourceVal) missingFields.push("Source");
       }
 

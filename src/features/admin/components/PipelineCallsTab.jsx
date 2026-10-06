@@ -13,6 +13,9 @@ import {
 } from "../utils.jsx";
 import { PIPELINE_STAGES, QUERY_PIPELINE_STAGES, getEffectiveStage } from "../../../utils/pipelineEngine";
 import { EditModal } from "../../attender/components/EditModal";
+import { InspectModal } from "./inspect-modal";
+import { toast } from "react-hot-toast";
+import { updateCallCenterOptions } from "../../../lib/db";
 
 // Multi-select dropdown component
 function MultiSelect({ options, selected, onChange, placeholder, allLabel = "All" }) {
@@ -264,9 +267,49 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
 
   // Drill-down Modals
   const [drillDownModal, setDrillDownModal] = useState(null); // { title: string, type: string, items: Array }
-  const [drillSearch, setDrillSearch] = useState("");
   const [attenderDetailModal, setAttenderDetailModal] = useState(null);
   const [selectedLeadForEdit, setSelectedLeadForEdit] = useState(null);
+
+  // Attempting Contact Call Threshold (Configurable by admin)
+  const [attemptingCallThreshold, setAttemptingCallThreshold] = useState(() => {
+    if (settingsOptions?.attemptingCallThreshold) {
+      const val = parseInt(settingsOptions.attemptingCallThreshold, 10);
+      if (!isNaN(val) && val > 0) return val;
+    }
+    try {
+      const stored = localStorage.getItem("admin_attempting_call_threshold");
+      if (stored) {
+        const parsed = parseInt(stored, 10);
+        if (!isNaN(parsed) && parsed > 0) return parsed;
+      }
+    } catch (e) {}
+    return 5;
+  });
+
+  useEffect(() => {
+    if (settingsOptions?.attemptingCallThreshold) {
+      const val = parseInt(settingsOptions.attemptingCallThreshold, 10);
+      if (!isNaN(val) && val > 0 && val !== attemptingCallThreshold) {
+        setAttemptingCallThreshold(val);
+      }
+    }
+  }, [settingsOptions?.attemptingCallThreshold]);
+
+  const handleUpdateAttemptingThreshold = async (newVal) => {
+    const val = parseInt(newVal, 10);
+    if (isNaN(val) || val < 1) {
+      toast.error("Please enter a valid call count (minimum 1)");
+      return;
+    }
+    setAttemptingCallThreshold(val);
+    try {
+      localStorage.setItem("admin_attempting_call_threshold", String(val));
+      await updateCallCenterOptions({ attemptingCallThreshold: val });
+      toast.success(`Attempting threshold updated to ${val} calls`);
+    } catch (err) {
+      console.warn("Failed to persist threshold to server:", err);
+    }
+  };
 
   // 1. EXTRACT ALL HISTORICAL CALL EVENTS
   const allCallEvents = useMemo(() => {
@@ -746,7 +789,7 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
         }
       }
 
-      if (stage === PIPELINE_STAGES.ATTEMPTING && callCount >= 5) {
+      if (stage === PIPELINE_STAGES.ATTEMPTING && callCount >= attemptingCallThreshold) {
         stuckInAttempting.push(c);
       }
 
@@ -760,7 +803,7 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
       stuckInAttempting,
       stuckInInfoGiven
     };
-  }, [filteredContacts]);
+  }, [filteredContacts, attemptingCallThreshold]);
 
   // Helper for clicking stage cards
   const handleStageClick = (stageName, stageValue) => {
@@ -1368,11 +1411,57 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
 
       {/* 3. ATTENTION NEEDED — SEPARATE COMPACT ALERT BOX */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-          <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-            <AlertTriangle size={15} className="text-amber-600" /> ATTENTION NEEDED
-          </h3>
-          <span className="text-xs font-semibold text-slate-500">Actionable lead alerts</span>
+        <div className="flex flex-wrap items-center justify-between pb-2 border-b border-slate-100 gap-2">
+          <div className="flex items-center gap-2">
+            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+              <AlertTriangle size={15} className="text-amber-600" /> ATTENTION NEEDED
+            </h3>
+            <span className="text-xs font-semibold text-slate-500">• Actionable lead alerts</span>
+          </div>
+
+          {/* Admin Configurable Attempting Call Threshold */}
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/90 rounded-lg px-2.5 py-1 shadow-2xs">
+            <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+              Attempting Limit:
+            </span>
+            <div className="flex items-center bg-white border border-slate-200 rounded-md overflow-hidden">
+              <button
+                type="button"
+                onClick={() => {
+                  if (attemptingCallThreshold > 1) {
+                    handleUpdateAttemptingThreshold(attemptingCallThreshold - 1);
+                  }
+                }}
+                className="w-6 h-6 flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 font-bold text-xs cursor-pointer transition-colors"
+                title="Decrease threshold by 1"
+              >
+                −
+              </button>
+              <input
+                type="number"
+                min="1"
+                max="99"
+                value={attemptingCallThreshold}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  if (!isNaN(val) && val >= 1) {
+                    handleUpdateAttemptingThreshold(val);
+                  }
+                }}
+                className="w-10 h-6 text-center font-bold text-xs text-rose-600 bg-white border-x border-slate-200 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                title="Enter threshold number of calls"
+              />
+              <button
+                type="button"
+                onClick={() => handleUpdateAttemptingThreshold(attemptingCallThreshold + 1)}
+                className="w-6 h-6 flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 font-bold text-xs cursor-pointer transition-colors"
+                title="Increase threshold by 1"
+              >
+                +
+              </button>
+            </div>
+            <span className="text-[11px] font-semibold text-slate-500">calls</span>
+          </div>
         </div>
 
         <div className="divide-y divide-slate-100 bg-slate-50/50 border border-slate-200/80 rounded-xl overflow-hidden text-xs font-medium">
@@ -1393,13 +1482,15 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
           <div
             onClick={() => {
               const items = attentionNeededLists.stuckInAttempting;
-              setDrillDownModal({ title: `Attempting (>5 calls stuck) (${items.length})`, type: "people", items });
+              setDrillDownModal({ title: `Attempting (≥${attemptingCallThreshold} calls stuck) (${items.length})`, type: "people", items });
             }}
             className="p-3.5 hover:bg-white transition-colors cursor-pointer flex items-center justify-between group"
           >
             <div className="flex items-center gap-2">
               <span className="text-rose-600 font-bold text-sm">⚠</span>
-              <span className="font-semibold text-slate-800 group-hover:text-rose-900 transition-colors">Attempting leads with &gt; 5 calls</span>
+              <span className="font-semibold text-slate-800 group-hover:text-rose-900 transition-colors">
+                Attempting leads with &ge; {attemptingCallThreshold} calls
+              </span>
             </div>
             <span className="font-black text-slate-900 text-sm">{attentionNeededLists.stuckInAttempting.length}</span>
           </div>
@@ -1574,127 +1665,12 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
         document.body
       )}
 
-      {/* DRILL-DOWN MODAL */}
-      {drillDownModal && createPortal(
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-              <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
-                <span>🔍</span> {drillDownModal.title}
-              </h3>
-              <button onClick={() => setDrillDownModal(null)} className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-200 cursor-pointer">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="p-3 border-b border-slate-100 bg-white">
-              <input
-                type="text"
-                placeholder="Search within drilldown items..."
-                value={drillSearch}
-                onChange={(e) => setDrillSearch(e.target.value)}
-                className="w-full h-8 px-3 bg-slate-50 border border-slate-200 rounded-md text-xs font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
-            </div>
-            <div className="p-4 overflow-y-auto flex-1 text-xs">
-              <table className="w-full text-left">
-                <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px]">
-                  <tr>
-                    <th className="p-2">Name & Phone</th>
-                    <th className="p-2">Attender</th>
-                    <th className="p-2">Stage / Status</th>
-                    <th className="p-2">Called For</th>
-                    <th className="p-2">Lead Origin</th>
-                    <th className="p-2">Current Source</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                  {drillDownModal.items
-                    .filter(rawItem => {
-                      const item = rawItem.contact || rawItem.row || rawItem;
-                      if (!drillSearch.trim()) return true;
-                      const q = drillSearch.toLowerCase();
-                      const name = String(getContactName(item, rawItem) || "").toLowerCase();
-                      const phone = String(getContactPhone(item, rawItem) || "").toLowerCase();
-                      return name.includes(q) || phone.includes(q);
-                    })
-                    .map((rawItem, idx) => {
-                      const item = rawItem.contact || rawItem.row || rawItem;
-                      const name = getContactName(item, rawItem) || (getContactPhone(item, rawItem) ? `Contact (${getContactPhone(item, rawItem)})` : `Lead #${(item.id || item._id || "").slice(-6) || idx + 1}`);
-                      const phone = getContactPhone(item, rawItem);
-                      
-                      const modalCategory = drillDownModal.category || 
-                        (drillDownModal.title.toLowerCase().includes("query") ? "query" : 
-                         drillDownModal.title.toLowerCase().includes("reminder") ? "reminder" : "sales");
-
-                      const salesStage = getCanonicalStage(item);
-                      const queryStage = getCanonicalQueryStage(item);
-                      const originVal = getContactLeadOrigin(item) || "—";
-                      const currentSrcVal = getContactSource(item) || "—";
-
-                      return (
-                        <tr
-                          key={idx}
-                          onClick={() => setSelectedLeadForEdit(item)}
-                          className="hover:bg-indigo-50/60 transition-colors cursor-pointer group"
-                        >
-                          <td className="p-2">
-                            <p className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{name}</p>
-                            {phone && <p className="text-[10px] text-indigo-600 font-mono">{phone}</p>}
-                          </td>
-                          <td className="p-2">{renderVal(item.attenderName || item.assignedTo)}</td>
-                          <td className="p-2">
-                            {modalCategory === "query" ? (
-                              <div className="space-y-0.5">
-                                <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-bold text-[10px] inline-block">
-                                  {queryStage || item.queryStatus || "Query Pending"}
-                                </span>
-                                {salesStage && salesStage !== "Query Desk" && salesStage !== "Reminder Desk" && (
-                                  <p className="text-[9px] text-slate-500 font-medium">Sales: {salesStage}</p>
-                                )}
-                              </div>
-                            ) : modalCategory === "reminder" ? (
-                              <div className="space-y-0.5">
-                                <span className="px-2 py-0.5 rounded bg-sky-100 text-sky-900 font-bold text-[10px] inline-block">
-                                  {item.status || "Reminder"}
-                                </span>
-                                {salesStage && salesStage !== "Query Desk" && salesStage !== "Reminder Desk" && (
-                                  <p className="text-[9px] text-slate-500 font-medium">Sales: {salesStage}</p>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold text-[10px]">
-                                {salesStage || "1. New Lead"}
-                              </span>
-                            )}
-                          </td>
-                          <td className="p-2">{renderVal(item.calledFor || item.programName)}</td>
-                          <td className="p-2">
-                            <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-semibold text-[10px] border border-emerald-100">
-                              {originVal}
-                            </span>
-                          </td>
-                          <td className="p-2">
-                            <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-semibold text-[10px] border border-blue-100">
-                              {currentSrcVal}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  {drillDownModal.items.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="py-8 text-center text-slate-400 font-medium">
-                        No contacts found for this criteria.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+      {/* DRILL-DOWN / INSPECT MODAL */}
+      <InspectModal
+        modal={drillDownModal}
+        onClose={() => setDrillDownModal(null)}
+        onSelectLead={(item) => setSelectedLeadForEdit(item)}
+      />
 
       {/* EDIT LEAD MODAL */}
       {selectedLeadForEdit && (

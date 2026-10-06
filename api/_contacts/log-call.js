@@ -118,7 +118,10 @@ function getEffectiveStageServer(lead, targetProgram = null) {
   return lead.pipelineStage || lead.status || null;
 }
 
-export function evaluateStageServer(lead, callEvent) {
+export function evaluateStageServer(lead, callEvent, options = {}) {
+  const attemptingLimit = (options && typeof options.attemptingCallThreshold === 'number' && options.attemptingCallThreshold > 0)
+    ? options.attemptingCallThreshold
+    : 5;
   const targetProg = callEvent.calledFor || lead['Called For'] || lead.calledFor || null;
   const currentStage = getEffectiveStageServer(lead, targetProg);
   const currentRank  = currentStage ? (STAGE_RANKS[currentStage] || 0) : 0;
@@ -208,9 +211,9 @@ export function evaluateStageServer(lead, callEvent) {
     wasConnected = true;
   }
   else if (isUnconnected) {
-    if (attemptCount >= 5 && currentRank <= 2 && currentRank > 0) {
+    if (attemptCount >= attemptingLimit && currentRank <= 2 && currentRank > 0) {
       targetStage  = "Closed / Invalid";
-      closedReason = "Automated: 5 Unanswered Dial Attempts";
+      closedReason = `Automated: ${attemptingLimit} Unanswered Dial Attempts`;
       wasConnected = false;
     } else {
       targetStage = currentRank >= 2 ? currentStage : "2. Attempting Contact";
@@ -284,6 +287,17 @@ export async function executeLogCall(db, payload) {
 
   const targetCalledFor = calledFor || rootUpdates['Called For'] || existingContact['Called For'] || '';
 
+  // ── Fetch dynamic attemptingCallThreshold from settings ──────────────────
+  let attemptingCallThreshold = 5;
+  try {
+    const settingsDoc = await db.collection('settings').findOne({ _id: 'call_center_options' });
+    if (settingsDoc && typeof settingsDoc.attemptingCallThreshold === 'number' && settingsDoc.attemptingCallThreshold > 0) {
+      attemptingCallThreshold = settingsDoc.attemptingCallThreshold;
+    }
+  } catch (err) {
+    console.warn('[log-call] Failed to read attemptingCallThreshold from settings, defaulting to 5:', err);
+  }
+
   // ── Evaluate pipeline ──────────────────────────────────────────────────
   const evalResult = evaluateStageServer(existingContact, {
     calledFor:   targetCalledFor,
@@ -291,7 +305,7 @@ export async function executeLogCall(db, payload) {
     callStatus:  callStatusClean,
     status,
     queryStatus,
-  });
+  }, { attemptingCallThreshold });
 
   const nowIso = new Date().toISOString();
 

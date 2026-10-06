@@ -1277,6 +1277,60 @@ Enable administrators to visually inspect the exact list of canonical registrati
 - **Commit**: `f520d98`
 - **Status**: Committed and pushed to `main`.
 
+---
+
+## 54. Dynamic DB-Backed Unconnected Limit & Mandatory "Called For" Validation
+
+### 1. Dynamic Max Unconnected Calls Auto-Move (`api/_contacts/log-call.js`, `src/utils/pipelineEngine.js`)
+- **Requirement**: Dynamically link the backend rule that auto-moves leads to "Closed / Invalid" (or terminal stage) after consecutive unconnected calls to read directly from the database settings (`maxUnconnectedCalls` in `system_settings`).
+- **Implementation**:
+  - Replaced hardcoded unconnected thresholds with dynamic database-backed setting resolution.
+  - When an attender logs an unconnected call (`Busy`, `Switched Off`, `No Answer`, `Not Picked Up`), the system counts consecutive unconnected attempts and automatically transitions the lead's stage to terminal status once the DB-configured limit is reached.
+
+### 2. Mandatory "Called For" Field Enforcement (`EditModal.jsx`, `CallEntryTab.jsx`)
+- **Requirement**: Stop automatically defaulting/autofilling `"General"` for `calledFor`. It is a compulsory field and attenders must explicitly pick what program they are calling for, unless the call is Not Connected.
+- **Implementation**:
+  - Disabled automatic `"General"` autofill for connected call outcomes.
+  - Added strict validation requiring `calledFor` to be explicitly selected before saving any connected call attempt.
+  - Allowed unselected/blank bypass only when the call status belongs to `NOT_CONNECTED`.
+
+---
+
+## 55. Source Dropdown & Tag Architecture Cleanup (Removal of Incoming/Outgoing Tags)
+
+### 1. Problem & Requirement
+- The CRM previously created and applied `"Incoming Calls"` and `"Outgoing Calls"` tags to contacts and displayed `"Outgoing Calls"` / `"Incoming Calls"` inside the "Current Source" options dropdown.
+- This created source clutter and redundant tags because call direction is already tracked per call event and lead origin.
+
+### 2. Implementation Summary
+- **Current Source Dropdown Filtering**: Filtered out `"Outgoing Calls"` and `"Incoming Calls"` options from the Current Source selectable list in `CallEntryTab.jsx` and attender options.
+- **Tag Generation Elimination**: Removed automated assignment of incoming/outgoing direction tags upon call creation or lead ingestion, ensuring clean, uncluttered contact tags.
+
+---
+
+## 56. Report Architecture Audit: Calls vs. Registrations Attribution Mismatch
+
+### 1. Problem Statement & Mathematical Flaw Identified
+- In the "Called For vs Source" table and Monthly Report (`MonthlyReportTab.jsx`), reports could display an impossible situation: e.g. **Incoming Calls: 2** alongside **Incoming Registrations: 6** (implying a 300% conversion rate).
+- Logically, every registration logged by an attender is an outcome of a call. Therefore, incoming registrations cannot exceed incoming calls for a given channel/program.
+
+### 2. Root Cause Analysis in Report Code
+The discrepancy is caused by two conflicting definitions of "Incoming" in `MonthlyReportTab.jsx`:
+1. **Physical Call Attempt Filter (`allAttempts` in `MonthlyReportTab.jsx`)**:
+   - Loops through `contact.history` call records.
+   - Evaluates `(c.callType || "").toLowerCase().startsWith("incoming")`.
+   - Strictly inspects the individual direction of that specific physical call attempt. If an attender called the student back (follow-up/closing call) or if `callType` defaulted to outgoing, that call increments **Outgoing Calls** (`item.outgoing++`).
+2. **Lead Origin Attribution Filter (`programRegistrationsList` via `determineCallType`)**:
+   - Evaluates registrations using `determineCallType(reg, contact)`.
+   - Accurately identifies the lead's permanent origin/acquisition channel (e.g. lead first called in via Facebook $\rightarrow$ OFF MA).
+   - Stamps the resulting conversion as an **Incoming Registration** (`item.incomingConversions++`), regardless of whether the closing call was outgoing.
+3. **The Disconnect**:
+   - When 6 incoming leads are registered via outgoing follow-up calls:
+     - Their follow-up calls are counted under **Outgoing Calls**.
+     - Their registrations are counted under **Incoming Conversions**.
+   - As a result, the table row displays **2 Incoming Calls** (only direct incoming calls in the month) alongside **6 Incoming Registrations** (all 6 converted leads who originated from the incoming channel).
+
+
 
 
 

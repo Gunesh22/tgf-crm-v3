@@ -666,6 +666,20 @@ function makeCall(purpose = 'SALES', callStatus = 'Connected', status = 'Info Gi
     assert('38-3b. evaluatePipeline outputs programStatesUpdate object', Boolean(evalResultNoBack.programStatesUpdate), 'programStatesUpdate missing');
     assert('38-3c. programStatesUpdate retains non-regressed stage', evalResultNoBack.programStatesUpdate?.pipelineStage === PIPELINE_STAGES.NURTURE_INTERESTED, `got: ${evalResultNoBack.programStatesUpdate?.pipelineStage}`);
   }
+
+  // 39: Dynamic attemptingCallThreshold auto-close
+  {
+    const contact = makeContact('2. Attempting Contact', [], { attemptCount: 1 });
+    // 2nd attempt with threshold = 3 -> remains Attempting
+    const r2 = evaluatePipeline(contact, makeCall('SALES', 'Not Picked Up', 'Not Picked Up'), { attemptingCallThreshold: 3 });
+    assert('39-1. Dynamic threshold 3: 2nd attempt remains Attempting Contact', r2.pipelineStage === PIPELINE_STAGES.ATTEMPTING, `got: ${r2.pipelineStage}`);
+
+    // 3rd attempt with threshold = 3 -> auto-closes to Closed / Invalid
+    const contactAt2 = makeContact('2. Attempting Contact', [], { attemptCount: 2 });
+    const r3 = evaluatePipeline(contactAt2, makeCall('SALES', 'Not Picked Up', 'Not Picked Up'), { attemptingCallThreshold: 3 });
+    assert('39-2. Dynamic threshold 3: 3rd attempt auto-closes to Closed / Invalid', r3.pipelineStage === PIPELINE_STAGES.CLOSED_INVALID, `got: ${r3.pipelineStage}`);
+    assert('39-3. Closed reason specifies 3 unanswered dial attempts', r3.closedReason === 'Automated: 3 Unanswered Dial Attempts', `got: ${r3.closedReason}`);
+  }
 }
 
 // ── Summary ───────────────────────────────────────────────────────────────────

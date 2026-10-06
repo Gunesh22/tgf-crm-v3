@@ -419,7 +419,10 @@ export function getEffectiveStage(contact = {}, targetCalledFor = null, attender
  *   wasConnected           — true if this call or any prior was connected
  *   programRelationshipUpdate — { status, program } if alumni evidence found (API layer writes this)
  */
-export function evaluatePipeline(contact = {}, callEvent = {}) {
+export function evaluatePipeline(contact = {}, callEvent = {}, options = {}) {
+  const attemptingLimit = (options && typeof options.attemptingCallThreshold === 'number' && options.attemptingCallThreshold > 0)
+    ? options.attemptingCallThreshold
+    : 5;
   const calledFor = callEvent.calledFor || callEvent["Called For"] || contact["Called For"] || contact.calledFor || null;
   const attenderId = callEvent.attenderId || callEvent.callAttenderId || contact.attenderId || contact.leadOwner || null;
   const currentStage = getEffectiveStage(contact, calledFor, attenderId) || (calledFor ? null : normalizeStageStr(contact.pipelineStage));
@@ -483,10 +486,10 @@ export function evaluatePipeline(contact = {}, callEvent = {}) {
     wasConnected = true;
   }
   else if (isUnconnected) {
-    // 5-attempt auto-close only for uncontacted leads (rank ≤ 2)
-    if (attemptCount >= 5 && currentRank <= 2 && currentRank > 0) {
+    // attempt auto-close only for uncontacted leads (rank ≤ 2)
+    if (attemptCount >= attemptingLimit && currentRank <= 2 && currentRank > 0) {
       targetStage  = PIPELINE_STAGES.CLOSED_INVALID;
-      closedReason = "Automated: 5 Unanswered Dial Attempts";
+      closedReason = `Automated: ${attemptingLimit} Unanswered Dial Attempts`;
       wasConnected = false;
     } else {
       // NEVER demote — keep current stage (or promote New Lead → Attempting)

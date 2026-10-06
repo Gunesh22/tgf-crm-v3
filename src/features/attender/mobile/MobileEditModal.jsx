@@ -101,8 +101,10 @@ export default function MobileEditModal({
       : (row.callbackStatus || (rootCallbackDate ? "pending" : null));
 
     if (attState) {
-      normalized["Called For"] = attState.calledFor || attState["Called For"] || "";
-      normalized.calledFor = normalized["Called For"];
+      const rawAttProg = attState.calledFor || attState["Called For"] || "";
+      const cleanAttProg = String(rawAttProg).trim().toLowerCase() === "general" ? "" : rawAttProg;
+      normalized["Called For"] = cleanAttProg;
+      normalized.calledFor = cleanAttProg;
       normalized.Source = attState.source || attState.Source || rootSource;
       normalized.source = normalized.Source;
       normalized.status = attState.status || "";
@@ -250,23 +252,44 @@ export default function MobileEditModal({
     return [...STATUS_OPTIONS];
   }, [optionsVersion, localSettingsVer, STATUS_OPTIONS.length, STATUS_OPTIONS.join(",")]);
 
+  const isOutgoingCallsOption = (opt) => {
+    if (!opt) return true;
+    const l = String(opt).trim().toLowerCase();
+    return l === "outgoing calls" || l === "outgoing call" || l === "outgoing" || l === "outgoing-calls";
+  };
+
+  const cleanSourceVal = (val) => {
+    if (!val) return "";
+    const s = String(val).trim();
+    if (isOutgoingCallsOption(s)) return "";
+    return s;
+  };
+
   const callSourceOptionsList = useMemo(() => {
-    return [...CALL_SOURCE_OPTIONS];
+    return CALL_SOURCE_OPTIONS.filter(opt => !isOutgoingCallsOption(opt));
   }, [optionsVersion, localSettingsVer, CALL_SOURCE_OPTIONS.length, CALL_SOURCE_OPTIONS.join(",")]);
 
   const currentSourceDropdownOptions = useMemo(() => {
-    return Array.from(new Set([...contactTagsList, ...callSourceOptionsList]));
+    return Array.from(new Set([...contactTagsList, ...callSourceOptionsList]))
+      .filter(opt => !isOutgoingCallsOption(opt));
   }, [contactTagsList, callSourceOptionsList]);
+
+  const cleanProg = (val) => {
+    if (!val) return "";
+    const s = String(val).split(",")[0].trim();
+    if (!s || s.toLowerCase() === "general") return "";
+    return s;
+  };
 
   const [activeProgram, setActiveProgram] = useState(() => {
     const list = extractProgramsList(row || {});
-    return list[0] || row[calledForField] || row["Called For"] || row.calledFor || "";
+    return cleanProg(list[0]) || cleanProg(row[calledForField]) || cleanProg(row["Called For"]) || cleanProg(row.calledFor) || "";
   });
 
   useEffect(() => {
     const freshNorm = getNormalizedRow();
     const list = extractProgramsList(row || {});
-    const firstProg = list[0] || freshNorm[calledForField] || freshNorm["Called For"] || freshNorm.calledFor || "";
+    const firstProg = cleanProg(list[0]) || cleanProg(freshNorm[calledForField]) || cleanProg(freshNorm["Called For"]) || cleanProg(freshNorm.calledFor) || "";
     if (firstProg) {
       const attId = activeAttenderId || freshNorm.attenderId || row?.attenderId || null;
       freshNorm.calledFor = firstProg;
@@ -524,6 +547,17 @@ export default function MobileEditModal({
         isSavingRef.current = false;
         setSaving(false);
         return;
+      }
+
+      const isUnconnected = isNotConnectedStatus(targetEdited.status) || (targetEdited.callStatus && targetEdited.callStatus !== "Connected");
+      const calledForVal = String(targetEdited[calledForField] || targetEdited["Called For"] || targetEdited.calledFor || "").trim();
+      if (!isUnconnected) {
+        if (!calledForVal || calledForVal.toLowerCase() === "general") {
+          toast.error("Please select a Program (Called For) before saving", { duration: 4000 });
+          isSavingRef.current = false;
+          setSaving(false);
+          return;
+        }
       }
 
       if (isCallAttemptUpdated) {
@@ -969,7 +1003,7 @@ export default function MobileEditModal({
                 </label>
                 <SearchableDropdown
                   options={calledForOptionsList}
-                  selected={String(activeProgram || (edited[calledForField] ? String(edited[calledForField]).split(",")[0].trim() : ""))}
+                  selected={cleanProg(activeProgram) || cleanProg(edited[calledForField]) || ""}
                   onChange={val => handleChange(calledForField, val)}
                   placeholder="Search & select program..."
                   isMulti={false}
@@ -985,7 +1019,7 @@ export default function MobileEditModal({
                 </label>
                 <SearchableDropdown
                   options={callSourceOptionsList}
-                  selected={String(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || getContactLeadOrigin(edited, activeProgram) || getContactLeadOrigin(row, activeProgram) || "")}
+                  selected={cleanSourceVal(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || getContactLeadOrigin(edited, activeProgram) || getContactLeadOrigin(row, activeProgram) || "")}
                   onChange={val => handleChange("leadOrigin", val)}
                   placeholder="Search & select origin..."
                   colorClass="indigo"
@@ -1000,7 +1034,7 @@ export default function MobileEditModal({
                 </label>
                 <SearchableDropdown
                   options={currentSourceDropdownOptions}
-                  selected={String(edited[sourceField] || edited.Source || edited.source || "")}
+                  selected={cleanSourceVal(edited[sourceField] || edited.Source || edited.source || "")}
                   onChange={val => handleChange(sourceField, val)}
                   placeholder="Search & select current source..."
                   colorClass="amber"
