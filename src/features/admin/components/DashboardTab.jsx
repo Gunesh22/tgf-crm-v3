@@ -2064,10 +2064,12 @@ export default function DashboardTab({
       )}
 
       {/* Universal Inspect Modal */}
-      <InspectModal
-        modal={inspectModal}
-        onClose={() => setInspectModal(null)}
-      />
+      {inspectModal && (
+        <InspectModal
+          modal={inspectModal}
+          onClose={() => setInspectModal(null)}
+        />
+      )}
 
       {/* Custom Preset Builder Modal */}
       {isBuilderOpen && (

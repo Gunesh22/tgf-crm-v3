@@ -1666,11 +1666,13 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
       )}
 
       {/* DRILL-DOWN / INSPECT MODAL */}
-      <InspectModal
-        modal={drillDownModal}
-        onClose={() => setDrillDownModal(null)}
-        onSelectLead={(item) => setSelectedLeadForEdit(item)}
-      />
+      {drillDownModal && (
+        <InspectModal
+          modal={drillDownModal}
+          onClose={() => setDrillDownModal(null)}
+          onSelectLead={(item) => setSelectedLeadForEdit(item)}
+        />
+      )}
 
       {/* EDIT LEAD MODAL */}
       {selectedLeadForEdit && (

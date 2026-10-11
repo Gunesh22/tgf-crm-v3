@@ -24,9 +24,12 @@ import {
  * Combines lead inspection, pipeline drilldowns, follow-up tracking,
  * multi-field search, status & date filtering, and Excel export into one unified component.
  */
-export function InspectModal({ modal, onClose, onSelectLead }) {
-  if (!modal) return null;
+export function InspectModal(props) {
+  if (!props?.modal) return null;
+  return <InspectModalDialog {...props} />;
+}
 
+function InspectModalDialog({ modal, onClose, onSelectLead }) {
   const {
     title = "Inspected Contacts",
     subtitle = "",
