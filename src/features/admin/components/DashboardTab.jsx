@@ -1360,7 +1360,6 @@ export default function DashboardTab({
             sub: "Total program registrations by registration ID", 
             inspectable: true,
             onClickInspect: () => {
-              setInspectSearch("");
               setInspectModal({
                 title: "Program Registrations — By Registration ID",
                 subtitle: "Total program registrations tracked by unique registration ID",
@@ -1376,7 +1375,6 @@ export default function DashboardTab({
             sub: "Calls logged with Interested outcome", 
             inspectable: true,
             onClickInspect: () => {
-              setInspectSearch("");
               setInspectModal({
                 title: "Interested Calls — Logged Activities",
                 subtitle: "Every call logged with Interested outcome (with Date & Time)",
