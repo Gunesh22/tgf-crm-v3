@@ -1218,9 +1218,10 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
 
       // 2. Quick Status Filter
       const activeAttenderStatus = getAttenderStatus(log, attenderId || attenderName);
-      if (filterStatus === "Hot Leads" && !log.isHotLead) return false;
-      if (filterStatus === "Callback" && !log.callbackDate) return false;
-      if (filterStatus === "Follow up" && !(log.callbackDate || activeAttenderStatus === "reminder" || activeAttenderStatus === "Next time")) return false;
+      const isClosed = log.pipelineStage === "Closed / Invalid" || log.pipelineStage === "Closed / Lost" || String(log.pipelineStage || "").toLowerCase().includes("closed");
+      if (filterStatus === "Hot Leads" && (!log.isHotLead || isClosed)) return false;
+      if (filterStatus === "Callback" && (!log.callbackDate || isClosed)) return false;
+      if (filterStatus === "Follow up" && (isClosed || !(log.callbackDate || activeAttenderStatus === "reminder" || activeAttenderStatus === "Next time"))) return false;
       if (filterStatus === "Unanswered Callback" && !isUnansweredCallback(log)) return false;
       if (filterStatus === "Shared" && getSharedAttenders(log).length <= 1) return false;
       if (filterStatus === "Today Activity") {

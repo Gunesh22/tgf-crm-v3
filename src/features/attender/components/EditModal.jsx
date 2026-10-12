@@ -39,7 +39,8 @@ import CallEntryTab from "./edit-modal/CallEntryTab";
 import ProfileDetailsTab from "./edit-modal/ProfileDetailsTab";
 import CallButton from "./CallButton";
 import WhatsAppButton from "./WhatsAppButton";
-import { getEffectiveStage, PIPELINE_STAGES, getProgramSpecificStatus } from "../../../utils/pipelineEngine";
+import { getEffectiveStage, PIPELINE_STAGES, getProgramSpecificStatus, evaluatePipeline } from "../../../utils/pipelineEngine";
+import { ScheduleFollowupModal } from "./edit-modal/ScheduleFollowupModal";
 import { extractProgramsList, getProgramContext, getProgramRegistrationInfo } from "../utils/programContextHelper";
 import { triggerRegistrationConfetti } from "../../../utils/confetti";
 
@@ -186,6 +187,9 @@ export const EditModal = ({
   const [promptSelection, setPromptSelection] = useState("");
   const [pendingSave, setPendingSave] = useState(false);
   const [showUndoStatusPrompt, setShowUndoStatusPrompt] = useState(false);
+  const [showScheduleFollowupPrompt, setShowScheduleFollowupPrompt] = useState(false);
+  const [pendingFollowupSaveData, setPendingFollowupSaveData] = useState(null);
+  const [pendingFollowupStage, setPendingFollowupStage] = useState("");
   const [activeTab, setActiveTab] = useState(() => (row._isNew ? "profile" : "call"));
   const [showEditHistory, setShowEditHistory] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
@@ -1250,7 +1254,7 @@ export const EditModal = ({
 
 
 
-  const handleSaveAndClose = async (overrideFields = null, isFromHistory = false) => {
+  const handleSaveAndClose = async (overrideFields = null, isFromHistory = false, skipFollowupPrompt = false) => {
     if (saving) return; // Prevent double save
 
     let targetEdited = (overrideFields && typeof overrideFields === "object" && !overrideFields.target && !overrideFields.nativeEvent)
@@ -1425,6 +1429,108 @@ export const EditModal = ({
           setPromptSelection("");
           setPendingSave(true);
           setShowCalledForPrompt(true);
+          return;
+        }
+      }
+      // DB attempt limit for unconnected calls (defaults to 3 from settings)
+      const dbAttemptLimit = (() => {
+        try {
+          const cached = localStorage.getItem("crm_settings_options_cache");
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed?.attemptingCallThreshold && typeof parsed.attemptingCallThreshold === 'number') {
+              return parsed.attemptingCallThreshold;
+            }
+          }
+          const direct = localStorage.getItem("admin_attempting_call_threshold");
+          if (direct) {
+            const val = parseInt(direct, 10);
+            if (!isNaN(val) && val > 0) return val;
+          }
+        } catch (e) {}
+        return 3;
+      })();
+
+      // Auto-close triggers on the 4th call
+      const attemptCloseLimit = Math.max(4, dbAttemptLimit + 1);
+      let effStage = "";
+      let isClosingLead = false;
+
+      try {
+        const evalRes = evaluatePipeline(savedRow || row || targetEdited, {
+          ...targetEdited,
+          callPurpose: targetEdited.callPurpose || "SALES",
+          callStatus: targetEdited.callStatus,
+          status: targetEdited.status,
+          purposeOutcome: targetEdited.status,
+          calledFor: targetEdited.calledFor || targetEdited["Called For"],
+          attenderId: activeAttenderId
+        }, { attemptingCallThreshold: attemptCloseLimit });
+
+        effStage = evalRes?.pipelineStage || "";
+        if (effStage === "Closed / Invalid" || effStage === "Closed / Lost" || (evalRes?.closedReason && String(evalRes.closedReason).includes("Unanswered"))) {
+          isClosingLead = true;
+        }
+      } catch (e) {
+        console.warn("[EvaluatePipeline Error in Followup Check]", e);
+      }
+
+      if (!effStage) {
+        effStage = targetEdited.pipelineStage || savedRow.pipelineStage || row.pipelineStage || "";
+      }
+
+      const normStage = String(effStage).trim().toLowerCase();
+      const outcomeLower = String(targetEdited.status || "").trim().toLowerCase();
+
+      // Check if this unconnected attempt has hit or exceeded the attempt limit (e.g. 3rd attempt)
+      const historyAttempts = Array.isArray(targetEdited.history || savedRow?.history || row?.history)
+        ? (targetEdited.history || savedRow?.history || row?.history).filter(h => isNotConnectedStatus(h.status)).length
+        : 0;
+      const priorAttempts = Math.max(Number((savedRow || row || targetEdited).attemptCount || 0), historyAttempts);
+      const totalAttempts = priorAttempts + (isUnconnected ? 1 : 0);
+      const hasReachedAttemptLimit = isUnconnected && totalAttempts >= dbAttemptLimit;
+
+      // If lead was erroneously marked Closed / Invalid with fewer than 4 attempts, heal it back to Attempting
+      if (targetEdited.pipelineStage === "Closed / Invalid" && !isClosingLead && effStage && effStage !== "Closed / Invalid") {
+        targetEdited.pipelineStage = effStage;
+      }
+
+      // If lead is closing on 4th call or has reached attempt limit (3rd unconnected call), wipe callback and skip prompt
+      if (isClosingLead || (normStage.includes("closed") && isClosingLead) || hasReachedAttemptLimit) {
+        targetEdited.callbackDate = null;
+        targetEdited.callbackStatus = null;
+        targetEdited.callbackTime = null;
+        if (effStage && isClosingLead) {
+          targetEdited.pipelineStage = effStage;
+        }
+      } else if (!skipFollowupPrompt && !isFromHistory && !targetEdited.callbackDate) {
+        const isTargetFollowupStage =
+          normStage.includes("attempting") ||
+          normStage.includes("info given") ||
+          normStage.includes("information given") ||
+          normStage.includes("nurture") ||
+          normStage.includes("interested") ||
+          normStage.includes("future pool");
+
+        const isFollowupOutcome =
+          outcomeLower === "info given" ||
+          outcomeLower === "interested" ||
+          outcomeLower === "next time" ||
+          outcomeLower === "callback" ||
+          (isNotConnectedStatus(targetEdited.status) && isTargetFollowupStage);
+
+        const isTerminalStatus =
+          outcomeLower === "reg.done" ||
+          outcomeLower === "already reg.d" ||
+          outcomeLower === "shivir done" ||
+          outcomeLower === "not interested" ||
+          outcomeLower === "invalid number" ||
+          (normStage.includes("closed") && isClosingLead);
+
+        if (!isTerminalStatus && (isTargetFollowupStage || isFollowupOutcome)) {
+          setPendingFollowupSaveData(targetEdited);
+          setPendingFollowupStage(effStage || targetEdited.pipelineStage || "Active Follow-up");
+          setShowScheduleFollowupPrompt(true);
           return;
         }
       }
@@ -2293,6 +2399,36 @@ export const EditModal = ({
           onParentClose={onClose}
           onSaveAll={handleSaveAndClose}
           mergedHistory={mergedHistory}
+        />
+      )}
+      {showScheduleFollowupPrompt && (
+        <ScheduleFollowupModal
+          isOpen={showScheduleFollowupPrompt}
+          stageName={pendingFollowupStage}
+          leadName={getLogName()}
+          initialDate={pendingFollowupSaveData?.callbackDate || edited.callbackDate || ""}
+          initialTime={pendingFollowupSaveData?.callbackTime || edited.callbackTime || ""}
+          onClose={() => {
+            setShowScheduleFollowupPrompt(false);
+            setPendingFollowupSaveData(null);
+          }}
+          onSkipAndSave={() => {
+            setShowScheduleFollowupPrompt(false);
+            const dataToSave = pendingFollowupSaveData || edited;
+            setPendingFollowupSaveData(null);
+            handleSaveAndClose(dataToSave, false, true);
+          }}
+          onScheduleAndSave={(date, time) => {
+            setShowScheduleFollowupPrompt(false);
+            const dataToSave = {
+              ...(pendingFollowupSaveData || edited),
+              callbackDate: date,
+              callbackTime: time ? String(time).trim() : null,
+              callbackStatus: "pending"
+            };
+            setPendingFollowupSaveData(null);
+            handleSaveAndClose(dataToSave, false, true);
+          }}
         />
       )}
     </div>,
