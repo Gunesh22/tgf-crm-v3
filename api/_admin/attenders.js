@@ -55,7 +55,10 @@ export default async function handler(req, res) {
       const formatted = attenders.map(a => ({
         id: a.id || a._id.toString(),
         name: a.name,
-        role: a.role || 'attender'
+        role: a.role || 'attender',
+        isActive: a.isActive !== false,
+        password: a.password || '',
+        assignedAttenders: Array.isArray(a.assignedAttenders) ? a.assignedAttenders : []
       }));
 
       return res.status(200).json({ success: true, data: formatted });
@@ -65,20 +68,23 @@ export default async function handler(req, res) {
       const session = requireAdmin(req, res);
       if (!session) return;
 
-      const { name, password } = req.body || {};
+      const { name, password, role, assignedAttenders, isActive } = req.body || {};
       const cleanName = sanitizeString(name);
       if (!cleanName) {
         return res.status(400).json({ error: 'Name is required' });
       }
 
-      const id = 'attender_' + Date.now();
+      const assignedRole = role === 'data_entry' ? 'data_entry' : 'attender';
+      const id = (assignedRole === 'data_entry' ? 'operator_' : 'attender_') + Date.now();
       const generatedPassword = sanitizeString(password) || Math.floor(100000 + Math.random() * 900000).toString();
 
       const newAttender = {
         id,
         name: cleanName,
-        role: 'attender',
+        role: assignedRole,
         password: generatedPassword,
+        isActive: isActive !== false,
+        assignedAttenders: Array.isArray(assignedAttenders) ? assignedAttenders : [],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -90,7 +96,9 @@ export default async function handler(req, res) {
         data: {
           id: newAttender.id,
           name: newAttender.name,
-          role: newAttender.role
+          role: newAttender.role,
+          isActive: newAttender.isActive,
+          assignedAttenders: newAttender.assignedAttenders
         },
         password: generatedPassword
       });
@@ -100,7 +108,7 @@ export default async function handler(req, res) {
       const session = requireAdmin(req, res);
       if (!session) return;
 
-      const { id, name, password, updates } = req.body || {};
+      const { id, name, password, role, assignedAttenders, isActive, updates } = req.body || {};
       const cleanId = sanitizeString(id);
       if (!cleanId) {
         return res.status(400).json({ error: 'id is required' });
@@ -112,6 +120,9 @@ export default async function handler(req, res) {
       };
       if (name) fieldsToSet.name = sanitizeString(name);
       if (password) fieldsToSet.password = sanitizeString(password);
+      if (role) fieldsToSet.role = sanitizeString(role);
+      if (Array.isArray(assignedAttenders)) fieldsToSet.assignedAttenders = assignedAttenders;
+      if (typeof isActive === 'boolean') fieldsToSet.isActive = isActive;
 
       await collection.updateOne(
         { $or: [{ id: cleanId }, { _id: cleanId }] },

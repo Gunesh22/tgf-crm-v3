@@ -4,8 +4,8 @@ import { toast } from "react-hot-toast";
 import * as XLSX from "xlsx";
 import { BarChart3, Download, Search, X, ChevronDown, Check, Eye } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
-import { COLORS, cleanExportRow, CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, parseTimestamp, getCanonicalStatus, getCanonicalStage, renderVal, isStageNurtureInterested, isStageRegisteredWon, getLocalDateStr, getCanonicalRegistrations, getCanonicalRegisteredPeople, getCanonicalStage6People, getContactPhone, formatDateTimeNoSeconds, getContactLeadOrigin, getContactSource } from "../utils.jsx";
-import { isKhojiAffirmative, isKhojiNegative } from "../../attender/utils.js";
+import { COLORS, cleanExportRow, CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, parseTimestamp, getCanonicalStatus, getCanonicalStage, renderVal, isStageNurtureInterested, isStageRegisteredWon, getLocalDateStr, getCanonicalRegistrations, getCanonicalRegisteredPeople, getCanonicalStage6People, getContactPhone, formatDateTimeNoSeconds, getContactLeadOrigin, getContactSource, sanitizeSource } from "../utils.jsx";
+import { isKhojiAffirmative, isKhojiNegative, resolveLeadOriginOptions, resolveCurrentSourceOptions } from "../../attender/utils.js";
 import { fetchAPI } from "../../../lib/db.js";
 import { useAuth } from "../../../context/AuthContext";
 import { getAllPresets } from "../../../utils/presetEngine.js";
@@ -190,6 +190,21 @@ export default function DashboardTab({
   const [convPage, setConvPage] = useState(1);
   const [selectedAttenderDetails, setSelectedAttenderDetails] = useState(null);
   const [attenderModalSearch, setAttenderModalSearch] = useState("");
+  const [selectedOperatorDetails, setSelectedOperatorDetails] = useState(null);
+  const [operatorModalSearch, setOperatorModalSearch] = useState("");
+
+  useEffect(() => {
+    if (!selectedAttenderDetails && !selectedOperatorDetails) return;
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setSelectedAttenderDetails(null);
+        setSelectedOperatorDetails(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedAttenderDetails, selectedOperatorDetails]);
+
   const [inspectModal, setInspectModal] = useState(null); // { title: string, subtitle: string, items: Array, type: string, defaultFilter?: string }
   const [serverStats, setServerStats] = useState(null);
 
@@ -290,18 +305,28 @@ export default function DashboardTab({
 
   const leadOriginOptions = useMemo(() => {
     const origins = new Set();
+    const configOpts = resolveLeadOriginOptions(settingsOptions);
+    (configOpts || []).forEach(s => {
+      const sanitized = sanitizeSource(s, "");
+      if (sanitized) origins.add(sanitized);
+    });
     callLogs.forEach(log => {
-      const val = getContactLeadOrigin(log) || "Direct / Organic";
-      origins.add(val);
+      const val = sanitizeSource(getContactLeadOrigin(log), "");
+      if (val) origins.add(val);
     });
     return Array.from(origins).sort().map(s => ({ value: s, label: s }));
-  }, [callLogs]);
+  }, [callLogs, settingsOptions]);
 
   const sourceOptions = useMemo(() => {
-    const sources = new Set(settingsOptions?.sourceOptions || []);
+    const sources = new Set();
+    const configOpts = resolveCurrentSourceOptions(settingsOptions);
+    (configOpts || []).forEach(s => {
+      const sanitized = sanitizeSource(s, "");
+      if (sanitized) sources.add(sanitized);
+    });
     callLogs.forEach(log => {
-      const val = getContactSource(log) || "Online/Direct";
-      sources.add(val);
+      const val = sanitizeSource(getContactSource(log) || log.currentSource || log.source, "");
+      if (val) sources.add(val);
     });
     return Array.from(sources).sort().map(s => ({ value: s, label: s }));
   }, [callLogs, settingsOptions]);
@@ -418,7 +443,9 @@ export default function DashboardTab({
               calledFor: h.calledFor || log["Called For"] || log.calledFor || calledForVal,
               feedback: feedbackVal,
               Khoji: khojiVal,
-              isHistory: true
+              isHistory: true,
+              dataEntryOperatorId: h.dataEntryOperatorId || log.dataEntryOperatorId || null,
+              dataEntryOperatorName: h.dataEntryOperatorName || h.enteredBy || log.dataEntryOperatorName || log.enteredBy || null
             });
           }
         });
@@ -670,7 +697,7 @@ export default function DashboardTab({
 
       // Match with official attenders list if available
       const foundAttender = (attenders || []).find(a => (a.name || "").toLowerCase().trim() === normName);
-      if (foundAttender && (foundAttender.role === "admin" || EXCLUDED_ATTENDER_NAMES.includes((foundAttender.name || "").toLowerCase().trim()))) return;
+      if (foundAttender && (foundAttender.role === "admin" || foundAttender.role === "data_entry" || EXCLUDED_ATTENDER_NAMES.includes((foundAttender.name || "").toLowerCase().trim()))) return;
 
       const canonicalName = foundAttender ? foundAttender.name : rawName;
       const canonicalId = foundAttender ? foundAttender.id : (log.attenderId && log.attenderId !== "unknown" && log.attenderId !== "legacy" ? log.attenderId : normName);
@@ -771,6 +798,69 @@ export default function DashboardTab({
     }, { total: 0, outgoing: 0, incoming: 0, interested: 0, regDone: 0, pending: 0 });
   }, [attenderStats]);
 
+  // ── Data Entry Operator Breakdown (Counts distinct call/entry events by operator) ──
+  const dataEntryStats = useMemo(() => {
+    const operatorMap = {};
+
+    // 1. Initialize all registered data_entry operators
+    (attenders || []).forEach(a => {
+      if (a.role === "data_entry") {
+        const canonicalId = a.id || a._id;
+        operatorMap[canonicalId] = {
+          id: canonicalId,
+          name: a.name,
+          totalEntries: 0,
+          regDone: 0,
+          assignedAttenders: Array.isArray(a.assignedAttenders) ? a.assignedAttenders : []
+        };
+      }
+    });
+
+    // 2. Count actual entry events from filteredLogs (isHistory === true to count distinct call events, not duplicate contact docs)
+    filteredLogs.forEach(log => {
+      if (!log.isHistory) return;
+      const opId = log.dataEntryOperatorId;
+      const opName = (log.dataEntryOperatorName || log.enteredBy || "").trim();
+
+      if (!opId && !opName) return;
+
+      // Find matching operator by ID or Name
+      let matchedKey = Object.keys(operatorMap).find(k => {
+        if (opId && String(k).toLowerCase() === String(opId).toLowerCase()) return true;
+        if (opName && operatorMap[k].name.toLowerCase() === opName.toLowerCase()) return true;
+        return false;
+      });
+
+      if (!matchedKey) {
+        // Operator might be inactive or created earlier
+        matchedKey = opId || opName;
+        operatorMap[matchedKey] = {
+          id: matchedKey,
+          name: opName || opId,
+          totalEntries: 0,
+          regDone: 0,
+          assignedAttenders: []
+        };
+      }
+
+      operatorMap[matchedKey].totalEntries++;
+      const normStatus = getCanonicalStatus(log.status);
+      if (normStatus === "Reg.Done") {
+        operatorMap[matchedKey].regDone++;
+      }
+    });
+
+    return Object.values(operatorMap).sort((a, b) => b.totalEntries - a.totalEntries || b.regDone - a.regDone);
+  }, [filteredLogs, attenders]);
+
+  const dataEntryTotals = useMemo(() => {
+    return dataEntryStats.reduce((acc, op) => {
+      acc.totalEntries += Number(op.totalEntries) || 0;
+      acc.regDone += Number(op.regDone) || 0;
+      return acc;
+    }, { totalEntries: 0, regDone: 0 });
+  }, [dataEntryStats]);
+
   const attenderModalLeads = useMemo(() => {
     if (!selectedAttenderDetails) return [];
     const targetObj = typeof selectedAttenderDetails === "object" ? selectedAttenderDetails : { id: null, name: selectedAttenderDetails };
@@ -844,6 +934,38 @@ export default function DashboardTab({
       (l.remark || "").toLowerCase().includes(q)
     );
   }, [filteredLogs, selectedAttenderDetails, attenderModalSearch, programRegistrationsList]);
+
+  const operatorModalLeads = useMemo(() => {
+    if (!selectedOperatorDetails) return [];
+    const targetObj = typeof selectedOperatorDetails === "object" ? selectedOperatorDetails : { id: null, name: selectedOperatorDetails };
+    const targetId = targetObj.id ? String(targetObj.id).trim().toLowerCase() : "";
+    const targetName = (targetObj.name || "").toLowerCase().trim();
+
+    const isMatch = (log) => {
+      if (!log.isHistory) return false;
+      const opId = log.dataEntryOperatorId ? String(log.dataEntryOperatorId).toLowerCase().trim() : "";
+      const opName = (log.dataEntryOperatorName || log.enteredBy || "").toLowerCase().trim();
+      if (!opId && !opName) return false;
+
+      if (targetId && opId && targetId === opId) return true;
+      if (targetName && opName && targetName === opName) return true;
+      if (targetId && opName && targetId === opName) return true;
+      if (targetName && opId && targetName === opId) return true;
+      return false;
+    };
+
+    const leads = filteredLogs.filter(isMatch);
+
+    if (!operatorModalSearch.trim()) return leads;
+    const q = operatorModalSearch.toLowerCase();
+    return leads.filter(l =>
+      (l.Name || "").toLowerCase().includes(q) ||
+      (l.Phone || "").toLowerCase().includes(q) ||
+      (l.status || "").toLowerCase().includes(q) ||
+      (l.attenderName || "").toLowerCase().includes(q) ||
+      (l.remark || "").toLowerCase().includes(q)
+    );
+  }, [filteredLogs, selectedOperatorDetails, operatorModalSearch]);
 
   const outcomeData = useMemo(() => {
     const map = {};
@@ -1761,6 +1883,62 @@ export default function DashboardTab({
         </div>
       </div>
 
+      {/* Data Entry Operator Breakdown Table */}
+      <div className="bg-white rounded-lg border border-slate-200 shadow-2xs overflow-hidden">
+        <div className="p-3.5 border-b border-slate-200 flex items-center justify-between">
+          <div>
+            <h3 className="text-xs font-semibold text-slate-900 uppercase tracking-wider">Per Data Entry Operator Breakdown</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Calls and entries logged by data entry operators on behalf of callers. Click any operator row to inspect exact entries.</p>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="px-3.5 py-2.5 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Operator Name</th>
+                <th className="px-3.5 py-2.5 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Total Entries Logged</th>
+                <th className="px-3.5 py-2.5 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Reg.Done Entries</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+              {dataEntryStats.map((op, i) => (
+                <tr 
+                  key={`${op.id || op.name}_${i}`} 
+                  onClick={() => { setSelectedOperatorDetails(op); setOperatorModalSearch(""); }}
+                  className="hover:bg-indigo-50/50 transition-colors cursor-pointer group"
+                  title="Click to inspect entries logged by this operator"
+                >
+                  <td className="px-3.5 py-2.5 font-semibold text-slate-900 group-hover:text-indigo-600 flex items-center gap-1.5">
+                    {op.name}
+                    <span className="text-[10px] text-slate-400 font-normal group-hover:text-indigo-600">🔍 Inspect</span>
+                  </td>
+                  <td className="px-3.5 py-2.5 font-bold text-slate-900">{op.totalEntries}</td>
+                  <td className="px-3.5 py-2.5 text-emerald-600 font-semibold">{op.regDone}</td>
+                </tr>
+              ))}
+              {dataEntryStats.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="py-8 text-center text-slate-400 font-medium">
+                    No data entry operators configured or no entries logged.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+            {dataEntryStats.length > 0 && (
+              <tfoot className="bg-slate-100/90 border-t-2 border-slate-300 font-bold text-slate-900">
+                <tr>
+                  <td className="px-3.5 py-3 uppercase tracking-wider text-[11px] font-extrabold text-slate-900">
+                    Total
+                  </td>
+                  <td className="px-3.5 py-3 font-extrabold text-slate-900">{dataEntryTotals.totalEntries}</td>
+                  <td className="px-3.5 py-3 text-emerald-700 font-extrabold">{dataEntryTotals.regDone}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      </div>
+
       {/* Converted Leads Table */}
       <div className="bg-white rounded-lg border border-slate-200 shadow-2xs overflow-hidden">
         <div className="p-3.5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -1918,72 +2096,93 @@ export default function DashboardTab({
 
       {/* Drill-down Modal for Selected Attender */}
       {selectedAttenderDetails && createPortal(
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget) setSelectedAttenderDetails(null); }}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 md:p-6 animate-fade-in"
+        >
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xl max-w-5xl w-full h-[90vh] max-h-[850px] flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-blue-50/40 via-white to-slate-50 flex items-center justify-between">
-              <div>
-                <h3 className="font-extrabold text-xl text-slate-900 flex items-center gap-2">
-                  <span>📊</span> Calls & Leads Breakdown for <span className="text-blue-600 underline decoration-blue-300">{typeof selectedAttenderDetails === "object" ? selectedAttenderDetails.name : selectedAttenderDetails}</span>
-                </h3>
-                <p className="text-xs text-gray-500 mt-1 font-medium">
-                  Showing {attenderModalLeads.length} counted entries for date range <span className="font-bold text-gray-700">{dateFrom}</span> to <span className="font-bold text-gray-700">{dateTo}</span>
+            <div className="px-6 py-4 border-b border-slate-200 bg-white flex items-center justify-between gap-4 shrink-0">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-bold text-base sm:text-lg text-slate-900 leading-tight">
+                    Calls & Leads Breakdown
+                  </h3>
+                  <span className="text-slate-400 font-normal text-xs sm:text-sm">for</span>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-indigo-50 border border-indigo-200/70 text-indigo-700 font-bold text-xs sm:text-sm">
+                    {typeof selectedAttenderDetails === "object" ? selectedAttenderDetails.name : selectedAttenderDetails}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1 font-medium">
+                  Date Range: <span className="font-semibold text-slate-700">{dateFrom}</span> to <span className="font-semibold text-slate-700">{dateTo}</span>
                 </p>
               </div>
               <button 
+                type="button"
                 onClick={() => setSelectedAttenderDetails(null)}
-                className="p-2 rounded-full hover:bg-gray-200/60 text-gray-400 hover:text-gray-700 transition-colors"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer shrink-0"
+                title="Close modal"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
             {/* Controls Bar */}
-            <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="relative w-full sm:max-w-sm">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <div className="px-6 py-3 border-b border-slate-200 bg-slate-50/70 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0">
+              <div className="relative flex-1 sm:max-w-sm">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <input
                   type="text"
-                  placeholder="Search leads by name, phone, status..."
+                  placeholder="Search leads by name, phone, status, remark..."
                   value={attenderModalSearch}
                   onChange={e => setAttenderModalSearch(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+                  className="w-full pl-9 pr-8 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors shadow-2xs"
                 />
                 {attenderModalSearch && (
-                  <button onClick={() => setAttenderModalSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  <button 
+                    type="button"
+                    onClick={() => setAttenderModalSearch("")} 
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer transition-colors"
+                    title="Clear search"
+                  >
                     <X size={13} />
                   </button>
                 )}
               </div>
-              <div className="flex items-center gap-2 text-xs font-semibold text-gray-500">
-                <span>Total Counted Items: <strong className="text-indigo-600 font-extrabold">{attenderModalLeads.length}</strong></span>
+              <div className="flex items-center gap-2 text-xs font-medium text-slate-500 shrink-0">
+                <span>Total Counted Items:</span>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold text-xs">
+                  {attenderModalLeads.length}
+                </span>
               </div>
             </div>
 
-            {/* Content Table */}
-            <div className="flex-1 overflow-y-auto p-6">
+            {/* Content Table Area */}
+            <div className="flex-1 overflow-auto p-4 sm:p-6 bg-slate-50/30">
               {attenderModalLeads.length === 0 ? (
-                <div className="text-center py-16">
-                  <div className="text-4xl mb-2">🔍</div>
-                  <p className="text-gray-500 font-bold">No matching leads found for this attender.</p>
-                  <p className="text-xs text-gray-400 mt-1">Try adjusting the search query or date range filters.</p>
+                <div className="text-center py-16 px-4">
+                  <div className="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 text-slate-400 flex items-center justify-center mx-auto mb-3">
+                    <Search size={20} />
+                  </div>
+                  <p className="text-sm font-bold text-slate-800">No matching leads found for this attender</p>
+                  <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">Try adjusting the search query or date range filters to view counted records.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto border border-gray-100 rounded-2xl shadow-sm">
-                  <table className="w-full text-xs text-left">
-                    <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 font-bold uppercase tracking-wider">
+                <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-2xs">
+                  <table className="w-full text-xs text-left border-collapse">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px] sticky top-0 z-10">
                       <tr>
-                        <th className="px-4 py-3">#</th>
-                        <th className="px-4 py-3">Lead Name</th>
-                        <th className="px-4 py-3">Phone</th>
-                        <th className="px-4 py-3 text-center">Calls Done</th>
-                        <th className="px-4 py-3">Status</th>
-                        <th className="px-4 py-3">Call Time (IST)</th>
-                        <th className="px-4 py-3">Call Type</th>
-                        <th className="px-4 py-3">Remark</th>
+                        <th className="px-3.5 py-2.5 w-12 text-center text-slate-400 font-mono">#</th>
+                        <th className="px-3.5 py-2.5 min-w-[150px]">Lead Name</th>
+                        <th className="px-3.5 py-2.5 min-w-[120px]">Phone</th>
+                        <th className="px-3.5 py-2.5 text-center min-w-[90px]">Calls Done</th>
+                        <th className="px-3.5 py-2.5 min-w-[110px]">Status</th>
+                        <th className="px-3.5 py-2.5 min-w-[140px]">Call Time (IST)</th>
+                        <th className="px-3.5 py-2.5 min-w-[90px]">Call Type</th>
+                        <th className="px-3.5 py-2.5 min-w-[200px]">Remark</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100 font-medium text-gray-700">
+                    <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                       {attenderModalLeads.map((log, i) => {
                         const callTime = parseTimestamp(log.timestamp || log.lastCalledAt || log.createdAt);
                         const timeStr = callTime && !isNaN(callTime.getTime()) 
@@ -2017,29 +2216,43 @@ export default function DashboardTab({
                           callsDoneCount = 1;
                         }
 
+                        const nameVal = renderVal(log.Name || log.contactName || log.name, "Unknown");
+                        const phoneVal = renderVal(log.Phone || log.contactPhone || log.phone || log.mobile, "—");
+                        const remarkVal = renderVal(log.remark, "—");
+
                         return (
-                          <tr key={log.id + "_" + i} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-3.5 py-2.5 text-slate-400 font-mono">{i + 1}</td>
-                            <td className="px-3.5 py-2.5 font-semibold text-slate-900">{renderVal(log.Name || log.contactName || log.name, "Unknown")}</td>
-                            <td className="px-3.5 py-2.5 font-mono text-slate-600">{renderVal(log.Phone || log.contactPhone || log.phone || log.mobile, "—")}</td>
+                          <tr key={log.id + "_" + i} className="hover:bg-indigo-50/30 transition-colors">
+                            <td className="px-3.5 py-2.5 text-slate-400 font-mono text-center">{i + 1}</td>
+                            <td className="px-3.5 py-2.5 font-semibold text-slate-900" title={nameVal}>
+                              <div className="truncate max-w-[200px]">{nameVal}</div>
+                            </td>
+                            <td className="px-3.5 py-2.5 font-mono text-slate-600 whitespace-nowrap" title={phoneVal}>
+                              {phoneVal}
+                            </td>
                             <td className="px-3.5 py-2.5 text-center font-semibold">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[11px]">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-mono text-[11px] font-bold border border-slate-200/70">
                                 {callsDoneCount}
                               </span>
                             </td>
                             <td className="px-3.5 py-2.5">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
-                                isReg ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
-                                isInterested ? "bg-amber-50 text-amber-700 border border-amber-200" :
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border tracking-wider ${
+                                isReg ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                                isInterested ? "bg-purple-50 text-purple-700 border-purple-200" :
                                 isPending ? "bg-slate-100 text-slate-600 border border-slate-200" :
-                                "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                                "bg-indigo-50 text-indigo-700 border-indigo-200"
                               }`}>
                                 {renderVal(st)}
                               </span>
                             </td>
-                            <td className="px-3.5 py-2.5 text-slate-500 whitespace-nowrap">{timeStr}</td>
-                            <td className="px-3.5 py-2.5 capitalize">{renderVal(log.callType || "outgoing")}</td>
-                            <td className="px-3.5 py-2.5 text-slate-600 max-w-xs truncate">{renderVal(log.remark, "—")}</td>
+                            <td className="px-3.5 py-2.5 text-slate-500 whitespace-nowrap font-mono text-[11px]">
+                              {timeStr}
+                            </td>
+                            <td className="px-3.5 py-2.5 capitalize text-slate-700 font-medium">
+                              {renderVal(log.callType || "outgoing")}
+                            </td>
+                            <td className="px-3.5 py-2.5 text-slate-600 max-w-xs" title={remarkVal}>
+                              <div className="truncate">{remarkVal}</div>
+                            </td>
                           </tr>
                         );
                       })}
@@ -2050,10 +2263,170 @@ export default function DashboardTab({
             </div>
 
             {/* Footer */}
-            <div className="p-4 border-t border-gray-100 bg-gray-50 flex items-center justify-end">
+            <div className="px-6 py-3 border-t border-slate-200 bg-white flex items-center justify-end shrink-0">
               <button
+                type="button"
                 onClick={() => setSelectedAttenderDetails(null)}
-                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-md transition-colors"
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white rounded-lg font-bold text-xs shadow-2xs transition-all cursor-pointer"
+              >
+                Close Breakdown
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Drill-down Modal for Selected Data Entry Operator */}
+      {selectedOperatorDetails && createPortal(
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget) setSelectedOperatorDetails(null); }}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 md:p-6 animate-fade-in"
+        >
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xl max-w-5xl w-full h-[90vh] max-h-[850px] flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-200 bg-white flex items-center justify-between gap-4 shrink-0">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-bold text-base sm:text-lg text-slate-900 leading-tight">
+                    Calls & Entries Breakdown
+                  </h3>
+                  <span className="text-slate-400 font-normal text-xs sm:text-sm">for Operator</span>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-indigo-50 border border-indigo-200/70 text-indigo-700 font-bold text-xs sm:text-sm">
+                    {typeof selectedOperatorDetails === "object" ? selectedOperatorDetails.name : selectedOperatorDetails}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1 font-medium">
+                  Date Range: <span className="font-semibold text-slate-700">{dateFrom}</span> to <span className="font-semibold text-slate-700">{dateTo}</span>
+                </p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setSelectedOperatorDetails(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer shrink-0"
+                title="Close modal"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Controls Bar */}
+            <div className="px-6 py-3 border-b border-slate-200 bg-slate-50/70 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0">
+              <div className="relative flex-1 sm:max-w-sm">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search entries by name, phone, attender, status, remark..."
+                  value={operatorModalSearch}
+                  onChange={e => setOperatorModalSearch(e.target.value)}
+                  className="w-full pl-9 pr-8 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors shadow-2xs"
+                />
+                {operatorModalSearch && (
+                  <button 
+                    type="button"
+                    onClick={() => setOperatorModalSearch("")} 
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer transition-colors"
+                    title="Clear search"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-xs font-medium text-slate-500 shrink-0">
+                <span>Total Counted Items:</span>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold text-xs">
+                  {operatorModalLeads.length}
+                </span>
+              </div>
+            </div>
+
+            {/* Content Table Area */}
+            <div className="flex-1 overflow-auto p-4 sm:p-6 bg-slate-50/30">
+              {operatorModalLeads.length === 0 ? (
+                <div className="text-center py-16 px-4">
+                  <div className="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 text-slate-400 flex items-center justify-center mx-auto mb-3">
+                    <Search size={20} />
+                  </div>
+                  <p className="text-sm font-bold text-slate-800">No matching entries found for this operator</p>
+                  <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">Try adjusting the search query or date range filters to view counted records.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-2xs">
+                  <table className="w-full text-xs text-left border-collapse">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px] sticky top-0 z-10">
+                      <tr>
+                        <th className="px-3.5 py-2.5 w-12 text-center text-slate-400 font-mono">#</th>
+                        <th className="px-3.5 py-2.5 min-w-[150px]">Lead Name</th>
+                        <th className="px-3.5 py-2.5 min-w-[120px]">Phone</th>
+                        <th className="px-3.5 py-2.5 min-w-[140px]">On Behalf Of (Attender)</th>
+                        <th className="px-3.5 py-2.5 min-w-[110px]">Status</th>
+                        <th className="px-3.5 py-2.5 min-w-[140px]">Call Time (IST)</th>
+                        <th className="px-3.5 py-2.5 min-w-[90px]">Call Type</th>
+                        <th className="px-3.5 py-2.5 min-w-[200px]">Remark</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                      {operatorModalLeads.map((log, i) => {
+                        const callTime = parseTimestamp(log.timestamp || log.lastCalledAt || log.createdAt);
+                        const timeStr = callTime && !isNaN(callTime.getTime()) 
+                          ? callTime.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" }) 
+                          : "N/A";
+                        const st = log.status || "Pending";
+                        const isInterested = st === "Interested";
+                        const isReg = st === "Reg.Done";
+                        const isPending = st === "Pending";
+
+                        const nameVal = renderVal(log.Name || log.contactName || log.name, "Unknown");
+                        const phoneVal = renderVal(log.Phone || log.contactPhone || log.phone || log.mobile, "—");
+                        const attenderVal = renderVal(log.attenderName, "—");
+                        const remarkVal = renderVal(log.remark, "—");
+
+                        return (
+                          <tr key={(log.id || i) + "_" + i} className="hover:bg-indigo-50/30 transition-colors">
+                            <td className="px-3.5 py-2.5 text-slate-400 font-mono text-center">{i + 1}</td>
+                            <td className="px-3.5 py-2.5 font-semibold text-slate-900" title={nameVal}>
+                              <div className="truncate max-w-[200px]">{nameVal}</div>
+                            </td>
+                            <td className="px-3.5 py-2.5 font-mono text-slate-600 whitespace-nowrap" title={phoneVal}>
+                              {phoneVal}
+                            </td>
+                            <td className="px-3.5 py-2.5 text-slate-800 font-medium" title={attenderVal}>
+                              <div className="truncate max-w-[160px]">{attenderVal}</div>
+                            </td>
+                            <td className="px-3.5 py-2.5">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border tracking-wider ${
+                                isReg ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                                isInterested ? "bg-purple-50 text-purple-700 border-purple-200" :
+                                isPending ? "bg-slate-100 text-slate-600 border border-slate-200" :
+                                "bg-indigo-50 text-indigo-700 border-indigo-200"
+                              }`}>
+                                {renderVal(st)}
+                              </span>
+                            </td>
+                            <td className="px-3.5 py-2.5 text-slate-500 whitespace-nowrap font-mono text-[11px]">
+                              {timeStr}
+                            </td>
+                            <td className="px-3.5 py-2.5 capitalize text-slate-700 font-medium">
+                              {renderVal(log.callType || "outgoing")}
+                            </td>
+                            <td className="px-3.5 py-2.5 text-slate-600 max-w-xs" title={remarkVal}>
+                              <div className="truncate">{remarkVal}</div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-slate-200 bg-white flex items-center justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setSelectedOperatorDetails(null)}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white rounded-lg font-bold text-xs shadow-2xs transition-all cursor-pointer"
               >
                 Close Breakdown
               </button>

@@ -201,3 +201,42 @@ export function isSameAttender(targetAttender, session) {
 
   return false;
 }
+
+/**
+ * Verify if authenticated session is authorized to act on behalf of target attender.
+ * For role 'admin': always true.
+ * For role 'attender': must match session identity via isSameAttender.
+ * For role 'data_entry': queries the operator's current active record in MongoDB to verify
+ * that the target attender ID is in assignedAttenders (and operator is active).
+ */
+export async function verifyAttenderAccess(db, session, targetAttenderId) {
+  if (!session || !targetAttenderId) return false;
+  if (session.role === 'admin' || (session.id && String(session.id).toLowerCase().includes('admin'))) {
+    return true;
+  }
+
+  const cleanTarget = String(targetAttenderId).trim();
+  const targetLower = cleanTarget.toLowerCase();
+  const canonicalTarget = ID_ALIASES[targetLower] || cleanTarget;
+
+  if (session.role === 'data_entry') {
+    if (!db) return false;
+    const operator = await db.collection('attenders').findOne({
+      $or: [{ id: session.id }, { _id: session.id }],
+      role: 'data_entry',
+      isActive: { $ne: false }
+    });
+    if (!operator) return false;
+
+    const assigned = Array.isArray(operator.assignedAttenders) ? operator.assignedAttenders : [];
+    return assigned.some(assignedId => {
+      const aClean = String(assignedId).trim();
+      const aLower = aClean.toLowerCase();
+      const aCanonical = ID_ALIASES[aLower] || aClean;
+      // Strict ID comparison only - no display name guessing
+      return aCanonical === canonicalTarget || aClean === cleanTarget;
+    });
+  }
+
+  return isSameAttender(targetAttenderId, session);
+}

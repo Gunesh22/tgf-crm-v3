@@ -11,9 +11,9 @@ export const PIPELINE_STAGE_INFO_LIST = [
   },
   {
     stage: "2. Attempting Contact",
-    badge: "bg-amber-100 text-amber-900 border-amber-300",
+    badge: "bg-teal-100 text-teal-900 border-teal-300",
     icon: Clock,
-    iconColor: "text-amber-600",
+    iconColor: "text-teal-600",
     desc: "At least one call attempt has been made (e.g. Busy, Not Picked Up, No Network), but contact with the person has not been established yet."
   },
   {

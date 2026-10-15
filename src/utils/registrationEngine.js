@@ -159,17 +159,16 @@ export function getContactCity(log, attempt) {
 }
 
 export function getContactLeadOrigin(log, attempt) {
-  const extractFromObj = (obj, allowFallbackSource = true) => {
+  const extractFromObj = (obj) => {
     if (!obj || typeof obj !== 'object') return '';
     const directVal = obj.leadOrigin || obj.original_source || obj.originalSource || obj['Lead Origin'] || obj.lead_origin;
     if (directVal && String(directVal).trim() && String(directVal).trim() !== '—') {
-      return String(directVal).trim();
-    }
-    if (allowFallbackSource) {
-      const srcVal = obj.source || obj.Source || obj.currentSource;
-      if (srcVal && String(srcVal).trim() && String(srcVal).trim() !== '—') {
-        return String(srcVal).trim();
+      const trimmed = String(directVal).trim();
+      const lower = trimmed.toLowerCase();
+      if (['incoming', 'incoming call', 'incoming calls', 'incoming-calls', 'outgoing', 'outgoing call', 'outgoing calls', 'outgoing-calls', 'call', 'calls', 'general', 'unspecified', 'unassigned', 'none', 'na', 'null', 'undefined', '-', 'direct / organic', 'direct / online', 'direct online', 'direct organic', 'direct', 'organic', 'online/direct', 'online direct'].includes(lower)) {
+        return '';
       }
+      return trimmed;
     }
     return '';
   };
@@ -259,9 +258,14 @@ export function getContactLeadOrigin(log, attempt) {
 export function getContactSource(log, attempt) {
   const extractFromObj = (obj) => {
     if (!obj || typeof obj !== 'object') return '';
-    const directVal = obj.source || obj.Source || obj.currentSource || obj.conversionSource || obj.callSource;
+    const directVal = obj.currentSource || obj.source || obj.Source || obj.conversionSource || obj.callSource;
     if (directVal && String(directVal).trim() && String(directVal).trim() !== '—') {
-      return String(directVal).trim();
+      const trimmed = String(directVal).trim();
+      const lower = trimmed.toLowerCase();
+      if (['incoming', 'incoming call', 'incoming calls', 'incoming-calls', 'outgoing', 'outgoing call', 'outgoing calls', 'outgoing-calls', 'call', 'calls', 'general', 'unspecified', 'unassigned', 'none', 'na', 'null', 'undefined', '-', 'direct / organic', 'direct / online', 'direct online', 'direct organic', 'direct', 'organic', 'online/direct', 'online direct'].includes(lower)) {
+        return '';
+      }
+      return trimmed;
     }
     return '';
   };

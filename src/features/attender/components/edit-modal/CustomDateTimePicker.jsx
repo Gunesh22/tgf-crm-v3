@@ -24,9 +24,10 @@ export const CustomDateTimePicker = ({
   onTimeChange,
   dateLabel = "Follow-up Date",
   timeLabel = "Follow-up Time (Optional)",
-  themeColor = "blue" // "blue" | "sky" | "indigo" | "emerald"
+  themeColor = "blue", // "blue" | "sky" | "indigo" | "emerald"
+  autoOpenDate = false
 }) => {
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(autoOpenDate);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
   // Date states
@@ -119,9 +120,11 @@ export const CustomDateTimePicker = ({
   useEffect(() => {
     if (showDatePicker || showTimePicker) {
       updateCoords();
+      const raf = requestAnimationFrame(updateCoords);
       window.addEventListener("scroll", updateCoords, true);
       window.addEventListener("resize", updateCoords);
       return () => {
+        cancelAnimationFrame(raf);
         window.removeEventListener("scroll", updateCoords, true);
         window.removeEventListener("resize", updateCoords);
       };
@@ -205,10 +208,14 @@ export const CustomDateTimePicker = ({
   const handleSelectDay = (dateStr) => {
     if (!dateStr) return;
     setSelectedDateStr(dateStr);
+    if (typeof onDateChange === "function") {
+      onDateChange(dateStr);
+    }
+    setShowDatePicker(false);
   };
 
   const handleConfirmDate = () => {
-    if (selectedDateStr) {
+    if (selectedDateStr && typeof onDateChange === "function") {
       onDateChange(selectedDateStr);
     }
     setShowDatePicker(false);

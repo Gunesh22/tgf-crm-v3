@@ -16,7 +16,9 @@ import {
   getContactSource, 
   renderVal, 
   parseTimestamp, 
-  getLocalDateStr 
+  getLocalDateStr,
+  sanitizeCalledFor,
+  sanitizeSource 
 } from "../../utils.jsx";
 
 /**
@@ -117,10 +119,11 @@ function InspectModalDialog({ modal, onClose, onSelectLead }) {
       const phone = getContactPhone(item, rawItem) || item.phone || "";
       const city = getContactCity(item) || item.city || "—";
       const khoji = item.khoji || item.isKhoji || "—";
-      const calledFor = item.calledFor || item.programName || "—";
+      const rawCalledFor = item.calledFor || item["Called For"] || item.programName;
+      const calledFor = sanitizeCalledFor(rawCalledFor, "—");
       const attender = item.attenderName || item.attender || item.assignedTo || "—";
-      const origin = getContactLeadOrigin(item) || item.leadOrigin || "—";
-      const source = getContactSource(item) || item.source || "—";
+      const origin = sanitizeSource(getContactLeadOrigin(item) || item.leadOrigin, "—");
+      const source = sanitizeSource(getContactSource(item) || item.source, "—");
       const remark = item.remark || item.comment || "";
       const salesStage = getCanonicalStage(item) || "1. New Lead";
       const queryStage = getCanonicalQueryStage(item) || item.queryStatus || "Query Pending";

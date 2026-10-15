@@ -18,6 +18,8 @@ import {
   CALLED_FOR_OPTIONS,
   SOURCE_OPTIONS,
   CALL_SOURCE_OPTIONS,
+  LEAD_ORIGIN_OPTIONS,
+  CURRENT_SOURCE_OPTIONS,
   getLocalDateString,
   formatFollowupDate
 } from "../../utils";
@@ -216,7 +218,7 @@ export const CallEntryTab = ({
   };
 
   // Compute active Call Purpose (SALES, QUERY, REMINDER)
-  const activePurpose = String(edited.callPurpose || "SALES").toUpperCase();
+  const activePurpose = edited.callPurpose ? String(edited.callPurpose).toUpperCase() : "";
   
   // Compute active Call Status (Connected vs Unconnected vs blank)
   const activeCallStatus = edited.callStatus || "";
@@ -268,15 +270,59 @@ export const CallEntryTab = ({
     return s;
   };
 
+  const currentLeadOriginVal = cleanSourceVal(
+    edited.leadOrigin !== undefined ? (edited.leadOrigin || "") :
+    edited.original_source !== undefined ? (edited.original_source || "") :
+    edited.originalSource !== undefined ? (edited.originalSource || "") :
+    edited["Lead Origin"] !== undefined ? (edited["Lead Origin"] || "") :
+    (
+      row?.leadOrigin ||
+      row?.original_source ||
+      row?.originalSource ||
+      row?.["Lead Origin"] ||
+      getContactLeadOrigin(edited, selectedProgram) ||
+      getContactLeadOrigin(row, selectedProgram) ||
+      ""
+    )
+  );
+
+  const leadOriginOptionsList = useMemo(() => {
+    const base = (LEAD_ORIGIN_OPTIONS || []).filter(opt => !isCallDirectionOption(opt));
+    if (currentLeadOriginVal && !base.some(o => o.toLowerCase() === currentLeadOriginVal.toLowerCase())) {
+      return [currentLeadOriginVal, ...base];
+    }
+    return base;
+  }, [optionsVersion, localSettingsVer, LEAD_ORIGIN_OPTIONS?.length, LEAD_ORIGIN_OPTIONS?.join(","), currentLeadOriginVal]);
+
+  const currentSourceVal = cleanSourceVal(
+    edited[sourceField] !== undefined ? (edited[sourceField] || "") :
+    edited.currentSource !== undefined ? (edited.currentSource || "") :
+    edited.Source !== undefined ? (edited.Source || "") :
+    edited.source !== undefined ? (edited.source || "") :
+    (
+      row?.[sourceField] ||
+      row?.currentSource ||
+      row?.Source ||
+      row?.source ||
+      getContactSource(edited, selectedProgram) ||
+      getContactSource(row, selectedProgram) ||
+      ""
+    )
+  );
+
   const callSourceOptionsList = useMemo(() => {
-    return CALL_SOURCE_OPTIONS.filter(opt => !isCallDirectionOption(opt));
-  }, [optionsVersion, localSettingsVer, CALL_SOURCE_OPTIONS.length, CALL_SOURCE_OPTIONS.join(",")]);
+    const base = (CURRENT_SOURCE_OPTIONS || CALL_SOURCE_OPTIONS || []).filter(opt => !isCallDirectionOption(opt));
+    return base;
+  }, [optionsVersion, localSettingsVer, CURRENT_SOURCE_OPTIONS?.length, CURRENT_SOURCE_OPTIONS?.join(","), CALL_SOURCE_OPTIONS?.length, CALL_SOURCE_OPTIONS?.join(",")]);
 
   const currentSourceDropdownOptions = useMemo(() => {
-    // Top N tags first, followed by all standard source options (excluding call directions)
+    // Top N tags first, followed by all standard current source options (excluding call directions)
     const combined = new Set([...contactTagsList, ...callSourceOptionsList]);
+    if (currentSourceVal && !Array.from(combined).some(o => o.toLowerCase() === currentSourceVal.toLowerCase())) {
+      combined.add(currentSourceVal);
+    }
     return Array.from(combined).filter(opt => !isCallDirectionOption(opt));
-  }, [contactTagsList, callSourceOptionsList]);
+  }, [contactTagsList, callSourceOptionsList, currentSourceVal]);
 
   const cleanProg = (str) => {
     if (!str) return "";
@@ -760,13 +806,10 @@ export const CallEntryTab = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center relative z-20">
         {/* Call Direction */}
         <div className="space-y-1.5">
-          <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center justify-between">
-            <span>Call Direction <span className="text-rose-500 font-bold">*</span></span>
-            {!edited.callType && (
-              <span className="text-[10px] text-amber-600 font-bold lowercase tracking-normal">select call type</span>
-            )}
+          <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+            Call Direction <span className="text-rose-500 font-bold">*</span>
           </label>
-          <div className={`flex gap-1.5 p-1.5 rounded-xl border transition-all ${!edited.callType ? "bg-amber-50/40 border-amber-300 ring-1 ring-amber-300/30" : "bg-slate-100/80 border-slate-200/60"}`}>
+          <div className="flex gap-1.5 p-1.5 rounded-xl border bg-slate-100/80 border-slate-200/60 transition-all">
             {["outgoing", "incoming"].map(opt => {
               const isSelected = Boolean(edited.callType) && String(edited.callType).toLowerCase().startsWith(opt);
               const activeColor = opt === "outgoing"
@@ -832,8 +875,8 @@ export const CallEntryTab = ({
               Lead Origin
             </label>
             <SearchableDropdown
-              options={callSourceOptionsList}
-              selected={cleanSourceVal(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || getContactLeadOrigin(edited, selectedProgram) || getContactLeadOrigin(row, selectedProgram) || "")}
+              options={leadOriginOptionsList}
+              selected={currentLeadOriginVal}
               onChange={val => {
                 handleChange("leadOrigin", val);
               }}
@@ -850,7 +893,7 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={currentSourceDropdownOptions}
-              selected={cleanSourceVal(edited[sourceField] || edited.Source || edited.source || getContactSource(edited, selectedProgram) || getContactSource(row, selectedProgram) || "")}
+              selected={currentSourceVal}
               onChange={val => handleChange(sourceField, val)}
               placeholder="Select Current Source..."
               colorClass="amber"
@@ -898,8 +941,8 @@ export const CallEntryTab = ({
               Lead Origin
             </label>
             <SearchableDropdown
-              options={callSourceOptionsList}
-              selected={cleanSourceVal(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || getContactLeadOrigin(edited, selectedProgram) || getContactLeadOrigin(row, selectedProgram) || "")}
+              options={leadOriginOptionsList}
+              selected={currentLeadOriginVal}
               onChange={val => {
                 handleChange("leadOrigin", val);
               }}
@@ -916,7 +959,7 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={currentSourceDropdownOptions}
-              selected={cleanSourceVal(edited[sourceField] || edited.Source || edited.source || getContactSource(edited, selectedProgram) || getContactSource(row, selectedProgram) || "")}
+              selected={currentSourceVal}
               onChange={val => handleChange(sourceField, val)}
               placeholder="Select Current Source..."
               colorClass="amber"
@@ -950,8 +993,8 @@ export const CallEntryTab = ({
               Lead Origin
             </label>
             <SearchableDropdown
-              options={callSourceOptionsList}
-              selected={cleanSourceVal(edited.leadOrigin || edited.original_source || edited.originalSource || row?.leadOrigin || row?.original_source || row?.originalSource || getContactLeadOrigin(edited, selectedProgram) || getContactLeadOrigin(row, selectedProgram) || "")}
+              options={leadOriginOptionsList}
+              selected={currentLeadOriginVal}
               onChange={val => {
                 handleChange("leadOrigin", val);
               }}
@@ -968,7 +1011,7 @@ export const CallEntryTab = ({
             </label>
             <SearchableDropdown
               options={currentSourceDropdownOptions}
-              selected={String(edited[sourceField] || edited.Source || edited.source || getContactSource(edited, selectedProgram) || getContactSource(row, selectedProgram) || "")}
+              selected={currentSourceVal}
               onChange={val => handleChange(sourceField, val)}
               placeholder="Select Current Source..."
               colorClass="amber"
@@ -998,6 +1041,14 @@ export const CallEntryTab = ({
 
         {/* Outcome Selector Column */}
         <div>
+          {/* NOTICE IF CALL PURPOSE NOT SELECTED YET */}
+          {activePrimaryResult === "Connected" && !activePurpose && (
+            <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-xs flex items-center gap-2 animate-fade-in">
+              <AlertCircle size={14} className="text-slate-500 shrink-0" />
+              <span>Please select <strong>Call Purpose</strong> above to choose the connected outcome.</span>
+            </div>
+          )}
+
           {/* CONNECTED SALES OUTCOME DROPDOWN */}
           {activePrimaryResult === "Connected" && activePurpose === "SALES" && (
             <div className="space-y-1.5 relative z-20 animate-fade-in">
@@ -1316,35 +1367,34 @@ export const CallEntryTab = ({
 
                 <div className="pt-2 border-t border-sky-200/80">
                   <CustomDateTimePicker
-                    dateValue={tempDate}
-                    timeValue={tempTime}
-                    onDateChange={setTempDate}
-                    onTimeChange={setTempTime}
+                    dateValue={tempDate || edited.callbackDate || ""}
+                    timeValue={tempTime || edited.callbackTime || ""}
+                    onDateChange={(selectedDate) => {
+                      if (!selectedDate) return;
+                      saveFollowupSnapshot();
+                      handleChange("callbackDate", selectedDate);
+                      handleChange("callbackStatus", "rescheduled");
+                      if (tempTime || edited.callbackTime) {
+                        handleChange("callbackTime", tempTime || edited.callbackTime);
+                      }
+                      setIsRescheduling(false);
+                      toast.success(`Rescheduled to ${formatFollowupDate(selectedDate)}`);
+                    }}
+                    onTimeChange={(selectedTime) => {
+                      setTempTime(selectedTime);
+                      handleChange("callbackTime", selectedTime);
+                      if (selectedTime) {
+                        toast.success(`Follow-up time updated to ${formatFollowupTime12h(selectedTime)}`);
+                      }
+                    }}
                     dateLabel="Follow-up Date"
                     timeLabel="Follow-up Time (Optional)"
                     themeColor="sky"
+                    autoOpenDate={true}
                   />
                 </div>
 
                 <div className="pt-2 border-t border-sky-200/80 flex justify-end items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!tempDate) {
-                        toast.error("Please pick a valid date");
-                        return;
-                      }
-                      saveFollowupSnapshot();
-                      handleChange("callbackDate", tempDate);
-                      handleChange("callbackTime", tempTime);
-                      handleChange("callbackStatus", "rescheduled");
-                      setIsRescheduling(false);
-                      toast.success(`Rescheduled to ${formatFollowupDate(tempDate)}`);
-                    }}
-                    className="px-4 py-1.5 bg-sky-600 hover:bg-sky-700 active:scale-95 text-white font-extrabold text-xs rounded-lg shadow-2xs transition cursor-pointer flex items-center gap-1.5"
-                  >
-                    <CheckCircle2 size={14} /> Confirm Reschedule
-                  </button>
                   <button
                     type="button"
                     onClick={() => setIsRescheduling(false)}
@@ -1453,33 +1503,29 @@ export const CallEntryTab = ({
             {isAddingNext ? (
               <div className="pt-2 border-t border-emerald-200/80 space-y-2.5 animate-fade-in">
                 <CustomDateTimePicker
-                  dateValue={tempDate}
-                  timeValue={tempTime}
-                  onDateChange={setTempDate}
-                  onTimeChange={setTempTime}
+                  dateValue={tempDate || ""}
+                  timeValue={tempTime || ""}
+                  onDateChange={(selectedDate) => {
+                    if (!selectedDate) return;
+                    saveFollowupSnapshot();
+                    handleChange("callbackDate", selectedDate);
+                    handleChange("callbackTime", tempTime || "");
+                    handleChange("callbackStatus", "pending");
+                    setIsAddingNext(false);
+                    toast.success(`Next follow-up scheduled for ${formatFollowupDate(selectedDate)}`);
+                  }}
+                  onTimeChange={(selectedTime) => {
+                    setTempTime(selectedTime);
+                    if (edited.callbackDate) {
+                      handleChange("callbackTime", selectedTime);
+                    }
+                  }}
                   dateLabel="Follow-up Date"
                   timeLabel="Follow-up Time (Optional)"
                   themeColor="emerald"
+                  autoOpenDate={true}
                 />
                 <div className="flex justify-end items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!tempDate) {
-                        toast.error("Please pick a valid date");
-                        return;
-                      }
-                      saveFollowupSnapshot();
-                      handleChange("callbackDate", tempDate);
-                      handleChange("callbackTime", tempTime);
-                      handleChange("callbackStatus", "pending");
-                      setIsAddingNext(false);
-                      toast.success(`Next follow-up scheduled for ${formatFollowupDate(tempDate)}`);
-                    }}
-                    className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-extrabold text-xs rounded-lg shadow-2xs transition cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Plus size={14} /> Confirm New Follow-up
-                  </button>
                   <button
                     type="button"
                     onClick={() => setIsAddingNext(false)}
@@ -1502,8 +1548,7 @@ export const CallEntryTab = ({
                 <button
                   type="button"
                   onClick={() => {
-                    const today = getLocalDateString();
-                    setTempDate(today);
+                    setTempDate("");
                     setTempTime("");
                     setIsAddingNext(true);
                   }}
@@ -1538,33 +1583,29 @@ export const CallEntryTab = ({
             {isAddingNext ? (
               <div className="pt-2 border-t border-slate-200 space-y-2.5 animate-fade-in">
                 <CustomDateTimePicker
-                  dateValue={tempDate}
-                  timeValue={tempTime}
-                  onDateChange={setTempDate}
-                  onTimeChange={setTempTime}
+                  dateValue={tempDate || ""}
+                  timeValue={tempTime || ""}
+                  onDateChange={(selectedDate) => {
+                    if (!selectedDate) return;
+                    saveFollowupSnapshot();
+                    handleChange("callbackDate", selectedDate);
+                    handleChange("callbackTime", tempTime || "");
+                    handleChange("callbackStatus", "pending");
+                    setIsAddingNext(false);
+                    toast.success(`New follow-up set for ${formatFollowupDate(selectedDate)}`);
+                  }}
+                  onTimeChange={(selectedTime) => {
+                    setTempTime(selectedTime);
+                    if (edited.callbackDate) {
+                      handleChange("callbackTime", selectedTime);
+                    }
+                  }}
                   dateLabel="Follow-up Date"
                   timeLabel="Follow-up Time (Optional)"
                   themeColor="blue"
+                  autoOpenDate={true}
                 />
                 <div className="flex justify-end items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!tempDate) {
-                        toast.error("Please pick a valid date");
-                        return;
-                      }
-                      saveFollowupSnapshot();
-                      handleChange("callbackDate", tempDate);
-                      handleChange("callbackTime", tempTime);
-                      handleChange("callbackStatus", "pending");
-                      setIsAddingNext(false);
-                      toast.success(`New follow-up set for ${formatFollowupDate(tempDate)}`);
-                    }}
-                    className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-extrabold text-xs rounded-lg transition cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Plus size={14} /> Confirm New Follow-up
-                  </button>
                   <button
                     type="button"
                     onClick={() => setIsAddingNext(false)}
@@ -1587,8 +1628,7 @@ export const CallEntryTab = ({
                 <button
                   type="button"
                   onClick={() => {
-                    const today = getLocalDateString();
-                    setTempDate(today);
+                    setTempDate("");
                     setTempTime("");
                     setIsAddingNext(true);
                   }}
@@ -1606,50 +1646,46 @@ export const CallEntryTab = ({
           <>
             {isAddingNext ? (
               <div className="space-y-3 p-3.5 bg-indigo-50/80 border border-indigo-200 rounded-xl animate-fade-in">
-                <div className="text-xs font-extrabold text-indigo-950">Schedule Follow-up</div>
-                <CustomDateTimePicker
-                  dateValue={tempDate}
-                  timeValue={tempTime}
-                  onDateChange={setTempDate}
-                  onTimeChange={setTempTime}
-                  dateLabel="Follow-up Date"
-                  timeLabel="Follow-up Time (Optional)"
-                  themeColor="indigo"
-                />
-                <div className="flex justify-end items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!tempDate) {
-                        toast.error("Please pick a valid date");
-                        return;
-                      }
-                      handleChange("callbackDate", tempDate);
-                      handleChange("callbackTime", tempTime);
-                      handleChange("callbackStatus", "pending");
-                      setIsAddingNext(false);
-                      toast.success(`Follow-up set for ${formatFollowupDate(tempDate)}`);
-                    }}
-                    className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-extrabold text-xs rounded-lg transition cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Plus size={14} /> Confirm Follow-up
-                  </button>
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-extrabold text-indigo-950">Schedule Follow-up</div>
                   <button
                     type="button"
                     onClick={() => setIsAddingNext(false)}
-                    className="px-3.5 py-1.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold text-xs rounded-lg transition cursor-pointer"
+                    className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 font-bold text-xs rounded-lg transition cursor-pointer"
                   >
                     Cancel
                   </button>
                 </div>
+                <CustomDateTimePicker
+                  dateValue={tempDate || ""}
+                  timeValue={tempTime || ""}
+                  onDateChange={(selectedDate) => {
+                    if (!selectedDate) return;
+                    saveFollowupSnapshot();
+                    handleChange("callbackDate", selectedDate);
+                    handleChange("callbackTime", tempTime || "");
+                    handleChange("callbackStatus", "pending");
+                    setIsAddingNext(false);
+                    toast.success(`Follow-up set for ${formatFollowupDate(selectedDate)}`);
+                  }}
+                  onTimeChange={(selectedTime) => {
+                    setTempTime(selectedTime);
+                    if (edited.callbackDate) {
+                      handleChange("callbackTime", selectedTime);
+                    }
+                  }}
+                  dateLabel="Follow-up Date"
+                  timeLabel="Follow-up Time (Optional)"
+                  themeColor="indigo"
+                  autoOpenDate={true}
+                />
               </div>
             ) : (
               <div className="flex justify-end">
                 <button
                   type="button"
                   onClick={() => {
-                    const today = getLocalDateString();
-                    setTempDate(today);
+                    setTempDate("");
                     setTempTime("");
                     setIsAddingNext(true);
                   }}

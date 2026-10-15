@@ -2,7 +2,7 @@
 import clientPromise from '../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
 import { PIPELINE_STAGES, STAGE_RANKS, getEffectiveStage } from '../../src/utils/pipelineEngine.js';
-import { requireAuth, sanitizeString } from '../lib/auth.js';
+import { requireAuth, sanitizeString, verifyAttenderAccess } from '../lib/auth.js';
 
 const VALID_STAGES = new Set([
   PIPELINE_STAGES.NEW_LEAD,
@@ -111,7 +111,12 @@ export async function executeOverrideStage(db, payload) {
     newStage: canonicalNewStage,
     reason: reason ? String(reason).trim() : "Manual Stage Override",
     status: "Manual Override",
-    remark: `[MANUAL STAGE OVERRIDE] Stage changed from "${previousStage}" to "${canonicalNewStage}" by ${changedBy || (isAdmin ? 'Admin' : 'Attender')}${reason ? `: ${reason}` : ''}`
+    remark: `[MANUAL STAGE OVERRIDE] Stage changed from "${previousStage}" to "${canonicalNewStage}" by ${changedBy || (isAdmin ? 'Admin' : 'Attender')}${reason ? `: ${reason}` : ''}`,
+    ...(payload.dataEntryOperatorId || payload.dataEntryOperatorName ? {
+      dataEntryOperatorId: payload.dataEntryOperatorId || null,
+      dataEntryOperatorName: payload.dataEntryOperatorName || null,
+      enteredBy: payload.dataEntryOperatorName || null,
+    } : {}),
   };
 
   const setFields = {
@@ -258,6 +263,18 @@ export default async function handler(req, res) {
   try {
     const client = await clientPromise;
     const db = client.db("tgf_crm");
+
+    const targetAttender = req.body?.changedByAttenderId || req.body?.attenderId;
+    const isAuthorized = await verifyAttenderAccess(db, session, targetAttender);
+    if (!isAuthorized) {
+      return res.status(403).json({ success: false, error: "Forbidden: Cannot override stage for this attender" });
+    }
+
+    if (session.role === 'data_entry') {
+      req.body.dataEntryOperatorId = session.id;
+      req.body.dataEntryOperatorName = session.name;
+    }
+
     const result = await executeOverrideStage(db, req.body || {});
     return res.status(200).json(result);
   } catch (err) {

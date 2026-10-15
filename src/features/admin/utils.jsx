@@ -109,6 +109,41 @@ export const getContactKhoji = (log, attempt) => {
   return (val && String(val).trim()) ? String(val).trim() : "";
 };
 
+export const isCallTypeOrInvalidValue = (str) => {
+  if (!str) return true;
+  const l = String(str).trim().toLowerCase();
+  return [
+    "incoming", "incoming call", "incoming calls", "incoming-calls",
+    "outgoing", "outgoing call", "outgoing calls", "outgoing-calls",
+    "call", "calls",
+    "general", "general / unassigned", "unassigned", "unspecified",
+    "direct / organic", "direct / online", "direct online", "direct organic", "direct", "organic",
+    "online/direct", "online direct",
+    "reminder", "query", "na", "none", "null", "undefined", "—", "-"
+  ].includes(l);
+};
+
+export const isCallTypeOrInvalidProgram = isCallTypeOrInvalidValue;
+export const isCallTypeOrInvalidSource = isCallTypeOrInvalidValue;
+
+export const sanitizeCalledFor = (str, fallback = "Unspecified") => {
+  if (!str) return fallback;
+  const cleaned = String(str).trim();
+  if (!cleaned || isCallTypeOrInvalidValue(cleaned)) {
+    return fallback;
+  }
+  return cleaned;
+};
+
+export const sanitizeSource = (str, fallback = "Unspecified") => {
+  if (!str) return fallback;
+  const cleaned = String(str).trim();
+  if (!cleaned || isCallTypeOrInvalidValue(cleaned)) {
+    return fallback;
+  }
+  return cleaned;
+};
+
 export const getCanonicalStage = (stageOrContact) => {
   if (!stageOrContact) return PIPELINE_STAGES.NEW_LEAD;
 
@@ -405,14 +440,16 @@ export function getCanonicalPhysicalCalls(contacts = [], filters = {}) {
       if (!matchesProgram) return;
     }
 
-    const sourceVal = getContactSource(c) || c.source || getContactValue(c, ["source", "sourse", "source of information", "source of informiton"]) || "Online/Direct";
+    const rawSourceVal = getContactSource(c) || c.currentSource || c.source || getContactValue(c, ["currentSource", "source", "sourse", "source of information", "source of informiton"]);
+    const sourceVal = sanitizeSource(rawSourceVal, "Unspecified");
     if (selectedSources.length > 0 && !selectedSources.includes(sourceVal)) return;
 
-    const leadOriginVal = getContactLeadOrigin(c) || "Direct / Organic";
+    const leadOriginVal = sanitizeSource(getContactLeadOrigin(c), "Unspecified");
     if (selectedLeadOrigins.length > 0 && !selectedLeadOrigins.includes(leadOriginVal)) return;
 
-    const calledForVal = c.calledFor || getContactValue(c, ["called for", "called_for", "calledfor"]);
-    const logCalledFors = String(calledForVal).split(",").map(x => x.trim()).filter(Boolean);
+    const rawCalledForVal = c.calledFor || getContactValue(c, ["called for", "called_for", "calledfor"]);
+    const calledForVal = sanitizeCalledFor(rawCalledForVal, "");
+    const logCalledFors = String(calledForVal).split(",").map(x => sanitizeCalledFor(x, "")).filter(Boolean);
     if (selectedCalledFors.length > 0 && !logCalledFors.some(cf => selectedCalledFors.includes(cf))) return;
 
     const khojiVal = getContactKhoji(c);
@@ -428,6 +465,7 @@ export function getCanonicalPhysicalCalls(contacts = [], filters = {}) {
 
         const ts = parseTimestamp(h.timestamp || h.createdAt || h.date);
         if (!ts) return;
+
         const timeMs = ts.getTime();
         if (startMs !== null && timeMs < startMs) return;
         if (endMs !== null && timeMs > endMs) return;
@@ -455,9 +493,9 @@ export function getCanonicalPhysicalCalls(contacts = [], filters = {}) {
           timestamp: ts,
           timeMs,
           callType,
-          calledFor: h.calledFor || calledForVal,
-          source: h.source || sourceVal,
-          leadOrigin: leadOriginVal,
+          calledFor: sanitizeCalledFor(h.calledFor || calledForVal, "Unspecified"),
+          source: sanitizeSource(h.currentSource || h.source || sourceVal, "Unspecified"),
+          leadOrigin: sanitizeSource(h.leadOrigin || leadOriginVal, "Unspecified"),
           isHistory: true
         });
       });
@@ -496,6 +534,7 @@ export const TAB_ITEMS = [
   { id: "programs", label: "Programs", icon: <FolderOpen size={18} /> },
   { id: "import", label: "Lead Distribution 📂", icon: <Upload size={18} /> },
   { id: "attenders", label: "Attenders", icon: <Users size={18} /> },
+  { id: "data-entry", label: "Data Entry Operators", icon: <Users size={18} /> },
   { id: "settings", label: "Settings", icon: <Settings size={18} /> },
 ];
 

@@ -89,6 +89,34 @@ export const CALL_SOURCE_OPTIONS = Array.from(new Set([
   ...SOURCE_OPTIONS
 ]));
 
+export const LEAD_ORIGIN_OPTIONS = [
+  ...SOURCE_OPTIONS
+];
+
+export const CURRENT_SOURCE_OPTIONS = [
+  ...SOURCE_OPTIONS
+];
+
+export const resolveLeadOriginOptions = (settings) => {
+  if (settings && Object.prototype.hasOwnProperty.call(settings, "leadOriginOptions") && Array.isArray(settings.leadOriginOptions)) {
+    return settings.leadOriginOptions;
+  }
+  if (settings && Object.prototype.hasOwnProperty.call(settings, "sourceOptions") && Array.isArray(settings.sourceOptions)) {
+    return settings.sourceOptions;
+  }
+  return LEAD_ORIGIN_OPTIONS;
+};
+
+export const resolveCurrentSourceOptions = (settings) => {
+  if (settings && Object.prototype.hasOwnProperty.call(settings, "currentSourceOptions") && Array.isArray(settings.currentSourceOptions)) {
+    return settings.currentSourceOptions;
+  }
+  if (settings && Object.prototype.hasOwnProperty.call(settings, "sourceOptions") && Array.isArray(settings.sourceOptions)) {
+    return settings.sourceOptions;
+  }
+  return CURRENT_SOURCE_OPTIONS;
+};
+
 export const CALL_DIRECTION_OPTIONS = ["outgoing", "incoming"];
 export const CALL_PURPOSE_OPTIONS = ["SALES", "QUERY", "REMINDER"];
 
@@ -942,6 +970,18 @@ export const updateDynamicOptions = (data) => {
     if (Array.isArray(data.sourceOptions)) {
       SOURCE_OPTIONS.splice(0, SOURCE_OPTIONS.length, ...data.sourceOptions);
     }
+    if (data && Object.prototype.hasOwnProperty.call(data, "leadOriginOptions") && Array.isArray(data.leadOriginOptions)) {
+      LEAD_ORIGIN_OPTIONS.splice(0, LEAD_ORIGIN_OPTIONS.length, ...data.leadOriginOptions);
+    } else if (Array.isArray(data.sourceOptions)) {
+      LEAD_ORIGIN_OPTIONS.splice(0, LEAD_ORIGIN_OPTIONS.length, ...data.sourceOptions);
+    }
+
+    if (data && Object.prototype.hasOwnProperty.call(data, "currentSourceOptions") && Array.isArray(data.currentSourceOptions)) {
+      CURRENT_SOURCE_OPTIONS.splice(0, CURRENT_SOURCE_OPTIONS.length, ...data.currentSourceOptions);
+    } else if (Array.isArray(data.sourceOptions)) {
+      CURRENT_SOURCE_OPTIONS.splice(0, CURRENT_SOURCE_OPTIONS.length, ...data.sourceOptions);
+    }
+
     if (Array.isArray(data.calledForOptions)) {
       CALLED_FOR_OPTIONS.splice(0, CALLED_FOR_OPTIONS.length, ...data.calledForOptions);
     }
@@ -959,7 +999,7 @@ export const updateDynamicOptions = (data) => {
     }
 
     const freshCallSources = Array.from(new Set([
-      ...SOURCE_OPTIONS
+      ...CURRENT_SOURCE_OPTIONS
     ]));
     CALL_SOURCE_OPTIONS.splice(0, CALL_SOURCE_OPTIONS.length, ...freshCallSources);
   }

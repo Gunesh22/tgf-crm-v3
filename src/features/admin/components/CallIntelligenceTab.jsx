@@ -18,7 +18,8 @@ import {
   getCanonicalRegistrations, 
   getContactSource, 
   getContactLeadOrigin,
-  getCanonicalQueryStage 
+  getCanonicalQueryStage,
+  sanitizeSource 
 } from "../utils.jsx";
 import { PIPELINE_STAGES, QUERY_PIPELINE_STAGES } from "../../../utils/pipelineEngine";
 import { EditModal } from "../../attender/components/EditModal";
@@ -394,9 +395,9 @@ export default function CallIntelligenceTab({
             status: h.status || contact.status || "Pending",
             callType: (h.callType || contact.callType || "outgoing").toLowerCase(),
             callPurpose: h.callPurpose || h.purpose || "SALES",
-            source: getContactSource(contact, h) || h.source || contact.source || "Online/Direct",
-            leadOrigin: getContactLeadOrigin(contact, h) || "Direct / Organic",
-            calledFor: h.calledFor || contact.calledFor || contact.programName || "",
+            source: sanitizeSource(getContactSource(contact, h) || h.source || contact.source, "Unspecified"),
+            leadOrigin: sanitizeSource(getContactLeadOrigin(contact, h), "Unspecified"),
+            calledFor: h.calledFor || contact.calledFor || contact.programName || "Unspecified",
             programId: h.programId || h.calledForKey || contact.programId || contact.calledForKey || "",
             attenderId: attId,
             attenderName: attName,
@@ -425,7 +426,7 @@ export default function CallIntelligenceTab({
       if (!matchesProgramRecord(ev, selectedPrograms, programs)) return false;
 
       if (selectedSources.length > 0) {
-        const evSource = ev.source || getContactSource(ev) || "Online/Direct";
+        const evSource = ev.source || getContactSource(ev) || "Unspecified";
         if (!selectedSources.includes(evSource)) return false;
       }
 
@@ -494,7 +495,7 @@ export default function CallIntelligenceTab({
       if (!matchesProgramRecord(c, selectedPrograms, programs)) return false;
 
       if (selectedSources.length > 0) {
-        const cSource = getContactSource(c) || "Online/Direct";
+        const cSource = getContactSource(c) || "Unspecified";
         if (!selectedSources.includes(cSource)) return false;
       }
 
@@ -670,8 +671,8 @@ export default function CallIntelligenceTab({
       const count = calls.length;
 
       // Source & Origin Matrix aggregation
-      const cSource = getContactSource(c) || "Unspecified";
-      const cOrigin = getContactLeadOrigin(c) || "Direct / Organic";
+      const cSource = sanitizeSource(getContactSource(c), "Unspecified");
+      const cOrigin = sanitizeSource(getContactLeadOrigin(c), "Unspecified");
 
       const recordToMatrix = (map, key) => {
         if (!map.has(key)) {

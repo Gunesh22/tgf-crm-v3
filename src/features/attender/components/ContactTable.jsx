@@ -379,7 +379,7 @@ export function ContactTable({
                           if (stage?.includes("Registered") || stage?.includes("Won")) return "bg-emerald-50 text-emerald-700 border-emerald-200";
                           if (stage?.includes("Alumni") || stage?.toLowerCase()?.includes("alumni")) return "bg-violet-50 text-violet-700 border-violet-200";
                           if (stage?.includes("Nurture") || stage?.includes("Interested")) return "bg-purple-50 text-purple-700 border-purple-200";
-                          if (stage?.includes("Attempting")) return "bg-amber-50 text-amber-700 border-amber-200";
+                          if (stage?.includes("Attempting")) return "bg-teal-50 text-teal-800 border-teal-200";
                           if (stage?.includes("Information") || stage?.includes("Pending")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
                           if (stage?.includes("Future") || stage?.includes("Pool")) return "bg-sky-50 text-sky-700 border-sky-200";
                           return "bg-slate-100 text-slate-700 border-slate-200";

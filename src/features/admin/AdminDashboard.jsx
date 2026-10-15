@@ -10,6 +10,7 @@ import DashboardTab from "./components/DashboardTab";
 import MonthlyReportTab from "./components/MonthlyReportTab";
 import ProgramsTab from "./components/ProgramsTab";
 import AttendersTab from "./components/AttendersTab";
+import DataEntryTab from "./components/DataEntryTab";
 import AbhivyaktiTab from "./components/AbhivyaktiTab";
 import SettingsTab from "./components/SettingsTab";
 import AllAttendersSheetTab from "./components/AllAttendersSheetTab";
@@ -28,7 +29,16 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
   const [attenders, setAttenders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [settingsOptions, setSettingsOptions] = useState({ statusOptions: [], sourceOptions: [], calledForOptions: [] });
+  const [settingsOptions, setSettingsOptions] = useState(() => {
+    try {
+      const cached = typeof window !== "undefined" ? localStorage.getItem("crm_settings_options_cache") : null;
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && typeof parsed === "object") return parsed;
+      }
+    } catch (e) {}
+    return null;
+  });
 
   const [callLogs, setCallLogs] = useState([]);
   const [callLogsLoading, setCallLogsLoading] = useState(true);
@@ -367,6 +377,7 @@ export default function AdminPanel({ onExit, onAttendersChange }) {
               {activeTab === "programs" && <ProgramsTab programs={programs} attenders={attenders} onReloadPrograms={refreshAll} />}
               {activeTab === "import" && <ImportContacts programs={programs} onImportComplete={refreshAll} />}
               {activeTab === "attenders" && <AttendersTab attenders={attenders} programs={programs} onReloadAttenders={refreshAll} />}
+              {activeTab === "data-entry" && <DataEntryTab attenders={attenders} onReloadAttenders={refreshAll} />}
               {activeTab === "abhivyakti" && (
                 <AbhivyaktiTab
                   registrations={registrations}

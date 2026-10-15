@@ -1398,6 +1398,115 @@ The discrepancy is caused by two conflicting definitions of "Incoming" in `Month
 3. **Backend Database Consistency**:
    - In `api/_contacts/override-stage.js`, unconditionally clears `closedReason` to `null` and updates `programStates` and `programs` to `Query Desk`.
 
+---
+
+## 60. Data Entry Operator Feature (`data_entry` Role)
+
+### 1. Architectural Overview & Objective
+- Added the `data_entry` role to the CRM to allow dedicated operators to log in with their own credentials and add calls/leads on behalf of attenders assigned to them by the Admin.
+- Reuses existing call sheets, EditModal, contact creation, and pipeline engines without duplicating workspaces or fracturing business logic.
+
+### 2. Admin Management (`DataEntryTab.jsx`)
+- Dedicated **Data Entry Operators** tab in the Admin panel.
+- Allows Admins to:
+  - Create operators with custom/random passwords.
+  - Assign / re-assign attenders via multi-select checkboxes (storing normalized `String(att.id)`).
+  - Toggle Active / Deactivated status.
+  - Delete operators.
+- Operators are excluded from regular attender call sheets and caller statistics.
+
+### 3. Server-Side Authentication & Access Control (`api/lib/auth.js`)
+- **Live Permission Enforcement (`verifyAttenderAccess`)**:
+  - Validates operator access live against MongoDB on every request.
+  - Checks `isActive !== false` and verifies that the target `attenderId` exists in `operator.assignedAttenders`.
+  - Uses strict canonical ID comparison (`String(att.id)`), eliminating display-name guessing/fallbacks.
+
+### 4. UI Workflow & Authoritative Selection (`EditModal.jsx`)
+- **Clean Sheet Header**: Removed top-bar dropdowns so the sheet view remains clean.
+- **Authoritative Attender Selection**:
+  - When a data entry operator clicks **Add Call Entry** (or opens a contact), a compact, professional slate banner appears at the top:
+    `Entering on behalf of Attender: *`
+  - Uses `SearchableDropdown` with an integrated search bar so operators can search and select from their assigned attenders.
+  - Selection is mandatory before saving.
+
+### 5. Dual Attribution in Database
+- **Caller Credit (Selected Attender)**:
+  - `attenderId` / `attenderName`: Selected caller (e.g., `Test`)
+  - `leadOwner` / `leadOwnerName`: Selected caller
+  - `callAttenderId` / `callAttenderName`: Selected caller
+  - `attenderStates[attenderId]`: Scoped to the selected caller
+- **Audit Tracking (Data Entry Operator)**:
+  - `dataEntryOperatorId`: Operator's authenticated ID
+  - `dataEntryOperatorName`: Operator's authenticated name
+  - `enteredBy`: Operator's name on `history` items
+- **Protected Write Paths**:
+  - `api/_contacts/log-call.js`
+  - `api/_contacts/create-incoming.js`
+  - `api/_contacts/override-stage.js`
+
+### 6. Analytics & Operator Dashboard (`DashboardTab.jsx`)
+- Callers receive credit in the **Attender Breakdown** table.
+- A separate **Per Data Entry Operator Breakdown** table counts physical entry events (`log.isHistory === true` where `dataEntryOperatorId` matches).
+- Multiple calls logged on a single contact count as distinct entry events without double-counting contact documents or inflating caller statistics.
+
+---
+
+## 20. Stage Palette & Badge Styling Refinements
+
+- **`2. Attempting Contact` Palette Update**:
+  - Replaced yellow/amber (`bg-amber-50`, `bg-amber-100`) with **Teal** (`bg-teal-50 text-teal-800 border-teal-200` in table views and `bg-teal-100 text-teal-900 border-teal-300` in modals).
+  - Teal was selected because all other Tailwind core palettes were already taken by other pipeline stages (Slate = New Lead, Blue/Indigo = Info Given, Purple = Nurture, Sky = Future Pool, Emerald = Registered/Won, Rose = Closed/Lost, Gray = Closed/Invalid, Orange = Query Desk, Violet/Cyan = Alumni).
+  - Updated consistently across `ContactTable.jsx`, `pipelineEngine.js`, and `StageInfoModal.jsx`.
+
+---
+
+## 21. Add Call Entry — Unselected Attender & Call Purpose
+
+- **No Default Attender for Data Entry Operators**:
+  - When clicking **Add Call Entry**, `attenderId` and `attenderName` are initialized empty (`""`).
+  - In `EditModal.jsx`, `allowAttenderSelection` prevents auto-filling from the active workspace attender props.
+  - The banner displays `-- Search & Select Attender --` with a `select attender` prompt and enforces selection upon saving.
+- **No Default Call Purpose**:
+  - Previously defaulted to `"SALES"`.
+  - Now starts empty (`""`) on new call entries.
+  - The dropdown displays `Select Call Purpose...` with a `select call purpose` prompt.
+  - If a connected outcome is chosen before setting Call Purpose, a helpful notice instructs the user to select Call Purpose first.
+
+---
+
+## 22. Admin Dashboard & Data Entry Operator UI Redesigns
+
+### 1. Per Attender Breakdown Drill-Down Modal (`DashboardTab.jsx`)
+- Polished the drill-down modal layout (`selectedAttenderDetails`) with a clean CRM theme:
+  - Header: Clickable attender name, subtle date range secondary subtitle, and close button.
+  - Controls: Search input with clear button and a styled **Total Counted Items** badge.
+  - Table: Sticky headers, compact rows, status badges (Reg.Done, Interested, Pending, etc.), call timestamps formatted in IST, and tooltip-enabled truncated remarks.
+  - Responsive layout constrained within the viewport (`h-[90vh] max-h-[850px]`) with smooth vertical and horizontal scrolling.
+
+### 2. Per Data Entry Operator Breakdown Inspect Modal & Table (`DashboardTab.jsx`)
+- **Inspect Drill-down Modal**:
+  - Added full drill-down inspection for the **Per Data Entry Operator Breakdown** table (`selectedOperatorDetails`).
+  - Clicking any operator row opens a modal listing all distinct entry events logged by that operator (`log.isHistory === true`).
+  - Columns: `#`, `Lead Name`, `Phone`, `On Behalf Of (Attender)`, `Status`, `Call Time (IST)`, `Call Type`, and `Remark`.
+  - Supports live search filtering across Lead Name, Phone, Status, Attender, and Remark.
+- **Table Streamlining**:
+  - Removed the `Assigned Attenders` column from the dashboard table to keep the high-level summary compact and scannable.
+  - Added a `🔍 Inspect` indicator next to operator names and made rows interactive.
+
+### 3. Data Entry Operators Tab Redesign (`DataEntryTab.jsx`)
+- **Top Action Button & Popup Modal**:
+  - Collapsed the large inline creation card into an elegant **`+ Create New Operator`** action button located in the top header banner.
+  - Clicking the button opens a modern popup modal (`isCreateModalOpen`) with fields for Operator Name and Password.
+- **Attender List View with Search**:
+  - Replaced the wide multi-column checkbox grid with a compact, scrollable **vertical list view**.
+  - Integrated an instant search bar (`Search attenders by name...`) with clear button.
+  - Added a live selection count badge (`X of Y`) with **Select All** and **Clear** quick toggles.
+  - Synchronized this list view and search bar to the **Edit Operator** modal as well.
+- **Full-Screen Blur & Portal (`createPortal`)**:
+  - Portaled both creation and edit modals to `document.body` via `createPortal`.
+  - Applied `fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm`, ensuring the backdrop blurs the entire viewport from edge to edge (including the left sidebar and header).
+
+
 
 
 

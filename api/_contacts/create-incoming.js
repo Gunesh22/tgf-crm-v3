@@ -4,7 +4,7 @@
 import clientPromise from '../lib/mongodb.js';
 import { buildPhoneDuplicateFilter } from '../lib/phoneNormalizer.js';
 import { executeLogCall, evaluateStageServer } from './log-call.js';
-import { requireAuth, sanitizeString, isSameAttender } from '../lib/auth.js';
+import { requireAuth, sanitizeString, isSameAttender, verifyAttenderAccess } from '../lib/auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -17,26 +17,25 @@ export default async function handler(req, res) {
   try {
     const { attenderId, attenderName, programId, programName, ...updates } = req.body || {};
 
+    const client = await clientPromise;
+    const db     = client.db('tgf_crm');
+
     let cleanAttenderId = sanitizeString(attenderId);
     let cleanAttenderName = sanitizeString(attenderName);
 
-    if (session.role !== 'admin' && !(session.id && session.id.toLowerCase().includes('admin'))) {
-      if (!isSameAttender(cleanAttenderId, session)) {
-        console.log(`[CREATE-INCOMING AUTOCORRECT] Overriding requested attender "${cleanAttenderId}" with logged-in attender "${session.name} (${session.id})"`);
-        cleanAttenderId = session.id;
-        cleanAttenderName = session.name;
-        req.body.attenderId = session.id;
-        req.body.attenderName = session.name;
-      }
-    } else if (!isSameAttender(cleanAttenderId, session)) {
-      return res.status(403).json({ success: false, error: 'Forbidden: Cannot create incoming call for another attender' });
+    const isAuthorized = await verifyAttenderAccess(db, session, cleanAttenderId);
+    if (!isAuthorized) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Cannot create lead for this attender' });
+    }
+
+    if (session.role === 'data_entry') {
+      req.body.dataEntryOperatorId = session.id;
+      req.body.dataEntryOperatorName = session.name;
     }
 
     const label = cleanAttenderName ? `${cleanAttenderName} (${cleanAttenderId})` : cleanAttenderId;
     console.log(`[ATTENDER API REQ] /api/contacts/create-incoming | Attender: "${label}" | Action: "Create Lead"`);
 
-    const client = await clientPromise;
-    const db     = client.db('tgf_crm');
     const nowIso = new Date().toISOString();
 
     const phoneVal  = String(updates.Phone  || updates.phone  || '').trim();
@@ -132,6 +131,11 @@ export default async function handler(req, res) {
       leadOrigin:        leadOriginVal,
       source:            currentSourceVal,
       timestamp:         nowIso,
+      ...(session.role === 'data_entry' ? {
+        dataEntryOperatorId: session.id,
+        dataEntryOperatorName: session.name,
+        enteredBy: session.name,
+      } : {}),
     };
 
     const newContact = {

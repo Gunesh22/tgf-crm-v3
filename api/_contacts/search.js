@@ -1,5 +1,5 @@
 import clientPromise from '../lib/mongodb.js';
-import { requireAuth, sanitizeString, isSameAttender } from '../lib/auth.js';
+import { requireAuth, sanitizeString, isSameAttender, verifyAttenderAccess } from '../lib/auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -17,15 +17,18 @@ export default async function handler(req, res) {
     const page = req.query?.page || 1;
     const limit = req.query?.limit || 10000;
 
+    const client = await clientPromise;
+    const db = client.db('tgf_crm');
+
     // IDOR Enforcement for non-admin users
-    if (rawAttenderId && !isSameAttender(rawAttenderId, session)) {
-      return res.status(403).json({ success: false, error: 'Forbidden: Access denied to other attender data' });
+    if (rawAttenderId) {
+      const isAuthorized = await verifyAttenderAccess(db, session, rawAttenderId);
+      if (!isAuthorized) {
+        return res.status(403).json({ success: false, error: 'Forbidden: Access denied to other attender data' });
+      }
     }
 
     const attenderId = rawAttenderId;
-
-    const client = await clientPromise;
-    const db = client.db('tgf_crm');
 
     // Ensure background indexes for fast queries
     db.collection('contacts').createIndex({ updatedAt: -1 }, { background: true }).catch(() => {});

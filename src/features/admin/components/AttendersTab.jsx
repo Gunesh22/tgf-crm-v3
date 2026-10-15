@@ -17,7 +17,7 @@ import { ReassignModal } from "./ReassignModal";
 export default function AttendersTab({ programs, attenders, onReloadAttenders }) {
   const EXCLUDED_ATTENDER_NAMES = React.useMemo(() => ["admin", "super admin", "administrator"], []);
   const filteredAttenders = React.useMemo(() => {
-    return (attenders || []).filter(a => a.role !== 'admin' && !EXCLUDED_ATTENDER_NAMES.includes((a.name || "").toLowerCase().trim()));
+    return (attenders || []).filter(a => a.role !== 'admin' && a.role !== 'data_entry' && !EXCLUDED_ATTENDER_NAMES.includes((a.name || "").toLowerCase().trim()));
   }, [attenders, EXCLUDED_ATTENDER_NAMES]);
 
   const [newAttenderName, setNewAttenderName] = useState("");
@@ -102,6 +102,17 @@ export default function AttendersTab({ programs, attenders, onReloadAttenders })
       onReloadAttenders();
     } catch (err) {
       toast.error("Failed to reset password: " + err.message);
+    }
+  };
+
+  const handleToggleActive = async (attender) => {
+    const nextActive = attender.isActive === false;
+    try {
+      await updateAttender(attender.id, { isActive: nextActive });
+      toast.success(`Attender "${attender.name}" is now ${nextActive ? "Active" : "Deactivated"}`);
+      if (onReloadAttenders) onReloadAttenders();
+    } catch (err) {
+      toast.error(err.message || "Failed to update status");
     }
   };
 
@@ -323,6 +334,20 @@ export default function AttendersTab({ programs, attenders, onReloadAttenders })
                     </div>
 
                     <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleActive(a)}
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition-colors cursor-pointer mr-1 ${
+                          a.isActive !== false
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100/70"
+                            : "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100/70"
+                        }`}
+                        title="Click to toggle active/deactivated status"
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${a.isActive !== false ? "bg-emerald-500" : "bg-rose-500"}`} />
+                        {a.isActive !== false ? "Active" : "Deactivated"}
+                      </button>
+
                       <button onClick={() => handleResetPassword(a)}
                         className="h-7 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded text-xs flex items-center gap-1 transition-colors cursor-pointer"
                         title="Generate new random 6-digit password">

@@ -3,19 +3,23 @@ import { createPortal } from "react-dom";
 import { 
   BarChart3, Users, PhoneCall, TrendingUp, Award, Filter, X, Download, 
   ArrowRight, CheckCircle2, AlertTriangle, Clock, RefreshCw, Layers, ShieldCheck, HelpCircle,
-  ChevronDown, ChevronUp, Info, UserCheck, Eye, Search, Check, Pencil
+  ChevronDown, ChevronUp, Info, UserCheck, Eye, Search, Check, Pencil,
+  PieChart as PieChartIcon, LayoutGrid
 } from "lucide-react";
 import { 
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid 
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
+  PieChart, Pie, Cell
 } from "recharts";
 import { 
-  parseTimestamp, renderVal, getCanonicalStatus, classifyCallStatus, COLORS, getContactName, getContactPhone, getContactCity, getCanonicalStage, getLocalDateStr, getCanonicalPhysicalCalls, getCanonicalRegistrations, getCanonicalQueryStage, getContactLeadOrigin, getContactSource 
+  parseTimestamp, renderVal, getCanonicalStatus, classifyCallStatus, COLORS, getContactName, getContactPhone, getContactCity, getCanonicalStage, getLocalDateStr, getCanonicalPhysicalCalls, getCanonicalRegistrations, getCanonicalQueryStage, getContactLeadOrigin, getContactSource,
+  isCallTypeOrInvalidProgram, sanitizeCalledFor, isCallTypeOrInvalidSource, sanitizeSource 
 } from "../utils.jsx";
 import { PIPELINE_STAGES, QUERY_PIPELINE_STAGES, getEffectiveStage } from "../../../utils/pipelineEngine";
 import { EditModal } from "../../attender/components/EditModal";
 import { InspectModal } from "./inspect-modal";
 import { toast } from "react-hot-toast";
 import { updateCallCenterOptions } from "../../../lib/db";
+import { resolveLeadOriginOptions, resolveCurrentSourceOptions } from "../../attender/utils.js";
 
 // Multi-select dropdown component
 function MultiSelect({ options, selected, onChange, placeholder, allLabel = "All" }) {
@@ -262,8 +266,7 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
   const [selectedPurposes, setSelectedPurposes] = useState([]);
   const [selectedPipelineStages, setSelectedPipelineStages] = useState([]);
   const [selectedOutcomes, setSelectedOutcomes] = useState([]);
-
-
+  const [pipelineViewMode, setPipelineViewMode] = useState("strip"); // "strip" (Cards View) | "graph" (Graphical View)
 
   // Drill-down Modals
   const [drillDownModal, setDrillDownModal] = useState(null); // { title: string, type: string, items: Array }
@@ -369,9 +372,9 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
             status: h.status || contact.status || "Pending",
             callType: (h.callType || contact.callType || "outgoing").toLowerCase(),
             purpose: getCallPurpose(h, contact),
-            source: getContactSource(contact, h) || h.source || contact.source || "Online/Direct",
-            leadOrigin: getContactLeadOrigin(contact, h) || "Direct / Organic",
-            calledFor: h.calledFor || contact.calledFor || contact.programName || "",
+            source: sanitizeSource(getContactSource(contact, h) || h.source || contact.source, "Unspecified"),
+            leadOrigin: sanitizeSource(getContactLeadOrigin(contact, h), "Unspecified"),
+            calledFor: sanitizeCalledFor(h.calledFor || contact.calledFor || contact.programName, ""),
             programId: h.programId || h.calledForKey || contact.programId || contact.calledForKey || "",
             calledForKey: h.calledForKey || h.programId || contact.calledForKey || contact.programId || "",
             attenderId: attId,
@@ -407,12 +410,12 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
       if (!matchesProgramRecord(ev, selectedProgramIds, programs)) return false;
 
       if (selectedSources.length > 0) {
-        const evSource = ev.source || getContactSource(ev) || "Online/Direct";
+        const evSource = ev.source || getContactSource(ev) || "Unspecified";
         if (!selectedSources.includes(evSource)) return false;
       }
 
       if (selectedLeadOrigins.length > 0) {
-        const evLeadOrigin = ev.leadOrigin || getContactLeadOrigin(ev) || "Direct / Organic";
+        const evLeadOrigin = sanitizeSource(ev.leadOrigin || getContactLeadOrigin(ev), "Unspecified");
         if (!selectedLeadOrigins.includes(evLeadOrigin)) return false;
       }
 
@@ -460,12 +463,12 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
       if (!matchesProgramRecord(c, selectedProgramIds, programs)) return false;
 
       if (selectedSources.length > 0) {
-        const cSource = getContactSource(c) || "Online/Direct";
+        const cSource = getContactSource(c) || "Unspecified";
         if (!selectedSources.includes(cSource)) return false;
       }
 
       if (selectedLeadOrigins.length > 0) {
-        const cLeadOrigin = getContactLeadOrigin(c) || "Direct / Organic";
+        const cLeadOrigin = sanitizeSource(getContactLeadOrigin(c), "Unspecified");
         if (!selectedLeadOrigins.includes(cLeadOrigin)) return false;
       }
 
@@ -630,11 +633,107 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
     filteredContacts.forEach(c => {
       const stage = getCanonicalStage(c);
       if (stage === PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING || stage === "Previous Program Pending") {
-        const prog = c.previousProgram || c.Source || c.source || "Unspecified";
+        const prog = sanitizeCalledFor(c.previousProgram || c.calledFor || c.programName, "Unspecified");
         map[prog] = (map[prog] || 0) + 1;
       }
     });
     return Object.entries(map).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+  }, [filteredContacts]);
+
+  const CALLED_FOR_PALETTE = [
+    "#4f46e5", "#06b6d4", "#10b981", "#f59e0b", "#ec4899", 
+    "#8b5cf6", "#3b82f6", "#14b8a6", "#f97316", "#ef4444",
+    "#6366f1", "#84cc16", "#a855f7", "#0ea5e9", "#eab308",
+    "#d946ef", "#059669", "#dc2626", "#2563eb", "#7c3aed"
+  ];
+
+  const stageGraphicalData = useMemo(() => {
+    const stageMap = {};
+    const globalCalledForCounts = {};
+
+    const STAGES_LIST = [
+      { key: "new_lead", label: "1. New Lead", stageValue: PIPELINE_STAGES.NEW_LEAD },
+      { key: "attempting", label: "2. Attempting Contact", stageValue: PIPELINE_STAGES.ATTEMPTING },
+      { key: "info_given", label: "3. Information Given", stageValue: PIPELINE_STAGES.INFO_GIVEN },
+      { key: "nurture", label: "4. Nurture / Interested", stageValue: PIPELINE_STAGES.NURTURE_INTERESTED },
+      { key: "prev_pending", label: "Previous Program Pending", stageValue: PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING },
+      { key: "future_pool", label: "5. Future Pool", stageValue: PIPELINE_STAGES.FUTURE_POOL },
+      { key: "registered", label: "6. Registered / Won", stageValue: PIPELINE_STAGES.REGISTERED_WON, isWon: true },
+      { key: "alumni", label: "Existing Alumni", stageValue: "Existing Alumni" },
+      { key: "closed_lost", label: "Closed / Lost", stageValue: PIPELINE_STAGES.CLOSED_LOST },
+      { key: "closed_invalid", label: "Closed / Invalid", stageValue: PIPELINE_STAGES.CLOSED_INVALID }
+    ];
+
+    STAGES_LIST.forEach(st => {
+      stageMap[st.stageValue] = {
+        key: st.key,
+        label: st.label,
+        stageValue: st.stageValue,
+        isWon: st.isWon,
+        totalPeople: 0,
+        calledForMap: {},
+        contacts: [],
+        contactsByCalledFor: {}
+      };
+    });
+
+    (filteredContacts || []).forEach(c => {
+      const stage = getCanonicalStage(c);
+      if (!stageMap[stage]) {
+        stageMap[stage] = {
+          key: stage,
+          label: stage,
+          stageValue: stage,
+          isWon: false,
+          totalPeople: 0,
+          calledForMap: {},
+          contacts: [],
+          contactsByCalledFor: {}
+        };
+      }
+      const sm = stageMap[stage];
+      sm.totalPeople++;
+      sm.contacts.push(c);
+
+      const cfRaw = c.calledFor || c["Called For"] || c.programName;
+      const cf = sanitizeCalledFor(cfRaw, "Unspecified");
+
+      if (!sm.calledForMap[cf]) {
+        sm.calledForMap[cf] = 0;
+        sm.contactsByCalledFor[cf] = [];
+      }
+      sm.calledForMap[cf]++;
+      sm.contactsByCalledFor[cf].push(c);
+
+      globalCalledForCounts[cf] = (globalCalledForCounts[cf] || 0) + 1;
+    });
+
+    const uniqueCalledFors = Object.keys(globalCalledForCounts).sort((a, b) => globalCalledForCounts[b] - globalCalledForCounts[a]);
+    const calledForColorMap = {};
+    uniqueCalledFors.forEach((cf, idx) => {
+      calledForColorMap[cf] = CALLED_FOR_PALETTE[idx % CALLED_FOR_PALETTE.length];
+    });
+
+    const groups = Object.values(stageMap).map(sm => {
+      const slices = Object.entries(sm.calledForMap).map(([cfName, count]) => ({
+        name: cfName,
+        value: count,
+        percentage: sm.totalPeople > 0 ? ((count / sm.totalPeople) * 100).toFixed(1) : "0.0"
+      })).sort((a, b) => b.value - a.value);
+
+      return {
+        ...sm,
+        sources: slices
+      };
+    }).filter(sm => sm.totalPeople > 0 || STAGES_LIST.some(sl => sl.stageValue === sm.stageValue));
+
+    return {
+      groups,
+      uniqueCalledFors,
+      globalCalledForCounts,
+      calledForColorMap,
+      totalFunnelPeople: (filteredContacts || []).length
+    };
   }, [filteredContacts]);
 
   // Stage Matrix for Calls vs People
@@ -879,18 +978,26 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
 
   const leadOriginOptions = useMemo(() => {
     const origins = new Set();
+    const configOpts = resolveLeadOriginOptions(settingsOptions);
+    (configOpts || []).forEach(s => {
+      if (s && !isCallTypeOrInvalidSource(s)) origins.add(s);
+    });
     (callLogs || []).forEach(log => {
-      const val = getContactLeadOrigin(log) || "Direct / Organic";
-      origins.add(val);
+      const val = sanitizeSource(getContactLeadOrigin(log), "");
+      if (val) origins.add(val);
     });
     return Array.from(origins).sort().map(s => ({ value: s, label: s }));
-  }, [callLogs]);
+  }, [callLogs, settingsOptions]);
 
   const sourceOptions = useMemo(() => {
-    const sources = new Set(settingsOptions?.sourceOptions || []);
+    const sources = new Set();
+    const configOpts = resolveCurrentSourceOptions(settingsOptions);
+    (configOpts || []).forEach(s => {
+      if (s && !isCallTypeOrInvalidSource(s)) sources.add(s);
+    });
     (callLogs || []).forEach(log => {
-      const val = getContactSource(log) || "Online/Direct";
-      sources.add(val);
+      const val = sanitizeSource(getContactSource(log) || log.currentSource || log.source, "");
+      if (val) sources.add(val);
     });
     return Array.from(sources).sort().map(s => ({ value: s, label: s }));
   }, [callLogs, settingsOptions]);
@@ -898,13 +1005,13 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
   const calledForOptions = useMemo(() => {
     const values = new Set();
     (settingsOptions?.calledForOptions || []).forEach(opt => {
-      if (opt && typeof opt === "object" && opt.name) values.add(opt.name);
-      else if (typeof opt === "string") values.add(opt);
+      const name = opt && typeof opt === "object" ? opt.name : opt;
+      if (name && !isCallTypeOrInvalidProgram(name)) values.add(String(name).trim());
     });
     (callLogs || []).forEach(log => {
       const cfKey = Object.keys(log).find(k => ["calledfor", "called for", "programname"].includes(k.toLowerCase()));
       const val = cfKey ? String(log[cfKey] || "").trim() : "";
-      if (val) values.add(val);
+      if (val && !isCallTypeOrInvalidProgram(val)) values.add(val);
     });
     return Array.from(values).sort().map(v => ({ value: v, label: v }));
   }, [callLogs, settingsOptions]);
@@ -1222,121 +1329,305 @@ export default function PipelineCallsTab({ callLogs = [], registrations = [], pr
         </div>
 
         {/* Section Header: Sales Pipeline */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-slate-100">
+            <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
-              SALES PIPELINE
-            </h3>
-            <span className="text-xs font-bold text-slate-500">
-              {Object.values(pipelineStageCounts).reduce((a, b) => a + b, 0)} Leads
-            </span>
-          </div>
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                SALES PIPELINE
+              </h3>
+              <span className="text-xs font-bold text-slate-500">
+                • {Object.values(pipelineStageCounts).reduce((a, b) => a + b, 0)} Leads
+              </span>
+            </div>
 
-          {/* Continuous Strip Sales Pipeline */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 bg-slate-50/70 rounded-xl border border-slate-200/80 overflow-hidden">
-            {[
-              { key: "new_lead", label: "New Lead", stageValue: PIPELINE_STAGES.NEW_LEAD },
-              { key: "attempting", label: "Attempting Contact", stageValue: PIPELINE_STAGES.ATTEMPTING },
-              { key: "info_given", label: "Information Given", stageValue: PIPELINE_STAGES.INFO_GIVEN },
-              { key: "nurture", label: "Nurture / Interested", stageValue: PIPELINE_STAGES.NURTURE_INTERESTED },
-              { key: "future_pool", label: "Future Pool", stageValue: PIPELINE_STAGES.FUTURE_POOL },
-              { key: "registered", label: "Registered / Won", stageValue: PIPELINE_STAGES.REGISTERED_WON, isWon: true }
-            ].map(st => {
-              const count = pipelineStageCounts[st.stageValue] || 0;
-              const totalFunnel = Object.values(pipelineStageCounts).reduce((a, b) => a + b, 0);
-              const pct = totalFunnel > 0 ? ((count / totalFunnel) * 100).toFixed(1) : "0.0";
-
-              return (
-                <div
-                  key={st.key}
-                  onClick={() => handleStageClick(st.label, st.stageValue)}
-                  className={`p-3.5 hover:bg-white transition-all cursor-pointer group flex flex-col justify-between ${
-                    st.isWon ? "bg-emerald-50/40" : ""
-                  }`}
-                >
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate block">
-                    {st.label}
-                  </span>
-                  <div className="mt-2 flex items-baseline justify-between">
-                    <span className={`text-2xl font-black transition-transform group-hover:scale-105 origin-left ${
-                      st.isWon ? "text-emerald-600" : count > 0 ? "text-slate-900" : "text-slate-400"
-                    }`}>
-                      {count}
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-400">
-                      {pct}%
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Compact Previous Program Pending Insight */}
-        {prevProgPendingBreakdown.length > 0 && (
-          <div className="pt-2">
-            <div className="p-3 bg-purple-50/50 border border-purple-200/80 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xs font-bold text-purple-950 uppercase tracking-wider">
-                  PREVIOUS PROGRAM PENDING
-                </span>
-                <span className="px-2 py-0.5 bg-purple-200 text-purple-900 font-extrabold text-[11px] rounded-full">
-                  {prevProgPendingBreakdown.reduce((sum, item) => sum + item.count, 0)}
-                </span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {prevProgPendingBreakdown.map((item) => (
-                  <div
-                    key={item.name}
-                    onClick={() => handleStageClick(`Previous Program Pending — ${item.name}`, PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING)}
-                    className="px-2.5 py-1 bg-white border border-purple-200/80 rounded-lg text-xs font-semibold text-purple-900 flex items-center gap-1.5 shadow-2xs hover:bg-purple-100/60 cursor-pointer transition-colors"
-                  >
-                    <span>{item.name}</span>
-                    <span className="font-black text-purple-700">({item.count})</span>
-                  </div>
-                ))}
-              </div>
+            {/* View Mode Toggle: Cards View vs Graphical View */}
+            <div className="bg-slate-100 p-0.5 rounded-lg flex items-center border border-slate-200 shadow-2xs self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setPipelineViewMode("strip")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                  pipelineViewMode === "strip"
+                    ? "bg-white text-indigo-700 shadow-2xs border border-slate-200"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+                title="View as pipeline cards strip"
+              >
+                <LayoutGrid size={13} />
+                <span>Cards View</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPipelineViewMode("graph")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                  pipelineViewMode === "graph"
+                    ? "bg-indigo-600 text-white shadow-2xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+                title="View as graphical donut charts per stage with called for breakdown"
+              >
+                <PieChartIcon size={13} />
+                <span>Graphical View</span>
+              </button>
             </div>
           </div>
-        )}
 
-        {/* Auxiliary Outcomes Row (Closed / Lost, Closed / Invalid, Existing Alumni, Legacy) */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
-          <div
-            onClick={() => handleStageClick("Closed / Lost", PIPELINE_STAGES.CLOSED_LOST)}
-            className="p-3 bg-rose-50/40 border border-rose-200/80 rounded-xl flex items-center justify-between cursor-pointer hover:bg-rose-100/50 transition-colors"
-          >
-            <span className="text-xs font-bold text-rose-900">Closed / Lost</span>
-            <span className="text-lg font-black text-rose-800">{pipelineStageCounts[PIPELINE_STAGES.CLOSED_LOST] || 0}</span>
-          </div>
+          {pipelineViewMode === "graph" ? (
+            <div className="space-y-4">
+              {/* Grid of Donut Charts (One Circle per Pipeline Stage) */}
+              {stageGraphicalData.groups.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 font-medium text-xs">
+                  No contacts found in pipeline for the selected period and filters.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {stageGraphicalData.groups.map(group => {
+                    const totalPeople = group.totalPeople;
+                    const funnelPct = stageGraphicalData.totalFunnelPeople > 0
+                      ? ((totalPeople / stageGraphicalData.totalFunnelPeople) * 100).toFixed(1)
+                      : "0.0";
 
-          <div
-            onClick={() => handleStageClick("Closed / Invalid", PIPELINE_STAGES.CLOSED_INVALID)}
-            className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center justify-between cursor-pointer hover:bg-slate-100 transition-colors"
-          >
-            <span className="text-xs font-bold text-slate-700">Closed / Invalid</span>
-            <span className="text-lg font-black text-slate-800">{pipelineStageCounts[PIPELINE_STAGES.CLOSED_INVALID] || 0}</span>
-          </div>
+                    return (
+                      <div
+                        key={group.stageValue}
+                        className={`bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between group relative hover:z-40 ${
+                          group.isWon ? "border-emerald-200 bg-emerald-50/20" : ""
+                        }`}
+                      >
+                        {/* Card Header: Stage Name & Inspect All Button */}
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-extrabold text-slate-800 text-xs truncate" title={group.label}>
+                              {group.label}
+                            </h4>
+                            <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                              {group.sources.length} {group.sources.length === 1 ? "called for program" : "called for programs"}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setDrillDownModal({
+                              title: `${group.label} — All Contacts (${group.totalPeople})`,
+                              type: "people",
+                              items: group.contacts
+                            })}
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-md transition cursor-pointer shrink-0 ${
+                              group.isWon
+                                ? "text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
+                                : "text-indigo-600 bg-indigo-50 hover:bg-indigo-100"
+                            }`}
+                            title="Inspect all contacts in this stage"
+                          >
+                            Inspect All
+                          </button>
+                        </div>
 
-          <div
-            onClick={() => handleStageClick("Existing Alumni", "Existing Alumni")}
-            className="p-3 bg-violet-50/40 border border-violet-200/80 rounded-xl flex items-center justify-between cursor-pointer hover:bg-violet-100/50 transition-colors"
-          >
-            <span className="text-xs font-bold text-violet-900">Existing Alumni</span>
-            <span className="text-lg font-black text-violet-800">{pipelineStageCounts["Existing Alumni"] || 0}</span>
-          </div>
+                        {/* Donut Chart with Center Count */}
+                        <div className="relative w-full h-[180px] flex items-center justify-center my-1">
+                          <ResponsiveContainer width="100%" height={180}>
+                            <PieChart>
+                              <Pie
+                                data={group.sources.length > 0 ? group.sources : [{ name: "No Leads", value: 1 }]}
+                                dataKey="value"
+                                nameKey="name"
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={46}
+                                outerRadius={68}
+                                paddingAngle={group.sources.length > 1 ? 2 : 0}
+                                onClick={(entry) => {
+                                  if (entry && entry.name && group.sources.length > 0) {
+                                    const sliceContacts = group.contactsByCalledFor[entry.name] || [];
+                                    setDrillDownModal({
+                                      title: `${group.label} — ${entry.name} (${sliceContacts.length})`,
+                                      type: "people",
+                                      items: sliceContacts
+                                    });
+                                  }
+                                }}
+                                className={group.sources.length > 0 ? "cursor-pointer" : ""}
+                              >
+                                {group.sources.length > 0 ? (
+                                  group.sources.map(entry => (
+                                    <Cell
+                                      key={entry.name}
+                                      fill={stageGraphicalData.calledForColorMap[entry.name] || "#94a3b8"}
+                                      className="hover:opacity-80 transition-opacity focus:outline-none"
+                                    />
+                                  ))
+                                ) : (
+                                  <Cell fill="#e2e8f0" />
+                                )}
+                              </Pie>
+                              {group.sources.length > 0 && (
+                                <Tooltip
+                                  wrapperStyle={{ zIndex: 100, pointerEvents: "none" }}
+                                  content={({ active, payload }) => {
+                                    if (active && payload && payload.length) {
+                                      const d = payload[0];
+                                      const pct = totalPeople ? ((d.value / totalPeople) * 100).toFixed(1) : 0;
+                                      return (
+                                        <div className="bg-white/95 backdrop-blur-sm text-slate-800 p-3 rounded-2xl shadow-xl border border-slate-200 text-xs min-w-[165px] ring-1 ring-slate-900/5">
+                                          <div className="font-extrabold flex items-center gap-1.5 mb-2 text-slate-900">
+                                            <span className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs" style={{ backgroundColor: d.payload?.fill }} />
+                                            <span className="truncate">{d.name}</span>
+                                          </div>
+                                          <div className="space-y-1">
+                                            <div className="text-slate-500 flex justify-between gap-4 py-0.5 text-[11px]">
+                                              <span>People (Leads):</span>
+                                              <span className="font-bold text-slate-900 font-mono text-xs">{d.value}</span>
+                                            </div>
+                                            <div className="text-slate-500 flex justify-between gap-4 py-0.5 text-[11px]">
+                                              <span>Share in Stage:</span>
+                                              <span className="font-bold font-mono text-xs text-indigo-600">{pct}%</span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    }
+                                    return null;
+                                  }}
+                                />
+                              )}
+                            </PieChart>
+                          </ResponsiveContainer>
 
-          <div
-            onClick={() => handleStageClick("Unknown / Legacy", "Unknown / Legacy")}
-            className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center justify-between cursor-pointer hover:bg-slate-100 transition-colors"
-          >
-            <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
-              <Info size={13} className="text-slate-400" /> Legacy / Unmapped
-            </span>
-            <span className="text-lg font-black text-slate-800">{pipelineStageCounts["Unknown / Legacy"] || 0}</span>
-          </div>
+                          {/* Center of the circle: number of people */}
+                          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none z-10">
+                            <span className="text-xl font-black text-slate-800 leading-none">{totalPeople}</span>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight mt-0.5">People</span>
+                          </div>
+                        </div>
+
+                        {/* Under the circle: Breakdown stats */}
+                        <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
+                          {group.isWon ? (
+                            <span className="font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md text-[11px]">
+                              {totalPeople} Reg.Done
+                            </span>
+                          ) : (
+                            <span className="font-bold text-slate-700 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md text-[11px]">
+                              {totalPeople} {totalPeople === 1 ? "Lead" : "Leads"}
+                            </span>
+                          )}
+                          <span className="font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md text-[11px]">
+                            {funnelPct}% of funnel
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Continuous Strip Sales Pipeline */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 bg-slate-50/70 rounded-xl border border-slate-200/80 overflow-hidden">
+                {[
+                  { key: "new_lead", label: "New Lead", stageValue: PIPELINE_STAGES.NEW_LEAD },
+                  { key: "attempting", label: "Attempting Contact", stageValue: PIPELINE_STAGES.ATTEMPTING },
+                  { key: "info_given", label: "Information Given", stageValue: PIPELINE_STAGES.INFO_GIVEN },
+                  { key: "nurture", label: "Nurture / Interested", stageValue: PIPELINE_STAGES.NURTURE_INTERESTED },
+                  { key: "future_pool", label: "Future Pool", stageValue: PIPELINE_STAGES.FUTURE_POOL },
+                  { key: "registered", label: "Registered / Won", stageValue: PIPELINE_STAGES.REGISTERED_WON, isWon: true }
+                ].map(st => {
+                  const count = pipelineStageCounts[st.stageValue] || 0;
+                  const totalFunnel = Object.values(pipelineStageCounts).reduce((a, b) => a + b, 0);
+                  const pct = totalFunnel > 0 ? ((count / totalFunnel) * 100).toFixed(1) : "0.0";
+
+                  return (
+                    <div
+                      key={st.key}
+                      onClick={() => handleStageClick(st.label, st.stageValue)}
+                      className={`p-3.5 hover:bg-white transition-all cursor-pointer group flex flex-col justify-between ${
+                        st.isWon ? "bg-emerald-50/40" : ""
+                      }`}
+                    >
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate block">
+                        {st.label}
+                      </span>
+                      <div className="mt-2 flex items-baseline justify-between">
+                        <span className={`text-2xl font-black transition-transform group-hover:scale-105 origin-left ${
+                          st.isWon ? "text-emerald-600" : count > 0 ? "text-slate-900" : "text-slate-400"
+                        }`}>
+                          {count}
+                        </span>
+                        <span className="text-[10px] font-bold text-slate-400">
+                          {pct}%
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Compact Previous Program Pending Insight */}
+              {prevProgPendingBreakdown.length > 0 && (
+                <div className="pt-2">
+                  <div className="p-3 bg-purple-50/50 border border-purple-200/80 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-bold text-purple-950 uppercase tracking-wider">
+                        PREVIOUS PROGRAM PENDING
+                      </span>
+                      <span className="px-2 py-0.5 bg-purple-200 text-purple-900 font-extrabold text-[11px] rounded-full">
+                        {prevProgPendingBreakdown.reduce((sum, item) => sum + item.count, 0)}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {prevProgPendingBreakdown.map((item) => (
+                        <div
+                          key={item.name}
+                          onClick={() => handleStageClick(`Previous Program Pending — ${item.name}`, PIPELINE_STAGES.PREVIOUS_PROGRAM_PENDING)}
+                          className="px-2.5 py-1 bg-white border border-purple-200/80 rounded-lg text-xs font-semibold text-purple-900 flex items-center gap-1.5 shadow-2xs hover:bg-purple-100/60 cursor-pointer transition-colors"
+                        >
+                          <span>{item.name}</span>
+                          <span className="font-black text-purple-700">({item.count})</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Auxiliary Outcomes Row (Closed / Lost, Closed / Invalid, Existing Alumni, Legacy) */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                <div
+                  onClick={() => handleStageClick("Closed / Lost", PIPELINE_STAGES.CLOSED_LOST)}
+                  className="p-3 bg-rose-50/40 border border-rose-200/80 rounded-xl flex items-center justify-between cursor-pointer hover:bg-rose-100/50 transition-colors"
+                >
+                  <span className="text-xs font-bold text-rose-900">Closed / Lost</span>
+                  <span className="text-lg font-black text-rose-800">{pipelineStageCounts[PIPELINE_STAGES.CLOSED_LOST] || 0}</span>
+                </div>
+
+                <div
+                  onClick={() => handleStageClick("Closed / Invalid", PIPELINE_STAGES.CLOSED_INVALID)}
+                  className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center justify-between cursor-pointer hover:bg-slate-100 transition-colors"
+                >
+                  <span className="text-xs font-bold text-slate-700">Closed / Invalid</span>
+                  <span className="text-lg font-black text-slate-800">{pipelineStageCounts[PIPELINE_STAGES.CLOSED_INVALID] || 0}</span>
+                </div>
+
+                <div
+                  onClick={() => handleStageClick("Existing Alumni", "Existing Alumni")}
+                  className="p-3 bg-violet-50/40 border border-violet-200/80 rounded-xl flex items-center justify-between cursor-pointer hover:bg-violet-100/50 transition-colors"
+                >
+                  <span className="text-xs font-bold text-violet-900">Existing Alumni</span>
+                  <span className="text-lg font-black text-violet-800">{pipelineStageCounts["Existing Alumni"] || 0}</span>
+                </div>
+
+                <div
+                  onClick={() => handleStageClick("Unknown / Legacy", "Unknown / Legacy")}
+                  className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center justify-between cursor-pointer hover:bg-slate-100 transition-colors"
+                >
+                  <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                    <Info size={13} className="text-slate-400" /> Legacy / Unmapped
+                  </span>
+                  <span className="text-lg font-black text-slate-800">{pipelineStageCounts["Unknown / Legacy"] || 0}</span>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* ── WORKSPACE SECTIONS: QUERY DESK & REMINDER ACTIVITY ── */}

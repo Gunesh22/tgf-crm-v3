@@ -25,7 +25,9 @@ import {
 import { 
   updateDynamicOptions,
   CALLED_FOR_OPTIONS,
-  SOURCE_OPTIONS
+  SOURCE_OPTIONS,
+  resolveLeadOriginOptions,
+  resolveCurrentSourceOptions
 } from "../../attender/utils";
 
 export default function SettingsTab() {
@@ -140,19 +142,26 @@ export default function SettingsTab() {
         ? "salesOutcomeOptions"
         : type === "status"
         ? "statusOptions"
+        : type === "leadOrigin"
+        ? "leadOriginOptions"
+        : type === "currentSource"
+        ? "currentSourceOptions"
         : type === "source"
         ? "sourceOptions"
         : "calledForOptions";
 
     const current =
-      options?.[key] ||
-      (type === "salesOutcome"
-        ? DEFAULT_SALES_OUTCOME_OPTIONS
+      type === "salesOutcome"
+        ? (options?.salesOutcomeOptions || DEFAULT_SALES_OUTCOME_OPTIONS)
+        : type === "leadOrigin"
+        ? resolveLeadOriginOptions(options)
+        : type === "currentSource"
+        ? resolveCurrentSourceOptions(options)
         : type === "source"
-        ? SOURCE_OPTIONS
+        ? (options?.sourceOptions || SOURCE_OPTIONS)
         : type === "calledFor"
-        ? CALLED_FOR_OPTIONS
-        : []);
+        ? (options?.calledForOptions || CALLED_FOR_OPTIONS)
+        : (options?.[key] || []);
     
     let updated;
     if (action === "delete") {
@@ -458,11 +467,11 @@ export default function SettingsTab() {
             </div>
             <div>
               <h3 className="text-sm font-semibold text-[#172033]">Call Center Options</h3>
-              <p className="text-xs text-[#667085] mt-0.5">Configure global dropdown options matching the Edit Modal: Program (Called For), Source (Lead Origin & Current Source), and Connected Outcome.</p>
+              <p className="text-xs text-[#667085] mt-0.5">Configure global dropdown options matching the Edit Modal: Program (Called For), Lead Origin, Current Source, and Connected Outcome.</p>
             </div>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
             <OptionsManagerCard
               title="Program (Called For)"
               subtitle="Modal: PROGRAM (CALLED FOR)"
@@ -473,13 +482,22 @@ export default function SettingsTab() {
               onRename={(oldVal, newVal) => handleOptionChange("calledFor", "rename", oldVal, newVal)}
             />
             <OptionsManagerCard
-              title="Source Options"
-              subtitle="Modal: LEAD ORIGIN & CURRENT SOURCE"
+              title="Lead Origin Options"
+              subtitle="Modal: LEAD ORIGIN"
+              icon={GitBranch}
+              options={resolveLeadOriginOptions(options)}
+              onAdd={(val) => handleOptionChange("leadOrigin", "add", val)}
+              onDelete={(val) => handleOptionChange("leadOrigin", "delete", val)}
+              onRename={(oldVal, newVal) => handleOptionChange("leadOrigin", "rename", oldVal, newVal)}
+            />
+            <OptionsManagerCard
+              title="Current Source Options"
+              subtitle="Modal: CURRENT SOURCE (+ Lead Tags)"
               icon={Tag}
-              options={options?.sourceOptions || SOURCE_OPTIONS}
-              onAdd={(val) => handleOptionChange("source", "add", val)}
-              onDelete={(val) => handleOptionChange("source", "delete", val)}
-              onRename={(oldVal, newVal) => handleOptionChange("source", "rename", oldVal, newVal)}
+              options={resolveCurrentSourceOptions(options)}
+              onAdd={(val) => handleOptionChange("currentSource", "add", val)}
+              onDelete={(val) => handleOptionChange("currentSource", "delete", val)}
+              onRename={(oldVal, newVal) => handleOptionChange("currentSource", "rename", oldVal, newVal)}
             />
             <OptionsManagerCard
               title="Connected Outcome"

@@ -39,6 +39,42 @@ export default async function handler(req, res) {
     if (!session) {
       return res.status(200).json({ success: true, authenticated: false, user: null });
     }
+
+    // Live validation against database
+    try {
+      const client = await clientPromise;
+      const db = client.db('tgf_crm');
+      if (session.role === 'data_entry') {
+        const op = await db.collection('attenders').findOne({
+          $or: [{ id: session.id }, { _id: session.id }],
+          role: 'data_entry'
+        });
+        if (!op || op.isActive === false) {
+          clearSessionCookie(res);
+          return res.status(200).json({ success: true, authenticated: false, user: null });
+        }
+        return res.status(200).json({
+          success: true,
+          authenticated: true,
+          user: {
+            ...session,
+            assignedAttenders: Array.isArray(op.assignedAttenders) ? op.assignedAttenders : []
+          }
+        });
+      } else if (session.role === 'attender') {
+        const att = await db.collection('attenders').findOne({
+          $or: [{ id: session.id }, { _id: session.id }],
+          role: { $ne: 'admin' }
+        });
+        if (att && att.isActive === false) {
+          clearSessionCookie(res);
+          return res.status(200).json({ success: true, authenticated: false, user: null });
+        }
+      }
+    } catch (e) {
+      console.warn('[GET SESSION DB CHECK ERROR]', e);
+    }
+
     return res.status(200).json({ success: true, authenticated: true, user: session });
   }
 
@@ -143,18 +179,24 @@ export default async function handler(req, res) {
       return res.status(401).json({ success: false, error: 'Incorrect password. Please try again.' });
     }
 
-    const attenderUser = {
+    if (matched.isActive === false) {
+      return res.status(403).json({ success: false, error: 'This account has been deactivated. Please contact admin.' });
+    }
+
+    const userRole = matched.role === 'data_entry' ? 'data_entry' : 'attender';
+    const authUser = {
       id: matched.id || matched._id.toString(),
       name: matched.name,
-      role: 'attender'
+      role: userRole,
+      ...(userRole === 'data_entry' ? { assignedAttenders: Array.isArray(matched.assignedAttenders) ? matched.assignedAttenders : [] } : {})
     };
 
-    const token = createSessionToken(attenderUser);
+    const token = createSessionToken(authUser);
     setSessionCookie(res, token);
 
     return res.status(200).json({
       success: true,
-      user: attenderUser,
+      user: authUser,
       token
     });
 

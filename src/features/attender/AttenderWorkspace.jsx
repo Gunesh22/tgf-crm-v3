@@ -14,7 +14,7 @@ import {
   INCOMING_PROGRAM_ID, INCOMING_PROGRAM_NAME, ensureIncomingProgram,
   OUTGOING_PROGRAM_ID, OUTGOING_PROGRAM_NAME, ensureOutgoingProgram,
   globalSearchContacts, searchAttenderContacts, claimContact, removeAttenderFromContact, claimCRMContact,
-  fetchFreshSharedLead, getSettingsOptions, subscribeToSettingsOptions
+  fetchFreshSharedLead, getSettingsOptions, subscribeToSettingsOptions, getAttenders
 } from "../../lib/db";
 import { searchCRM } from "../../lib/ghl";
 import {
@@ -84,7 +84,14 @@ function enrichLogsWithCallbackFlags(logs, activeAttenderCtx) {
 }
 
 // ─── Main Attender View ───────────────────────
-export default function AttenderView({ attenderId, attenderName, optionsVersion, onExit }) {
+export default function AttenderView({
+  attenderId,
+  attenderName,
+  optionsVersion,
+  onExit,
+  isDataEntry = false,
+  operatorUser = null
+}) {
   const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== "undefined" && window.innerWidth < 768);
 
   useEffect(() => {
@@ -94,6 +101,76 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  // ── Operator Attender Selection State ──
+  const [allAttendersList, setAllAttendersList] = useState([]);
+  const [liveOperatorAssignments, setLiveOperatorAssignments] = useState(
+    () => (Array.isArray(operatorUser?.assignedAttenders) ? operatorUser.assignedAttenders.map(String) : [])
+  );
+
+  // Fetch full attenders list and fresh operator assignments from server on mount
+  useEffect(() => {
+    if (isDataEntry) {
+      getAttenders().then(list => {
+        if (Array.isArray(list)) {
+          setAllAttendersList(list);
+          if (operatorUser?.id) {
+            const currentOp = list.find(a => String(a.id || a._id) === String(operatorUser.id));
+            if (currentOp && Array.isArray(currentOp.assignedAttenders)) {
+              setLiveOperatorAssignments(currentOp.assignedAttenders.map(String));
+            }
+          }
+        }
+      }).catch(() => {});
+    }
+  }, [isDataEntry, operatorUser?.id]);
+
+  const assignedAttenders = useMemo(() => {
+    if (!isDataEntry) return [];
+    const assignedIds = liveOperatorAssignments;
+    if (assignedIds.length === 0) return [];
+
+    return allAttendersList.filter(a => {
+      const aId = String(a.id || "");
+      const aMongoId = String(a._id || "");
+      return assignedIds.includes(aId) || assignedIds.includes(aMongoId);
+    });
+  }, [isDataEntry, liveOperatorAssignments, allAttendersList]);
+
+  const [activeCallerId, setActiveCallerId] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = sessionStorage.getItem(`data_entry_active_caller_${operatorUser?.id || attenderId}`);
+      return saved ? String(saved) : "";
+    }
+    return "";
+  });
+  const [activeCallerName, setActiveCallerName] = useState("");
+
+  // Sync and validate activeCallerId against assignedAttenders
+  useEffect(() => {
+    if (isDataEntry && assignedAttenders.length > 0) {
+      const isValid = assignedAttenders.some(a => String(a.id) === String(activeCallerId));
+      if (!activeCallerId || !isValid) {
+        const first = assignedAttenders[0];
+        setActiveCallerId(String(first.id));
+        setActiveCallerName(first.name);
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem(`data_entry_active_caller_${operatorUser?.id || attenderId}`, String(first.id));
+        }
+      } else {
+        const found = assignedAttenders.find(a => String(a.id) === String(activeCallerId));
+        if (found && found.name !== activeCallerName) {
+          setActiveCallerName(found.name);
+        }
+      }
+    } else if (isDataEntry && assignedAttenders.length === 0) {
+      setActiveCallerId("");
+      setActiveCallerName("");
+    }
+  }, [isDataEntry, assignedAttenders, activeCallerId, activeCallerName, operatorUser?.id, attenderId]);
+
+  const effectiveAttenderId = isDataEntry ? activeCallerId : attenderId;
+  const effectiveAttenderName = isDataEntry ? activeCallerName : attenderName;
 
   const [settingsVersion, setSettingsVersion] = useState(0);
 
@@ -185,7 +262,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     };
   }, []);
 
-  // Abort active manual sync whenever attenderId changes to prevent cross-contamination
+  // Abort active manual sync whenever effectiveAttenderId changes to prevent cross-contamination
   useEffect(() => {
     if (syncAbortControllerRef.current) {
       syncAbortControllerRef.current.abort();
@@ -193,13 +270,13 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
     }
     isSyncingRef.current = false;
     setIsSyncingDB(false);
-  }, [attenderId]);
+  }, [effectiveAttenderId]);
 
   const handleSyncDB = async () => {
-    if (isSyncingRef.current || !attenderId) return;
+    if (isSyncingRef.current || !effectiveAttenderId) return;
 
-    console.log(`%c[MANUAL SYNC DB] Manual sync triggered by ${attenderName} (${attenderId})`, "background: #2563eb; color: #ffffff; font-weight: bold; padding: 4px 8px; border-radius: 4px;");
-    const requestAttenderId = attenderId;
+    console.log(`%c[MANUAL SYNC DB] Manual sync triggered by ${effectiveAttenderName} (${effectiveAttenderId})`, "background: #2563eb; color: #ffffff; font-weight: bold; padding: 4px 8px; border-radius: 4px;");
+    const requestAttenderId = effectiveAttenderId;
     isSyncingRef.current = true;
     setIsSyncingDB(true);
 
@@ -211,14 +288,14 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
 
     const toastId = toast.loading("Syncing with database...");
     try {
-      const res = await getAssignedContacts(requestAttenderId, { signal: controller.signal, attenderName, purpose: 'manual_sync', device: 'desktop' });
-      if (controller.signal.aborted || attenderId !== requestAttenderId) return;
+      const res = await getAssignedContacts(requestAttenderId, { signal: controller.signal, attenderName: effectiveAttenderName, purpose: 'manual_sync', device: 'desktop' });
+      if (controller.signal.aborted || effectiveAttenderId !== requestAttenderId) return;
 
       const rawData = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
       const normList = rawData.map(c => normalizeProgramStates(c));
 
-      if (isComponentMountedRef.current && !controller.signal.aborted && attenderId === requestAttenderId) {
-        const enrichedList = enrichLogsWithCallbackFlags(normList, attenderId || attenderName);
+      if (isComponentMountedRef.current && !controller.signal.aborted && effectiveAttenderId === requestAttenderId) {
+        const enrichedList = enrichLogsWithCallbackFlags(normList, effectiveAttenderId || effectiveAttenderName);
         setCallLogs(enrichedList);
         safeSetLocalStorage(`attender_call_logs_${requestAttenderId}`, enrichedList);
         toast.success(`Database synced! Downloaded ${normList.length} contacts.`, { id: toastId });
@@ -417,16 +494,16 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
   }, []);
 
   const handleRetryLoad = useCallback(() => {
-    if (!attenderId) return;
+    if (!effectiveAttenderId) return;
     setIsLoadingProgram(true);
     setLoadError(null);
     if (unsubRef.current) unsubRef.current();
 
     unsubRef.current = subscribeToCallLogs(
-      attenderId,
-      attenderName,
+      effectiveAttenderId,
+      effectiveAttenderName,
       (logs) => {
-        setCallLogs(enrichLogsWithCallbackFlags(logs, attenderId || attenderName));
+        setCallLogs(enrichLogsWithCallbackFlags(logs, effectiveAttenderId || effectiveAttenderName));
         setIsLoadingProgram(false);
         setLoadError(null);
       },
@@ -436,7 +513,7 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
         setIsLoadingProgram(false);
       }
     );
-  }, [attenderId, attenderName]);
+  }, [effectiveAttenderId, effectiveAttenderName]);
 
   useEffect(() => {
     handleRetryLoad();
@@ -721,17 +798,23 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
       _timestamp: Date.now(),
       programId: "",
       programName: "",
-      attenderId, attenderName,
+      attenderId: isDataEntry ? "" : effectiveAttenderId,
+      attenderName: isDataEntry ? "" : effectiveAttenderName,
       Name: "", Phone: "", Mobile: "", Email: "",
       City: "", State: "", Khoji: "No", Source: "", Tags: "",
       "Called For": "",
       callType: "",
       callDirection: "",
+      callPurpose: "",
       "Sub Program": "",
       subProgram: "",
       status: "", remark: "",
+      ...(isDataEntry ? {
+        dataEntryOperatorId: operatorUser?.id || attenderId,
+        dataEntryOperatorName: operatorUser?.name || attenderName
+      } : {})
     });
-  }, [attenderId, attenderName]);
+  }, [effectiveAttenderId, effectiveAttenderName, isDataEntry, operatorUser?.id, operatorUser?.name, attenderId, attenderName]);
 
   // Global Keyboard Shortcut: Alt + A directly opens the Add Call Entry modal
   useEffect(() => {
@@ -1859,8 +1942,12 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
               <ArrowLeft size={16} />
             </button>
             <div>
-              <h1 className="font-bold text-slate-900 text-base leading-none">My Call Sheet</h1>
-              <p className="text-[11px] text-slate-500 font-medium mt-0.5">{attenderName}</p>
+              <h1 className="font-bold text-slate-900 text-base leading-none">
+                {isDataEntry ? "Data Entry Workspace" : "My Call Sheet"}
+              </h1>
+              <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                {isDataEntry ? `Operator: ${attenderName}` : attenderName}
+              </p>
             </div>
           </div>
 
@@ -2350,8 +2437,8 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
             onRefreshLead={handleRefreshSingleLead}
             onClearFilters={handleClearAllFilters}
             callLogs={callLogs}
-            attenderId={attenderId}
-            attenderName={attenderName}
+            attenderId={effectiveAttenderId}
+            attenderName={effectiveAttenderName}
           />
 
           <Pagination
@@ -2372,8 +2459,8 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
           key={editingRow.id || (editingRow._isNew ? `new-${editingRow._timestamp || Date.now()}` : "entry")}
           optionsVersion={effectiveOptionsVersion}
           row={editingRow}
-          attenderId={attenderId}
-          attenderName={attenderName}
+          attenderId={effectiveAttenderId}
+          attenderName={effectiveAttenderName}
           programs={programs.filter(p => p.id !== INCOMING_PROGRAM_ID && p.id !== OUTGOING_PROGRAM_ID)}
           onSave={handleSaveRow}
           onDelete={handleDeleteRow}
@@ -2387,8 +2474,13 @@ export default function AttenderView({ attenderId, attenderName, optionsVersion,
           key={editingRow.id || (editingRow._isNew ? `new-${editingRow._timestamp || Date.now()}` : "entry")}
           optionsVersion={effectiveOptionsVersion}
           row={editingRow}
-          attenderId={attenderId}
-          attenderName={attenderName}
+          attenderId={effectiveAttenderId}
+          attenderName={effectiveAttenderName}
+          isDataEntry={isDataEntry}
+          operatorId={operatorUser?.id || attenderId}
+          operatorName={operatorUser?.name || attenderName}
+          attenders={isDataEntry ? assignedAttenders : []}
+          allowAttenderSelection={isDataEntry}
           programs={programs.filter(p => p.id !== INCOMING_PROGRAM_ID && p.id !== OUTGOING_PROGRAM_ID)}
           onSave={handleSaveRow}
           onDelete={handleDeleteRow}

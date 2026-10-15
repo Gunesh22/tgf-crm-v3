@@ -583,7 +583,7 @@ export function getPipelineStageConfig(stage) {
     case "2. Attempting Contact":
     case "Attempting Contact":
     case "Attempting":
-      return { label: "2. Attempting Contact", bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-800", badge: "bg-amber-100 text-amber-900 border-amber-300 font-semibold" };
+      return { label: "2. Attempting Contact", bg: "bg-teal-50", border: "border-teal-300", text: "text-teal-800", badge: "bg-teal-100 text-teal-900 border-teal-300 font-semibold" };
     case "3. Information Given":
     case "Information Given":
     case "Info Given":

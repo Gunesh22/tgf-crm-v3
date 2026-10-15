@@ -447,7 +447,7 @@ export default function AllAttendersSheetTab({
       if (l.attenderName) set.add(JSON.stringify({ id: l.attenderId, name: l.attenderName }));
     });
     attenders.forEach(a => {
-      if (a.id && a.name) set.add(JSON.stringify({ id: a.id, name: a.name }));
+      if (a.role !== 'data_entry' && a.id && a.name) set.add(JSON.stringify({ id: a.id, name: a.name }));
     });
     return Array.from(set).map(str => {
       const obj = JSON.parse(str);

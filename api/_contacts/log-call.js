@@ -4,7 +4,7 @@
 import clientPromise from '../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
 import { normalizeCalledForKey } from '../lib/calledForNormalizer.js';
-import { requireAuth, sanitizeString, isSameAttender } from '../lib/auth.js';
+import { requireAuth, sanitizeString, isSameAttender, verifyAttenderAccess } from '../lib/auth.js';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -316,14 +316,42 @@ export async function executeLogCall(db, payload) {
   const currentLeadOwnerName = existingContact.leadOwnerName || null;
   const isNewOwnerAssignment = !currentLeadOwner;
 
-  // ── original_source & currentSource — contextual persistence ───────────────
-  const originalSource = payload.leadOrigin || payload.original_source || payload.originalSource ||
-    rootUpdates.leadOrigin || rootUpdates.original_source || rootUpdates.originalSource ||
-    existingContact.leadOrigin || existingContact.original_source || existingContact.originalSource || "";
+  // ── Lead Origin Resolution (Authoritative priority: leadOrigin > original_source > originalSource > Lead Origin > lead_origin)
+  const findLeadOriginField = (obj) => {
+    if (!obj || typeof obj !== 'object') return undefined;
+    if (obj.leadOrigin !== undefined) return obj.leadOrigin;
+    if (obj.original_source !== undefined) return obj.original_source;
+    if (obj.originalSource !== undefined) return obj.originalSource;
+    if (obj['Lead Origin'] !== undefined) return obj['Lead Origin'];
+    if (obj.lead_origin !== undefined) return obj.lead_origin;
+    return undefined;
+  };
 
-  const currentCallSource = payload.currentSource || payload.callSource || payload.source || payload.Source ||
-    rootUpdates.currentSource || rootUpdates.callSource || rootUpdates.source || rootUpdates.Source ||
-    existingContact.currentSource || existingContact.Source || existingContact.source || "";
+  const explicitLeadOrigin = findLeadOriginField(payload) !== undefined
+    ? findLeadOriginField(payload)
+    : findLeadOriginField(rootUpdates);
+
+  const originalSource = explicitLeadOrigin !== undefined
+    ? (explicitLeadOrigin ? String(explicitLeadOrigin).trim() : "")
+    : (findLeadOriginField(existingContact) ? String(findLeadOriginField(existingContact)).trim() : "");
+
+  // ── Current Source Resolution (Authoritative priority: currentSource > source > Source > callSource)
+  const findCurrentSourceField = (obj) => {
+    if (!obj || typeof obj !== 'object') return undefined;
+    if (obj.currentSource !== undefined) return obj.currentSource;
+    if (obj.source !== undefined) return obj.source;
+    if (obj.Source !== undefined) return obj.Source;
+    if (obj.callSource !== undefined) return obj.callSource;
+    return undefined;
+  };
+
+  const explicitCurrentSource = findCurrentSourceField(payload) !== undefined
+    ? findCurrentSourceField(payload)
+    : findCurrentSourceField(rootUpdates);
+
+  const currentCallSource = explicitCurrentSource !== undefined
+    ? (explicitCurrentSource ? String(explicitCurrentSource).trim() : "")
+    : (findCurrentSourceField(existingContact) ? String(findCurrentSourceField(existingContact)).trim() : "");
 
   const resolvedPreviousProgram = previousProgram !== undefined
     ? previousProgram
@@ -377,6 +405,11 @@ export async function executeLogCall(db, payload) {
     leadOrigin:   originalSource,
     previousProgram: resolvedPreviousProgram,
     timestamp: nowIso,
+    ...(payload.dataEntryOperatorId || payload.dataEntryOperatorName ? {
+      dataEntryOperatorId: payload.dataEntryOperatorId || null,
+      dataEntryOperatorName: payload.dataEntryOperatorName || null,
+      enteredBy: payload.dataEntryOperatorName || null,
+    } : {}),
   };
 
   // ── Clean rootUpdates ──────────────────────────────────────────────────
@@ -713,16 +746,14 @@ export default async function handler(req, res) {
     const db     = client.db('tgf_crm');
     let { attenderId, attenderName, status } = req.body || {};
 
-    if (session.role !== 'admin' && !(session.id && session.id.toLowerCase().includes('admin'))) {
-      if (!isSameAttender(attenderId, session)) {
-        console.log(`[LOG-CALL AUTOCORRECT] Overriding requested attender "${attenderId}" with logged-in attender "${session.name} (${session.id})"`);
-        attenderId = session.id;
-        attenderName = session.name;
-        req.body.attenderId = session.id;
-        req.body.attenderName = session.name;
-      }
-    } else if (!isSameAttender(attenderId, session)) {
-      return res.status(403).json({ success: false, error: 'Forbidden: Cannot log call on behalf of another attender' });
+    const isAuthorized = await verifyAttenderAccess(db, session, attenderId);
+    if (!isAuthorized) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Cannot log call for this attender' });
+    }
+
+    if (session.role === 'data_entry') {
+      req.body.dataEntryOperatorId = session.id;
+      req.body.dataEntryOperatorName = session.name;
     }
 
     const label = attenderName ? `${attenderName} (${attenderId})` : (attenderId || 'unknown');

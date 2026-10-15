@@ -65,6 +65,18 @@ function AppRoutes() {
               <AttenderWorkspace attenderId={user?.id} attenderName={user?.name} onExit={logout} />
             </ProtectedRoute>
           } />
+
+          <Route path="/data_entry" element={
+            <ProtectedRoute requiredRole="data_entry">
+              <AttenderWorkspace
+                attenderId={user?.id}
+                attenderName={user?.name}
+                isDataEntry={true}
+                operatorUser={user}
+                onExit={logout}
+              />
+            </ProtectedRoute>
+          } />
           
           <Route path="/admin" element={
             <ProtectedRoute requiredRole="admin">

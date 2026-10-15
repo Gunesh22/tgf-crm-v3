@@ -99,6 +99,8 @@ export const DEFAULT_SETTINGS = {
   connectedStatuses: DEFAULT_CONNECTED_STATUSES,
   notConnectedStatuses: DEFAULT_NOT_CONNECTED_STATUSES,
   sourceOptions: DEFAULT_SOURCE_OPTIONS,
+  leadOriginOptions: DEFAULT_SOURCE_OPTIONS,
+  currentSourceOptions: DEFAULT_SOURCE_OPTIONS,
   calledForOptions: DEFAULT_CALLED_FOR_OPTIONS,
   whatsappTemplates: DEFAULT_WHATSAPP_TEMPLATES,
   optionalCompulsoryStatuses: DEFAULT_NOT_CONNECTED_STATUSES,
@@ -136,6 +138,12 @@ export default async function handler(req, res) {
       }
       if (!cleanData.sourceOptions) {
         cleanData.sourceOptions = DEFAULT_SOURCE_OPTIONS;
+      }
+      if (!Object.prototype.hasOwnProperty.call(cleanData, "leadOriginOptions")) {
+        cleanData.leadOriginOptions = cleanData.sourceOptions || DEFAULT_SOURCE_OPTIONS;
+      }
+      if (!Object.prototype.hasOwnProperty.call(cleanData, "currentSourceOptions")) {
+        cleanData.currentSourceOptions = cleanData.sourceOptions || DEFAULT_SOURCE_OPTIONS;
       }
       if (!cleanData.calledForOptions) {
         cleanData.calledForOptions = DEFAULT_CALLED_FOR_OPTIONS;

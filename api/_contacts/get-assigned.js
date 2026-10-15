@@ -1,5 +1,5 @@
 import clientPromise, { ensureIndexes } from '../lib/mongodb.js';
-import { requireAuth, sanitizeString, isSameAttender, ID_ALIASES } from '../lib/auth.js';
+import { requireAuth, sanitizeString, isSameAttender, verifyAttenderAccess, ID_ALIASES } from '../lib/auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -19,8 +19,12 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'attenderId query parameter is required' });
     }
 
-    // IDOR Enforcement
-    if (!isSameAttender(rawAttenderId, session)) {
+    const client = await clientPromise;
+    const db = client.db('tgf_crm');
+
+    // IDOR Enforcement (Live database check for operators and callers)
+    const isAuthorized = await verifyAttenderAccess(db, session, rawAttenderId);
+    if (!isAuthorized) {
       return res.status(403).json({ success: false, error: 'Forbidden: Access denied to other attender data' });
     }
 
@@ -61,8 +65,6 @@ export default async function handler(req, res) {
     const attenderLabel = `${resolvedName} (${resolvedId})`;
     console.log(`[ATTENDER API REQ] /api/contacts/get-assigned | Attender: "${attenderLabel}" | Purpose: "${purpose}" | Device: "${device}"`);
 
-    const client = await clientPromise;
-    const db = client.db('tgf_crm');
     ensureIndexes(db);
 
     const includeHistory = req.query.includeHistory === 'true';

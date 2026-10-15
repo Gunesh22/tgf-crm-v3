@@ -121,7 +121,6 @@ export function ReportBuilderDrawer({
     "YouTube",
     "Website",
     "Referral",
-    "Organic",
     ...(settingsOptions?.sourceOptions || []),
     ...(contacts || []).map(c => getContactLeadOrigin(c)).filter(Boolean)
   ])).filter(Boolean).sort();

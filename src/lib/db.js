@@ -236,6 +236,8 @@ const getTemporaryFallbackSettings = () => ({
   connectedStatuses: DEFAULT_CONNECTED_STATUSES,
   notConnectedStatuses: DEFAULT_NOT_CONNECTED_STATUSES,
   sourceOptions: DEFAULT_SOURCE_OPTIONS,
+  leadOriginOptions: DEFAULT_SOURCE_OPTIONS,
+  currentSourceOptions: DEFAULT_SOURCE_OPTIONS,
   calledForOptions: DEFAULT_CALLED_FOR_OPTIONS,
   whatsappTemplates: DEFAULT_WHATSAPP_TEMPLATES,
   attemptingCallThreshold: 5,
@@ -411,8 +413,8 @@ export const getAttenders = async () => {
   return [];
 };
 
-export const createAttender = async (name, password) => {
-  return fetchAPI(`/api/admin/attenders`, "POST", { name, password });
+export const createAttender = async (name, password, options = {}) => {
+  return fetchAPI(`/api/admin/attenders`, "POST", { name, password, ...options });
 };
 
 export const updateAttender = async (id, updates) => {

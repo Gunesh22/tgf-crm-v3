@@ -5,7 +5,7 @@ import * as XLSX from "xlsx";
 import {
   Download, Calendar, TrendingUp, UserCheck, Smile, Info, Search, X, ChevronDown, Check, ChevronRight, RotateCw
 } from "lucide-react";
-import { CONNECTED_STATUSES, getContactKhoji, renderVal, getContactLeadOrigin, getContactSource, getCanonicalRegistrations } from "../utils.jsx";
+import { CONNECTED_STATUSES, getContactKhoji, renderVal, getContactLeadOrigin, getContactSource, getCanonicalRegistrations, sanitizeSource } from "../utils.jsx";
 
 function ReportSection({ title, subtitle, badge, action, children, defaultOpen = true }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -442,7 +442,7 @@ export default function AbhivyaktiTab({
   const sourceOptions = useMemo(() => {
     const set = new Set();
     canonicalRegistrations.forEach(r => {
-      const val = r.conversionSource || r.Source || r.source || getContactSource(r) || "Online/Direct";
+      const val = sanitizeSource(r.conversionSource || r.Source || r.source || getContactSource(r), "");
       if (val) set.add(String(val).trim());
     });
     return Array.from(set).sort().map(val => ({ value: val, label: val }));
@@ -451,7 +451,7 @@ export default function AbhivyaktiTab({
   const leadOriginOptions = useMemo(() => {
     const set = new Set();
     canonicalRegistrations.forEach(r => {
-      const val = r.leadOrigin || getContactLeadOrigin(r) || "Direct / Organic";
+      const val = sanitizeSource(r.leadOrigin || getContactLeadOrigin(r), "");
       if (val) set.add(String(val).trim());
     });
     return Array.from(set).sort().map(val => ({ value: val, label: val }));
@@ -514,9 +514,10 @@ export default function AbhivyaktiTab({
     const map = {};
     let total = 0;
     filteredRegistrations.forEach(r => {
-      const src = sourceDimension === "leadOrigin"
-        ? (r.leadOrigin || getContactLeadOrigin(r) || "Direct / Organic")
-        : (r.conversionSource || r.Source || r.source || "Online/Direct");
+      const rawSrc = sourceDimension === "leadOrigin"
+        ? (r.leadOrigin || getContactLeadOrigin(r))
+        : (r.conversionSource || r.Source || r.source);
+      const src = sanitizeSource(rawSrc, "Unspecified");
       map[src] = (map[src] || 0) + 1;
       total++;
     });
@@ -1620,8 +1621,8 @@ export default function AbhivyaktiTab({
                       const attenderVal = getRegistrationPrimaryAttender(r);
                       const calledForVal = r.calledFor || r["Called For"] || "N/A";
                       const khojiVal = getContactKhoji(r) || "No";
-                      const leadOriginVal = r.leadOrigin || getContactLeadOrigin(r) || "Direct / Organic";
-                      const sourceVal = r.conversionSource || r.Source || r.source || "N/A";
+                      const leadOriginVal = sanitizeSource(r.leadOrigin || getContactLeadOrigin(r), "—");
+                      const sourceVal = sanitizeSource(r.conversionSource || r.Source || r.source, "—");
                       const callTypeVal = r.callType || "N/A";
 
                       return (
