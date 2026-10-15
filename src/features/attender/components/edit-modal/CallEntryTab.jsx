@@ -139,6 +139,46 @@ export const CallEntryTab = ({
     }
   };
 
+  const followupSectionRef = useRef(null);
+  const scheduleFormRef = useRef(null);
+
+  // Smoothly scroll modal content upward when Schedule Follow-up opens so card and fields are fully visible above fixed footer
+  useEffect(() => {
+    if (isAddingNext || isRescheduling) {
+      const raf = requestAnimationFrame(() => {
+        const targetEl = scheduleFormRef.current || followupSectionRef.current;
+        if (!targetEl) return;
+        const container = targetEl.closest(".overflow-y-auto");
+        if (!container) return;
+
+        const cRect = container.getBoundingClientRect();
+        const tRect = targetEl.getBoundingClientRect();
+
+        // Target's position relative to container's scroll content
+        const elemTopInContainer = (tRect.top - cRect.top) + container.scrollTop;
+
+        // Position with comfortable margin above the card
+        const topMargin = 20;
+        const bottomMargin = 20;
+
+        // Check if card is already fully visible inside modal
+        const isFullyVisible = (tRect.top >= cRect.top + topMargin) && (tRect.bottom <= cRect.bottom - bottomMargin);
+
+        if (!isFullyVisible) {
+          let targetScrollTop = elemTopInContainer - topMargin;
+          const maxScroll = container.scrollHeight - container.clientHeight;
+          targetScrollTop = Math.max(0, Math.min(targetScrollTop, maxScroll));
+
+          container.scrollTo({
+            top: targetScrollTop,
+            behavior: "smooth"
+          });
+        }
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+  }, [isAddingNext, isRescheduling]);
+
 
   const rawCbStatus = String(edited.callbackStatus || "").toLowerCase().trim();
   const isFollowupCompleted = rawCbStatus === "done" || rawCbStatus === "completed";
@@ -1339,10 +1379,10 @@ export const CallEntryTab = ({
       </div>
 
       {/* 7. ACTION-DRIVEN FOLLOW-UP SCHEDULER */}
-      <div className="space-y-2 p-3 bg-slate-50/70 border border-slate-100 rounded-xl">
+      <div ref={followupSectionRef} className="space-y-2 p-2.5 bg-slate-50/70 border border-slate-200/70 rounded-xl">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-slate-600 uppercase tracking-wider">
-            <CalendarDays size={14} className={hasActivePendingFollowup ? "text-amber-600" : isFollowupCompleted ? "text-emerald-600" : "text-slate-400"} />
+            <CalendarDays size={14} className={hasActivePendingFollowup ? "text-indigo-600" : isFollowupCompleted ? "text-emerald-600" : "text-slate-400"} />
             <span>Follow-up</span>
           </div>
 
@@ -1355,9 +1395,25 @@ export const CallEntryTab = ({
                 setIsRescheduling(false);
                 setIsAddingNext(false);
               }}
-              className="px-2 py-0.5 bg-rose-50 border border-rose-200 text-rose-700 font-bold rounded text-[10px] hover:bg-rose-100 transition cursor-pointer"
+              className="text-[11px] font-semibold text-rose-500 hover:text-rose-700 hover:bg-rose-50 px-2 py-0.5 rounded transition cursor-pointer"
+              title="Remove follow-up"
             >
               Remove
+            </button>
+          )}
+
+          {!edited.callbackDate && !isFollowupCompleted && !isFollowupCancelled && !isAddingNext && (
+            <button
+              type="button"
+              onClick={() => {
+                setTempDate("");
+                setTempTime("");
+                setIsAddingNext(true);
+              }}
+              className="h-7 px-3 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+            >
+              <CalendarDays size={13} className="text-indigo-600" />
+              <span>Schedule Follow-up</span>
             </button>
           )}
         </div>
@@ -1367,22 +1423,31 @@ export const CallEntryTab = ({
           <>
             {/* Mode 1: Rescheduling Mode */}
             {isRescheduling ? (
-              <div className="space-y-3 p-3.5 bg-sky-50/90 border border-sky-200 rounded-xl shadow-2xs animate-fade-in">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-sky-100 border border-sky-300 text-sky-800 flex items-center justify-center shrink-0">
-                    <RotateCw size={15} />
-                  </div>
-                  <div>
-                    <div className="text-xs font-extrabold text-sky-950">
-                      Rescheduling Follow-up
+              <div ref={scheduleFormRef} className="space-y-2.5 p-3 bg-white border border-indigo-200/90 rounded-xl shadow-2xs animate-fade-in">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                      <RotateCw size={14} />
                     </div>
-                    <div className="text-[10px] text-sky-700 font-medium">
-                      Current: {formatFollowupDate(edited.callbackDate)} {edited.callbackTime ? `· ${formatFollowupTime12h(edited.callbackTime)}` : ""}
+                    <div>
+                      <div className="text-xs font-bold text-slate-900">
+                        Reschedule Follow-up
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-medium">
+                        Current: {formatFollowupDate(edited.callbackDate)} {edited.callbackTime ? `· ${formatFollowupTime12h(edited.callbackTime)}` : ""}
+                      </div>
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsRescheduling(false)}
+                    className="text-xs font-semibold text-slate-500 hover:text-slate-700 px-2 py-1 rounded hover:bg-slate-100 transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
                 </div>
 
-                <div className="pt-2 border-t border-sky-200/80">
+                <div className="pt-2 border-t border-slate-100">
                   <CustomDateTimePicker
                     dateValue={tempDate || edited.callbackDate || ""}
                     timeValue={tempTime || edited.callbackTime || ""}
@@ -1406,52 +1471,50 @@ export const CallEntryTab = ({
                     }}
                     dateLabel="Follow-up Date"
                     timeLabel="Follow-up Time (Optional)"
-                    themeColor="sky"
+                    themeColor="indigo"
                     autoOpenDate={true}
                   />
                 </div>
-
-                <div className="pt-2 border-t border-sky-200/80 flex justify-end items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsRescheduling(false)}
-                    className="px-3.5 py-1.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold text-xs rounded-lg transition cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
               </div>
             ) : (
-              /* Mode 2: Normal Pending Mode */
-              <div className="space-y-3 p-3.5 bg-amber-50/80 border border-amber-200/80 rounded-xl shadow-2xs animate-fade-in">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-amber-100 border border-amber-300 text-amber-800 flex items-center justify-center shrink-0">
-                      <CalendarDays size={15} />
-                    </div>
-                    <div>
-                      <div className="text-xs font-extrabold text-amber-950 flex items-center gap-1.5">
-                        <span>📅 {formatFollowupDate(edited.callbackDate)}</span>
-                        {edited.callbackTime && <span className="text-amber-800">· 🕒 {formatFollowupTime12h(edited.callbackTime)}</span>}
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-300/60">
-                          ⏳ {edited.callbackStatus === "rescheduled" ? "Rescheduled" : "Pending"}
+              /* Mode 2: Normal Pending Mode (Compact Row Card) */
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2.5 bg-white border border-slate-200/90 rounded-xl shadow-2xs animate-fade-in">
+                {/* Left: Icon, Date, Time & Status */}
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                    <CalendarDays size={16} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-slate-900 tracking-tight">
+                        {formatFollowupDate(edited.callbackDate)}
+                      </span>
+                      {edited.callbackTime && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/60">
+                          <Clock size={11} className="text-slate-400" />
+                          {formatFollowupTime12h(edited.callbackTime)}
                         </span>
-                      </div>
+                      )}
+                    </div>
+                    <div className="mt-0.5">
+                      <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-indigo-700 bg-indigo-50 border border-indigo-100/90 px-2 py-0.5 rounded-md">
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse" />
+                        {edited.callbackStatus === "rescheduled" ? "Rescheduled" : "Pending"}
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-amber-200/80 flex justify-end items-center gap-2 flex-wrap">
+                {/* Right: Action Buttons */}
+                <div className="flex items-center gap-1.5 flex-wrap shrink-0">
                   {(prevFollowupState || edited.callbackStatus === "rescheduled") && (
                     <button
                       type="button"
                       onClick={handleUndoFollowup}
-                      className="py-1.5 px-2.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold text-xs rounded-lg transition cursor-pointer flex items-center gap-1"
+                      className="h-7 px-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 font-semibold text-xs rounded-lg transition cursor-pointer flex items-center gap-1"
                       title="Undo previous follow-up action"
                     >
-                      <Undo2 size={13} /> Undo
+                      <Undo2 size={12} /> Undo
                     </button>
                   )}
 
@@ -1463,9 +1526,9 @@ export const CallEntryTab = ({
                       setIsRescheduling(false);
                       toast.success("Follow-up marked as completed ✓");
                     }}
-                    className="py-1.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs rounded-lg shadow-2xs transition cursor-pointer flex items-center gap-1.5"
+                    className="h-7 px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-lg shadow-2xs transition cursor-pointer flex items-center gap-1.5"
                   >
-                    <CheckCircle2 size={14} /> Complete
+                    <CheckCircle2 size={13} /> Complete
                   </button>
 
                   <button
@@ -1475,9 +1538,9 @@ export const CallEntryTab = ({
                       setTempTime(edited.callbackTime || "");
                       setIsRescheduling(true);
                     }}
-                    className="py-1.5 px-3 bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 font-bold text-xs rounded-lg transition cursor-pointer flex items-center gap-1.5"
+                    className="h-7 px-2.5 bg-white hover:bg-indigo-50/50 border border-slate-200 hover:border-indigo-200 text-slate-700 hover:text-indigo-700 font-semibold text-xs rounded-lg shadow-2xs transition cursor-pointer flex items-center gap-1.5"
                   >
-                    <RotateCw size={13} /> Reschedule
+                    <RotateCw size={12} /> Reschedule
                   </button>
 
                   <button
@@ -1488,9 +1551,9 @@ export const CallEntryTab = ({
                       setIsRescheduling(false);
                       toast("Follow-up cancelled");
                     }}
-                    className="py-1.5 px-2.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold text-xs rounded-lg transition cursor-pointer flex items-center gap-1"
+                    className="h-7 px-2.5 bg-rose-50/70 hover:bg-rose-100/80 border border-rose-200/80 text-rose-700 font-semibold text-xs rounded-lg transition cursor-pointer flex items-center gap-1"
                   >
-                    <X size={13} /> Cancel
+                    <X size={12} /> Cancel
                   </button>
                 </div>
               </div>
@@ -1500,25 +1563,49 @@ export const CallEntryTab = ({
 
         {/* CASE B: Completed Follow-up */}
         {isFollowupCompleted && (
-          <div className="space-y-3 p-3.5 bg-emerald-50/80 border border-emerald-200/80 rounded-xl shadow-2xs animate-fade-in">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-800 flex items-center justify-center shrink-0">
-                  <CheckCircle2 size={16} />
+          <div className="space-y-2.5 p-2.5 bg-white border border-slate-200/80 rounded-xl shadow-2xs animate-fade-in">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center shrink-0">
+                  <CheckCircle2 size={15} />
                 </div>
                 <div>
-                  <div className="text-xs font-extrabold text-emerald-950">
-                    ✓ Completed — {formatFollowupDate(edited.callbackDate) || "Follow-up"}
+                  <div className="text-xs font-bold text-slate-900">
+                    Completed — {formatFollowupDate(edited.callbackDate) || "Follow-up"}
                   </div>
-                  <div className="text-[10px] text-emerald-700 font-medium">
-                    No active follow-up pending.
+                  <div className="text-[10px] text-slate-500 font-medium">
+                    No active follow-up pending
                   </div>
                 </div>
               </div>
+
+              {!isAddingNext && (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleUndoFollowup}
+                    className="h-7 px-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 font-semibold text-xs rounded-lg transition cursor-pointer flex items-center gap-1"
+                    title="Undo completion and restore follow-up"
+                  >
+                    <Undo2 size={12} /> Undo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTempDate("");
+                      setTempTime("");
+                      setIsAddingNext(true);
+                    }}
+                    className="h-7 px-3 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs rounded-lg shadow-2xs transition cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Plus size={13} /> Schedule Next
+                  </button>
+                </div>
+              )}
             </div>
 
-            {isAddingNext ? (
-              <div className="pt-2 border-t border-emerald-200/80 space-y-2.5 animate-fade-in">
+            {isAddingNext && (
+              <div ref={scheduleFormRef} className="pt-2 border-t border-slate-100 space-y-2.5 animate-fade-in">
                 <CustomDateTimePicker
                   dateValue={tempDate || ""}
                   timeValue={tempTime || ""}
@@ -1546,33 +1633,11 @@ export const CallEntryTab = ({
                   <button
                     type="button"
                     onClick={() => setIsAddingNext(false)}
-                    className="px-3.5 py-1.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold text-xs rounded-lg transition cursor-pointer"
+                    className="px-3 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 font-semibold text-xs rounded-lg transition cursor-pointer"
                   >
                     Cancel
                   </button>
                 </div>
-              </div>
-            ) : (
-              <div className="pt-2 border-t border-emerald-200/80 flex justify-end items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleUndoFollowup}
-                  className="py-1.5 px-3 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold text-xs rounded-lg transition cursor-pointer flex items-center gap-1.5"
-                  title="Undo completion and restore follow-up"
-                >
-                  <Undo2 size={13} /> Undo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTempDate("");
-                    setTempTime("");
-                    setIsAddingNext(true);
-                  }}
-                  className="py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-extrabold text-xs rounded-lg shadow-2xs transition cursor-pointer flex items-center gap-1.5"
-                >
-                  <Plus size={14} /> ＋ Add Next Follow-up
-                </button>
               </div>
             )}
           </div>
@@ -1580,25 +1645,49 @@ export const CallEntryTab = ({
 
         {/* CASE C: Cancelled Follow-up */}
         {isFollowupCancelled && (
-          <div className="space-y-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl animate-fade-in">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-slate-100 border border-slate-200 text-slate-500 flex items-center justify-center shrink-0">
+          <div className="space-y-2.5 p-2.5 bg-white border border-slate-200/80 rounded-xl shadow-2xs animate-fade-in">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 text-slate-500 flex items-center justify-center shrink-0">
                   <X size={15} />
                 </div>
                 <div>
-                  <div className="text-xs font-extrabold text-slate-700">
-                    ✕ Cancelled — {formatFollowupDate(edited.callbackDate) || "Follow-up"}
+                  <div className="text-xs font-bold text-slate-700">
+                    Cancelled — {formatFollowupDate(edited.callbackDate) || "Follow-up"}
                   </div>
                   <div className="text-[10px] text-slate-500 font-medium">
-                    Follow-up cancelled.
+                    Follow-up cancelled
                   </div>
                 </div>
               </div>
+
+              {!isAddingNext && (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleUndoFollowup}
+                    className="h-7 px-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 font-semibold text-xs rounded-lg transition cursor-pointer flex items-center gap-1"
+                    title="Undo cancellation and restore follow-up"
+                  >
+                    <Undo2 size={12} /> Undo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTempDate("");
+                      setTempTime("");
+                      setIsAddingNext(true);
+                    }}
+                    className="h-7 px-3 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold text-xs rounded-lg transition cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Plus size={13} /> Schedule Next
+                  </button>
+                </div>
+              )}
             </div>
 
-            {isAddingNext ? (
-              <div className="pt-2 border-t border-slate-200 space-y-2.5 animate-fade-in">
+            {isAddingNext && (
+              <div ref={scheduleFormRef} className="pt-2 border-t border-slate-100 space-y-2.5 animate-fade-in">
                 <CustomDateTimePicker
                   dateValue={tempDate || ""}
                   timeValue={tempTime || ""}
@@ -1626,33 +1715,11 @@ export const CallEntryTab = ({
                   <button
                     type="button"
                     onClick={() => setIsAddingNext(false)}
-                    className="px-3.5 py-1.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold text-xs rounded-lg transition cursor-pointer"
+                    className="px-3 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 font-semibold text-xs rounded-lg transition cursor-pointer"
                   >
                     Cancel
                   </button>
                 </div>
-              </div>
-            ) : (
-              <div className="pt-2 border-t border-slate-200 flex justify-end items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleUndoFollowup}
-                  className="py-1.5 px-3 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold text-xs rounded-lg transition cursor-pointer flex items-center gap-1.5"
-                  title="Undo cancellation and restore follow-up"
-                >
-                  <Undo2 size={13} /> Undo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTempDate("");
-                    setTempTime("");
-                    setIsAddingNext(true);
-                  }}
-                  className="py-1.5 px-3 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold text-xs rounded-lg transition cursor-pointer flex items-center gap-1.5"
-                >
-                  <Plus size={14} /> ＋ Add Next Follow-up
-                </button>
               </div>
             )}
           </div>
@@ -1662,13 +1729,18 @@ export const CallEntryTab = ({
         {!edited.callbackDate && !isFollowupCompleted && !isFollowupCancelled && (
           <>
             {isAddingNext ? (
-              <div className="space-y-3 p-3.5 bg-indigo-50/80 border border-indigo-200 rounded-xl animate-fade-in">
-                <div className="flex items-center justify-between">
-                  <div className="text-xs font-extrabold text-indigo-950">Schedule Follow-up</div>
+              <div ref={scheduleFormRef} className="space-y-3 p-3 bg-white border border-slate-200/90 rounded-xl shadow-2xs animate-fade-in">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-md bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                      <CalendarDays size={13} />
+                    </div>
+                    <span className="text-xs font-bold text-slate-900">Schedule Follow-up</span>
+                  </div>
                   <button
                     type="button"
                     onClick={() => setIsAddingNext(false)}
-                    className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 font-bold text-xs rounded-lg transition cursor-pointer"
+                    className="text-xs font-semibold text-slate-500 hover:text-slate-700 px-2 py-0.5 rounded hover:bg-slate-100 transition cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -1698,19 +1770,14 @@ export const CallEntryTab = ({
                 />
               </div>
             ) : (
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTempDate("");
-                    setTempTime("");
-                    setIsAddingNext(true);
-                  }}
-                  className="py-2 px-3.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-extrabold rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                >
-                  <CalendarDays size={14} className="text-indigo-600" />
-                  <span>＋ Schedule Follow-up</span>
-                </button>
+              <div className="flex items-center gap-2.5 px-3 py-2 bg-white/80 border border-dashed border-slate-200 rounded-lg">
+                <div className="w-6 h-6 rounded-md bg-slate-100 text-slate-400 flex items-center justify-center shrink-0">
+                  <CalendarDays size={13} />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-slate-700 block leading-tight">No follow-up scheduled</span>
+                  <span className="text-[11px] text-slate-500 font-medium block leading-tight">Schedule a follow-up to remember the next contact.</span>
+                </div>
               </div>
             )}
           </>

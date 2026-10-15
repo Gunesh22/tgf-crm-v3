@@ -30,20 +30,21 @@ export const CustomDateTimePicker = ({
   const [showDatePicker, setShowDatePicker] = useState(autoOpenDate);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
+  const getTodayStr = () => {
+    return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  };
+
+  const initialDateStr = (dateValue && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) ? dateValue : getTodayStr();
+
   // Date states
   const [currentYear, setCurrentYear] = useState(() => {
-    if (dateValue && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
-      return Number(dateValue.split("-")[0]);
-    }
-    return new Date().getFullYear();
+    return Number(initialDateStr.split("-")[0]) || new Date().getFullYear();
   });
   const [currentMonth, setCurrentMonth] = useState(() => {
-    if (dateValue && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
-      return Number(dateValue.split("-")[1]) - 1;
-    }
-    return new Date().getMonth();
+    const m = Number(initialDateStr.split("-")[1]);
+    return (!isNaN(m) && m > 0) ? m - 1 : new Date().getMonth();
   });
-  const [selectedDateStr, setSelectedDateStr] = useState(dateValue || "");
+  const [selectedDateStr, setSelectedDateStr] = useState(initialDateStr);
 
   // Time states
   const parsedInitialTime = useMemo(() => parseTimeTo3Boxes(timeValue), [timeValue]);
@@ -63,9 +64,10 @@ export const CustomDateTimePicker = ({
   const timePickerRef = useRef(null);
 
   const resetDateToProp = () => {
-    setSelectedDateStr(dateValue || "");
-    if (dateValue && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
-      const [y, m] = dateValue.split("-").map(Number);
+    const effective = (dateValue && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) ? dateValue : getTodayStr();
+    setSelectedDateStr(effective);
+    if (effective && /^\d{4}-\d{2}-\d{2}$/.test(effective)) {
+      const [y, m] = effective.split("-").map(Number);
       setCurrentYear(y);
       setCurrentMonth(m - 1);
     }
@@ -87,23 +89,48 @@ export const CustomDateTimePicker = ({
   };
 
   useEffect(() => {
-    resetDateToProp();
+    if (dateValue && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+      setSelectedDateStr(dateValue);
+      const [y, m] = dateValue.split("-").map(Number);
+      setCurrentYear(y);
+      setCurrentMonth(m - 1);
+    }
   }, [dateValue]);
 
   useEffect(() => {
     resetTimeToProp();
   }, [timeValue]);
 
-  // Unified popover viewport-aware coordinate calculator
+  // Unified popover viewport-aware coordinate calculator that respects modal scroll container
   const calculateCoords = (buttonEl, width, height, alignRight = false) => {
     if (!buttonEl) return { top: 0, left: 0 };
     const rect = buttonEl.getBoundingClientRect();
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const spaceAbove = rect.top;
+    const scrollContainer = buttonEl.closest(".overflow-y-auto");
+    const cRect = scrollContainer ? scrollContainer.getBoundingClientRect() : null;
 
-    const top = spaceBelow < height && spaceAbove > height
-      ? Math.max(10, rect.top - height - 4)
-      : Math.min(window.innerHeight - height - 10, rect.bottom + 4);
+    // Usable vertical boundaries inside modal (above fixed footer)
+    const containerBottom = cRect ? cRect.bottom : window.innerHeight;
+    const containerTop = cRect ? cRect.top : 0;
+
+    const spaceBelow = containerBottom - rect.bottom;
+    const spaceAbove = rect.top - containerTop;
+
+    let top;
+    if (spaceBelow >= height + 6) {
+      top = rect.bottom + 4;
+    } else if (spaceAbove >= height + 6) {
+      top = rect.top - height - 4;
+    } else {
+      top = spaceBelow > spaceAbove
+        ? Math.min(containerBottom - height - 6, rect.bottom + 4)
+        : Math.max(containerTop + 6, rect.top - height - 4);
+    }
+
+    // Window edge safety bounds
+    if (top + height > window.innerHeight - 10) {
+      top = Math.max(10, window.innerHeight - height - 10);
+    }
+    if (top < 10) top = 10;
 
     let left = alignRight ? rect.right - width : rect.left;
     if (left + width > window.innerWidth - 12) left = window.innerWidth - width - 12;
@@ -116,6 +143,54 @@ export const CustomDateTimePicker = ({
     if (dateButtonRef.current) setDateCoords(calculateCoords(dateButtonRef.current, 256, 310, false));
     if (timeButtonRef.current) setTimeCoords(calculateCoords(timeButtonRef.current, 224, 285, true));
   };
+
+  // Smoothly adjust modal scroll position if picker popover would be obscured by fixed footer
+  const ensurePickerVisibility = (buttonEl, pickerHeight) => {
+    if (!buttonEl) return;
+    const scrollContainer = buttonEl.closest(".overflow-y-auto");
+    if (!scrollContainer) return;
+
+    const cRect = scrollContainer.getBoundingClientRect();
+    const bRect = buttonEl.getBoundingClientRect();
+
+    const spaceBelow = cRect.bottom - bRect.bottom;
+    const spaceAbove = bRect.top - cRect.top;
+
+    // If it already fits comfortably in either direction, no scroll needed
+    if (spaceBelow >= pickerHeight + 10 || spaceAbove >= pickerHeight + 10) {
+      return;
+    }
+
+    const neededBelow = (pickerHeight + 16) - spaceBelow;
+    if (neededBelow > 0) {
+      const maxScroll = scrollContainer.scrollHeight - scrollContainer.clientHeight;
+      const targetScroll = Math.min(maxScroll, scrollContainer.scrollTop + neededBelow);
+      if (targetScroll > scrollContainer.scrollTop + 4) {
+        scrollContainer.scrollTo({
+          top: targetScroll,
+          behavior: "smooth"
+        });
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (showDatePicker) {
+      const raf = requestAnimationFrame(() => {
+        ensurePickerVisibility(dateButtonRef.current, 310);
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+  }, [showDatePicker]);
+
+  useEffect(() => {
+    if (showTimePicker) {
+      const raf = requestAnimationFrame(() => {
+        ensurePickerVisibility(timeButtonRef.current, 285);
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+  }, [showTimePicker]);
 
   useEffect(() => {
     if (showDatePicker || showTimePicker) {
@@ -208,15 +283,13 @@ export const CustomDateTimePicker = ({
   const handleSelectDay = (dateStr) => {
     if (!dateStr) return;
     setSelectedDateStr(dateStr);
-    if (typeof onDateChange === "function") {
-      onDateChange(dateStr);
-    }
-    setShowDatePicker(false);
   };
 
   const handleConfirmDate = () => {
-    if (selectedDateStr && typeof onDateChange === "function") {
-      onDateChange(selectedDateStr);
+    const todayStr = getTodayStr();
+    const targetDate = selectedDateStr || dateValue || todayStr;
+    if (targetDate && typeof onDateChange === "function") {
+      onDateChange(targetDate);
     }
     setShowDatePicker(false);
   };
@@ -312,13 +385,13 @@ export const CustomDateTimePicker = ({
             setShowTimePicker(false);
             if (nextState) updateCoords();
           }}
-          className={`w-full h-9 px-3 bg-white border border-slate-300 text-slate-900 font-bold rounded-md text-xs flex items-center justify-between shadow-2xs hover:border-blue-400 focus:outline-none transition-colors cursor-pointer ${showDatePicker ? primaryBorderClass : ""}`}
+          className={`w-full h-9 px-3 bg-white border border-slate-300 text-slate-900 font-bold rounded-lg text-xs flex items-center justify-between shadow-2xs hover:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors cursor-pointer ${showDatePicker ? primaryBorderClass : ""}`}
         >
           <span className="flex items-center gap-2 truncate">
             <CalendarIcon size={14} className={primaryTextClass} />
             <span>{formattedDateDisplay}</span>
           </span>
-          <span className="text-[10px] text-slate-400 font-medium">▼</span>
+          <ChevronDown size={14} className="text-slate-400 shrink-0" />
         </button>
 
         {/* CUSTOM DATE PICKER CARD MODAL (LEFT CARD IN IMAGE) */}
@@ -385,6 +458,13 @@ export const CustomDateTimePicker = ({
                     key={idx}
                     type="button"
                     onClick={() => handleSelectDay(cell.dateStr)}
+                    onDoubleClick={() => {
+                      if (cell.dateStr && typeof onDateChange === "function") {
+                        setSelectedDateStr(cell.dateStr);
+                        onDateChange(cell.dateStr);
+                        setShowDatePicker(false);
+                      }
+                    }}
                     className={`h-7 w-7 mx-auto rounded-md flex items-center justify-center text-xs font-bold cursor-pointer transition-all ${
                       isSelected
                         ? `${primaryBgClass} text-white shadow-xs scale-105`
@@ -441,7 +521,7 @@ export const CustomDateTimePicker = ({
               }
               setShowDatePicker(false);
             }}
-            className={`w-full h-9 px-3 bg-white border border-slate-300 text-slate-900 font-bold rounded-md text-xs flex items-center justify-between shadow-2xs hover:border-blue-400 focus:outline-none transition-colors cursor-pointer ${showTimePicker ? primaryBorderClass : ""}`}
+            className={`w-full h-9 px-3 bg-white border border-slate-300 text-slate-900 font-bold rounded-lg text-xs flex items-center justify-between shadow-2xs hover:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors cursor-pointer ${showTimePicker ? primaryBorderClass : ""}`}
           >
             <span className="flex items-center gap-2 truncate">
               <Clock size={14} className={timeValue ? primaryTextClass : "text-slate-400"} />
@@ -449,7 +529,7 @@ export const CustomDateTimePicker = ({
                 {timeValue ? normalizeTypedTime(timeValue) : "No time (Optional)"}
               </span>
             </span>
-            <span className="text-[10px] text-slate-400 font-medium">▼</span>
+            <ChevronDown size={14} className="text-slate-400 shrink-0" />
           </button>
 
           {timeValue && (

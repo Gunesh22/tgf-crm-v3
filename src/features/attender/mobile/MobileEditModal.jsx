@@ -1208,23 +1208,29 @@ export default function MobileEditModal({
                       </div>
                     ) : (
                       /* Mode 2: Normal Pending Mode */
-                      <div className="space-y-3 p-3 bg-amber-50/80 border border-amber-200 rounded-xl">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-lg bg-amber-100 border border-amber-300 text-amber-800 flex items-center justify-center shrink-0">
+                      <div className="space-y-3 p-3 bg-gradient-to-r from-indigo-50/70 via-slate-50/70 to-blue-50/50 border border-indigo-200/80 rounded-2xl shadow-2xs">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-lg bg-indigo-100/90 border border-indigo-200 text-indigo-700 flex items-center justify-center shrink-0">
                             <CalendarDays size={14} />
                           </div>
                           <div>
-                            <div className="text-xs font-extrabold text-amber-950 flex items-center gap-1.5">
-                              <span>📅 {formatFollowupDate(edited.callbackDate)}</span>
-                              {edited.callbackTime && <span className="text-amber-800">· 🕒 {formatFollowupTime12h(edited.callbackTime)}</span>}
+                            <div className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                              <span>{formatFollowupDate(edited.callbackDate)}</span>
+                              {edited.callbackTime && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 bg-white/90 px-1 py-0.5 rounded border border-slate-200">
+                                  <Clock size={10} className="text-indigo-600" />
+                                  {formatFollowupTime12h(edited.callbackTime)}
+                                </span>
+                              )}
                             </div>
-                            <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded border border-amber-300/60">
-                              ⏳ {edited.callbackStatus === "rescheduled" ? "Rescheduled" : "Pending"}
+                            <span className="inline-flex items-center gap-1.5 text-[9px] font-extrabold uppercase tracking-wider text-indigo-700 bg-indigo-100/80 px-2 py-0.5 rounded-md border border-indigo-200/90 mt-0.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse" />
+                              {edited.callbackStatus === "rescheduled" ? "Rescheduled" : "Pending"}
                             </span>
                           </div>
                         </div>
 
-                        <div className="pt-2 border-t border-amber-200/80 flex justify-end items-center gap-1.5 flex-wrap">
+                        <div className="pt-2 border-t border-indigo-100 flex justify-end items-center gap-1.5 flex-wrap">
                           {(prevFollowupState || edited.callbackStatus === "rescheduled") && (
                             <button
                               type="button"
