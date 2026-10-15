@@ -1515,3 +1515,76 @@ The discrepancy is caused by two conflicting definitions of "Incoming" in `Month
 
 
 
+
+
+---
+
+## 23. Lead Origin & Current Source Complete Separation
+
+### 1. Architectural Decoupling
+- **Independent Dimensions**: `Lead Origin` (how the lead originally arrived) and `Current Source` (the attribution/channel for the current interaction/campaign) are fully decoupled.
+- **No Cross-Pollution**: Selecting or clearing one field never alters, substitutes, or falls back to the other field.
+- **Production Safety**: Zero database migrations or bulk updates. Existing contact documents continue reading legacy `source` fields through non-destructive fallback resolvers.
+
+### 2. Global Settings Separation (`SettingsTab.jsx`, `utils.js`)
+- **Two Independent Cards**:
+  - `Lead Origin Options` (`leadOriginOptions`)
+  - `Current Source Options` (`currentSourceOptions`)
+- **Safe Fallback Resolvers (`resolveLeadOriginOptions`, `resolveCurrentSourceOptions`)**:
+  - Checks if `leadOriginOptions` / `currentSourceOptions` property exists as an array (even if empty `[]`).
+  - Only falls back to legacy `sourceOptions` if the new settings key is entirely undefined on older settings documents.
+  - Avoids indefinite bi-directional synchronization that could silently mutate legacy configurations.
+
+### 3. Edit Modal & Call Entry Separation (`CallEntryTab.jsx`, `EditModal.jsx`)
+- **Lead Origin Dropdown**:
+  - Exclusively reads `leadOriginOptionsList`.
+  - Does NOT merge lead tags.
+- **Current Source Dropdown**:
+  - Exclusively reads `currentSourceDropdownOptions` (combining `currentSourceOptions` + active contact `tags`).
+- **Explicit-Clear Bug Prevention**:
+  - Replaced truthy `||` fallback chains with explicit property-presence (`!== undefined`) checks.
+  - If an attender intentionally clears Lead Origin or Current Source to an empty string (`""`), it is strictly preserved and never silently restored from `row` or legacy aliases.
+- **Consolidated Field Extractors**:
+  - Unified alias extraction into `extractLeadOriginField` and `extractCurrentSourceField` in `EditModal.jsx`.
+
+### 4. Backend Persistence (`api/_contacts/log-call.js`)
+- **Authoritative Alias Precedence**:
+  - Lead Origin: `payload.leadOrigin` > `payload.original_source` > `payload.originalSource` > `payload['Lead Origin']` > `payload.lead_origin`.
+  - Current Source: `payload.currentSource` > `payload.source` > `payload.Source` > `payload.callSource`.
+- **Existing Contact Fallback**:
+  - If omitted in payload, uses `findLeadOriginField(existingContact)` and `findCurrentSourceField(existingContact)`.
+  - If explicitly cleared (`""`), persists empty string without restoring old values.
+- **Call Snapshots**:
+  - History entries record separate `leadOrigin` and `currentSource` snapshots at the time the call was placed.
+
+### 5. Independent Reporting & Analytics
+- **Independent Field Resolution**: Updated `DashboardTab.jsx`, `MonthlyReportTab.jsx`, `PipelineCallsTab.jsx`, and `ReportBuilderDrawer.jsx`.
+- **Unspecified Handling**: An empty selected dimension renders strictly as `"Unspecified"`; it never borrows values from the other dimension.
+
+---
+
+## 24. Follow-up Auto-Scheduling & UI Streamlining
+
+### 1. Instant 1-Click Scheduling (No "Confirm" Button)
+- **Eliminated Confirm Buttons**:
+  - Removed `Confirm Follow-up`, `Confirm Reschedule`, and `Confirm New Follow-up` buttons across all follow-up modes in `CallEntryTab.jsx`.
+- **Immediate Cell Click Scheduling (`CustomDateTimePicker.jsx`)**:
+  - In `CustomDateTimePicker`, clicking any date in the calendar grid immediately invokes `onDateChange(selectedDate)` and closes the date picker popover.
+  - Automatically commits `callbackDate: selectedDate`, `callbackStatus: "pending"` (or `"rescheduled"`), and persists changes to the contact state with a toast notification.
+- **Auto-Open Calendar (`autoOpenDate={true}`)**:
+  - Clicking **`＋ Schedule Follow-up`**, **`Reschedule`**, or **`＋ Add Next Follow-up`** automatically opens the calendar popover on mount, allowing 1-click scheduling.
+
+### 2. Optional Time Auto-Updates
+- If an attender adjusts the hour, minute, or AM/PM period, the scheduled time updates immediately without needing confirmation.
+
+### 3. Reversibility & Cancel Safeguards
+- **Cancel Button**: Available if an attender opens the scheduler and decides to exit without picking a date.
+- **Undo Button**: Restores the previous follow-up snapshot if a user completes, cancels, or reschedules by mistake.
+
+---
+
+## 25. Code Cleanup & Deduplication
+
+- Removed redundant alias evaluation and ~50 lines of duplicate SearchableDropdown fallback boilerplate across Sales, Reminder, and Query modes in `CallEntryTab.jsx`.
+- Cleaned up unused imports `LEAD_ORIGIN_OPTIONS` and `CURRENT_SOURCE_OPTIONS` in `SettingsTab.jsx`.
+- Reused `findLeadOriginField` and `findCurrentSourceField` helpers in `api/_contacts/log-call.js`.
