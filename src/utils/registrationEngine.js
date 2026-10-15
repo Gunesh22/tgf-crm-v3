@@ -165,7 +165,7 @@ export function getContactLeadOrigin(log, attempt) {
     if (directVal && String(directVal).trim() && String(directVal).trim() !== '—') {
       const trimmed = String(directVal).trim();
       const lower = trimmed.toLowerCase();
-      if (['incoming', 'incoming call', 'incoming calls', 'incoming-calls', 'outgoing', 'outgoing call', 'outgoing calls', 'outgoing-calls', 'call', 'calls', 'general', 'unspecified', 'unassigned', 'none', 'na', 'null', 'undefined', '-', 'direct / organic', 'direct / online', 'direct online', 'direct organic', 'direct', 'organic', 'online/direct', 'online direct'].includes(lower)) {
+      if (['incoming', 'incoming call', 'incoming-calls', 'outgoing', 'outgoing call', 'outgoing calls', 'outgoing-calls', 'call', 'calls', 'general', 'unspecified', 'unassigned', 'none', 'na', 'null', 'undefined', '-', 'direct / organic', 'direct / online', 'direct online', 'direct organic', 'direct', 'organic', 'online/direct', 'online direct'].includes(lower)) {
         return '';
       }
       return trimmed;
@@ -262,7 +262,7 @@ export function getContactSource(log, attempt) {
     if (directVal && String(directVal).trim() && String(directVal).trim() !== '—') {
       const trimmed = String(directVal).trim();
       const lower = trimmed.toLowerCase();
-      if (['incoming', 'incoming call', 'incoming calls', 'incoming-calls', 'outgoing', 'outgoing call', 'outgoing calls', 'outgoing-calls', 'call', 'calls', 'general', 'unspecified', 'unassigned', 'none', 'na', 'null', 'undefined', '-', 'direct / organic', 'direct / online', 'direct online', 'direct organic', 'direct', 'organic', 'online/direct', 'online direct'].includes(lower)) {
+      if (['incoming', 'incoming call', 'incoming-calls', 'outgoing', 'outgoing call', 'outgoing calls', 'outgoing-calls', 'call', 'calls', 'general', 'unspecified', 'unassigned', 'none', 'na', 'null', 'undefined', '-', 'direct / organic', 'direct / online', 'direct online', 'direct organic', 'direct', 'organic', 'online/direct', 'online direct'].includes(lower)) {
         return '';
       }
       return trimmed;

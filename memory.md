@@ -1588,3 +1588,26 @@ The discrepancy is caused by two conflicting definitions of "Incoming" in `Month
 - Removed redundant alias evaluation and ~50 lines of duplicate SearchableDropdown fallback boilerplate across Sales, Reminder, and Query modes in `CallEntryTab.jsx`.
 - Cleaned up unused imports `LEAD_ORIGIN_OPTIONS` and `CURRENT_SOURCE_OPTIONS` in `SettingsTab.jsx`.
 - Reused `findLeadOriginField` and `findCurrentSourceField` helpers in `api/_contacts/log-call.js`.
+
+---
+
+## 26. Configured Current Source Options & "Incoming Calls" Preservation
+
+### 1. Root Cause
+- Previously, `CallEntryTab.jsx` contained an `isCallDirectionOption` filter that stripped strings matching telephony direction labels (`"incoming calls"`, `"incoming call"`, `"outgoing calls"`, etc.) from the Current Source and Lead Origin dropdowns.
+- This caused explicitly configured marketing sources like `"Incoming Calls"` (saved in Admin Settings) to disappear from the Attender Edit Modal, and caused `cleanSourceVal()` to erase saved values to `""`.
+- Similar blanket exclusions existed in `sanitizeSource()` (`src/features/admin/utils.jsx`) and `getContactSource()` (`src/utils/registrationEngine.js`), converting legitimate `"Incoming Calls"` records into `"Unspecified"` or empty strings in analytics.
+
+### 2. Changes Implemented
+- **`CallEntryTab.jsx`**:
+  - Enhanced `isCallDirectionOption(opt, allowConfigured = true, configuredList = null)` to check whether an option is explicitly configured in `CURRENT_SOURCE_OPTIONS` / `LEAD_ORIGIN_OPTIONS`. Configured options are preserved, while raw unconfigured telephony labels (like `outgoing`, `incoming-calls`) continue to be filtered.
+  - Updated `cleanSourceVal()` to pass configured options so selected `"Incoming Calls"` values are not erased on mount or re-render.
+  - Allowed configured tags in `contactTagsList` while filtering unconfigured direction tags.
+- **`src/features/admin/utils.jsx`**:
+  - Separated `isCallTypeOrInvalidProgram` (for program names) from `isCallTypeOrInvalidSource` (for source names).
+  - Configured sources and `"Incoming Calls"` are recognized as valid sources in `sanitizeSource()` without falling back to `"Unspecified"`.
+- **`src/utils/registrationEngine.js`**:
+  - Removed `'incoming calls'` from the rejected lists in `getContactSource()` and `getContactLeadOrigin()`, preserving the value when selected while keeping raw direction tags (`incoming`, `outgoing`, `outgoing calls`) filtered.
+- **Call-Type Integrity**:
+  - Preserved the independent `determineCallType()` logic and the modal's separate Outgoing / Incoming call-type radio controls.
+

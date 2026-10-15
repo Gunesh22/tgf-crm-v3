@@ -252,21 +252,33 @@ export const CallEntryTab = ({
         .filter(t => {
           if (!t || t.length === 0 || t === "[object Object]") return false;
           const lower = t.toLowerCase();
+          const configured = CURRENT_SOURCE_OPTIONS || CALL_SOURCE_OPTIONS || [];
+          const isConfigured = configured.some(c => c && String(c).trim().toLowerCase() === lower);
+          if (isConfigured) return true;
           return !["outgoing calls", "outgoing call", "outgoing", "outgoing-calls", "incoming calls", "incoming call", "incoming", "incoming-calls"].includes(lower);
         })
     ));
   }, [edited.Tags, edited.tags, row?.Tags, row?.tags]);
 
-  const isCallDirectionOption = (opt) => {
+  const isCallDirectionOption = (opt, allowConfigured = true, configuredList = null) => {
     if (!opt) return true;
     const l = String(opt).trim().toLowerCase();
+    if (allowConfigured) {
+      const list = configuredList || CURRENT_SOURCE_OPTIONS || CALL_SOURCE_OPTIONS || [];
+      if (list.some(c => c && String(c).trim().toLowerCase() === l)) {
+        return false;
+      }
+    }
     return ["outgoing calls", "outgoing call", "outgoing", "outgoing-calls", "incoming calls", "incoming call", "incoming", "incoming-calls"].includes(l);
   };
 
-  const cleanSourceVal = (val) => {
+  const cleanSourceVal = (val, isCurrentSource = true) => {
     if (!val) return "";
     const s = String(val).trim();
-    if (isCallDirectionOption(s)) return "";
+    const configured = isCurrentSource
+      ? (CURRENT_SOURCE_OPTIONS || CALL_SOURCE_OPTIONS || [])
+      : (LEAD_ORIGIN_OPTIONS || []);
+    if (isCallDirectionOption(s, true, configured)) return "";
     return s;
   };
 
@@ -283,11 +295,13 @@ export const CallEntryTab = ({
       getContactLeadOrigin(edited, selectedProgram) ||
       getContactLeadOrigin(row, selectedProgram) ||
       ""
-    )
+    ),
+    false
   );
 
   const leadOriginOptionsList = useMemo(() => {
-    const base = (LEAD_ORIGIN_OPTIONS || []).filter(opt => !isCallDirectionOption(opt));
+    const configured = LEAD_ORIGIN_OPTIONS || [];
+    const base = configured.filter(opt => !isCallDirectionOption(opt, true, configured));
     if (currentLeadOriginVal && !base.some(o => o.toLowerCase() === currentLeadOriginVal.toLowerCase())) {
       return [currentLeadOriginVal, ...base];
     }
@@ -307,21 +321,24 @@ export const CallEntryTab = ({
       getContactSource(edited, selectedProgram) ||
       getContactSource(row, selectedProgram) ||
       ""
-    )
+    ),
+    true
   );
 
   const callSourceOptionsList = useMemo(() => {
-    const base = (CURRENT_SOURCE_OPTIONS || CALL_SOURCE_OPTIONS || []).filter(opt => !isCallDirectionOption(opt));
+    const configured = CURRENT_SOURCE_OPTIONS || CALL_SOURCE_OPTIONS || [];
+    const base = configured.filter(opt => !isCallDirectionOption(opt, true, configured));
     return base;
   }, [optionsVersion, localSettingsVer, CURRENT_SOURCE_OPTIONS?.length, CURRENT_SOURCE_OPTIONS?.join(","), CALL_SOURCE_OPTIONS?.length, CALL_SOURCE_OPTIONS?.join(",")]);
 
   const currentSourceDropdownOptions = useMemo(() => {
-    // Top N tags first, followed by all standard current source options (excluding call directions)
+    const configured = CURRENT_SOURCE_OPTIONS || CALL_SOURCE_OPTIONS || [];
+    // Top N tags first, followed by all standard current source options (excluding unconfigured call directions)
     const combined = new Set([...contactTagsList, ...callSourceOptionsList]);
     if (currentSourceVal && !Array.from(combined).some(o => o.toLowerCase() === currentSourceVal.toLowerCase())) {
       combined.add(currentSourceVal);
     }
-    return Array.from(combined).filter(opt => !isCallDirectionOption(opt));
+    return Array.from(combined).filter(opt => !isCallDirectionOption(opt, true, configured));
   }, [contactTagsList, callSourceOptionsList, currentSourceVal]);
 
   const cleanProg = (str) => {

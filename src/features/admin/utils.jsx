@@ -4,7 +4,7 @@ import {
 } from "lucide-react";
 import { isKhojiField } from "../../lib/khojiHelper";
 import { PIPELINE_STAGES, getEffectiveStage, QUERY_PIPELINE_STAGES, getCanonicalQueryStage } from "../../utils/pipelineEngine";
-import { STATUS_STAGE_MAPPING } from "../attender/utils";
+import { STATUS_STAGE_MAPPING, CURRENT_SOURCE_OPTIONS } from "../attender/utils";
 export { QUERY_PIPELINE_STAGES, getCanonicalQueryStage };
 
 export function parseTimestamp(t) {
@@ -124,21 +124,46 @@ export const isCallTypeOrInvalidValue = (str) => {
 };
 
 export const isCallTypeOrInvalidProgram = isCallTypeOrInvalidValue;
-export const isCallTypeOrInvalidSource = isCallTypeOrInvalidValue;
+
+export const isCallTypeOrInvalidSource = (str, configuredOptions = null) => {
+  if (!str) return true;
+  const l = String(str).trim().toLowerCase();
+  
+  // If explicitly configured in current source options, it is a valid source (e.g. "Incoming Calls")
+  const configured = configuredOptions || CURRENT_SOURCE_OPTIONS || [];
+  if (configured.some(opt => opt && String(opt).trim().toLowerCase() === l)) {
+    return false;
+  }
+
+  // Specifically preserve standard "incoming calls" as a valid configured source option
+  if (l === "incoming calls") {
+    return false;
+  }
+
+  return [
+    "incoming", "incoming call", "incoming-calls",
+    "outgoing", "outgoing call", "outgoing calls", "outgoing-calls",
+    "call", "calls",
+    "general", "general / unassigned", "unassigned", "unspecified",
+    "direct / organic", "direct / online", "direct online", "direct organic", "direct", "organic",
+    "online/direct", "online direct",
+    "reminder", "query", "na", "none", "null", "undefined", "—", "-"
+  ].includes(l);
+};
 
 export const sanitizeCalledFor = (str, fallback = "Unspecified") => {
   if (!str) return fallback;
   const cleaned = String(str).trim();
-  if (!cleaned || isCallTypeOrInvalidValue(cleaned)) {
+  if (!cleaned || isCallTypeOrInvalidProgram(cleaned)) {
     return fallback;
   }
   return cleaned;
 };
 
-export const sanitizeSource = (str, fallback = "Unspecified") => {
+export const sanitizeSource = (str, fallback = "Unspecified", configuredOptions = null) => {
   if (!str) return fallback;
   const cleaned = String(str).trim();
-  if (!cleaned || isCallTypeOrInvalidValue(cleaned)) {
+  if (!cleaned || isCallTypeOrInvalidSource(cleaned, configuredOptions)) {
     return fallback;
   }
   return cleaned;
