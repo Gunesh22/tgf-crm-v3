@@ -3,11 +3,14 @@ import { createPortal } from "react-dom";
 import { toast } from "react-hot-toast";
 import * as XLSX from "xlsx";
 import {
-  Download, ChevronRight, ChevronDown, Calendar, TrendingUp, UserCheck, Smile, Info, Search, X, Check, Eye, Table as TableIcon, PieChart as PieChartIcon
+  Download, ChevronRight, ChevronDown, Calendar, TrendingUp, UserCheck, Smile, Info, Search, X, Check, Eye, Table as TableIcon, PieChart as PieChartIcon, BarChart3, Layers, Target, PhoneCall
 } from "lucide-react";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import {
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend
+} from "recharts";
 import { subscribeToAllCallLogs } from "../../../lib/db";
-import { CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, parseTimestamp, getCanonicalStatus, getContactPhone, getContactName, getContactCity, getContactKhoji, renderVal, classifyCallStatus, getCanonicalPhysicalCalls, getLocalDateStr, getCanonicalRegistrations, getContactLeadOrigin, getContactSource, isCallTypeOrInvalidProgram, sanitizeCalledFor, isCallTypeOrInvalidSource, sanitizeSource } from "../utils.jsx";
+import { CONNECTED_STATUSES, NOT_CONNECTED_STATUSES, parseTimestamp, getCanonicalStatus, getContactPhone, getContactName, getContactCity, getContactKhoji, renderVal, classifyCallStatus, getCanonicalPhysicalCalls, getLocalDateStr, getCanonicalRegistrations, getContactLeadOrigin, getContactSource, isCallTypeOrInvalidProgram, sanitizeCalledFor, isCallTypeOrInvalidSource, sanitizeSource, getCanonicalStage } from "../utils.jsx";
 import { isKhojiAffirmative, isKhojiNegative, resolveLeadOriginOptions, resolveCurrentSourceOptions } from "../../attender/utils.js";
 import { getAllPresets } from "../../../utils/presetEngine.js";
 import { determineCallType } from "../../../utils/registrationEngine.js";
@@ -481,8 +484,148 @@ export default function MonthlyReportTab({
   const [convPage, setConvPage] = useState(1);
   const [calledForVsSourceView, setCalledForVsSourceView] = useState("table"); // "table" | "graph"
   const [graphMetric, setGraphMetric] = useState("calls"); // "calls" | "registrations"
+  const [sourceWiseView, setSourceWiseView] = useState("table"); // "table" | "graph"
   const [inspectModalData, setInspectModalData] = useState(null);
   const [inspectSearch, setInspectSearch] = useState("");
+  const [inspectStageFilter, setInspectStageFilter] = useState("ALL");
+  const [inspectCallTypeFilter, setInspectCallTypeFilter] = useState("ALL");
+  const [inspectAttenderFilter, setInspectAttenderFilter] = useState("ALL");
+  const [inspectProgramFilter, setInspectProgramFilter] = useState("ALL");
+
+  const contactMap = React.useMemo(() => {
+    const map = new Map();
+    (callLogs || []).forEach(c => {
+      if (c._id) map.set(String(c._id), c);
+      if (c.id) map.set(String(c.id), c);
+    });
+    return map;
+  }, [callLogs]);
+
+  const getItemStage = React.useCallback((item) => {
+    if (!item) return "New Lead";
+    const cId = String(item.contactId || item._id || item.id || "");
+    const contact = (cId && contactMap.get(cId)) ? contactMap.get(cId) : item;
+    return getCanonicalStage(contact);
+  }, [contactMap]);
+
+  const handleCloseInspectModal = React.useCallback(() => {
+    setInspectModalData(null);
+    setInspectSearch("");
+    setInspectStageFilter("ALL");
+    setInspectCallTypeFilter("ALL");
+    setInspectAttenderFilter("ALL");
+    setInspectProgramFilter("ALL");
+  }, []);
+
+  const getStageBadgeClass = (stage) => {
+    const s = String(stage || "").toLowerCase();
+    if (s.includes("registered") || s.includes("won") || s.includes("reg.done")) {
+      return "bg-emerald-100 text-emerald-800 border-emerald-300";
+    }
+    if (s.includes("interested") || s.includes("nurture")) {
+      return "bg-purple-100 text-purple-800 border-purple-300";
+    }
+    if (s.includes("info given") || s.includes("information given")) {
+      return "bg-blue-100 text-blue-800 border-blue-300";
+    }
+    if (s.includes("attempting")) {
+      return "bg-amber-100 text-amber-800 border-amber-300";
+    }
+    if (s.includes("future pool") || s.includes("next time")) {
+      return "bg-teal-100 text-teal-800 border-teal-300";
+    }
+    if (s.includes("alumni")) {
+      return "bg-indigo-100 text-indigo-800 border-indigo-300";
+    }
+    if (s.includes("query")) {
+      return "bg-orange-100 text-orange-800 border-orange-300";
+    }
+    if (s.includes("reminder")) {
+      return "bg-yellow-100 text-yellow-800 border-yellow-300";
+    }
+    if (s.includes("closed") || s.includes("lost") || s.includes("invalid") || s.includes("not interested")) {
+      return "bg-rose-100 text-rose-800 border-rose-300";
+    }
+    return "bg-slate-100 text-slate-700 border-slate-300";
+  };
+
+  const inspectOptions = React.useMemo(() => {
+    if (!inspectModalData?.items) return { stages: [], callTypes: [], attenders: [], programs: [] };
+    const stages = new Set();
+    const callTypes = new Set();
+    const attendersSet = new Set();
+    const programsSet = new Set();
+
+    inspectModalData.items.forEach(item => {
+      const stage = getItemStage(item);
+      if (stage) stages.add(stage);
+
+      const cType = String(item.callType || item.type || "").toLowerCase();
+      const isInc = cType === "incoming" || cType === "in" || cType.includes("incoming");
+      callTypes.add(isInc ? "incoming" : "outgoing");
+
+      const att = item.attenderName || "Unassigned";
+      if (att) attendersSet.add(att);
+
+      const prog = sanitizeCalledFor(item.calledFor || item.programName, "Unspecified");
+      if (prog && prog !== "Unspecified") programsSet.add(prog);
+    });
+
+    return {
+      stages: Array.from(stages).sort(),
+      callTypes: Array.from(callTypes).sort(),
+      attenders: Array.from(attendersSet).sort(),
+      programs: Array.from(programsSet).sort()
+    };
+  }, [inspectModalData, getItemStage]);
+
+  const filteredInspectItems = React.useMemo(() => {
+    if (!inspectModalData?.items) return [];
+    return inspectModalData.items.filter(item => {
+      const stage = getItemStage(item);
+
+      // Search Query
+      if (inspectSearch.trim()) {
+        const q = inspectSearch.toLowerCase();
+        const matches = (
+          String(item.contactName || "").toLowerCase().includes(q) ||
+          String(item.contactPhone || "").toLowerCase().includes(q) ||
+          String(item.calledFor || item.programName || "").toLowerCase().includes(q) ||
+          String(item.source || "").toLowerCase().includes(q) ||
+          String(item.callType || item.type || "").toLowerCase().includes(q) ||
+          String(item.attenderName || "").toLowerCase().includes(q) ||
+          stage.toLowerCase().includes(q)
+        );
+        if (!matches) return false;
+      }
+
+      // Stage Filter
+      if (inspectStageFilter !== "ALL" && stage !== inspectStageFilter) {
+        return false;
+      }
+
+      // Call Type Filter
+      if (inspectCallTypeFilter !== "ALL") {
+        const cType = String(item.callType || item.type || "").toLowerCase();
+        const isInc = cType === "incoming" || cType === "in" || cType.includes("incoming");
+        if (inspectCallTypeFilter === "incoming" && !isInc) return false;
+        if (inspectCallTypeFilter === "outgoing" && isInc) return false;
+      }
+
+      // Attender Filter
+      if (inspectAttenderFilter !== "ALL") {
+        if ((item.attenderName || "Unassigned") !== inspectAttenderFilter) return false;
+      }
+
+      // Program Filter
+      if (inspectProgramFilter !== "ALL") {
+        const prog = sanitizeCalledFor(item.calledFor || item.programName, "Unspecified");
+        if (prog !== inspectProgramFilter) return false;
+      }
+
+      return true;
+    });
+  }, [inspectModalData, inspectSearch, inspectStageFilter, inspectCallTypeFilter, inspectAttenderFilter, inspectProgramFilter, getItemStage]);
   const [selectedLeadForEdit, setSelectedLeadForEdit] = useState(null);
   const loading = false;
 
@@ -1150,6 +1293,276 @@ export default function MonthlyReportTab({
     return totals;
   }, [calledForVsSourceBreakdown]);
 
+  // ── Source-wise Conversions, Calls, Incoming & Outgoing Breakdown ──────────
+  const sourceWiseBreakdown = React.useMemo(() => {
+    const map = {};
+
+    allAttempts.forEach(c => {
+      const rawSrc = sourceDimension === "leadOrigin" ? c.leadOrigin : c.source;
+      const src = sanitizeSource(rawSrc, "Unspecified");
+
+      if (selectedSources.length > 0 && !selectedSources.includes(src)) {
+        return;
+      }
+
+      if (!map[src]) {
+        map[src] = {
+          source: src,
+          total: 0,
+          incoming: 0,
+          outgoing: 0,
+          conversions: 0,
+          incomingConversions: 0,
+          outgoingConversions: 0,
+          attempts: [],
+          registrations: []
+        };
+      }
+
+      const item = map[src];
+      item.total++;
+      item.attempts.push(c);
+
+      const type = (c.callType || "").toLowerCase();
+      const isIncoming = type.startsWith("incoming");
+
+      if (isIncoming) {
+        item.incoming++;
+      } else {
+        item.outgoing++;
+      }
+    });
+
+    // Populate conversions directly from canonical programRegistrationsList
+    programRegistrationsList.forEach(reg => {
+      const rawSrc = sourceDimension === "leadOrigin" ? reg.leadOrigin : reg.source;
+      const src = sanitizeSource(rawSrc, "Unspecified");
+
+      if (selectedSources.length > 0 && !selectedSources.includes(src)) {
+        return;
+      }
+
+      if (!map[src]) {
+        map[src] = {
+          source: src,
+          total: 0,
+          incoming: 0,
+          outgoing: 0,
+          conversions: 0,
+          incomingConversions: 0,
+          outgoingConversions: 0,
+          attempts: [],
+          registrations: []
+        };
+      }
+
+      const item = map[src];
+      const type = String(reg.callType || reg.type || "").toLowerCase().trim();
+      const isIncoming = type === "incoming" || type === "in" || type.includes("incoming");
+      item.conversions++;
+      item.registrations.push(reg);
+
+      if (isIncoming) {
+        item.incomingConversions++;
+      } else {
+        item.outgoingConversions++;
+      }
+    });
+
+    const srcCol = sourceDimension === "leadOrigin" ? "Lead Origin" : "Source";
+
+    const rows = Object.values(map).map(a => {
+      const totalConvRate = a.total > 0
+        ? Math.min(100, (a.conversions / a.total) * 100)
+        : 0;
+
+      const incomingRate = a.incoming > 0
+        ? Math.min(100, (a.incomingConversions / a.incoming) * 100)
+        : 0;
+
+      const outgoingRate = a.outgoing > 0
+        ? Math.min(100, (a.outgoingConversions / a.outgoing) * 100)
+        : 0;
+
+      return {
+        [srcCol]: a.source,
+        "Source": a.source,
+        "Lead Origin": a.source,
+        "Total Calls": a.total,
+        "Incoming Calls": a.incoming,
+        "Outgoing Calls": a.outgoing,
+        "Total Conversions": a.conversions,
+        "Incoming Conversions": a.incomingConversions,
+        "Outgoing Conversions": a.outgoingConversions,
+        "Conversion Rate (%)": `${totalConvRate.toFixed(1)}%`,
+        "Incoming Conversion Rate (%)": `${incomingRate.toFixed(1)}%`,
+        "Outgoing Conversion Rate (%)": `${outgoingRate.toFixed(1)}%`,
+        rawTotalRate: parseFloat(totalConvRate.toFixed(1)),
+        rawIncomingRate: parseFloat(incomingRate.toFixed(1)),
+        rawOutgoingRate: parseFloat(outgoingRate.toFixed(1)),
+        _attempts: a.attempts || [],
+        _registrations: a.registrations || []
+      };
+    });
+
+    return rows.sort((a, b) => {
+      const aEnd = shouldGoToEnd(a.Source);
+      const bEnd = shouldGoToEnd(b.Source);
+      if (aEnd && !bEnd) return 1;
+      if (!aEnd && bEnd) return -1;
+      if (b["Total Conversions"] !== a["Total Conversions"]) {
+        return b["Total Conversions"] - a["Total Conversions"];
+      }
+      return b["Total Calls"] - a["Total Calls"];
+    });
+  }, [allAttempts, programRegistrationsList, sourceDimension, selectedSources]);
+
+  const sourceWiseBreakdownTotals = React.useMemo(() => {
+    const srcCol = sourceDimension === "leadOrigin" ? "Lead Origin" : "Source";
+    const totals = {
+      [srcCol]: "Total",
+      "Source": "Total",
+      "Lead Origin": "Total",
+      "Total Calls": 0,
+      "Incoming Calls": 0,
+      "Outgoing Calls": 0,
+      "Total Conversions": 0,
+      "Incoming Conversions": 0,
+      "Outgoing Conversions": 0,
+      "Conversion Rate (%)": "0.0%",
+      "Incoming Conversion Rate (%)": "0.0%",
+      "Outgoing Conversion Rate (%)": "0.0%",
+      _attempts: allAttempts,
+      _registrations: programRegistrationsList
+    };
+
+    sourceWiseBreakdown.forEach(row => {
+      totals["Total Calls"] += row["Total Calls"];
+      totals["Incoming Calls"] += row["Incoming Calls"];
+      totals["Outgoing Calls"] += row["Outgoing Calls"];
+      totals["Total Conversions"] += row["Total Conversions"];
+      totals["Incoming Conversions"] += row["Incoming Conversions"];
+      totals["Outgoing Conversions"] += row["Outgoing Conversions"];
+    });
+
+    const totalConvRate = totals["Total Calls"] > 0
+      ? Math.min(100, (totals["Total Conversions"] / totals["Total Calls"]) * 100)
+      : 0;
+
+    const incomingOverallRate = totals["Incoming Calls"] > 0
+      ? Math.min(100, (totals["Incoming Conversions"] / totals["Incoming Calls"]) * 100)
+      : 0;
+
+    const outgoingOverallRate = totals["Outgoing Calls"] > 0
+      ? Math.min(100, (totals["Outgoing Conversions"] / totals["Outgoing Calls"]) * 100)
+      : 0;
+
+    totals["Conversion Rate (%)"] = `${totalConvRate.toFixed(1)}%`;
+    totals["Incoming Conversion Rate (%)"] = `${incomingOverallRate.toFixed(1)}%`;
+    totals["Outgoing Conversion Rate (%)"] = `${outgoingOverallRate.toFixed(1)}%`;
+
+    return totals;
+  }, [sourceWiseBreakdown, sourceDimension, allAttempts, programRegistrationsList]);
+
+  const sourceWisePieData = React.useMemo(() => {
+    const totalConvs = sourceWiseBreakdownTotals["Total Conversions"] || 1;
+    const totalCalls = sourceWiseBreakdownTotals["Total Calls"] || 1;
+
+    const convSlice = sourceWiseBreakdown
+      .filter(r => r["Total Conversions"] > 0)
+      .map((r, idx) => ({
+        name: r.Source,
+        value: r["Total Conversions"],
+        percentage: ((r["Total Conversions"] / totalConvs) * 100).toFixed(1),
+        color: SOURCE_PALETTE[idx % SOURCE_PALETTE.length]
+      }));
+
+    const callSlice = sourceWiseBreakdown
+      .filter(r => r["Total Calls"] > 0)
+      .map((r, idx) => ({
+        name: r.Source,
+        value: r["Total Calls"],
+        percentage: ((r["Total Calls"] / totalCalls) * 100).toFixed(1),
+        color: SOURCE_PALETTE[idx % SOURCE_PALETTE.length]
+      }));
+
+    return { convSlice, callSlice };
+  }, [sourceWiseBreakdown, sourceWiseBreakdownTotals]);
+
+  const handleInspectSourceSlice = (sourceName, sliceType = "conversions") => {
+    if (!sourceName) return;
+    const row = sourceWiseBreakdown.find(r => (r.Source || r["Lead Origin"]) === sourceName);
+    if (!row) return;
+
+    const isConv = sliceType === "conversions";
+    const items = isConv
+      ? (row._registrations && row._registrations.length > 0 ? row._registrations : row._attempts || [])
+      : (row._attempts && row._attempts.length > 0 ? row._attempts : row._registrations || []);
+
+    const sName = row.Source || row["Lead Origin"];
+    setInspectModalData({
+      title: `${isConv ? "Conversions" : "Calls & Leads"} for Source "${sName}" (${items.length})`,
+      subtitle: `Total Calls: ${row["Total Calls"]} (Incoming: ${row["Incoming Calls"]}, Outgoing: ${row["Outgoing Calls"]}) | Conversions: ${row["Total Conversions"]} (Incoming: ${row["Incoming Conversions"]}, Outgoing: ${row["Outgoing Conversions"]})`,
+      category: isConv ? "registrations" : "calls",
+      items: items
+    });
+  };
+
+  const calledForConversionPieData = React.useMemo(() => {
+    const progMap = {};
+    const totalConvs = programRegistrationsList.length || 1;
+
+    programRegistrationsList.forEach(reg => {
+      const prog = sanitizeCalledFor(reg.calledFor || reg.programName, "Unspecified");
+      if (selectedCalledFors.length > 0 && !selectedCalledFors.includes(prog)) {
+        return;
+      }
+
+      if (!progMap[prog]) {
+        progMap[prog] = {
+          name: prog,
+          value: 0,
+          registrations: []
+        };
+      }
+      progMap[prog].value++;
+      progMap[prog].registrations.push(reg);
+    });
+
+    const slices = Object.values(progMap)
+      .filter(p => p.value > 0)
+      .sort((a, b) => {
+        const aEnd = shouldGoToEnd(a.name);
+        const bEnd = shouldGoToEnd(b.name);
+        if (aEnd && !bEnd) return 1;
+        if (!aEnd && bEnd) return -1;
+        return b.value - a.value;
+      })
+      .map((p, idx) => ({
+        name: p.name,
+        value: p.value,
+        percentage: ((p.value / totalConvs) * 100).toFixed(1),
+        color: SOURCE_PALETTE[(idx + 4) % SOURCE_PALETTE.length],
+        registrations: p.registrations
+      }));
+
+    const totalCalledForConvs = slices.reduce((sum, s) => sum + s.value, 0);
+
+    return { slices, totalCalledForConvs };
+  }, [programRegistrationsList, selectedCalledFors]);
+
+  const handleInspectCalledForConversionSlice = (progName) => {
+    if (!progName) return;
+    const slice = calledForConversionPieData.slices.find(s => s.name === progName);
+    const items = slice ? slice.registrations : [];
+    setInspectModalData({
+      title: `Conversions for Program "${progName}" (${items.length})`,
+      subtitle: `Total Registrations: ${items.length} confirmed conversions`,
+      category: "registrations",
+      items: items
+    });
+  };
+
   const calledForPieData = React.useMemo(() => {
     const groupMap = {};
     const globalSourceCounts = {};
@@ -1410,6 +1823,10 @@ export default function MonthlyReportTab({
     // 3. Called For vs Source Breakdown
     const wsCalledForVsSource = XLSX.utils.json_to_sheet(cleanRows([...calledForVsSourceBreakdown, calledForVsSourceBreakdownTotals]));
     XLSX.utils.book_append_sheet(wb, wsCalledForVsSource, "Called For vs Source");
+
+    // 3b. Source-wise Conversions & Calls Breakdown
+    const wsSourceWise = XLSX.utils.json_to_sheet(cleanRows([...sourceWiseBreakdown, sourceWiseBreakdownTotals]));
+    XLSX.utils.book_append_sheet(wb, wsSourceWise, "Source Breakdown");
 
     // 4. Detailed Call Logs (Grouped by Mobile Number: consecutive rows per number, chronological history)
     const detailedLogs = [...allAttempts]
@@ -2048,6 +2465,435 @@ export default function MonthlyReportTab({
             )}
           </MonthlySection>
 
+          {/* Section 3: Source-wise Conversions & Calls Breakdown */}
+          <MonthlySection
+            title="Section 3: Source-wise Conversions & Calls Breakdown"
+            subtitle={
+              <div className="mt-2.5 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Dimension:</span>
+                <div className="inline-flex items-center bg-slate-200/80 p-0.5 rounded-lg border border-slate-300 shadow-2xs">
+                  <button
+                    type="button"
+                    onClick={() => setSourceDimension("currentSource")}
+                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                      sourceDimension === "currentSource"
+                        ? "bg-white text-indigo-700 shadow-2xs border border-slate-200"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    Current Source
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSourceDimension("leadOrigin")}
+                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                      sourceDimension === "leadOrigin"
+                        ? "bg-white text-indigo-700 shadow-2xs border border-slate-200"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    Lead Origin
+                  </button>
+                </div>
+              </div>
+            }
+            action={
+              <div className="flex items-center gap-2">
+                {/* View Mode Toggle: Table View vs Graphical View vs Both */}
+                <div className="bg-slate-100 p-0.5 rounded-lg flex items-center border border-slate-200" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={() => setSourceWiseView("table")}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                      sourceWiseView === "table"
+                        ? "bg-white text-indigo-700 shadow-2xs border border-slate-200"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                    title="View as detailed data table"
+                  >
+                    <TableIcon size={13} />
+                    <span>Table View</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSourceWiseView("graph")}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                      sourceWiseView === "graph"
+                        ? "bg-white text-indigo-700 shadow-2xs border border-slate-200"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                    title="View as graphical charts"
+                  >
+                    <BarChart3 size={13} />
+                    <span>Graph View</span>
+                  </button>
+                </div>
+
+                <FormulaInfoPopover
+                  title="Source Conversion Rate Formulas"
+                  formulas={[
+                    {
+                      label: "Total Conversion Rate (%)",
+                      formula: "(Total Conversions ÷ Total Calls) × 100",
+                      note: "*Shows 0.0% if Total Calls = 0. Capped at 100.0%."
+                    },
+                    {
+                      label: "Incoming Conversion Rate (%)",
+                      formula: "(Incoming Conversions ÷ Incoming Calls) × 100",
+                      note: "*Shows 0.0% if Incoming Calls = 0. Capped at 100.0%."
+                    },
+                    {
+                      label: "Outgoing Conversion Rate (%)",
+                      formula: "(Outgoing Conversions ÷ Outgoing Calls) × 100",
+                      note: "*Shows 0.0% if Outgoing Calls = 0. Capped at 100.0%."
+                    }
+                  ]}
+                />
+              </div>
+            }
+          >
+            <div className="space-y-6">
+              {/* Graphical View (Donut Graphs) */}
+              {sourceWiseView === "graph" && (
+                <div className="pt-2">
+                  {sourceWisePieData.convSlice.length === 0 && sourceWisePieData.callSlice.length === 0 ? (
+                    <div className="text-center py-12 text-slate-400 font-medium text-xs">
+                      No source data available for the selected filters.
+                    </div>
+                  ) : (
+                    /* Donut Charts side-by-side (Source Conversions, Called For Conversions, Source Calls) */
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Left Donut: Total Conversions by Source */}
+                      <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-200/80 flex flex-col items-center">
+                        <div className="w-full flex items-center justify-between mb-2">
+                          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Conversions by Source</h4>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setInspectModalData({
+                                title: `All Source Conversions (${programRegistrationsList.length})`,
+                                subtitle: `Total Conversions: ${sourceWiseBreakdownTotals["Total Conversions"]} (In: ${sourceWiseBreakdownTotals["Incoming Conversions"]} · Out: ${sourceWiseBreakdownTotals["Outgoing Conversions"]})`,
+                                category: "registrations",
+                                items: programRegistrationsList
+                              });
+                            }}
+                            className="text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200 cursor-pointer transition-colors"
+                            title="Click to inspect all conversions"
+                          >
+                            {sourceWiseBreakdownTotals["Total Conversions"]} Regs • Inspect
+                          </button>
+                        </div>
+                        <div className="relative w-full h-64 flex items-center justify-center">
+                          <ResponsiveContainer width="100%" height={250}>
+                            <PieChart>
+                              <Pie
+                                data={sourceWisePieData.convSlice}
+                                dataKey="value"
+                                nameKey="name"
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={55}
+                                outerRadius={80}
+                                paddingAngle={2}
+                                onClick={(entry) => handleInspectSourceSlice(entry?.name, "conversions")}
+                                className="cursor-pointer"
+                              >
+                                {sourceWisePieData.convSlice.map((entry) => (
+                                  <Cell
+                                    key={entry.name}
+                                    fill={entry.color}
+                                    onClick={() => handleInspectSourceSlice(entry?.name, "conversions")}
+                                    style={{ cursor: "pointer" }}
+                                    className="cursor-pointer hover:opacity-80 transition-opacity focus:outline-none"
+                                  />
+                                ))}
+                              </Pie>
+                              <Tooltip
+                                wrapperStyle={{ zIndex: 100, pointerEvents: "none" }}
+                                content={({ active, payload }) => {
+                                  if (!active || !payload || !payload.length) return null;
+                                  const d = payload[0];
+                                  const fill = d.payload?.color || d.color || "#10b981";
+                                  return (
+                                    <div className="bg-white/95 backdrop-blur-sm p-2.5 rounded-xl shadow-xl border border-slate-200 text-xs min-w-[170px] pointer-events-none">
+                                      <div className="font-extrabold text-slate-900 mb-1 flex items-center gap-1.5">
+                                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: fill }} />
+                                        <span className="truncate">{d.name}</span>
+                                      </div>
+                                      <div className="flex justify-between items-baseline gap-3 pt-1 border-t border-slate-100">
+                                        <span className="text-slate-500 font-medium">Conversions:</span>
+                                        <span className="text-emerald-700 font-mono font-bold text-sm">
+                                          {d.value} <span className="text-xs text-emerald-600 font-normal">({d.payload?.percentage}%)</span>
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                }}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none z-10">
+                            <span className="text-2xl font-black text-slate-800">
+                              {sourceWiseBreakdownTotals["Total Conversions"]}
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                              Regs
+                            </span>
+                          </div>
+                        </div>
+                        <div className="w-full flex flex-wrap gap-2 justify-center pt-2 border-t border-slate-200/60 max-h-24 overflow-y-auto">
+                          {sourceWisePieData.convSlice.map(item => (
+                            <div
+                              key={item.name}
+                              onClick={() => handleInspectSourceSlice(item.name, "conversions")}
+                              className="flex items-center gap-1.5 text-[11px] text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
+                              title={`Click to inspect ${item.value} conversions for ${item.name}`}
+                            >
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                              <span className="font-medium truncate max-w-[100px]">{item.name}:</span>
+                              <span className="font-bold text-slate-900 font-mono">{item.value} ({item.percentage}%)</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Middle Donut: Called For-wise Conversions */}
+                      <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-200/80 flex flex-col items-center">
+                        <div className="w-full flex items-center justify-between mb-2">
+                          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Conversions by Called For</h4>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setInspectModalData({
+                                title: `All Program Conversions (${programRegistrationsList.length})`,
+                                subtitle: `Total Conversions: ${calledForConversionPieData.totalCalledForConvs} confirmed registrations`,
+                                category: "registrations",
+                                items: programRegistrationsList
+                              });
+                            }}
+                            className="text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 px-2 py-0.5 rounded border border-purple-200 cursor-pointer transition-colors"
+                            title="Click to inspect all program conversions"
+                          >
+                            {calledForConversionPieData.totalCalledForConvs} Regs • Inspect
+                          </button>
+                        </div>
+                        <div className="relative w-full h-64 flex items-center justify-center">
+                          <ResponsiveContainer width="100%" height={250}>
+                            <PieChart>
+                              <Pie
+                                data={calledForConversionPieData.slices}
+                                dataKey="value"
+                                nameKey="name"
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={55}
+                                outerRadius={80}
+                                paddingAngle={2}
+                                onClick={(entry) => handleInspectCalledForConversionSlice(entry?.name)}
+                                className="cursor-pointer"
+                              >
+                                {calledForConversionPieData.slices.map((entry) => (
+                                  <Cell
+                                    key={entry.name}
+                                    fill={entry.color}
+                                    onClick={() => handleInspectCalledForConversionSlice(entry?.name)}
+                                    style={{ cursor: "pointer" }}
+                                    className="cursor-pointer hover:opacity-80 transition-opacity focus:outline-none"
+                                  />
+                                ))}
+                              </Pie>
+                              <Tooltip
+                                wrapperStyle={{ zIndex: 100, pointerEvents: "none" }}
+                                content={({ active, payload }) => {
+                                  if (!active || !payload || !payload.length) return null;
+                                  const d = payload[0];
+                                  const fill = d.payload?.color || d.color || "#8b5cf6";
+                                  return (
+                                    <div className="bg-white/95 backdrop-blur-sm p-2.5 rounded-xl shadow-xl border border-slate-200 text-xs min-w-[170px] pointer-events-none">
+                                      <div className="font-extrabold text-slate-900 mb-1 flex items-center gap-1.5">
+                                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: fill }} />
+                                        <span className="truncate">{d.name}</span>
+                                      </div>
+                                      <div className="flex justify-between items-baseline gap-3 pt-1 border-t border-slate-100">
+                                        <span className="text-slate-500 font-medium">Conversions:</span>
+                                        <span className="text-purple-700 font-mono font-bold text-sm">
+                                          {d.value} <span className="text-xs text-purple-600 font-normal">({d.payload?.percentage}%)</span>
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                }}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none z-10">
+                            <span className="text-2xl font-black text-slate-800">
+                              {calledForConversionPieData.totalCalledForConvs}
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                              Regs
+                            </span>
+                          </div>
+                        </div>
+                        <div className="w-full flex flex-wrap gap-2 justify-center pt-2 border-t border-slate-200/60 max-h-24 overflow-y-auto">
+                          {calledForConversionPieData.slices.map(item => (
+                            <div
+                              key={item.name}
+                              onClick={() => handleInspectCalledForConversionSlice(item.name)}
+                              className="flex items-center gap-1.5 text-[11px] text-slate-600 hover:text-purple-700 hover:bg-purple-50 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
+                              title={`Click to inspect ${item.value} conversions for ${item.name}`}
+                            >
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                              <span className="font-medium truncate max-w-[100px]">{item.name}:</span>
+                              <span className="font-bold text-slate-900 font-mono">{item.value} ({item.percentage}%)</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Right Donut: Total Calls by Source */}
+                      <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-200/80 flex flex-col items-center">
+                        <div className="w-full flex items-center justify-between mb-2">
+                          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Call Volume Share by Source</h4>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setInspectModalData({
+                                title: `All Source-wise Calls (${allAttempts.length})`,
+                                subtitle: `Total Calls: ${sourceWiseBreakdownTotals["Total Calls"]} | Total Conversions: ${sourceWiseBreakdownTotals["Total Conversions"]}`,
+                                category: "calls",
+                                items: allAttempts
+                              });
+                            }}
+                            className="text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded border border-indigo-200 cursor-pointer transition-colors"
+                            title="Click to inspect all calls"
+                          >
+                            {sourceWiseBreakdownTotals["Total Calls"]} Calls • Inspect
+                          </button>
+                        </div>
+                        <div className="relative w-full h-64 flex items-center justify-center">
+                          <ResponsiveContainer width="100%" height={250}>
+                            <PieChart>
+                              <Pie
+                                data={sourceWisePieData.callSlice}
+                                dataKey="value"
+                                nameKey="name"
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={55}
+                                outerRadius={80}
+                                paddingAngle={2}
+                                onClick={(entry) => handleInspectSourceSlice(entry?.name, "calls")}
+                                className="cursor-pointer"
+                              >
+                                {sourceWisePieData.callSlice.map((entry) => (
+                                  <Cell
+                                    key={entry.name}
+                                    fill={entry.color}
+                                    onClick={() => handleInspectSourceSlice(entry?.name, "calls")}
+                                    style={{ cursor: "pointer" }}
+                                    className="cursor-pointer hover:opacity-80 transition-opacity focus:outline-none"
+                                  />
+                                ))}
+                              </Pie>
+                              <Tooltip
+                                wrapperStyle={{ zIndex: 100, pointerEvents: "none" }}
+                                content={({ active, payload }) => {
+                                  if (!active || !payload || !payload.length) return null;
+                                  const d = payload[0];
+                                  const fill = d.payload?.color || d.color || "#6366f1";
+                                  return (
+                                    <div className="bg-white/95 backdrop-blur-sm p-2.5 rounded-xl shadow-xl border border-slate-200 text-xs min-w-[170px] pointer-events-none">
+                                      <div className="font-extrabold text-slate-900 mb-1 flex items-center gap-1.5">
+                                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: fill }} />
+                                        <span className="truncate">{d.name}</span>
+                                      </div>
+                                      <div className="flex justify-between items-baseline gap-3 pt-1 border-t border-slate-100">
+                                        <span className="text-slate-500 font-medium">Call Volume:</span>
+                                        <span className="text-indigo-700 font-mono font-bold text-sm">
+                                          {d.value} <span className="text-xs text-indigo-600 font-normal">({d.payload?.percentage}%)</span>
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                }}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none z-10">
+                            <span className="text-2xl font-black text-slate-800">
+                              {sourceWiseBreakdownTotals["Total Calls"]}
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                              Calls
+                            </span>
+                          </div>
+                        </div>
+                        <div className="w-full flex flex-wrap gap-2 justify-center pt-2 border-t border-slate-200/60 max-h-24 overflow-y-auto">
+                          {sourceWisePieData.callSlice.map(item => (
+                            <div
+                              key={item.name}
+                              onClick={() => handleInspectSourceSlice(item.name, "calls")}
+                              className="flex items-center gap-1.5 text-[11px] text-slate-600 hover:text-indigo-700 hover:bg-indigo-50 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
+                              title={`Click to inspect ${item.value} calls for ${item.name}`}
+                            >
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                              <span className="font-medium truncate max-w-[100px]">{item.name}:</span>
+                              <span className="font-bold text-slate-900 font-mono">{item.value} ({item.percentage}%)</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Table View */}
+              {sourceWiseView === "table" && (
+                <div className="pt-2">
+                  <MonthlyTable
+                    headers={[
+                      sourceDimension === "leadOrigin" ? "Lead Origin" : "Source",
+                      "Total Calls",
+                      "Incoming Calls",
+                      "Outgoing Calls",
+                      "Total Conversions",
+                      "Incoming Conversions",
+                      "Outgoing Conversions",
+                      "Conversion Rate (%)",
+                      "Incoming Conversion Rate (%)",
+                      "Outgoing Conversion Rate (%)"
+                    ]}
+                    rows={sourceWiseBreakdown}
+                    totals={sourceWiseBreakdownTotals}
+                    onRowClick={(row, isTotal) => {
+                      if (isTotal) {
+                        setInspectModalData({
+                          title: `All Source-wise Calls (${allAttempts.length})`,
+                          subtitle: `Total Calls: ${sourceWiseBreakdownTotals["Total Calls"]} | Total Conversions: ${sourceWiseBreakdownTotals["Total Conversions"]}`,
+                          category: "all",
+                          items: allAttempts
+                        });
+                        return;
+                      }
+                      const items = (row._attempts && row._attempts.length > 0)
+                        ? row._attempts
+                        : (row._registrations || []);
+                      const sName = row.Source || row["Lead Origin"];
+                      setInspectModalData({
+                        title: `Calls & Leads for Source "${sName}" (${items.length})`,
+                        subtitle: `Total Calls: ${row["Total Calls"]} (Incoming: ${row["Incoming Calls"]}, Outgoing: ${row["Outgoing Calls"]}) | Conversions: ${row["Total Conversions"]}`,
+                        category: "all",
+                        items: items
+                      });
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          </MonthlySection>
+
 
           <MonthlySection
             title="🏆 Attender Productivity Leaderboard"
@@ -2330,7 +3176,7 @@ export default function MonthlyReportTab({
         {/* Inspect Registrations Modal */}
         {inspectModalData && createPortal(
         <div className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl shadow-xl max-w-5xl w-full max-h-[88vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
             {/* Header */}
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <div>
@@ -2339,74 +3185,138 @@ export default function MonthlyReportTab({
               </div>
               <button
                 type="button"
-                onClick={() => setInspectModalData(null)}
+                onClick={handleCloseInspectModal}
                 className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-lg transition cursor-pointer"
               >
                 <X size={16} />
               </button>
             </div>
 
-            {/* Search Filter */}
-            <div className="p-4 border-b border-slate-100 bg-white flex items-center justify-between gap-3">
-              <div className="relative flex-1 max-w-md">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Filter by name, phone, program, source, call type..."
-                  value={inspectSearch}
-                  onChange={(e) => setInspectSearch(e.target.value)}
-                  className="w-full pl-9 pr-4 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition"
-                />
+            {/* Filter Bar */}
+            <div className="p-3.5 border-b border-slate-200 bg-slate-50/70 flex flex-wrap items-center justify-between gap-2.5">
+              <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[280px]">
+                {/* Search Filter */}
+                <div className="relative flex-1 min-w-[200px] max-w-xs">
+                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search name, phone, stage..."
+                    value={inspectSearch}
+                    onChange={(e) => setInspectSearch(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white shadow-2xs"
+                  />
+                  {inspectSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setInspectSearch("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Stage Filter */}
+                <select
+                  value={inspectStageFilter}
+                  onChange={(e) => setInspectStageFilter(e.target.value)}
+                  className="px-2.5 py-1.5 text-xs font-semibold border border-slate-200 rounded-lg bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs cursor-pointer"
+                >
+                  <option value="ALL">All Stages ({inspectOptions.stages.length})</option>
+                  {inspectOptions.stages.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+
+                {/* Call Type Filter */}
+                <select
+                  value={inspectCallTypeFilter}
+                  onChange={(e) => setInspectCallTypeFilter(e.target.value)}
+                  className="px-2.5 py-1.5 text-xs font-semibold border border-slate-200 rounded-lg bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs cursor-pointer"
+                >
+                  <option value="ALL">All Call Types</option>
+                  <option value="incoming">Incoming Only</option>
+                  <option value="outgoing">Outgoing Only</option>
+                </select>
+
+                {/* Attender Filter */}
+                {inspectOptions.attenders.length > 1 && (
+                  <select
+                    value={inspectAttenderFilter}
+                    onChange={(e) => setInspectAttenderFilter(e.target.value)}
+                    className="px-2.5 py-1.5 text-xs font-semibold border border-slate-200 rounded-lg bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs cursor-pointer max-w-[150px] truncate"
+                  >
+                    <option value="ALL">All Attenders ({inspectOptions.attenders.length})</option>
+                    {inspectOptions.attenders.map(a => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </select>
+                )}
+
+                {/* Program Filter */}
+                {inspectOptions.programs.length > 1 && (
+                  <select
+                    value={inspectProgramFilter}
+                    onChange={(e) => setInspectProgramFilter(e.target.value)}
+                    className="px-2.5 py-1.5 text-xs font-semibold border border-slate-200 rounded-lg bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs cursor-pointer max-w-[150px] truncate"
+                  >
+                    <option value="ALL">All Programs ({inspectOptions.programs.length})</option>
+                    {inspectOptions.programs.map(p => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                )}
+
+                {/* Reset Filters Button */}
+                {(inspectSearch || inspectStageFilter !== "ALL" || inspectCallTypeFilter !== "ALL" || inspectAttenderFilter !== "ALL" || inspectProgramFilter !== "ALL") && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInspectSearch("");
+                      setInspectStageFilter("ALL");
+                      setInspectCallTypeFilter("ALL");
+                      setInspectAttenderFilter("ALL");
+                      setInspectProgramFilter("ALL");
+                    }}
+                    className="text-xs font-bold text-rose-600 hover:text-rose-700 px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors cursor-pointer shrink-0"
+                  >
+                    Reset
+                  </button>
+                )}
               </div>
-              <span className="text-xs font-semibold text-slate-500">
-                Showing {
-                  (inspectModalData.items || []).filter(item => {
-                    if (!inspectSearch.trim()) return true;
-                    const q = inspectSearch.toLowerCase();
-                    return (
-                      String(item.contactName || "").toLowerCase().includes(q) ||
-                      String(item.contactPhone || "").toLowerCase().includes(q) ||
-                      String(item.calledFor || item.programName || "").toLowerCase().includes(q) ||
-                      String(item.source || "").toLowerCase().includes(q) ||
-                      String(item.callType || item.type || "").toLowerCase().includes(q) ||
-                      String(item.attenderName || "").toLowerCase().includes(q)
-                    );
-                  }).length
-                } of {inspectModalData.items?.length || 0} entries
+
+              <span className="text-xs font-bold text-slate-500 shrink-0">
+                Showing {filteredInspectItems.length} of {inspectModalData.items?.length || 0}
               </span>
             </div>
 
             {/* Table Content */}
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex-1 overflow-y-auto">
               <table className="w-full text-xs text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-100/70 text-slate-600 font-bold border-b border-slate-200">
-                    <th className="py-2.5 px-3">#</th>
-                    <th className="py-2.5 px-3">Contact Name</th>
-                    <th className="py-2.5 px-3">Phone</th>
-                    <th className="py-2.5 px-3">Program (Called For)</th>
-                    <th className="py-2.5 px-3">Call Type</th>
-                    <th className="py-2.5 px-3">Source</th>
-                    <th className="py-2.5 px-3">Attender</th>
+                <thead className="sticky top-0 z-20 bg-slate-100 border-b border-slate-200 shadow-2xs">
+                  <tr className="text-slate-700 font-bold bg-slate-100">
+                    <th className="py-2.5 px-4 bg-slate-100">#</th>
+                    <th className="py-2.5 px-4 bg-slate-100">Contact Name</th>
+                    <th className="py-2.5 px-4 bg-slate-100">Phone</th>
+                    <th className="py-2.5 px-4 bg-slate-100">Current Stage</th>
+                    <th className="py-2.5 px-4 bg-slate-100">Program (Called For)</th>
+                    <th className="py-2.5 px-4 bg-slate-100">Call Type</th>
+                    <th className="py-2.5 px-4 bg-slate-100">Source</th>
+                    <th className="py-2.5 px-4 bg-slate-100">Attender</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {(inspectModalData.items || [])
-                    .filter(item => {
-                      if (!inspectSearch.trim()) return true;
-                      const q = inspectSearch.toLowerCase();
-                      return (
-                        String(item.contactName || "").toLowerCase().includes(q) ||
-                        String(item.contactPhone || "").toLowerCase().includes(q) ||
-                        String(item.calledFor || item.programName || "").toLowerCase().includes(q) ||
-                        String(item.source || "").toLowerCase().includes(q) ||
-                        String(item.callType || item.type || "").toLowerCase().includes(q) ||
-                        String(item.attenderName || "").toLowerCase().includes(q)
-                      );
-                    })
-                    .map((item, idx) => {
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {filteredInspectItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-12 text-center text-slate-400 font-medium">
+                        No records match the current search and filter criteria.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredInspectItems.map((item, idx) => {
                       const cType = String(item.callType || item.type || "").toLowerCase();
                       const isInc = cType === "incoming" || cType === "in" || cType.includes("incoming");
+                      const stage = getItemStage(item);
                       return (
                         <tr 
                           key={idx} 
@@ -2414,36 +3324,45 @@ export default function MonthlyReportTab({
                           className="hover:bg-indigo-50/70 transition-colors cursor-pointer group"
                           title="Click to view & edit lead details"
                         >
-                          <td className="py-2.5 px-3 font-semibold text-slate-400">{idx + 1}</td>
-                          <td className="py-2.5 px-3 font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">
-                            <div className="flex items-center justify-between">
+                          <td className="py-2.5 px-4 font-semibold text-slate-400">{idx + 1}</td>
+                          <td className="py-2.5 px-4 font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">
+                            <div className="flex items-center justify-between gap-1">
                               <span>{item.contactName || "Unknown"}</span>
                               <span className="text-[10px] text-indigo-500 opacity-0 group-hover:opacity-100 font-normal transition-opacity">Edit →</span>
                             </div>
                           </td>
-                          <td className="py-2.5 px-3 font-mono text-slate-600">{item.contactPhone || "—"}</td>
-                          <td className="py-2.5 px-3 font-semibold text-indigo-700">{sanitizeCalledFor(item.calledFor || item.programName, "—")}</td>
-                          <td className="py-2.5 px-3">
+                          <td className="py-2.5 px-4 font-mono text-slate-600">{item.contactPhone || "—"}</td>
+                          <td className="py-2.5 px-4">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border ${getStageBadgeClass(stage)}`}>
+                              {stage}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-4 font-semibold text-indigo-700">{sanitizeCalledFor(item.calledFor || item.programName, "—")}</td>
+                          <td className="py-2.5 px-4">
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
                               isInc ? "bg-emerald-100 text-emerald-800 border border-emerald-300" : "bg-blue-100 text-blue-800 border border-blue-300"
                             }`}>
                               {isInc ? "Incoming (Inc)" : "Outgoing (Out)"}
                             </span>
                           </td>
-                          <td className="py-2.5 px-3 text-slate-600">{sanitizeSource(item.source, "—")}</td>
-                          <td className="py-2.5 px-3 font-medium text-slate-700">{item.attenderName || "Unassigned"}</td>
+                          <td className="py-2.5 px-4 text-slate-600">{sanitizeSource(item.source, "—")}</td>
+                          <td className="py-2.5 px-4 font-medium text-slate-700">{item.attenderName || "Unassigned"}</td>
                         </tr>
                       );
-                    })}
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-end">
+            <div className="px-6 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+              <span className="text-xs text-slate-500 font-medium">
+                {filteredInspectItems.length} record{filteredInspectItems.length === 1 ? "" : "s"} shown
+              </span>
               <button
                 type="button"
-                onClick={() => setInspectModalData(null)}
+                onClick={handleCloseInspectModal}
                 className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-lg transition cursor-pointer"
               >
                 Close

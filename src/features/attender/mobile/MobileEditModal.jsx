@@ -511,6 +511,8 @@ export default function MobileEditModal({
       delete updates.attenderStates;
       delete updates.assignedTo;
       delete updates.assignedName;
+      delete updates.attenderId;
+      delete updates.attenderName;
 
       updates.lastEditedBy = attenderName || "Unknown";
 

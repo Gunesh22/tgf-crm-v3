@@ -42,14 +42,16 @@ export default async function handler(req, res) {
       'geeta': 'WbND9Oa4yPUuWXVyibb3',
       'attender_5': 'WbND9Oa4yPUuWXVyibb3',
       'wbnd9oa4ypuuwxvyibb3': 'WbND9Oa4yPUuWXVyibb3',
-      'rakhi': 'IrAgizMZzxqzUbJjHIBI',
-      'iragizmzzxqzubjjhibi': 'IrAgizMZzxqzUbJjHIBI',
+      'rakhi': 'lrAgizMZzxqzUbJjHIBI',
+      'lragizmzzxqzubjjhibi': 'lrAgizMZzxqzUbJjHIBI',
+      'iragizmzzxqzubjjhibi': 'lrAgizMZzxqzUbJjHIBI',
     };
 
     const ID_NAME_MAP = {
       'ZJQsev2aLqi2ispr3j74': 'Priyanka',
       '9VZZnV00X63PzUSaGTgq': 'Manisha',
       'WbND9Oa4yPUuWXVyibb3': 'Geeta',
+      'lrAgizMZzxqzUbJjHIBI': 'Rakhi',
       'IrAgizMZzxqzUbJjHIBI': 'Rakhi',
       'priyanka': 'Priyanka',
       'manisha': 'Manisha',

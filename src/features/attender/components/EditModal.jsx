@@ -1611,6 +1611,8 @@ export const EditModal = ({
       delete updates.lastEditedAt;
       delete updates.normalizedPhone;
       delete updates.normalizedMobile;
+      delete updates.attenderId;
+      delete updates.attenderName;
 
       // Detect if history was altered (e.g., deletion or edit) so we keep it even when not a call attempt.
       const historyChanged = JSON.stringify(targetEdited.history || []) !== JSON.stringify(savedRow.history || []);

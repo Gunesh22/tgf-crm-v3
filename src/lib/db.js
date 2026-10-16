@@ -83,14 +83,15 @@ export const globalSearchContacts = async (query) => {
 
 export const updateCallLog = async (contactId, updates = {}, attenderId, attenderName, context = {}) => {
   const resolvedCalledFor = updates.calledFor || updates["Called For"] || context.calledFor || context["Called For"] || "";
+  const { attenderId: _ignoredAttenderId, attenderName: _ignoredAttenderName, ...safeUpdates } = updates;
   return fetchAPI(`/api/contacts/log-call`, "POST", {
     contactId,
+    status: safeUpdates.status,
+    remark: safeUpdates.remark,
+    callbackDate: safeUpdates.callbackDate,
+    ...safeUpdates,
     attenderId,
     attenderName,
-    status: updates.status,
-    remark: updates.remark,
-    callbackDate: updates.callbackDate,
-    ...updates,
     calledFor: resolvedCalledFor
   });
 };

@@ -15,8 +15,9 @@ export const ID_ALIASES = {
   'geeta': 'WbND9Oa4yPUuWXVyibb3',
   'attender_5': 'WbND9Oa4yPUuWXVyibb3',
   'wbnd9oa4ypuuwxvyibb3': 'WbND9Oa4yPUuWXVyibb3',
-  'rakhi': 'IrAgizMZzxqzUbJjHIBI',
-  'iragizmzzxqzubjjhibi': 'IrAgizMZzxqzUbJjHIBI',
+  'rakhi': 'lrAgizMZzxqzUbJjHIBI',
+  'lragizmzzxqzubjjhibi': 'lrAgizMZzxqzUbJjHIBI',
+  'iragizmzzxqzubjjhibi': 'lrAgizMZzxqzUbJjHIBI',
 };
 
 /**

@@ -9,7 +9,7 @@ const DEFAULT_ATTENDERS = [
   { id: "WbND9Oa4yPUuWXVyibb3", name: "Geeta", role: "attender", password: "198291", isActive: true },
   { id: "ZJQsev2aLqi2Ispr3j74", name: "Priyanka", role: "attender", password: "706321", isActive: true },
   { id: "a82GcDWY69r6k936b4GC", name: "Vaishali Golande", role: "attender", password: "121314", isActive: true },
-  { id: "IrAgizMZzxqzUbJjHIBI", name: "Rakhi", role: "attender", password: "697984", isActive: true },
+  { id: "lrAgizMZzxqzUbJjHIBI", name: "Rakhi", role: "attender", password: "697984", isActive: true },
   { id: "o1FPWNvI7HO4O2ylSuZm", name: "Sreeja", role: "attender", password: "646080", isActive: true },
   { id: "pKfAHuc7UODJ8aOB1luFY", name: "Dipika", role: "attender", password: "121311", isActive: true }
 ];
