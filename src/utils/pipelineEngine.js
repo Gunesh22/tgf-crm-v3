@@ -433,7 +433,16 @@ export function evaluatePipeline(contact = {}, callEvent = {}, options = {}) {
   const outcome    = (callEvent.purposeOutcome || callEvent.outcome || callEvent.status || "").trim();
   const sLower     = outcome.toLowerCase();
 
-  let attemptCount  = Number(contact.attemptCount || 0);
+  let historyUnconnectedCount = 0;
+  if (Array.isArray(contact.history)) {
+    historyUnconnectedCount = contact.history.filter(h => {
+      const p = String(h?.callPurpose || h?.purpose || "SALES").toUpperCase();
+      if (p !== "SALES") return false;
+      const st = String(h?.callStatus || h?.status || "").trim().toLowerCase();
+      return UNCONNECTED_CALL_STATUSES.some(s => s.toLowerCase() === st);
+    }).length;
+  }
+  let attemptCount  = Math.max(Number(contact.attemptCount || 0), historyUnconnectedCount);
   const isUnconnected = UNCONNECTED_CALL_STATUSES.some(
     s => s.toLowerCase() === callStatus.toLowerCase() || s.toLowerCase() === sLower
   );

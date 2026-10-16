@@ -1311,6 +1311,25 @@ export const EditModal = ({
       ? { ...edited, ...overrideFields }
       : { ...edited };
 
+    // DB attempt limit for unconnected calls (defaults to 3 from settings)
+    const dbAttemptLimit = (() => {
+      try {
+        const cached = localStorage.getItem("crm_settings_options_cache");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed?.attemptingCallThreshold && typeof parsed.attemptingCallThreshold === 'number') {
+            return parsed.attemptingCallThreshold;
+          }
+        }
+        const direct = localStorage.getItem("admin_attempting_call_threshold");
+        if (direct) {
+          const val = parseInt(direct, 10);
+          if (!isNaN(val) && val > 0) return val;
+        }
+      } catch (e) {}
+      return 3;
+    })();
+
     if (targetEdited.status === "Reg.Done") {
       targetEdited.callbackDate = null;
       targetEdited.callbackStatus = null;
@@ -1485,27 +1504,8 @@ export const EditModal = ({
           return;
         }
       }
-      // DB attempt limit for unconnected calls (defaults to 3 from settings)
-      const dbAttemptLimit = (() => {
-        try {
-          const cached = localStorage.getItem("crm_settings_options_cache");
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            if (parsed?.attemptingCallThreshold && typeof parsed.attemptingCallThreshold === 'number') {
-              return parsed.attemptingCallThreshold;
-            }
-          }
-          const direct = localStorage.getItem("admin_attempting_call_threshold");
-          if (direct) {
-            const val = parseInt(direct, 10);
-            if (!isNaN(val) && val > 0) return val;
-          }
-        } catch (e) {}
-        return 3;
-      })();
-
-      // Auto-close triggers on the 4th call
-      const attemptCloseLimit = Math.max(4, dbAttemptLimit + 1);
+      // Auto-close threshold for unconnected calls (configured threshold, defaults to 3)
+      const attemptCloseLimit = dbAttemptLimit;
       let effStage = "";
       let isClosingLead = false;
 
@@ -1534,22 +1534,41 @@ export const EditModal = ({
 
       const normStage = String(effStage).trim().toLowerCase();
       const outcomeLower = String(targetEdited.status || "").trim().toLowerCase();
+      const isSalesCall = String(targetEdited.callPurpose || "SALES").trim().toUpperCase() === "SALES";
 
-      // Check if this unconnected attempt has hit or exceeded the attempt limit (e.g. 3rd attempt)
+      // Count prior qualifying unconnected SALES attempts from history
       const historyAttempts = Array.isArray(targetEdited.history || savedRow?.history || row?.history)
-        ? (targetEdited.history || savedRow?.history || row?.history).filter(h => isNotConnectedStatus(h.status)).length
+        ? (targetEdited.history || savedRow?.history || row?.history).filter(h => {
+            const p = String(h?.callPurpose || h?.purpose || "SALES").trim().toUpperCase();
+            return p === "SALES" && isNotConnectedStatus(h?.status);
+          }).length
         : 0;
       const priorAttempts = Math.max(Number((savedRow || row || targetEdited).attemptCount || 0), historyAttempts);
-      const totalAttempts = priorAttempts + (isUnconnected ? 1 : 0);
-      const hasReachedAttemptLimit = isUnconnected && totalAttempts >= dbAttemptLimit;
+      const totalAttempts = priorAttempts + (isUnconnected && isSalesCall ? 1 : 0);
+      const hasReachedAttemptLimit = isUnconnected && isSalesCall && totalAttempts >= dbAttemptLimit;
 
-      // If lead was erroneously marked Closed / Invalid with fewer than 4 attempts, heal it back to Attempting
-      if (targetEdited.pipelineStage === "Closed / Invalid" && !isClosingLead && effStage && effStage !== "Closed / Invalid") {
+      if (hasReachedAttemptLimit) {
+        isClosingLead = true;
+        effStage = "Closed / Invalid";
+      }
+
+      const isClosedState =
+        isClosingLead ||
+        normStage.includes("closed") ||
+        targetEdited.pipelineStage === "Closed / Invalid" ||
+        targetEdited.pipelineStage === "Closed / Lost" ||
+        outcomeLower === "not interested" ||
+        outcomeLower === "not possible" ||
+        outcomeLower === "invalid number" ||
+        outcomeLower === "invalid no";
+
+      // If lead was erroneously marked Closed / Invalid with fewer than attemptCloseLimit attempts, heal it back to Attempting
+      if (targetEdited.pipelineStage === "Closed / Invalid" && !isClosedState && effStage && effStage !== "Closed / Invalid") {
         targetEdited.pipelineStage = effStage;
       }
 
-      // If lead is closing on 4th call or has reached attempt limit (3rd unconnected call), wipe callback and skip prompt
-      if (isClosingLead || (normStage.includes("closed") && isClosingLead) || hasReachedAttemptLimit) {
+      // Automatically remove pending follow-ups whenever a lead transitions to or is in a closed state
+      if (isClosedState) {
         targetEdited.callbackDate = null;
         targetEdited.callbackStatus = null;
         targetEdited.callbackTime = null;
@@ -1645,6 +1664,7 @@ export const EditModal = ({
       if ('original_source' in updates) updates.original_source = resolvedLeadOrigin;
       if ('originalSource' in updates) updates.originalSource = resolvedLeadOrigin;
       if ('Lead Origin' in updates) updates['Lead Origin'] = resolvedLeadOrigin;
+      updates.attemptingCallThreshold = dbAttemptLimit;
 
       if (isFromHistory) {
         updates.callbackDate = updates.callbackDate ? getLocalDateString(updates.callbackDate) : null;

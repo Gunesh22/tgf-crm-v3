@@ -190,6 +190,24 @@ export async function executeOverrideStage(db, payload) {
     setFields.closedReason = null;
   } else if (newRank === 7) {
     setFields.closedReason = reason || `Manually closed to ${canonicalNewStage}`;
+    setFields.callbackDate = null;
+    setFields.callbackTime = null;
+    setFields.callbackStatus = null;
+    if (cleanAttenderId) {
+      setFields[`attenderStates.${cleanAttenderId}.callbackDate`] = null;
+      setFields[`attenderStates.${cleanAttenderId}.callbackTime`] = null;
+      setFields[`attenderStates.${cleanAttenderId}.callbackStatus`] = null;
+      const targetProg = program || existingContact["Called For"] || existingContact.calledFor;
+      const progKey = targetProg ? String(targetProg).trim().toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+      if (progKey) {
+        setFields[`programStates.${cleanAttenderId}.${progKey}.callbackDate`] = null;
+        setFields[`programStates.${cleanAttenderId}.${progKey}.callbackTime`] = null;
+        setFields[`programStates.${cleanAttenderId}.${progKey}.callbackStatus`] = null;
+        setFields[`programs.${progKey}.${cleanAttenderId}.callbackDate`] = null;
+        setFields[`programs.${progKey}.${cleanAttenderId}.callbackTime`] = null;
+        setFields[`programs.${progKey}.${cleanAttenderId}.callbackStatus`] = null;
+      }
+    }
   }
 
   if (canonicalNewStage === PIPELINE_STAGES.REGISTERED_WON) {

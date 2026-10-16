@@ -104,7 +104,7 @@ export const DEFAULT_SETTINGS = {
   calledForOptions: DEFAULT_CALLED_FOR_OPTIONS,
   whatsappTemplates: DEFAULT_WHATSAPP_TEMPLATES,
   optionalCompulsoryStatuses: DEFAULT_NOT_CONNECTED_STATUSES,
-  attemptingCallThreshold: 5,
+  attemptingCallThreshold: 3,
   updatedAt: new Date().toISOString()
 };
 
@@ -152,7 +152,7 @@ export default async function handler(req, res) {
         cleanData.statusOptions = DEFAULT_SETTINGS.statusOptions;
       }
       if (cleanData.attemptingCallThreshold === undefined) {
-        cleanData.attemptingCallThreshold = 5;
+        cleanData.attemptingCallThreshold = 3;
       }
 
       // Check for sinceRevision query parameter (with req.url fallback for all proxy environments)

@@ -241,7 +241,7 @@ const getTemporaryFallbackSettings = () => ({
   currentSourceOptions: DEFAULT_SOURCE_OPTIONS,
   calledForOptions: DEFAULT_CALLED_FOR_OPTIONS,
   whatsappTemplates: DEFAULT_WHATSAPP_TEMPLATES,
-  attemptingCallThreshold: 5,
+  attemptingCallThreshold: 3,
   revision: 1
 });
 

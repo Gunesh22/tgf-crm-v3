@@ -131,7 +131,16 @@ export function evaluateStageServer(lead, callEvent, options = {}) {
   const outcome    = (callEvent.purposeOutcome || callEvent.status || "").trim();
   const sLower     = outcome.toLowerCase();
 
-  let attemptCount = Number(lead.attemptCount || 0);
+  let historyUnconnectedCount = 0;
+  if (Array.isArray(lead.history)) {
+    historyUnconnectedCount = lead.history.filter(h => {
+      const p = String(h?.callPurpose || h?.purpose || "SALES").trim().toUpperCase();
+      if (p !== "SALES") return false;
+      const st = String(h?.callStatus || h?.status || "").trim().toLowerCase();
+      return UNCONNECTED_CALL_STATUSES.some(s => s.toLowerCase() === st);
+    }).length;
+  }
+  let attemptCount = Math.max(Number(lead.attemptCount || 0), historyUnconnectedCount);
   const isUnconnected = UNCONNECTED_CALL_STATUSES.some(
     s => s.toLowerCase() === callStatus.toLowerCase() || s.toLowerCase() === sLower
   );
@@ -287,15 +296,22 @@ export async function executeLogCall(db, payload) {
 
   const targetCalledFor = calledFor || rootUpdates['Called For'] || existingContact['Called For'] || '';
 
-  // ── Fetch dynamic attemptingCallThreshold from settings ──────────────────
-  let attemptingCallThreshold = 5;
-  try {
-    const settingsDoc = await db.collection('settings').findOne({ _id: 'call_center_options' });
-    if (settingsDoc && typeof settingsDoc.attemptingCallThreshold === 'number' && settingsDoc.attemptingCallThreshold > 0) {
-      attemptingCallThreshold = settingsDoc.attemptingCallThreshold;
+  // ── Fetch dynamic attemptingCallThreshold from payload or settings ─────
+  let attemptingCallThreshold = 3;
+  if (typeof payload.attemptingCallThreshold === 'number' && payload.attemptingCallThreshold > 0) {
+    attemptingCallThreshold = payload.attemptingCallThreshold;
+  } else if (typeof rootUpdates.attemptingCallThreshold === 'number' && rootUpdates.attemptingCallThreshold > 0) {
+    attemptingCallThreshold = rootUpdates.attemptingCallThreshold;
+    delete rootUpdates.attemptingCallThreshold;
+  } else {
+    try {
+      const settingsDoc = await db.collection('settings').findOne({ _id: 'call_center_options' });
+      if (settingsDoc && typeof settingsDoc.attemptingCallThreshold === 'number' && settingsDoc.attemptingCallThreshold > 0) {
+        attemptingCallThreshold = settingsDoc.attemptingCallThreshold;
+      }
+    } catch (err) {
+      console.warn('[log-call] Failed to read attemptingCallThreshold from settings, defaulting to 3:', err);
     }
-  } catch (err) {
-    console.warn('[log-call] Failed to read attemptingCallThreshold from settings, defaulting to 5:', err);
   }
 
   // ── Evaluate pipeline ──────────────────────────────────────────────────
@@ -372,8 +388,20 @@ export async function executeLogCall(db, payload) {
     }
   }
 
-  const cleanCallbackTime = callbackTime ? String(callbackTime).trim() : null;
-  const cleanCallbackStatus = payload.callbackStatus || rootUpdates.callbackStatus || (cleanCallbackDate ? 'pending' : null);
+  let cleanCallbackTime = callbackTime ? String(callbackTime).trim() : null;
+  let cleanCallbackStatus = payload.callbackStatus || rootUpdates.callbackStatus || (cleanCallbackDate ? 'pending' : null);
+
+  const isLeadClosed =
+    evalResult.pipelineStage === "Closed / Lost" ||
+    evalResult.pipelineStage === "Closed / Invalid" ||
+    String(evalResult.pipelineStage || "").toLowerCase().includes("closed") ||
+    ["not interested", "not possible", "invalid number", "invalid no"].includes(String(status || "").trim().toLowerCase());
+
+  if (isLeadClosed) {
+    cleanCallbackDate = null;
+    cleanCallbackTime = null;
+    cleanCallbackStatus = null;
+  }
 
   // ── Build history item ─────────────────────────────────────────────────
   const historyItem = {
@@ -437,6 +465,8 @@ export async function executeLogCall(db, payload) {
 
   const isSameCalledFor = !targetCalledFor || !ownerCalledFor ||
     normalizeCalledForKey(targetCalledFor) === normalizeCalledForKey(ownerCalledFor);
+
+  const shouldUpdateRootStage = !isNonOwnerSharedCall || isSameCalledFor;
 
   if (isNonOwnerSharedCall) {
     delete rootUpdates['Called For'];
@@ -566,6 +596,12 @@ export async function executeLogCall(db, payload) {
     delete setPayload.callStatus;
   }
 
+  if (isLeadClosed && shouldUpdateRootStage) {
+    setPayload.callbackDate = null;
+    setPayload.callbackTime = null;
+    setPayload.callbackStatus = null;
+  }
+
   // Set leadOwner only on FIRST assignment (additive — never overwrites)
   if (isNewOwnerAssignment) {
     setPayload.leadOwner     = cleanAttenderId;
@@ -575,7 +611,6 @@ export async function executeLogCall(db, payload) {
   // Conditionally update root pipelineStage ONLY for SALES calls (never QUERY or REMINDER)
   const isSalesCall = callPurposeClean === 'SALES';
   const stageChanged = evalResult.pipelineStage && evalResult.pipelineStage !== currentStageInDb;
-  const shouldUpdateRootStage = !isNonOwnerSharedCall || isSameCalledFor;
   if (isSalesCall && shouldUpdateRootStage && stageChanged && canTransitionServer(currentStageInDb, evalResult.pipelineStage, {
     callStatus: callStatusClean,
     status,

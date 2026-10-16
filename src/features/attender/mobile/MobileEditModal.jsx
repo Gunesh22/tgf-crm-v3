@@ -498,8 +498,18 @@ export default function MobileEditModal({
       ? { ...edited, ...overrideFields }
       : { ...edited };
 
-    if (targetEdited.status === "Reg.Done") {
+    const isClosedMobile = targetEdited.status === "Reg.Done" ||
+      targetEdited.status === "Not Interested" ||
+      targetEdited.status === "Not possible" ||
+      targetEdited.status === "Invalid Number" ||
+      targetEdited.status === "Invalid No" ||
+      targetEdited.pipelineStage === "Closed / Lost" ||
+      targetEdited.pipelineStage === "Closed / Invalid" ||
+      String(targetEdited.pipelineStage || "").toLowerCase().includes("closed");
+
+    if (isClosedMobile) {
       targetEdited.callbackDate = null;
+      targetEdited.callbackTime = null;
       targetEdited.callbackStatus = null;
     }
 

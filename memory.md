@@ -1611,3 +1611,26 @@ The discrepancy is caused by two conflicting definitions of "Incoming" in `Month
 - **Call-Type Integrity**:
   - Preserved the independent `determineCallType()` logic and the modal's separate Outgoing / Incoming call-type radio controls.
 
+---
+
+## 27. 3 Not-Connected Call Auto-Closure & Automatic Follow-Up Cleanup
+
+### 1. Root Cause Analysis
+- **Off-By-One Closure Bug**: In `EditModal.jsx`, the threshold was hardcoded as `const attemptCloseLimit = Math.max(4, dbAttemptLimit + 1);`. Even when the settings configured a limit of 3, the modal calculated `Math.max(4, 4) = 4`, requiring a 4th dial attempt before closing. Additionally, fallback defaults in `api/_admin/settings.js`, `db.js`, and `CallEntryTab.jsx` were defaulting to 5 instead of 3.
+- **Pending Follow-Up Residue**: Leads transitioning to terminal closed states (`Closed / Lost`, `Closed / Invalid`, `Not Interested`, `Invalid Number`, etc.) retained active follow-up dates (`callbackDate`, `callbackTime`, `callbackStatus`), leaving dead/opted-out contacts in callback queues.
+
+### 2. Changes Implemented
+- **Inclusive Auto-Close Threshold**:
+  - Aligned configured default threshold to 3 across `EditModal.jsx`, `CallEntryTab.jsx`, `api/_admin/settings.js`, `api/_contacts/log-call.js`, and `src/lib/db.js`.
+  - Inclusive logic: 1st dial $\rightarrow$ `2. Attempting Contact`, 2nd dial $\rightarrow$ `2. Attempting Contact`, 3rd dial $\rightarrow$ auto-closes to `Closed / Invalid` (`Automated: 3 Unanswered Dial Attempts`).
+  - Strict purpose isolation: Only qualifying `SALES` calls with non-connected outcomes increment dial attempts. `Query`, `Reminder`, and connected calls are excluded.
+- **Automatic Follow-Up Cleanup**:
+  - Whenever a lead enters a closed state (via 3rd unconnected attempt auto-close, manual stage override, or terminal outcome), pending follow-ups are wiped:
+    - Root contact: `callbackDate = null`, `callbackTime = null`, `callbackStatus = null`.
+    - Active attender state: `attenderStates[attenderId]` callback fields are set to `null`.
+    - Active program state: `programStates[attenderId][progKey]` and `programs[progKey][attenderId]` callback fields are set to `null`.
+  - Historical call entries in `contact.history[]` and audit records remain intact.
+- **Backend & Frontend Runtime Defect Fixes**:
+  - **`api/_contacts/log-call.js` TDZ Fix**: Hoisted `const shouldUpdateRootStage = !isNonOwnerSharedCall || isSameCalledFor;` above line 599 so that `isLeadClosed && shouldUpdateRootStage` does not trigger a Temporal Dead Zone `ReferenceError`.
+  - **`EditModal.jsx` Scoping Fix**: Hoisted `const dbAttemptLimit = (() => { ... })();` to the top level of `handleSaveAndClose` so that `updates.attemptingCallThreshold = dbAttemptLimit;` inside `try { ... }` does not throw `ReferenceError: dbAttemptLimit is not defined`.
+

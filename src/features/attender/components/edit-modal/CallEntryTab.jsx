@@ -85,7 +85,7 @@ export const CallEntryTab = ({
         if (!isNaN(val) && val > 0) return val;
       }
     } catch (e) {}
-    return 5;
+    return 3;
   });
 
   useEffect(() => {
