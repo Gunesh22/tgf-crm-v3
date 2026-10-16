@@ -410,12 +410,66 @@ const shouldGoToEnd = (sourceName) => {
   );
 };
 
-const SOURCE_PALETTE = [
-  "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", 
-  "#06b6d4", "#f97316", "#14b8a6", "#6366f1", "#84cc16", 
-  "#a855f7", "#ef4444", "#64748b", "#0284c7", "#e11d48",
-  "#d97706", "#059669", "#7c3aed", "#db2777", "#2563eb"
+const CANONICAL_CHANNEL_COLORS = {
+  // Major standard channels with recognizable, high-contrast brand/category colors
+  "facebook": "#1877f2",
+  "meta": "#1877f2",
+  "meta / facebook": "#1877f2",
+  "meta/facebook": "#1877f2",
+  "instagram": "#e1306c",
+  "insta": "#e1306c",
+  "whatsapp": "#25d366",
+  "youtube": "#ef4444",
+  "google": "#f59e0b",
+  "google ads": "#f59e0b",
+  "website": "#06b6d4",
+  "web form": "#06b6d4",
+  "books": "#8b5cf6",
+  "book": "#8b5cf6",
+  "call centre": "#6366f1",
+  "call center": "#6366f1",
+  "direct call": "#3b82f6",
+  "direct": "#3b82f6",
+  "program": "#10b981",
+  "khoji": "#f97316",
+  "cbt basic": "#14b8a6",
+  "cbt avd": "#0d9488",
+  "shsh": "#a855f7",
+  "fail payment": "#e11d48",
+  "old database": "#84cc16",
+  "old db": "#84cc16",
+  "referral": "#ec4899",
+  "other": "#64748b",
+  "others": "#64748b",
+  "na": "#94a3b8",
+  "n/a": "#94a3b8",
+  "unspecified": "#94a3b8",
+  "unknown": "#94a3b8"
+};
+
+const MASTER_PALETTE = [
+  "#2563eb", "#059669", "#d97706", "#7c3aed", "#db2777", 
+  "#0891b2", "#ea580c", "#4f46e5", "#16a34a", "#dc2626", 
+  "#9333ea", "#0284c7", "#ca8a04", "#0d9488", "#be185d", 
+  "#475569", "#6b21a8", "#15803d", "#b91c1c", "#1e40af", 
+  "#a16207", "#0f766e", "#86198f", "#9f1239"
 ];
+
+export const getConsistentColor = (name) => {
+  if (!name) return "#94a3b8";
+  const clean = String(name).trim().toLowerCase();
+  if (CANONICAL_CHANNEL_COLORS[clean]) {
+    return CANONICAL_CHANNEL_COLORS[clean];
+  }
+  let hash = 0;
+  for (let i = 0; i < clean.length; i++) {
+    hash = (hash << 5) - hash + clean.charCodeAt(i);
+    hash |= 0;
+  }
+  return MASTER_PALETTE[Math.abs(hash) % MASTER_PALETTE.length];
+};
+
+const SOURCE_PALETTE = MASTER_PALETTE;
 
 export default function MonthlyReportTab({
   callLogs = [],
@@ -479,12 +533,16 @@ export default function MonthlyReportTab({
   const [selectedStatuses, setSelectedStatuses] = useState([]);
   const [selectedCallTypes, setSelectedCallTypes] = useState([]);
   const [selectedKhojiStatuses, setSelectedKhojiStatuses] = useState([]);
+  const [selectedCallPurposes, setSelectedCallPurposes] = useState([]);
   const [sourceDimension, setSourceDimension] = useState("currentSource"); // "currentSource" | "leadOrigin"
+  const [sourceVsOriginPrimary, setSourceVsOriginPrimary] = useState("currentSource"); // "currentSource" | "leadOrigin"
   const [conversionSearch, setConversionSearch] = useState("");
   const [convPage, setConvPage] = useState(1);
   const [calledForVsSourceView, setCalledForVsSourceView] = useState("table"); // "table" | "graph"
   const [graphMetric, setGraphMetric] = useState("calls"); // "calls" | "registrations"
   const [sourceWiseView, setSourceWiseView] = useState("table"); // "table" | "graph"
+  const [sourceVsOriginView, setSourceVsOriginView] = useState("table"); // "table" | "graph"
+  const [sourceVsOriginMetric, setSourceVsOriginMetric] = useState("calls"); // "calls" | "registrations"
   const [inspectModalData, setInspectModalData] = useState(null);
   const [inspectSearch, setInspectSearch] = useState("");
   const [inspectStageFilter, setInspectStageFilter] = useState("ALL");
@@ -706,6 +764,12 @@ export default function MonthlyReportTab({
     { value: "Dew drop khoji", label: "Dew drop khoji" }
   ], []);
 
+  const callPurposeOptions = React.useMemo(() => [
+    { value: "SALES", label: "Sales" },
+    { value: "QUERY", label: "Query" },
+    { value: "REMINDER", label: "Reminder" }
+  ], []);
+
   const programOptions = React.useMemo(() => {
     const map = new Map();
 
@@ -826,9 +890,10 @@ export default function MonthlyReportTab({
       selectedCalledFors,
       selectedStatuses,
       selectedCallTypes,
-      selectedKhojiStatuses
+      selectedKhojiStatuses,
+      selectedCallPurposes
     });
-  }, [callLogs, startDate, endDate, selectedAttenderIds, selectedProgramIds, selectedSources, selectedLeadOrigins, selectedCalledFors, selectedStatuses, selectedCallTypes, selectedKhojiStatuses]);
+  }, [callLogs, startDate, endDate, selectedAttenderIds, selectedProgramIds, selectedSources, selectedLeadOrigins, selectedCalledFors, selectedStatuses, selectedCallTypes, selectedKhojiStatuses, selectedCallPurposes]);
 
   const attenderOptions = React.useMemo(() => {
     const EXCLUDED_ATTENDER_NAMES = ["admin", "super admin", "administrator", "agent"];
@@ -1464,26 +1529,218 @@ export default function MonthlyReportTab({
     return totals;
   }, [sourceWiseBreakdown, sourceDimension, allAttempts, programRegistrationsList]);
 
+  // ── Current Source vs Lead Origin Breakdown ─────────────────────────────
+  const currentSourceVsOriginBreakdown = React.useMemo(() => {
+    const map = {};
+
+    allAttempts.forEach(c => {
+      const currentSrc = sanitizeSource(c.source, "Unspecified");
+      const origin = sanitizeSource(c.leadOrigin, "Unspecified");
+
+      if (selectedSources.length > 0 && !selectedSources.includes(currentSrc)) {
+        return;
+      }
+      if (selectedLeadOrigins.length > 0 && !selectedLeadOrigins.includes(origin)) {
+        return;
+      }
+
+      const key = `${currentSrc} &&& ${origin}`;
+      if (!map[key]) {
+        map[key] = {
+          currentSource: currentSrc,
+          leadOrigin: origin,
+          total: 0,
+          incoming: 0,
+          outgoing: 0,
+          conversions: 0,
+          incomingConversions: 0,
+          outgoingConversions: 0,
+          attempts: [],
+          registrations: []
+        };
+      }
+
+      const item = map[key];
+      item.total++;
+      item.attempts.push(c);
+
+      const type = (c.callType || "").toLowerCase();
+      const isIncoming = type.startsWith("incoming");
+
+      if (isIncoming) {
+        item.incoming++;
+      } else {
+        item.outgoing++;
+      }
+    });
+
+    // Populate conversions directly from canonical programRegistrationsList
+    programRegistrationsList.forEach(reg => {
+      const currentSrc = sanitizeSource(reg.source, "Unspecified");
+      const origin = sanitizeSource(reg.leadOrigin, "Unspecified");
+
+      if (selectedSources.length > 0 && !selectedSources.includes(currentSrc)) {
+        return;
+      }
+      if (selectedLeadOrigins.length > 0 && !selectedLeadOrigins.includes(origin)) {
+        return;
+      }
+
+      const key = `${currentSrc} &&& ${origin}`;
+      if (!map[key]) {
+        map[key] = {
+          currentSource: currentSrc,
+          leadOrigin: origin,
+          total: 0,
+          incoming: 0,
+          outgoing: 0,
+          conversions: 0,
+          incomingConversions: 0,
+          outgoingConversions: 0,
+          attempts: [],
+          registrations: []
+        };
+      }
+
+      const item = map[key];
+      const type = String(reg.callType || reg.type || "").toLowerCase().trim();
+      const isIncoming = type === "incoming" || type === "in" || type.includes("incoming");
+      item.conversions++;
+      item.registrations.push(reg);
+      if (isIncoming) {
+        item.incomingConversions++;
+      } else {
+        item.outgoingConversions++;
+      }
+    });
+
+    const isCurrentFirst = sourceVsOriginPrimary === "currentSource";
+
+    const rows = Object.values(map).map(item => {
+      const totalCalls = item.total;
+      const totalConvs = item.conversions;
+      const incCalls = item.incoming;
+      const outCalls = item.outgoing;
+      const incConvs = item.incomingConversions;
+      const outConvs = item.outgoingConversions;
+
+      const totalConvRate = totalCalls > 0 ? Math.min(100, (totalConvs / totalCalls) * 100) : 0;
+      const incomingConvRate = incCalls > 0 ? Math.min(100, (incConvs / incCalls) * 100) : 0;
+      const outgoingConvRate = outCalls > 0 ? Math.min(100, (outConvs / outCalls) * 100) : 0;
+
+      const baseMetrics = {
+        "Total Calls": totalCalls,
+        "Incoming Calls": incCalls,
+        "Outgoing Calls": outCalls,
+        "Total Conversions": totalConvs,
+        "Incoming Conversions": incConvs,
+        "Outgoing Conversions": outConvs,
+        "Conversion Rate (%)": `${totalConvRate.toFixed(1)}%`,
+        "Incoming Conversion Rate (%)": `${incomingConvRate.toFixed(1)}%`,
+        "Outgoing Conversion Rate (%)": `${outgoingConvRate.toFixed(1)}%`,
+        _attempts: item.attempts,
+        _registrations: item.registrations,
+        _currentSource: item.currentSource,
+        _leadOrigin: item.leadOrigin
+      };
+
+      if (isCurrentFirst) {
+        return {
+          "Current Source": item.currentSource,
+          "Lead Origin": item.leadOrigin,
+          ...baseMetrics
+        };
+      } else {
+        return {
+          "Lead Origin": item.leadOrigin,
+          "Current Source": item.currentSource,
+          ...baseMetrics
+        };
+      }
+    });
+
+    return rows.sort((a, b) => {
+      const primaryKey = isCurrentFirst ? "Current Source" : "Lead Origin";
+      const aPrim = a[primaryKey] || "";
+      const bPrim = b[primaryKey] || "";
+      if (aPrim !== bPrim) {
+        const aIsUnspec = aPrim.toLowerCase().includes("unspecified");
+        const bIsUnspec = bPrim.toLowerCase().includes("unspecified");
+        if (aIsUnspec && !bIsUnspec) return 1;
+        if (!aIsUnspec && bIsUnspec) return -1;
+        return aPrim.localeCompare(bPrim);
+      }
+
+      if (b["Total Conversions"] !== a["Total Conversions"]) {
+        return b["Total Conversions"] - a["Total Conversions"];
+      }
+      return b["Total Calls"] - a["Total Calls"];
+    });
+  }, [allAttempts, programRegistrationsList, selectedSources, selectedLeadOrigins, sourceVsOriginPrimary]);
+
+  const currentSourceVsOriginBreakdownTotals = React.useMemo(() => {
+    const isCurrentFirst = sourceVsOriginPrimary === "currentSource";
+    const totals = {
+      ...(isCurrentFirst ? { "Current Source": "Total", "Lead Origin": "-" } : { "Lead Origin": "Total", "Current Source": "-" }),
+      "Total Calls": 0,
+      "Incoming Calls": 0,
+      "Outgoing Calls": 0,
+      "Total Conversions": 0,
+      "Incoming Conversions": 0,
+      "Outgoing Conversions": 0,
+      "Conversion Rate (%)": "0.0%",
+      "Incoming Conversion Rate (%)": "0.0%",
+      "Outgoing Conversion Rate (%)": "0.0%",
+      _attempts: allAttempts,
+      _registrations: programRegistrationsList
+    };
+
+    currentSourceVsOriginBreakdown.forEach(row => {
+      totals["Total Calls"] += row["Total Calls"];
+      totals["Incoming Calls"] += row["Incoming Calls"];
+      totals["Outgoing Calls"] += row["Outgoing Calls"];
+      totals["Total Conversions"] += row["Total Conversions"];
+      totals["Incoming Conversions"] += row["Incoming Conversions"];
+      totals["Outgoing Conversions"] += row["Outgoing Conversions"];
+    });
+
+    const totalConvRate = totals["Total Calls"] > 0
+      ? Math.min(100, (totals["Total Conversions"] / totals["Total Calls"]) * 100)
+      : 0;
+    const incomingOverallRate = totals["Incoming Calls"] > 0
+      ? Math.min(100, (totals["Incoming Conversions"] / totals["Incoming Calls"]) * 100)
+      : 0;
+    const outgoingOverallRate = totals["Outgoing Calls"] > 0
+      ? Math.min(100, (totals["Outgoing Conversions"] / totals["Outgoing Calls"]) * 100)
+      : 0;
+
+    totals["Conversion Rate (%)"] = `${totalConvRate.toFixed(1)}%`;
+    totals["Incoming Conversion Rate (%)"] = `${incomingOverallRate.toFixed(1)}%`;
+    totals["Outgoing Conversion Rate (%)"] = `${outgoingOverallRate.toFixed(1)}%`;
+
+    return totals;
+  }, [currentSourceVsOriginBreakdown, sourceVsOriginPrimary, allAttempts, programRegistrationsList]);
+
   const sourceWisePieData = React.useMemo(() => {
     const totalConvs = sourceWiseBreakdownTotals["Total Conversions"] || 1;
     const totalCalls = sourceWiseBreakdownTotals["Total Calls"] || 1;
 
     const convSlice = sourceWiseBreakdown
       .filter(r => r["Total Conversions"] > 0)
-      .map((r, idx) => ({
+      .map(r => ({
         name: r.Source,
         value: r["Total Conversions"],
         percentage: ((r["Total Conversions"] / totalConvs) * 100).toFixed(1),
-        color: SOURCE_PALETTE[idx % SOURCE_PALETTE.length]
+        color: getConsistentColor(r.Source)
       }));
 
     const callSlice = sourceWiseBreakdown
       .filter(r => r["Total Calls"] > 0)
-      .map((r, idx) => ({
+      .map(r => ({
         name: r.Source,
         value: r["Total Calls"],
         percentage: ((r["Total Calls"] / totalCalls) * 100).toFixed(1),
-        color: SOURCE_PALETTE[idx % SOURCE_PALETTE.length]
+        color: getConsistentColor(r.Source)
       }));
 
     return { convSlice, callSlice };
@@ -1538,11 +1795,11 @@ export default function MonthlyReportTab({
         if (!aEnd && bEnd) return -1;
         return b.value - a.value;
       })
-      .map((p, idx) => ({
+      .map(p => ({
         name: p.name,
         value: p.value,
         percentage: ((p.value / totalConvs) * 100).toFixed(1),
-        color: SOURCE_PALETTE[(idx + 4) % SOURCE_PALETTE.length],
+        color: getConsistentColor(p.name),
         registrations: p.registrations
       }));
 
@@ -1560,6 +1817,110 @@ export default function MonthlyReportTab({
       subtitle: `Total Registrations: ${items.length} confirmed conversions`,
       category: "registrations",
       items: items
+    });
+  };
+
+  const currentSourceVsOriginPieData = React.useMemo(() => {
+    const isRegMode = sourceVsOriginMetric === "registrations";
+    const dataList = isRegMode ? programRegistrationsList : allAttempts;
+    const isCurrentFirst = sourceVsOriginPrimary === "currentSource";
+
+    const groupMap = {};
+    const globalSecondaryCounts = {};
+
+    dataList.forEach(item => {
+      const currentSrc = sanitizeSource(item.source, "Unspecified");
+      const origin = sanitizeSource(item.leadOrigin, "Unspecified");
+
+      if (selectedSources.length > 0 && !selectedSources.includes(currentSrc)) return;
+      if (selectedLeadOrigins.length > 0 && !selectedLeadOrigins.includes(origin)) return;
+
+      const primaryKey = isCurrentFirst ? currentSrc : origin;
+      const secondaryKey = isCurrentFirst ? origin : currentSrc;
+
+      if (!groupMap[primaryKey]) {
+        groupMap[primaryKey] = {
+          name: primaryKey,
+          totalCount: 0,
+          secondaryMap: {},
+          items: [],
+          itemsBySecondary: {}
+        };
+      }
+
+      const grp = groupMap[primaryKey];
+      grp.totalCount++;
+      grp.items.push(item);
+
+      if (!grp.secondaryMap[secondaryKey]) {
+        grp.secondaryMap[secondaryKey] = 0;
+        grp.itemsBySecondary[secondaryKey] = [];
+      }
+      grp.secondaryMap[secondaryKey]++;
+      grp.itemsBySecondary[secondaryKey].push(item);
+
+      globalSecondaryCounts[secondaryKey] = (globalSecondaryCounts[secondaryKey] || 0) + 1;
+    });
+
+    const uniqueSecondary = Object.keys(globalSecondaryCounts).sort((a, b) => {
+      const aEnd = shouldGoToEnd(a);
+      const bEnd = shouldGoToEnd(b);
+      if (aEnd && !bEnd) return 1;
+      if (!aEnd && bEnd) return -1;
+      return globalSecondaryCounts[b] - globalSecondaryCounts[a];
+    }).map(sec => ({
+      name: sec,
+      color: getConsistentColor(sec),
+      count: globalSecondaryCounts[sec]
+    }));
+
+    const groups = Object.values(groupMap).map(g => {
+      const slices = Object.entries(g.secondaryMap).map(([secName, secCount]) => ({
+        name: secName,
+        value: secCount,
+        percentage: g.totalCount ? ((secCount / g.totalCount) * 100).toFixed(1) : "0.0",
+        color: getConsistentColor(secName)
+      })).sort((a, b) => b.value - a.value);
+
+      return {
+        name: g.name,
+        totalCount: g.totalCount,
+        slices,
+        items: g.items,
+        itemsBySecondary: g.itemsBySecondary
+      };
+    }).sort((a, b) => {
+      const aEnd = shouldGoToEnd(a.name);
+      const bEnd = shouldGoToEnd(b.name);
+      if (aEnd && !bEnd) return 1;
+      if (!aEnd && bEnd) return -1;
+      return b.totalCount - a.totalCount;
+    });
+
+    const totalVolume = groups.reduce((sum, g) => sum + g.totalCount, 0);
+
+    return {
+      groups,
+      totalVolume,
+      uniqueSecondary,
+      isRegMode,
+      isCurrentFirst,
+      primaryLabel: isCurrentFirst ? "Current Source" : "Lead Origin",
+      secondaryLabel: isCurrentFirst ? "Lead Origin" : "Current Source"
+    };
+  }, [allAttempts, programRegistrationsList, sourceVsOriginMetric, sourceVsOriginPrimary, selectedSources, selectedLeadOrigins]);
+
+  const handleInspectSourceVsOriginSlice = (groupName, sliceName, sliceItems) => {
+    const isRegMode = sourceVsOriginMetric === "registrations";
+    const isCurrentFirst = sourceVsOriginPrimary === "currentSource";
+    const primaryLabel = isCurrentFirst ? "Current Source" : "Lead Origin";
+    const secondaryLabel = isCurrentFirst ? "Lead Origin" : "Current Source";
+
+    setInspectModalData({
+      title: `${isRegMode ? "Conversions" : "Calls"} for ${primaryLabel} "${groupName}" → ${secondaryLabel} "${sliceName}" (${sliceItems?.length || 0})`,
+      subtitle: `${sliceItems?.length || 0} matching records`,
+      category: isRegMode ? "registrations" : "all",
+      items: sliceItems || []
     });
   };
 
@@ -1612,8 +1973,8 @@ export default function MonthlyReportTab({
     });
 
     const sourceColorMap = {};
-    uniqueSources.forEach((src, idx) => {
-      sourceColorMap[src] = SOURCE_PALETTE[idx % SOURCE_PALETTE.length];
+    uniqueSources.forEach((src) => {
+      sourceColorMap[src] = getConsistentColor(src);
     });
 
     const groups = Object.values(groupMap).map(g => {
@@ -1703,8 +2064,8 @@ export default function MonthlyReportTab({
     });
 
     const sourceColorMap = {};
-    uniqueSources.forEach((src, idx) => {
-      sourceColorMap[src] = SOURCE_PALETTE[idx % SOURCE_PALETTE.length];
+    uniqueSources.forEach((src) => {
+      sourceColorMap[src] = getConsistentColor(src);
     });
 
     const groups = Object.values(groupMap).map(g => {
@@ -1828,6 +2189,10 @@ export default function MonthlyReportTab({
     const wsSourceWise = XLSX.utils.json_to_sheet(cleanRows([...sourceWiseBreakdown, sourceWiseBreakdownTotals]));
     XLSX.utils.book_append_sheet(wb, wsSourceWise, "Source Breakdown");
 
+    // 3c. Current Source vs Lead Origin Breakdown
+    const wsCurrentSourceVsOrigin = XLSX.utils.json_to_sheet(cleanRows([...currentSourceVsOriginBreakdown, currentSourceVsOriginBreakdownTotals]));
+    XLSX.utils.book_append_sheet(wb, wsCurrentSourceVsOrigin, "Source vs Origin");
+
     // 4. Detailed Call Logs (Grouped by Mobile Number: consecutive rows per number, chronological history)
     const detailedLogs = [...allAttempts]
       .sort((a, b) => {
@@ -1888,7 +2253,7 @@ export default function MonthlyReportTab({
     toast.success("Excel analytics report downloaded successfully!");
   };
 
-  const activeFilters = selectedLeadOrigins.length + selectedProgramIds.length + selectedAttenderIds.length + selectedSources.length + selectedCalledFors.length + selectedStatuses.length + selectedCallTypes.length + selectedKhojiStatuses.length;
+  const activeFilters = selectedLeadOrigins.length + selectedProgramIds.length + selectedAttenderIds.length + selectedSources.length + selectedCalledFors.length + selectedStatuses.length + selectedCallTypes.length + selectedKhojiStatuses.length + selectedCallPurposes.length;
 
   return (
     <div className="p-4 md:p-6 space-y-5">
@@ -1967,6 +2332,14 @@ export default function MonthlyReportTab({
             onChange={setSelectedCallTypes}
             placeholder="Call Type"
             allLabel="All Call Types"
+          />
+
+          <MultiSelect
+            options={callPurposeOptions}
+            selected={selectedCallPurposes}
+            onChange={setSelectedCallPurposes}
+            placeholder="Call Purpose"
+            allLabel="All Call Purposes"
           />
 
           <MultiSelect
@@ -2054,6 +2427,7 @@ export default function MonthlyReportTab({
                   setSelectedStatuses([]);
                   setSelectedCallTypes([]);
                   setSelectedKhojiStatuses([]);
+                  setSelectedCallPurposes([]);
                 }}
                 className="flex items-center gap-1 px-2.5 h-8 bg-rose-50 text-rose-600 border border-rose-200 rounded-md text-xs font-medium hover:bg-rose-100 transition cursor-pointer"
               >
@@ -2641,20 +3015,6 @@ export default function MonthlyReportTab({
                             </span>
                           </div>
                         </div>
-                        <div className="w-full flex flex-wrap gap-2 justify-center pt-2 border-t border-slate-200/60 max-h-24 overflow-y-auto">
-                          {sourceWisePieData.convSlice.map(item => (
-                            <div
-                              key={item.name}
-                              onClick={() => handleInspectSourceSlice(item.name, "conversions")}
-                              className="flex items-center gap-1.5 text-[11px] text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
-                              title={`Click to inspect ${item.value} conversions for ${item.name}`}
-                            >
-                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                              <span className="font-medium truncate max-w-[100px]">{item.name}:</span>
-                              <span className="font-bold text-slate-900 font-mono">{item.value} ({item.percentage}%)</span>
-                            </div>
-                          ))}
-                        </div>
                       </div>
 
                       {/* Middle Donut: Called For-wise Conversions */}
@@ -2734,20 +3094,6 @@ export default function MonthlyReportTab({
                               Regs
                             </span>
                           </div>
-                        </div>
-                        <div className="w-full flex flex-wrap gap-2 justify-center pt-2 border-t border-slate-200/60 max-h-24 overflow-y-auto">
-                          {calledForConversionPieData.slices.map(item => (
-                            <div
-                              key={item.name}
-                              onClick={() => handleInspectCalledForConversionSlice(item.name)}
-                              className="flex items-center gap-1.5 text-[11px] text-slate-600 hover:text-purple-700 hover:bg-purple-50 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
-                              title={`Click to inspect ${item.value} conversions for ${item.name}`}
-                            >
-                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                              <span className="font-medium truncate max-w-[100px]">{item.name}:</span>
-                              <span className="font-bold text-slate-900 font-mono">{item.value} ({item.percentage}%)</span>
-                            </div>
-                          ))}
                         </div>
                       </div>
 
@@ -2829,20 +3175,6 @@ export default function MonthlyReportTab({
                             </span>
                           </div>
                         </div>
-                        <div className="w-full flex flex-wrap gap-2 justify-center pt-2 border-t border-slate-200/60 max-h-24 overflow-y-auto">
-                          {sourceWisePieData.callSlice.map(item => (
-                            <div
-                              key={item.name}
-                              onClick={() => handleInspectSourceSlice(item.name, "calls")}
-                              className="flex items-center gap-1.5 text-[11px] text-slate-600 hover:text-indigo-700 hover:bg-indigo-50 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
-                              title={`Click to inspect ${item.value} calls for ${item.name}`}
-                            >
-                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                              <span className="font-medium truncate max-w-[100px]">{item.name}:</span>
-                              <span className="font-bold text-slate-900 font-mono">{item.value} ({item.percentage}%)</span>
-                            </div>
-                          ))}
-                        </div>
                       </div>
                     </div>
                   )}
@@ -2894,6 +3226,341 @@ export default function MonthlyReportTab({
             </div>
           </MonthlySection>
 
+          {/* Section 4: Current Source vs Lead Origin Breakdown */}
+          <MonthlySection
+            title="Section 4: Current Source vs Lead Origin Breakdown"
+            subtitle={
+              <div className="mt-2.5 flex items-center gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Group By:</span>
+                <div className="inline-flex items-center bg-slate-200/80 p-0.5 rounded-lg border border-slate-300 shadow-2xs">
+                  <button
+                    type="button"
+                    onClick={() => setSourceVsOriginPrimary("currentSource")}
+                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                      sourceVsOriginPrimary === "currentSource"
+                        ? "bg-white text-indigo-700 shadow-2xs border border-slate-200"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    Current Source → Lead Origin
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSourceVsOriginPrimary("leadOrigin")}
+                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                      sourceVsOriginPrimary === "leadOrigin"
+                        ? "bg-white text-indigo-700 shadow-2xs border border-slate-200"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    Lead Origin → Current Source
+                  </button>
+                </div>
+                <span className="text-xs text-slate-400 font-medium ml-2">
+                  ({currentSourceVsOriginBreakdown.length} combinations)
+                </span>
+              </div>
+            }
+            action={
+              <div className="flex items-center gap-2">
+                {/* View Mode Toggle: Table View vs Graph View */}
+                <div className="bg-slate-100 p-0.5 rounded-lg flex items-center border border-slate-200" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={() => setSourceVsOriginView("table")}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                      sourceVsOriginView === "table"
+                        ? "bg-white text-indigo-700 shadow-2xs border border-slate-200"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                    title="View as detailed data table"
+                  >
+                    <TableIcon size={13} />
+                    <span>Table View</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSourceVsOriginView("graph")}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                      sourceVsOriginView === "graph"
+                        ? "bg-white text-indigo-700 shadow-2xs border border-slate-200"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                    title="View as graphical charts"
+                  >
+                    <BarChart3 size={13} />
+                    <span>Graph View</span>
+                  </button>
+                </div>
+
+                <FormulaInfoPopover
+                  title="Conversion Rate Formulas"
+                  formulas={[
+                    {
+                      label: "Total Conversion Rate (%)",
+                      formula: "(Total Conversions ÷ Total Calls) × 100",
+                      note: "*Shows 0.0% if Total Calls = 0. Capped at 100.0%."
+                    },
+                    {
+                      label: "Incoming Conversion Rate (%)",
+                      formula: "(Incoming Conversions ÷ Incoming Calls) × 100",
+                      note: "*Shows 0.0% if Incoming Calls = 0. Capped at 100.0%."
+                    },
+                    {
+                      label: "Outgoing Conversion Rate (%)",
+                      formula: "(Outgoing Conversions ÷ Outgoing Calls) × 100",
+                      note: "*Shows 0.0% if Outgoing Calls = 0. Capped at 100.0%."
+                    }
+                  ]}
+                />
+              </div>
+            }
+          >
+            <div className="space-y-6">
+              {/* Graphical View (One Donut per Current Source / Lead Origin) */}
+              {sourceVsOriginView === "graph" && (
+                <div className="pt-2 space-y-4">
+                  {/* Metric & Group Direction Controls */}
+                  <div className="flex items-center justify-between flex-wrap gap-3 pb-2 border-b border-slate-100">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Metric Toggle */}
+                      <div className="bg-slate-100 p-0.5 rounded-lg flex items-center border border-slate-200">
+                        <button
+                          type="button"
+                          onClick={() => setSourceVsOriginMetric("calls")}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                            sourceVsOriginMetric === "calls"
+                              ? "bg-white text-indigo-700 shadow-2xs border border-slate-200"
+                              : "text-slate-600 hover:text-slate-900"
+                          }`}
+                          title="View call volume breakdown"
+                        >
+                          <span>📞 Total Calls</span>
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded font-extrabold ${
+                            sourceVsOriginMetric === "calls" ? "bg-indigo-50 text-indigo-700" : "bg-slate-200/60 text-slate-600"
+                          }`}>
+                            {currentSourceVsOriginBreakdownTotals["Total Calls"] ?? allAttempts.length}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSourceVsOriginMetric("registrations")}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                            sourceVsOriginMetric === "registrations"
+                              ? "bg-emerald-600 text-white shadow-2xs"
+                              : "text-slate-600 hover:text-slate-900"
+                          }`}
+                          title="View conversion (registration) breakdown"
+                        >
+                          <span>🏆 Registrations (Conversions)</span>
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded font-extrabold ${
+                            sourceVsOriginMetric === "registrations" ? "bg-emerald-700 text-white" : "bg-slate-200/60 text-slate-600"
+                          }`}>
+                            {currentSourceVsOriginBreakdownTotals["Total Conversions"] ?? programRegistrationsList.length}
+                          </span>
+                        </button>
+                      </div>
+
+                      {/* Direction Switcher (Current Source vs Lead Origin) */}
+                      <div className="bg-slate-100 p-0.5 rounded-lg flex items-center border border-slate-200">
+                        <button
+                          type="button"
+                          onClick={() => setSourceVsOriginPrimary("currentSource")}
+                          className={`px-2.5 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                            sourceVsOriginPrimary === "currentSource"
+                              ? "bg-white text-indigo-700 shadow-2xs border border-slate-200"
+                              : "text-slate-600 hover:text-slate-900"
+                          }`}
+                          title="Show a chart for each Current Source (broken down by Lead Origin)"
+                        >
+                          For Each Current Source
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSourceVsOriginPrimary("leadOrigin")}
+                          className={`px-2.5 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                            sourceVsOriginPrimary === "leadOrigin"
+                              ? "bg-white text-indigo-700 shadow-2xs border border-slate-200"
+                              : "text-slate-600 hover:text-slate-900"
+                          }`}
+                          title="Show a chart for each Lead Origin (broken down by Current Source)"
+                        >
+                          For Each Lead Origin
+                        </button>
+                      </div>
+                    </div>
+
+                    <span className="text-[11px] font-semibold text-slate-400">
+                      Showing {currentSourceVsOriginPieData.secondaryLabel} breakdown for each {currentSourceVsOriginPieData.primaryLabel}
+                    </span>
+                  </div>
+
+                  {/* Grid of Donut Charts (One Donut per Current Source / Lead Origin) */}
+                  {currentSourceVsOriginPieData.groups.length === 0 ? (
+                    <div className="text-center py-12 text-slate-400 font-medium text-xs">
+                      No source vs origin data available for the selected filters.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {currentSourceVsOriginPieData.groups.map(group => {
+                        const countVal = group.totalCount;
+                        const countUnit = currentSourceVsOriginPieData.isRegMode ? "Regs" : "Calls";
+                        const itemsList = group.items;
+                        const itemsBySec = group.itemsBySecondary;
+
+                        return (
+                          <div
+                            key={group.name}
+                            className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between group relative hover:z-40"
+                          >
+                            {/* Card Header: Primary entity title & Inspect All */}
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-extrabold text-slate-800 text-xs truncate" title={group.name}>
+                                  {group.name}
+                                </h4>
+                                <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                                  {group.slices.length} {currentSourceVsOriginPieData.secondaryLabel.toLowerCase()}{group.slices.length === 1 ? "" : "s"}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setInspectModalData({
+                                  title: `All ${currentSourceVsOriginPieData.isRegMode ? "Registrations" : "Calls"} for ${currentSourceVsOriginPieData.primaryLabel} "${group.name}"`,
+                                  subtitle: `${countVal} total records`,
+                                  category: currentSourceVsOriginPieData.isRegMode ? "registrations" : "all",
+                                  items: itemsList
+                                })}
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-md transition cursor-pointer shrink-0 ${
+                                  currentSourceVsOriginPieData.isRegMode
+                                    ? "text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
+                                    : "text-indigo-600 bg-indigo-50 hover:bg-indigo-100"
+                                }`}
+                                title={`Inspect all ${currentSourceVsOriginPieData.isRegMode ? "registrations" : "calls"} for ${group.name}`}
+                              >
+                                Inspect All
+                              </button>
+                            </div>
+
+                            {/* Donut Chart with Center Count */}
+                            <div className="relative w-full h-[180px] flex items-center justify-center my-1">
+                              <ResponsiveContainer width="100%" height={180}>
+                                <PieChart>
+                                  <Pie
+                                    data={group.slices}
+                                    dataKey="value"
+                                    nameKey="name"
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={46}
+                                    outerRadius={68}
+                                    paddingAngle={group.slices.length > 1 ? 2 : 0}
+                                    onClick={(entry) => {
+                                      if (entry && entry.name) {
+                                        handleInspectSourceVsOriginSlice(group.name, entry.name, itemsBySec[entry.name]);
+                                      }
+                                    }}
+                                    className="cursor-pointer"
+                                  >
+                                    {group.slices.map((entry) => (
+                                      <Cell
+                                        key={entry.name}
+                                        fill={entry.color}
+                                        onClick={() => handleInspectSourceVsOriginSlice(group.name, entry.name, itemsBySec[entry.name])}
+                                        style={{ cursor: "pointer" }}
+                                        className="cursor-pointer hover:opacity-80 transition-opacity focus:outline-none"
+                                      />
+                                    ))}
+                                  </Pie>
+                                  <Tooltip
+                                    wrapperStyle={{ zIndex: 100, pointerEvents: "none" }}
+                                    content={({ active, payload }) => {
+                                      if (!active || !payload || !payload.length) return null;
+                                      const d = payload[0];
+                                      const fill = d.payload?.color || d.color || "#6366f1";
+                                      return (
+                                        <div className="bg-white/95 backdrop-blur-sm p-2.5 rounded-xl shadow-xl border border-slate-200 text-xs min-w-[170px] pointer-events-none">
+                                          <div className="font-extrabold text-slate-900 mb-1 flex items-center gap-1.5">
+                                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: fill }} />
+                                            <span className="truncate">{d.name}</span>
+                                          </div>
+                                          <div className="flex justify-between items-baseline gap-3 pt-1 border-t border-slate-100">
+                                            <span className="text-slate-500 font-medium">
+                                              {currentSourceVsOriginPieData.isRegMode ? "Registrations:" : "Calls:"}
+                                            </span>
+                                            <span className={`font-mono font-bold text-sm ${currentSourceVsOriginPieData.isRegMode ? "text-emerald-700" : "text-indigo-700"}`}>
+                                              {d.value} <span className="text-xs font-normal text-slate-400">({d.payload?.percentage}%)</span>
+                                            </span>
+                                          </div>
+                                        </div>
+                                      );
+                                    }}
+                                  />
+                                </PieChart>
+                              </ResponsiveContainer>
+                              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none z-10">
+                                <span className="text-xl font-black text-slate-800 tracking-tight">
+                                  {countVal}
+                                </span>
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                                  {countUnit}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Table View */}
+              {sourceVsOriginView === "table" && (
+                <div className="pt-2">
+                  <MonthlyTable
+                    headers={[
+                      sourceVsOriginPrimary === "currentSource" ? "Current Source" : "Lead Origin",
+                      sourceVsOriginPrimary === "currentSource" ? "Lead Origin" : "Current Source",
+                      "Total Calls",
+                      "Incoming Calls",
+                      "Outgoing Calls",
+                      "Total Conversions",
+                      "Incoming Conversions",
+                      "Outgoing Conversions",
+                      "Conversion Rate (%)",
+                      "Incoming Conversion Rate (%)",
+                      "Outgoing Conversion Rate (%)"
+                    ]}
+                    rows={currentSourceVsOriginBreakdown}
+                    totals={currentSourceVsOriginBreakdownTotals}
+                    onRowClick={(row, isTotal) => {
+                      if (isTotal) {
+                        setInspectModalData({
+                          title: `All Section 4 Calls (${allAttempts.length})`,
+                          subtitle: `Total Calls: ${currentSourceVsOriginBreakdownTotals["Total Calls"]} | Total Conversions: ${currentSourceVsOriginBreakdownTotals["Total Conversions"]}`,
+                          category: "all",
+                          items: allAttempts
+                        });
+                        return;
+                      }
+                      const items = (row._attempts && row._attempts.length > 0)
+                        ? row._attempts
+                        : (row._registrations || []);
+                      const cSrc = row._currentSource || row["Current Source"];
+                      const lOrig = row._leadOrigin || row["Lead Origin"];
+                      setInspectModalData({
+                        title: `Calls & Leads for Current Source "${cSrc}" (Origin: "${lOrig}") (${items.length})`,
+                        subtitle: `Total Calls: ${row["Total Calls"]} (Incoming: ${row["Incoming Calls"]}, Outgoing: ${row["Outgoing Calls"]}) | Conversions: ${row["Total Conversions"]}`,
+                        category: "all",
+                        items: items
+                      });
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          </MonthlySection>
 
           <MonthlySection
             title="🏆 Attender Productivity Leaderboard"

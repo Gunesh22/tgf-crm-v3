@@ -424,6 +424,48 @@ export function parseLocalDateBoundaries(dateStr, isEnd = false) {
   }
 }
 
+export function getCanonicalCallPurpose(h = {}, contact = {}) {
+  const explicit = String(h?.callPurpose || h?.purpose || contact?.callPurpose || "").toUpperCase().trim();
+  if (explicit === "QUERY") return "QUERY";
+  if (explicit === "REMINDER") return "REMINDER";
+  if (explicit === "SALES") return "SALES";
+
+  const remark = String(h?.remark || h?.comment || contact?.remark || "").toLowerCase().trim();
+  const status = String(h?.status || contact?.status || "").toLowerCase().trim();
+
+  if (
+    status.includes("query") ||
+    remark.includes("query") ||
+    remark.includes("doubt") ||
+    remark.includes("question") ||
+    remark.includes("fee detail asked") ||
+    remark.includes("inquiry") ||
+    remark.includes("location") ||
+    remark.includes("timing") ||
+    remark.includes("batch timing") ||
+    remark.includes("suvidha")
+  ) {
+    return "QUERY";
+  }
+
+  if (
+    status.includes("reminder") ||
+    remark.includes("reminder") ||
+    remark.includes("remind") ||
+    remark.includes("payment link") ||
+    remark.includes("session link") ||
+    remark.includes("zoom link") ||
+    remark.includes("whatsapp link") ||
+    remark.includes("webinar link") ||
+    remark.includes("event reminder") ||
+    remark.includes("passcode")
+  ) {
+    return "REMINDER";
+  }
+
+  return "SALES";
+}
+
 export function getCanonicalPhysicalCalls(contacts = [], filters = {}) {
   const {
     startDate,
@@ -435,7 +477,8 @@ export function getCanonicalPhysicalCalls(contacts = [], filters = {}) {
     selectedCalledFors = [],
     selectedStatuses = [],
     selectedCallTypes = [],
-    selectedKhojiStatuses = []
+    selectedKhojiStatuses = [],
+    selectedCallPurposes = []
   } = filters;
 
   let startMs = null;
@@ -504,6 +547,12 @@ export function getCanonicalPhysicalCalls(contacts = [], filters = {}) {
           if (!matchesType) return;
         }
 
+        const callPurpose = getCanonicalCallPurpose(h, c);
+        if (selectedCallPurposes.length > 0) {
+          const matchesPurpose = selectedCallPurposes.some(p => p.toUpperCase() === callPurpose.toUpperCase());
+          if (!matchesPurpose) return;
+        }
+
         seenCallIds.add(callId);
 
         physicalCalls.push({
@@ -518,6 +567,7 @@ export function getCanonicalPhysicalCalls(contacts = [], filters = {}) {
           timestamp: ts,
           timeMs,
           callType,
+          callPurpose,
           calledFor: sanitizeCalledFor(h.calledFor || calledForVal, "Unspecified"),
           source: sanitizeSource(h.currentSource || h.source || sourceVal, "Unspecified"),
           leadOrigin: sanitizeSource(h.leadOrigin || leadOriginVal, "Unspecified"),
